@@ -56,3 +56,8 @@ export const ScarRespondBody = z
   .strict();
 export const ScarExtensionBody = z.object({ newDueOn: day, reason: z.string().trim().min(3).max(1000) }).strict();
 export const ScarExtensionWithdrawBody = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
+
+export const ScarUploadBody = z.object({ fileName: z.string().trim().min(1).max(255) }).strict();
+export const ScarFileBody = z
+  .object({ path: z.string().min(1).max(1024), fileName: z.string().trim().min(1).max(255), contentType: z.string().max(150).optional(), sizeBytes: z.number().int().min(0).max(26_214_400) })
+  .strict();

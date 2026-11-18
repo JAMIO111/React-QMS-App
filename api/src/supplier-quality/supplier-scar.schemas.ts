@@ -175,6 +175,7 @@ const ResponseItem = z.object({
   receivedAt: Iso,
   receivedBy: Person,
   review: Review.nullable(),
+  files: z.array(z.object({ id: z.string().uuid(), fileName: z.string(), sizeBytes: z.number(), storagePath: z.string(), uploadedAt: Iso })),
 });
 const Implementation = z.object({ id: z.string().uuid(), description: z.string(), implementedOn: DateOnly, evidenceNote: z.string().nullable(), recordedAt: Iso, recordedBy: Person });
 const Verification = z.object({ id: z.string().uuid(), result: z.enum(['effective', 'not_effective']), method: z.string(), note: z.string(), verifiedAt: Iso, verifiedBy: Person });

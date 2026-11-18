@@ -16,7 +16,7 @@ DO $$
 DECLARE
   ann uuid := '5e000000-0000-0000-0000-000000000f01'; insp uuid := '5e000000-0000-0000-0000-000000000f02';
   sam uuid := '5e000000-0000-0000-0000-000000000f04'; ben uuid := '5e000000-0000-0000-0000-000000000f05'; eve uuid := '5e000000-0000-0000-0000-000000000f06';
-  org uuid; org2 uuid; site uuid; acme uuid; bolt uuid; p_acme uuid; p_bolt uuid; a_sam uuid; a_ben uuid; nc uuid; sc uuid; sc2 uuid; ext uuid; ext2 uuid; r text; j jsonb; k text;
+  org uuid; org2 uuid; site uuid; acme uuid; bolt uuid; p_acme uuid; p_bolt uuid; a_sam uuid; a_ben uuid; nc uuid; sc uuid; sc2 uuid; ext uuid; ext2 uuid; f1 uuid; f2 uuid; i integer; f record; r text; j jsonb; k text;
 BEGIN
   PERFORM pg_temp.login(ann); org := app.create_organisation('PT3 Alpha'); PERFORM pg_temp.logout();
   PERFORM pg_temp.login(eve); org2 := app.create_organisation('PT3 Beta'); PERFORM pg_temp.logout();
@@ -61,7 +61,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT awaiting_response FROM app.portal_list_scars(org)), true, 'awaiting a response');
   j := app.portal_get_scar(sc);
   SELECT string_agg(key, ',' ORDER BY key COLLATE "C") INTO k FROM jsonb_object_keys(j) key;
-  PERFORM pg_temp.assert_eq(k, 'canAcknowledge,canRequestExtension,canRespond,cancelReason,contact,containmentRequirements,extensions,issuedAt,items,objectiveEvidence,originalResponseDueOn,overdue,problemDescription,reference,requirementBreached,responseDueOn,responses,severity,status,title',
+  PERFORM pg_temp.assert_eq(k, 'canAcknowledge,canRequestExtension,canRespond,cancelReason,contact,containmentRequirements,draftFiles,extensions,issuedAt,items,objectiveEvidence,originalResponseDueOn,overdue,problemDescription,reference,requirementBreached,responseDueOn,responses,severity,status,title',
                             'the external view is these named fields and nothing else');
   PERFORM pg_temp.assert_eq(j ->> 'contact', 'Pat in Quality', 'the contact they are given');
   PERFORM pg_temp.assert_eq(jsonb_array_length(j -> 'items'), 1, 'what is affected');
@@ -106,6 +106,41 @@ BEGIN
   PERFORM pg_temp.assert_eq(r LIKE 'QM032%root cause%', true, 'a root cause is needed');
   r := pg_temp.fails(format($f$SELECT app.portal_respond_scar(%L, 'root cause here', NULL, 'fix it here', NULL, current_date - 1)$f$, sc));
   PERFORM pg_temp.assert_eq(r LIKE 'QM032%past%', true, 'a completion date in the past is refused');
+  -- ---- evidence files: unsent first, then sent with the response ----
+  PERFORM pg_temp.assert_eq(app.portal_scar_upload_allowed(sc, org || '/scar/' || sc || '/a.pdf'), true, 'the supplier may upload into the SCAR''s own folder');
+  PERFORM pg_temp.assert_eq(app.portal_scar_upload_allowed(sc, org || '/scar/' || gen_random_uuid() || '/a.pdf'), false, 'not into another SCAR''s folder');
+  PERFORM pg_temp.assert_eq(app.portal_scar_upload_allowed(sc, org || '/ncr/' || sc || '/a.pdf'), false, 'nor another kind of folder');
+  PERFORM pg_temp.assert_eq(app.portal_scar_upload_allowed(sc, org || '/scar/' || sc || '/../a.pdf'), false, 'nor up and out of it');
+  f1 := app.portal_add_scar_file(sc, org || '/scar/' || sc || '/1-a.pdf', 'a.pdf', 'application/pdf', 1000);
+  f2 := app.portal_add_scar_file(sc, org || '/scar/' || sc || '/2-b.pdf', 'b.pdf', 'application/pdf', 2000);
+  r := pg_temp.fails(format($f$SELECT app.portal_add_scar_file(%L, %L, 'c.pdf', NULL, 1)$f$, sc, org || '/scar/' || gen_random_uuid() || '/c.pdf'));
+  PERFORM pg_temp.assert_eq(r LIKE 'QM032%folder%', true, 'a path outside the folder is refused');
+  r := pg_temp.fails(format($f$SELECT app.portal_add_scar_file(%L, %L, 'c.pdf', NULL, 26214401)$f$, sc, org || '/scar/' || sc || '/3-c.pdf'));
+  PERFORM pg_temp.assert_eq(r LIKE 'QM032%25 MB%', true, 'over 25 MB is refused');
+  PERFORM pg_temp.assert_eq(jsonb_array_length(app.portal_get_scar(sc) -> 'draftFiles'), 2, 'unsent files are listed');
+  PERFORM pg_temp.assert_eq(app.portal_remove_scar_file(f2), sc, 'an unsent file can be taken back');
+  r := pg_temp.fails(format($f$SELECT app.portal_remove_scar_file(%L)$f$, f2));
+  PERFORM pg_temp.assert_eq(r LIKE 'QM032%already removed%', true, 'once');
+  FOR i IN 1..9 LOOP PERFORM app.portal_add_scar_file(sc, org || '/scar/' || sc || '/x' || i || '.pdf', 'x.pdf', NULL, 1); END LOOP;
+  r := pg_temp.fails(format($f$SELECT app.portal_add_scar_file(%L, %L, 'x.pdf', NULL, 1)$f$, sc, org || '/scar/' || sc || '/x10.pdf'));
+  PERFORM pg_temp.assert_eq(r LIKE 'QM032%At most ten%', true, 'at most ten wait to be sent');
+  PERFORM pg_temp.assert_eq(app.portal_scar_upload_allowed(sc, org || '/scar/' || sc || '/x10.pdf'), false, 'and the upload check says the same');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(ben);
+  r := pg_temp.fails(format($f$SELECT app.portal_add_scar_file(%L, %L, 'z.pdf', NULL, 1)$f$, sc, org || '/scar/' || sc || '/z.pdf'));
+  PERFORM pg_temp.assert_eq(left(r, 5), 'P0002', 'another supplier cannot add');
+  r := pg_temp.fails(format($f$SELECT * FROM app.portal_scar_file_path(%L)$f$, f1));
+  PERFORM pg_temp.assert_eq(left(r, 5), 'P0002', 'nor open');
+  r := pg_temp.fails(format($f$SELECT app.portal_remove_scar_file(%L)$f$, f1));
+  PERFORM pg_temp.assert_eq(left(r, 5), 'P0002', 'nor take back');
+  PERFORM pg_temp.assert_eq(app.portal_scar_upload_allowed(sc, org || '/scar/' || sc || '/z.pdf'), false, 'nor pass the upload check');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(sam);
+  FOR f IN SELECT (e ->> 'id')::uuid AS id FROM jsonb_array_elements(app.portal_get_scar(sc) -> 'draftFiles') e WHERE e ->> 'fileName' = 'x.pdf' LOOP PERFORM app.portal_remove_scar_file(f.id); END LOOP;
+  PERFORM pg_temp.assert_eq(jsonb_array_length(app.portal_get_scar(sc) -> 'draftFiles'), 1, 'only the first file is left to send');
+  PERFORM pg_temp.assert_eq((SELECT storage_path FROM app.portal_scar_file_path(f1)), org || '/scar/' || sc || '/1-a.pdf', 'the supplier can open their own file');
+  r := pg_temp.fails(format($f$SELECT * FROM app.portal_scar_file_path(%L)$f$, f2));
+  PERFORM pg_temp.assert_eq(left(r, 5), 'P0002', 'but not one taken back');
   PERFORM app.portal_respond_scar(sc, 'Mould temperature too low', 'Stock sorted', 'Raise the mould temperature and add a check', NULL, current_date + 7, 'Other lots checked', 'Final inspection', 'Pat', 'five_whys');
   PERFORM pg_temp.assert_eq((SELECT status FROM app.portal_list_scars(org)), 'response_received', 'it now waits for review');
   r := pg_temp.fails(format($f$SELECT app.portal_respond_scar(%L, 'root cause here', NULL, 'fix it here', NULL, NULL)$f$, sc));
@@ -113,6 +148,24 @@ BEGIN
   PERFORM pg_temp.logout();
   PERFORM pg_temp.assert_eq((SELECT responded_by_name LIKE '%(Acme Castings)' FROM public.supplier_scar_responses WHERE scar_id = sc AND seq = 1), true, 'the response names the supplier and the person');
   PERFORM pg_temp.assert_eq((SELECT responded_on FROM public.supplier_scar_responses WHERE scar_id = sc AND seq = 1), current_date, 'dated today');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.supplier_scar_files WHERE scar_id = sc AND response_id IS NOT NULL AND removed_at IS NULL), 1::bigint, 'the unsent file went with the response');
+  r := pg_temp.fails(format($f$UPDATE public.supplier_scar_files SET removed_at = now() WHERE id = %L$f$, f1));
+  PERFORM pg_temp.assert_eq(r LIKE '%sent with a response%', true, 'and is kept as it was sent');
+  r := pg_temp.fails(format($f$DELETE FROM public.supplier_scar_files WHERE id = %L$f$, f1));
+  PERFORM pg_temp.assert_eq(r LIKE '%never deleted%', true, 'never deleted');
+  PERFORM pg_temp.login(sam);
+  j := app.portal_get_scar(sc);
+  PERFORM pg_temp.assert_eq(j -> 'responses' -> 0 -> 'files' -> 0 ->> 'fileName', 'a.pdf', 'the response lists its file');
+  PERFORM pg_temp.assert_eq(jsonb_array_length(j -> 'draftFiles'), 0, 'nothing is left unsent');
+  r := pg_temp.fails(format($f$SELECT app.portal_remove_scar_file(%L)$f$, f1));
+  PERFORM pg_temp.assert_eq(r LIKE 'QM032%stays with it%', true, 'a sent file cannot be taken back');
+  PERFORM pg_temp.assert_eq(app.storage_file_allowed('scar-files', org || '/scar/' || sc || '/1-a.pdf', false), false, 'a supplier does not read the bucket directly');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(app.storage_file_allowed('scar-files', org || '/scar/' || sc || '/1-a.pdf', false), true, 'staff may read it');
+  PERFORM pg_temp.assert_eq(app.storage_file_allowed('scar-files', org || '/scar/' || sc || '/1-a.pdf', true), false, 'nobody writes the bucket directly');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.supplier_scar_files WHERE scar_id = sc), 11::bigint, 'staff see every file row, removed ones included');
+  PERFORM pg_temp.logout();
 
   -- ---- staff review it; a revision is asked for and the supplier answers again ----
   PERFORM pg_temp.login(ann);

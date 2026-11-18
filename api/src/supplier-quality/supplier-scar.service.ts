@@ -181,7 +181,7 @@ export class SupplierScarService {
     if (!h) throw notFound();
 
     const canApprove = (await db.execute<{ ok: boolean }>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'supplier_quality.approve') as ok`)).rows[0].ok;
-    const [ncrs, responses, implementations, verifications, extensions, history, items] = await Promise.all([
+    const [ncrs, responses, implementations, verifications, extensions, history, items, files] = await Promise.all([
       db.execute<Row>(sql`
         select l.id as link_id, l.linked_at, l.ended_at, l.end_reason, n.id, n.reference, n.title, n.stage, n.severity
         from public.supplier_scar_ncrs l join public.nonconformances n on n.id = l.ncr_id where l.scar_id = ${id}::uuid order by (l.ended_at is not null), l.linked_at`),
@@ -199,6 +199,8 @@ export class SupplierScarService {
       db.execute<Row>(sql`
         select i.*, pt.part_number, pt.name as part_name, l.lot_number from public.supplier_scar_items i left join public.parts pt on pt.id = i.part_id left join public.lots l on l.id = i.lot_id
         where i.scar_id = ${id}::uuid order by (i.ended_at is not null), i.created_at`),
+      db.execute<Row>(sql`select f.id, f.response_id, f.file_name, f.size_bytes, f.storage_path, f.created_at from public.supplier_scar_files f
+        where f.scar_id = ${id}::uuid and f.response_id is not null and f.removed_at is null order by f.created_at`),
     ]);
 
     return {
@@ -255,6 +257,7 @@ export class SupplierScarService {
         contact: r.contact_id ? { id: r.contact_id as string, name: r.contact_name as string } : null,
         receivedAt: iso(r.received_at)!,
         receivedBy: person(r.received_by, r.received_by_name),
+        files: files.rows.filter((f) => f.response_id === r.id).map((f) => ({ id: f.id as string, fileName: f.file_name as string, sizeBytes: Number(f.size_bytes), storagePath: f.storage_path as string, uploadedAt: iso(f.created_at)! })),
         review: r.review_id
           ? { id: r.review_id as string, decision: r.decision as 'accepted' | 'revision_requested', note: r.review_note as string, reviewedAt: iso(r.reviewed_at)!, reviewedBy: person(r.reviewed_by, r.reviewed_by_name) }
           : null,

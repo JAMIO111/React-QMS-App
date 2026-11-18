@@ -5,10 +5,12 @@ import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 
 let scarState;
 const mutate = vi.fn();
+const openFile = vi.fn();
 let mutationState;
 
 vi.mock("../../hooks/usePortal", () => ({
   usePortalScar: () => scarState,
+  openPortalScarFile: (...a) => openFile(...a),
   usePortalScarMutation: () => ({ mutate, isPending: false, variables: null, error: null, reset: vi.fn(), ...mutationState }),
 }));
 
@@ -19,7 +21,7 @@ const base = {
   reference: "SCAR-26-0001", title: "Cracked castings", severity: "major", status: "issued", issuedAt: "2026-11-10T09:00:00Z", responseDueOn: "2099-12-03", originalResponseDueOn: "2099-12-03",
   overdue: false, problemDescription: "Cracks in the bar stock", requirementBreached: "No visible cracks", objectiveEvidence: "3 of 10 cracked", containmentRequirements: "Sort the stock", cancelReason: null,
   items: [{ partNumber: "BAR-1", partName: "Bar", material: null, lotNumber: "LOT-77", receiptReference: null, quantity: 10, notes: "Whole delivery" }],
-  responses: [], extensions: [], canAcknowledge: true, canRespond: true, canRequestExtension: true, contact: "Pat in Quality",
+  responses: [], draftFiles: [], extensions: [], canAcknowledge: true, canRespond: true, canRequestExtension: true, contact: "Pat in Quality",
 };
 
 const renderIt = () =>
@@ -35,6 +37,7 @@ const renderIt = () =>
 
 beforeEach(() => {
   mutate.mockReset();
+  openFile.mockReset();
   mutationState = {};
   scarState = { data: { id: "c1", scar: base }, isLoading: false, error: null };
 });
@@ -126,5 +129,28 @@ describe("a corrective action request in the portal", () => {
     scarState = { data: undefined, isLoading: false, error: { status: 404, message: "SCAR not found" } };
     renderIt();
     expect(screen.getByRole("alert")).toHaveTextContent("This request is not available to you.");
+  });
+
+  it("lists files waiting to be sent, takes one back and adds another", async () => {
+    scarState = { data: { id: "c1", scar: { ...base, draftFiles: [{ id: "f1", fileName: "photo.jpg", sizeBytes: 204800, mine: true }] } }, isLoading: false, error: null };
+    renderIt();
+    const waiting = screen.getByRole("list", { name: "Files waiting to be sent" });
+    expect(waiting).toHaveTextContent("photo.jpg");
+    await userEvent.click(within(waiting).getByRole("button", { name: "Take back photo.jpg" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "removeFile", id: "f1" });
+    const file = new File(["x"], "report.pdf", { type: "application/pdf" });
+    await userEvent.upload(screen.getByLabelText("Choose a file to add"), file);
+    expect(mutate).toHaveBeenCalledWith({ action: "uploadFile", body: { file } });
+  });
+
+  it("shows files sent with a response and opens one on a short link, but offers no upload once nothing is awaited", async () => {
+    scarState = {
+      data: { id: "c1", scar: { ...base, status: "response_received", canRespond: false, canAcknowledge: false, canRequestExtension: false, draftFiles: [], responses: [{ seq: 1, respondedOn: "2026-11-12", respondedBy: "Sam", rootCause: "Mould", correctiveAction: "Fix", files: [{ id: "f9", fileName: "evidence.pdf", sizeBytes: 2048 }], review: null }] } },
+      isLoading: false, error: null,
+    };
+    renderIt();
+    expect(screen.queryByRole("heading", { name: "Evidence to send with your response" })).toBeNull();
+    await userEvent.click(within(screen.getByRole("list", { name: "Files with response 1" })).getByRole("button", { name: /evidence\.pdf/ }));
+    expect(openFile).toHaveBeenCalledWith("o1", "f9");
   });
 });

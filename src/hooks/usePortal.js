@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
+import { uploadPortalScarFile } from "../api/supabaseApi";
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -301,6 +302,10 @@ export const usePortalScarMutation = (organisationId, scarId) => {
           return apiFetch(`/portal/scars/${scarId}/extensions`, { method: "POST", body, organisationId });
         case "withdrawExtension":
           return apiFetch(`/portal/scar-extensions/${id}/withdraw`, { method: "POST", body, organisationId });
+        case "removeFile":
+          return apiFetch(`/portal/scar-files/${id}/remove`, { method: "POST", organisationId });
+        case "uploadFile":
+          return uploadPortalScarFile(body.file, organisationId, scarId);
         default:
           throw new Error(`Unknown SCAR action ${action}`);
       }
@@ -308,4 +313,10 @@ export const usePortalScarMutation = (organisationId, scarId) => {
     onSuccess: (data) => queryClient.setQueryData(portalKey(user?.id, organisationId, "scar", scarId), data),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
   });
+};
+
+/** A short link to a file of a SCAR the person may see (ten minutes). Opens in a new tab. */
+export const openPortalScarFile = async (organisationId, fileId) => {
+  const { url } = await apiFetch(`/portal/scar-files/${fileId}/download-url`, { method: "POST", organisationId });
+  window.open(url, "_blank", "noopener");
 };

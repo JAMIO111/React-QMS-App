@@ -17,6 +17,7 @@ export const ORGANISATION_BUCKETS = [
   'nc-files',
   'org-logos',
   'quality-alert-files',
+  'scar-files',
   'supplier-files',
 ] as const;
 export type OrganisationBucket = (typeof ORGANISATION_BUCKETS)[number];

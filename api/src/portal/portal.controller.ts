@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarRespondBody } from './portal.schemas';
+import { CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -144,5 +144,37 @@ export class PortalController {
   @ApiOkResponse({ description: 'Take back your own request for more time while it waits; answers with the SCAR' })
   withdrawScarExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdrawScarExtension(ctx, Uuid.parse(id), parse(ScarExtensionWithdrawBody, body).reason);
+  }
+
+  @Post('scars/:id/files/upload-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarUploadBody) })
+  @ApiOkResponse({ description: 'A token to upload one evidence file to the SCAR’s folder (only while a response is awaited, at most ten unsent files); 403 file_not_allowed otherwise' })
+  scarUploadUrl(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.scarUploadLink(ctx, Uuid.parse(id), parse(ScarUploadBody, body).fileName);
+  }
+
+  @Post('scars/:id/files')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarFileBody) })
+  @ApiOkResponse({ description: 'Record an uploaded file; it waits, unsent, until a response is sent; answers with the SCAR' })
+  addScarFile(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addScarFile(ctx, Uuid.parse(id), parse(ScarFileBody, body));
+  }
+
+  @Post('scar-files/:id/remove')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Take back a file that has not been sent with a response yet; answers with the SCAR' })
+  removeScarFile(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removeScarFile(ctx, Uuid.parse(id));
+  }
+
+  @Post('scar-files/:id/download-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiOkResponse({ description: 'A short-lived link (ten minutes) to a file of a SCAR the person may see' })
+  scarFileUrl(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.scarFileLink(ctx, Uuid.parse(id));
   }
 }

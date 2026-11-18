@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { generateSignedUrl } from "../../api/supabaseApi";
 import { Link, useParams } from "react-router-dom";
 import { PencilIcon, PlusIcon } from "@/components/icons";
 import { usePermissions } from "../../hooks/useQmsApi";
@@ -234,6 +235,23 @@ const ScarPage = () => {
                   <Fact label="Preventive action">{r.preventiveAction}</Fact>
                   <Fact label="Planned completion">{r.plannedCompletionOn ? formatDate(r.plannedCompletionOn) : null}</Fact>
                 </dl>
+                {r.files?.length > 0 && (
+                  <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Files with response ${r.seq}`}>
+                    {r.files.map((f) => (
+                      <li key={f.id}>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-border-color px-3 py-1.5 text-sm text-link-color hover:bg-primary-bg"
+                          onClick={async () => {
+                            const url = await generateSignedUrl("scar-files", f.storagePath);
+                            if (url) window.open(url, "_blank", "noopener");
+                          }}>
+                          {f.fileName}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {r.review ? (
                   <Callout tone={r.review.decision === "accepted" ? "success" : "warning"} title={r.review.decision === "accepted" ? "Accepted" : "Revision requested"} className="mt-3">
                     {r.review.note} <span className="text-secondary-text">({by(r.review.reviewedBy, r.review.reviewedAt)})</span>

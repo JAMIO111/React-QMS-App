@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
@@ -9,7 +9,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { ArrowLeftIcon } from "@/components/icons";
-import { usePortalScar, usePortalScarMutation } from "../../hooks/usePortal";
+import { openPortalScarFile, usePortalScar, usePortalScarMutation } from "../../hooks/usePortal";
 import { describeApiError } from "../../lib/api-client";
 import { todayIso } from "@/lib/localDate";
 import { EXTENSION_WORDS, SCAR_SEVERITY, scarStatus, shortDate } from "../../lib/portal";
@@ -141,6 +141,59 @@ function TakeBackDialog({ extension, mutation, onClose }) {
   );
 }
 
+const size = (bytes) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} kB`);
+
+/** Files sent with a response: each opens on a short link. */
+const FileLinks = ({ files, label, organisationId }) =>
+  !files?.length ? null : (
+    <ul aria-label={label} className="flex flex-wrap gap-2">
+      {files.map((f) => (
+        <li key={f.id}>
+          <button type="button" className="rounded-lg border border-border-color px-3 py-1.5 text-sm text-link-color hover:bg-primary-bg" onClick={() => openPortalScarFile(organisationId, f.id)}>
+            {f.fileName} <span className="text-xs text-secondary-text">{size(f.sizeBytes)}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+/** Evidence waiting to be sent with the next response: add, take back. Shown while a response is awaited, or while files are waiting. */
+function EvidenceBlock({ scar, mutation }) {
+  const input = useRef(null);
+  const uploading = mutation.isPending && mutation.variables?.action === "uploadFile";
+  return (
+    <Block title="Evidence to send with your response">
+      <p className="text-sm text-secondary-text">Photos, reports or certificates that support your response. They are sent when you send the response; until then you can take them back. Up to ten files of 25 MB each.</p>
+      {scar.draftFiles.length > 0 && (
+        <ul aria-label="Files waiting to be sent" className="flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+          {scar.draftFiles.map((f) => (
+            <li key={f.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <span className="min-w-0 grow truncate text-primary-text">{f.fileName} <span className="text-xs text-secondary-text">{size(f.sizeBytes)}</span></span>
+              <CTAButton type="neutral" size="default" aria-label={`Take back ${f.fileName}`} onClick={() => mutation.mutate({ action: "removeFile", id: f.id })}>Take back</CTAButton>
+            </li>
+          ))}
+        </ul>
+      )}
+      {scar.canRespond && (
+        <div>
+          <input
+            ref={input}
+            type="file"
+            aria-label="Choose a file to add"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) mutation.mutate({ action: "uploadFile", body: { file } });
+            }}
+          />
+          <CTAButton type="secondary" size="md" loading={uploading} loadingText="Uploading…" onClick={() => input.current?.click()}>Add a file</CTAButton>
+        </div>
+      )}
+    </Block>
+  );
+}
+
 const ReviewNote = ({ review }) =>
   !review ? null : (
     <Callout tone={review.decision === "accepted" ? "success" : "warning"} title={review.decision === "accepted" ? "Accepted" : "A revision is needed"}>
@@ -247,12 +300,15 @@ export default function PortalScarPage() {
                   <Fact label="Planned completion" value={day(r.plannedCompletionOn)} />
                   <Fact label="Responsible" value={r.responsibleName} />
                 </Facts>
+                <FileLinks files={r.files} label={`Files with response ${r.seq}`} organisationId={access.organisationId} />
                 <ReviewNote review={r.review} />
               </li>
             ))}
           </ol>
         )}
       </Block>
+
+      {(s.canRespond || s.draftFiles.length > 0) && <EvidenceBlock scar={s} mutation={mutation} />}
 
       {s.extensions.length > 0 && (
         <Block title="Requests for more time">

@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { FileLinkSigner } from '../files/file-links';
 import { InvitationMailer } from '../members/invitation-mailer.service';
 import { personRow } from './external-access.service';
 
@@ -31,6 +33,7 @@ export class PortalService {
   constructor(
     private readonly database: DatabaseService,
     private readonly mailer: InvitationMailer,
+    private readonly signer: FileLinkSigner,
   ) {}
 
   private access(db: Db) {
@@ -172,6 +175,48 @@ export class PortalService {
       const r = await db.execute<{ scar_id: string }>(sql`select app.portal_withdraw_scar_extension(${extensionId}::uuid, ${reason}) as scar_id`);
       return this.scarDetail(db, r.rows[0].scar_id);
     });
+  }
+
+  /** A file name made safe for a storage path: no slashes, no dot runs, no control characters. */
+  private safeName(name: string) {
+    const clean = name.replace(/[\\/]/g, '_').replace(/\.{2,}/g, '.').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    return clean.slice(0, 120) || 'file';
+  }
+
+  /** The path is chosen here, never by the browser; the database says whether this person may add to this SCAR now (404 when it is not theirs). */
+  async scarUploadLink(ctx: RequestContext, scarId: string, fileName: string) {
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    const path = `${ctx.organisationId}/scar/${scarId}/${randomUUID()}-${this.safeName(fileName)}`;
+    await this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_get_scar(${scarId}::uuid)`); // 404 unless the SCAR is theirs
+      const ok = await db.execute<{ ok: boolean }>(sql`select app.portal_scar_upload_allowed(${scarId}::uuid, ${path}) as ok`);
+      if (!ok.rows[0].ok) throw new ApiError(403, 'file_not_allowed', 'Files can be added only while a response is awaited, and at most ten can wait to be sent');
+    });
+    const signed = await this.signer.signUpload('scar-files', path);
+    return { bucket: 'scar-files', path, token: signed.token, signedUrl: signed.signedUrl };
+  }
+
+  addScarFile(ctx: RequestContext, scarId: string, b: { path: string; fileName: string; contentType?: string; sizeBytes: number }) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_add_scar_file(${scarId}::uuid, ${b.path}, ${b.fileName}, ${b.contentType ?? null}, ${b.sizeBytes}::bigint)`);
+      return this.scarDetail(db, scarId);
+    });
+  }
+
+  removeScarFile(ctx: RequestContext, fileId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ scar_id: string }>(sql`select app.portal_remove_scar_file(${fileId}::uuid) as scar_id`);
+      return this.scarDetail(db, r.rows[0].scar_id);
+    });
+  }
+
+  async scarFileLink(ctx: RequestContext, fileId: string) {
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    const f = await this.database.asUser(ctx, async (db) => (await db.execute<{ storage_path: string; file_name: string }>(sql`select * from app.portal_scar_file_path(${fileId}::uuid)`)).rows[0]);
+    const seconds = 600;
+    const url = await this.signer.signDownload('scar-files', f.storage_path, seconds, f.file_name);
+    if (!url) throw ApiError.notFound('file_not_found', 'File not found');
+    return { url, expiresIn: seconds, expiresAt: new Date(Date.now() + seconds * 1000).toISOString() };
   }
 
   listShares(ctx: RequestContext) {

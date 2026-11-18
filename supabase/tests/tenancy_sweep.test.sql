@@ -464,6 +464,10 @@ BEGIN
   INSERT INTO public.portal_activity (organisation_id, party_id, kind, record_kind, record_id, party_name, record_label, message)
     VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'comment', 'ncr', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1), 'Sweep supplier', 'NC-1 · Sweep', 'Commented');
   INSERT INTO sweep VALUES ('portal_activity', (SELECT id FROM public.portal_activity WHERE organisation_id = a));
+  -- External portal (PT3b): an evidence file on the SCAR (written by functions; seeded directly here).
+  INSERT INTO public.supplier_scar_files (organisation_id, scar_id, storage_path, file_name, size_bytes)
+    SELECT a, c.id, a::text || '/scar/' || c.id::text || '/sweep.pdf', 'sweep.pdf', 10 FROM public.supplier_scars c WHERE c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('supplier_scar_file', (SELECT id FROM public.supplier_scar_files WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

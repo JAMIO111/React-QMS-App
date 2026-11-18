@@ -119,6 +119,17 @@ export class PortalService {
     return party.partyId;
   }
 
+  /** A customer's own quality figures (PT5d): counts and averages the database works out for their party only. */
+  customerFigures(ctx: RequestContext, days?: string) {
+    const party = this.customerParty(ctx);
+    const n = days === undefined || days === '' ? 90 : Number(days);
+    if (![30, 90, 365].includes(n)) throw ApiError.badRequest('invalid_period', 'Choose 30, 90 or 365 days');
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_customer_figures(${ctx.organisationId}::uuid, ${party}::uuid, ${n}::int) as r`);
+      return r.rows[0].r;
+    });
+  }
+
   /** A customer's own complaints (PT5a): a plain status from the non-conformance's stage, named fields only. */
   listComplaints(ctx: RequestContext) {
     const party = this.customerParty(ctx);

@@ -7,7 +7,10 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
-import { usePortalComplaintMutation, usePortalComplaintParts, usePortalComplaints } from "../../hooks/usePortal";
+import { usePortalComplaintMutation, usePortalComplaintParts, usePortalComplaints, usePortalFigures } from "../../hooks/usePortal";
+import SlidingToggle from "../ui/SlidingToggle";
+import { Chip, Tile } from "../dashboard/DashboardGraphics";
+import { PERIODS } from "../../lib/supplierPerformance";
 import { describeApiError } from "../../lib/api-client";
 import { todayIso } from "@/lib/localDate";
 import { COMPLAINT_STATUS, sharedPath, shortDate } from "../../lib/portal";
@@ -123,5 +126,42 @@ function ComplaintDialog({ access, onClose }) {
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** A customer's own quality figures (PT5d): non-conformances raised against what we supply them and the 8Ds that answer them. Counts only. */
+export function PortalFigures({ access }) {
+  const [days, setDays] = useState("90");
+  const figures = usePortalFigures(access.organisationId, Number(days));
+  if (figures.isLoading || figures.error || figures.data?.available === false) return null;
+  const { ncs, capas, period } = figures.data;
+  const avg = (v, unit) => (v === null || v === undefined ? "—" : `${v} ${unit}`);
+  return (
+    <section aria-labelledby="portal-figures" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="portal-figures" className="text-lg font-semibold">Quality of what we supply you</h2>
+          <p className="text-sm text-secondary-text">{shortDate(period.from)} to {shortDate(period.to)}. Counts only; the details are in your complaints and the records we share.</p>
+        </div>
+        <SlidingToggle ariaLabel="Period" options={PERIODS} value={days} onChange={setDays} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Tile label="Non-conformances">
+          <span className="text-sm text-secondary-text">Non-conformances raised</span>
+          <p className="text-3xl font-semibold">{ncs.raised}</p>
+          <p className="flex flex-wrap gap-1 text-xs"><Chip>{ncs.critical} critical</Chip><Chip>{ncs.major} major</Chip><Chip>{ncs.minor} minor</Chip></p>
+          <p className="text-xs text-secondary-text">
+            {ncs.open} open{ncs.oldestOpenDays !== null ? `, the oldest ${ncs.oldestOpenDays} days (on average ${avg(ncs.averageOpenDays, "days")})` : ""}. {ncs.closedInPeriod} closed in this period, taking {avg(ncs.averageDaysToClose, "days")} on average.
+          </p>
+        </Tile>
+        <Tile label="8Ds">
+          <span className="text-sm text-secondary-text">8Ds started</span>
+          <p className="text-3xl font-semibold">{capas.started}</p>
+          <p className="text-xs text-secondary-text">
+            {capas.inProgress} in progress. {capas.closedInPeriod} closed in this period, taking {avg(capas.averageDaysToClose, "days")} on average.
+          </p>
+        </Tile>
+      </div>
+    </section>
   );
 }

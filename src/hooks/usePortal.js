@@ -327,6 +327,17 @@ export const usePortalComplaints = (organisationId, { enabled = true } = {}) => 
   });
 };
 
+/** A customer's own quality figures over 30, 90 or 365 days (PT5d). */
+export const usePortalFigures = (organisationId, days = 90, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "figures", days),
+    queryFn: () => apiFetch(`/portal/figures?days=${days}`, { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
 export const usePortalComplaintParts = (organisationId) => {
   const { user } = useAuth();
   return useQuery({

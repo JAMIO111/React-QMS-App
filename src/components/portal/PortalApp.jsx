@@ -6,7 +6,7 @@ import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { useMe } from "../../hooks/useQmsApi";
-import PortalComplaints from "./PortalComplaints";
+import PortalComplaints, { PortalFigures } from "./PortalComplaints";
 import { usePortalHome, usePortalMutation, usePortalScars, usePortalShares } from "../../hooks/usePortal";
 import useSignOut from "../../hooks/useSignOut";
 import { describeApiError } from "../../lib/api-client";
@@ -146,6 +146,7 @@ export function PortalHome() {
           <span className="text-secondary-text"> — on time, in full and quality, as {access.organisationName} measures them.</span>
         </p>
       )}
+      {access.partyKind === "customer" && <PortalFigures access={access} />}
       {access.partyKind === "customer" && <PortalComplaints access={access} />}
       {home.data.scarsAwaiting.length > 0 && (
         <section aria-labelledby="portal-scars-awaiting" className="rounded-2xl border border-warning-color/40 bg-secondary-bg p-5">

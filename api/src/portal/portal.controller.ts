@@ -133,6 +133,13 @@ export class PortalController {
     return this.service.decideClosure(ctx, Uuid.parse(id), b.confirm, b.note ?? null);
   }
 
+  @Get('figures')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'A customer’s own quality figures over 30, 90 (default) or 365 days: non-conformances raised against them and the 8Ds that answer them, as counts and averages only' })
+  figures(@Ctx() ctx: RequestContext, @Query('days') days?: string) {
+    return this.service.customerFigures(ctx, days);
+  }
+
   @Get('complaints')
   @PortalScoped()
   @ApiOkResponse({ description: 'A customer’s own complaints with a plain status (received, in progress, closed, cancelled)' })

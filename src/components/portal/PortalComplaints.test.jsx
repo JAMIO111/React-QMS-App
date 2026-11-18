@@ -4,19 +4,22 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
 let list;
+let figures;
 const mutate = vi.fn();
 vi.mock("../../hooks/usePortal", () => ({
   usePortalComplaints: () => ({ data: { data: list }, error: null }),
   usePortalComplaintParts: () => ({ data: { data: [{ id: "p1", partNumber: "P-100", name: "Bracket", customerPartNumber: "W-77" }] } }),
   usePortalComplaintMutation: () => ({ mutate, isPending: false }),
+  usePortalFigures: () => ({ data: figures, isLoading: false, error: null }),
 }));
 
-import PortalComplaints from "./PortalComplaints";
+import PortalComplaints, { PortalFigures } from "./PortalComplaints";
 
 const access = { organisationId: "o1", organisationName: "Alpha Precision" };
 const item = { id: "c1", reference: "SNC-26-0001", title: "Bracket cracked", description: "x", status: "received", raisedAt: "2026-11-17T09:00:00Z", raisedByMe: true, partNumber: "P-100", partName: "Bracket", quantity: 3, lot: "LOT-9", customerReference: null, detectedOn: "2026-11-16", shareId: null };
 
 beforeEach(() => {
+  figures = { available: true, period: { from: "2026-08-20", to: "2026-11-17", days: 90 }, ncs: { raised: 4, critical: 0, major: 1, minor: 3, open: 2, oldestOpenDays: 12, averageOpenDays: 7.5, closedInPeriod: 2, averageDaysToClose: 9.5 }, capas: { started: 1, inProgress: 1, closedInPeriod: 0, averageDaysToClose: null } };
   mutate.mockReset();
   list = [item];
 });
@@ -61,5 +64,21 @@ describe("complaints in the portal", () => {
     const body = mutate.mock.calls[0][0];
     expect(body).toMatchObject({ title: "Bracket cracked", description: "Three brackets had cracks at the bend.", partId: null, quantity: null });
     expect(body.clientKey).toMatch(/.{8,}/);
+  });
+});
+
+describe("quality figures for a customer", () => {
+  it("states every figure in words", () => {
+    render(<PortalFigures access={access} />);
+    expect(screen.getByText("Non-conformances raised").nextSibling).toHaveTextContent("4");
+    expect(screen.getByText(/2 open, the oldest 12 days \(on average 7.5 days\)/)).toBeInTheDocument();
+    expect(screen.getByText(/2 closed in this period, taking 9.5 days on average/)).toBeInTheDocument();
+    expect(screen.getByText(/0 closed in this period, taking — on average/)).toBeInTheDocument();
+  });
+
+  it("shows nothing when staff switched the figures off", () => {
+    figures = { available: false, period: { from: "2026-08-20", to: "2026-11-17", days: 90 } };
+    const { container } = render(<PortalFigures access={access} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

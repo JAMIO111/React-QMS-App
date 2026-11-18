@@ -85,4 +85,13 @@ describe('portal complaints', () => {
     await api().post('/api/v1/portal/complaints').set(await external(sam)).send({ title: 'From a supplier', description: 'A long enough description.' }).expect(404);
     await api().get('/api/v1/portal/complaint-parts').set(await external(ids.ownerB)).expect(404);
   });
+
+  it('gives a customer their own quality figures as counts only, and a supplier none', async () => {
+    const r = await api().get('/api/v1/portal/figures').set(await external(cus)).expect(200);
+    expect(Object.keys(r.body).sort()).toEqual(['available', 'capas', 'ncs', 'period']);
+    expect(Object.keys(r.body.ncs).sort()).toEqual(['averageDaysToClose', 'averageOpenDays', 'closedInPeriod', 'critical', 'major', 'minor', 'oldestOpenDays', 'open', 'raised']);
+    expect(r.body.period.days).toBe(90);
+    await api().get('/api/v1/portal/figures?days=45').set(await external(cus)).expect(400);
+    await api().get('/api/v1/portal/figures').set(await external(sam)).expect(404);
+  });
 });

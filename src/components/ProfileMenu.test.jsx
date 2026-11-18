@@ -9,7 +9,7 @@ let signingOut = false;
 vi.mock("../contexts/UserProvider", () => ({ useUser: () => ({ profile }) }));
 vi.mock("../hooks/useSignedAvatarURL", () => ({ default: () => ({ signedUrl: null }) }));
 vi.mock("../hooks/useSignOut", () => ({ default: () => [signOutNow, signingOut] }));
-const help = vi.hoisted(() => ({ url: null }));
+const help = vi.hoisted(() => ({ url: "https://fortress-qms.com/help" }));
 vi.mock("../lib/help", () => ({
   get HELP_URL() {
     return help.url;
@@ -32,7 +32,7 @@ describe("ProfileMenu", () => {
     document.documentElement.classList.remove("dark");
     signOutNow.mockReset();
     signingOut = false;
-    help.url = null;
+    help.url = "https://fortress-qms.com/help";
     profile = { first_name: "Ada", surname: "Lovelace", email: "ada@example.com" };
   });
 
@@ -53,20 +53,20 @@ describe("ProfileMenu", () => {
     expect(screen.getByRole("menuitem", { name: "Logout" })).toBeInTheDocument();
   });
 
-  it("shows Help switched off until an address is configured", async () => {
-    await renderMenu();
-    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
-    expect(screen.getByRole("menuitem", { name: /Help/ })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText("Not set up yet")).toBeInTheDocument();
-  });
-
-  it("links Help to the configured address", async () => {
-    help.url = "https://help.example.com";
+  it("opens the contents page of the website guides in a new tab", async () => {
     await renderMenu();
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     const link = screen.getByRole("menuitem", { name: "Help" });
-    expect(link).toHaveAttribute("href", "https://help.example.com");
+    expect(link).toHaveAttribute("href", "https://fortress-qms.com/help");
     expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+  });
+
+  it("follows VITE_HELP_URL when it is set", async () => {
+    help.url = "https://staging.example.com/help";
+    await renderMenu();
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    expect(screen.getByRole("menuitem", { name: "Help" })).toHaveAttribute("href", "https://staging.example.com/help");
   });
 
   it("switches dark mode on and off, remembers it, and keeps the menu open", async () => {

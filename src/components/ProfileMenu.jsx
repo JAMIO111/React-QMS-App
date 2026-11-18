@@ -28,9 +28,7 @@ const ProfileMenu = () => {
       items={[
         { label: "My reminders", icon: AlarmClockIcon, to: "/Reminders" },
         { label: "Settings", icon: SettingsIcon, to: "/Settings" },
-        HELP_URL
-          ? { label: "Help", icon: CircleHelpIcon, href: HELP_URL }
-          : { label: "Help", icon: CircleHelpIcon, disabled: true, hint: "Not set up yet" },
+        { label: "Help", icon: CircleHelpIcon, href: HELP_URL },
         { label: "Dark mode", icon: dark ? MoonStarIcon : SunIcon, checked: dark, onSelect: () => setTheme(dark ? "light" : "dark") },
         { separator: true },
         { label: signingOut ? "Logging out…" : "Logout", icon: LogOutIcon, tone: "danger", disabled: signingOut, onSelect: signOutNow },

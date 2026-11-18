@@ -484,6 +484,10 @@ BEGIN
   INSERT INTO public.portal_closure_requests (organisation_id, share_id)
     SELECT a, x.id FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_closure_request', (SELECT id FROM public.portal_closure_requests WHERE organisation_id = a));
+  -- External portal (PT5c): a customer contact.
+  INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
+    SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('customer_contact', (SELECT id FROM public.customer_contacts WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

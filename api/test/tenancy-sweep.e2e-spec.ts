@@ -544,6 +544,9 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/external-access/shares/{id}/comments': undefined,
     'GET /api/v1/external-access/shares/{id}/acknowledgements': undefined,
     'GET /api/v1/external-access/shares/{id}/closures': undefined,
+    'PATCH /api/v1/customer-contacts/{id}': { name: 'Hijacked' },
+    'GET /api/v1/customers/{id}/contacts': undefined,
+    'POST /api/v1/customers/{id}/contacts': { name: 'Hijacked' },
     'POST /api/v1/external-access/shares/{id}/closures': { note: 'Hijacked' },
     'POST /api/v1/external-access/closure-requests/{id}/withdraw': { reason: 'Hijacked' },
     'POST /api/v1/portal/closure-requests/{id}/decide': { confirm: true },
@@ -1059,6 +1062,9 @@ const hasSample = (op: Op) =>
     'GET /api/v1/external-access/shares/{id}/comments',
     'GET /api/v1/external-access/shares/{id}/acknowledgements',
     'GET /api/v1/external-access/shares/{id}/closures',
+    'PATCH /api/v1/customer-contacts/{id}',
+    'GET /api/v1/customers/{id}/contacts',
+    'POST /api/v1/customers/{id}/contacts',
     'POST /api/v1/external-access/shares/{id}/closures',
     'POST /api/v1/external-access/closure-requests/{id}/withdraw',
     'POST /api/v1/portal/closure-requests/{id}/decide',
@@ -1126,6 +1132,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
   if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
+  if (path.startsWith('/api/v1/customer-contacts/')) return a.customerContact;
   if (path.startsWith('/api/v1/customers/')) return a.customer;
   if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
   if (path.startsWith('/api/v1/supplier-quality/suppliers/')) return a.supplier;
@@ -1356,6 +1363,7 @@ beforeAll(async () => {
       `insert into public.portal_comments (organisation_id, share_id, author_side, author_user_id, body) values ($1, $2, 'staff', $3, 'Sweep comment') returning id`,
       [ids.orgA, a.portalShare, ids.ownerA],
     )).rows[0].id;
+    a.customerContact = (await admin.query(`insert into public.customer_contacts (organisation_id, customer_id, name) values ($1, $2, 'Sweep contact') returning id`, [ids.orgA, a.customer])).rows[0].id;
     a.portalClosure = (await admin.query(
       `insert into public.portal_closure_requests (organisation_id, share_id) values ($1, $2) returning id`,
       [ids.orgA, a.portalShare],

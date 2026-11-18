@@ -13,6 +13,7 @@ import { useQuickSave } from "../../hooks/useQuickSave";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
+import CustomerContacts from "./CustomerContacts";
 
 /** The custom-field kind of record for each register. */
 const ENTITY_TYPES = { customers: "customer", suppliers: "supplier" };
@@ -169,6 +170,7 @@ const PartiesPage = ({ kind }) => {
       {editing && (
         <Dialog title={editing === "new" ? `Add ${label.one}` : `Edit ${editing.code}`} onClose={() => setEditing(null)}>
           <PartyForm kind={kind} party={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
+          {editing !== "new" && kind === "customers" && <CustomerContacts customerId={editing.id} canManage={canManage} />}
           {editing !== "new" && (
             <CustomFieldsCard
               entityType={ENTITY_TYPES[kind]}

@@ -6,7 +6,7 @@ import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { useMe } from "../../hooks/useQmsApi";
-import PortalComplaints, { PortalFigures } from "./PortalComplaints";
+import PortalComplaints, { PortalEvidence, PortalFigures } from "./PortalComplaints";
 import { usePortalHome, usePortalMutation, usePortalScars, usePortalShares } from "../../hooks/usePortal";
 import useSignOut from "../../hooks/useSignOut";
 import { describeApiError } from "../../lib/api-client";
@@ -148,6 +148,7 @@ export function PortalHome() {
       )}
       {access.partyKind === "customer" && <PortalFigures access={access} />}
       {access.partyKind === "customer" && <PortalComplaints access={access} />}
+      {access.partyKind === "customer" && <PortalEvidence access={access} />}
       {home.data.scarsAwaiting.length > 0 && (
         <section aria-labelledby="portal-scars-awaiting" className="rounded-2xl border border-warning-color/40 bg-secondary-bg p-5">
           <h2 id="portal-scars-awaiting" className="text-lg font-semibold">Waiting for your response</h2>

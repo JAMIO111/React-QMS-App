@@ -545,6 +545,10 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/external-access/shares/{id}/acknowledgements': undefined,
     'GET /api/v1/external-access/shares/{id}/closures': undefined,
     'PATCH /api/v1/customer-contacts/{id}': { name: 'Hijacked' },
+    'GET /api/v1/external-access/lots/{id}/evidence': undefined,
+    'POST /api/v1/external-access/lots/{id}/evidence': { customerId: '00000000-0000-0000-0000-000000000000', kind: 'other', path: 'x/y/z', fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/external-access/lot-evidence/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/portal/evidence/{id}/download-url': undefined,
     'POST /api/v1/portal/complaints/{id}/files/upload-url': { fileName: 'x.jpg' },
     'POST /api/v1/portal/complaints/{id}/files': { path: 'x/y/z', fileName: 'x.jpg', sizeBytes: 1 },
     'POST /api/v1/portal/complaint-files/{id}/remove': undefined,
@@ -1067,6 +1071,10 @@ const hasSample = (op: Op) =>
     'GET /api/v1/external-access/shares/{id}/acknowledgements',
     'GET /api/v1/external-access/shares/{id}/closures',
     'PATCH /api/v1/customer-contacts/{id}',
+    'GET /api/v1/external-access/lots/{id}/evidence',
+    'POST /api/v1/external-access/lots/{id}/evidence',
+    'POST /api/v1/external-access/lot-evidence/{id}/remove',
+    'POST /api/v1/portal/evidence/{id}/download-url',
     'POST /api/v1/portal/complaints/{id}/files/upload-url',
     'POST /api/v1/portal/complaints/{id}/files',
     'POST /api/v1/portal/complaint-files/{id}/remove',
@@ -1141,6 +1149,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
   if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
   if (path.startsWith('/api/v1/customer-contacts/')) return a.customerContact;
+  if (path.startsWith('/api/v1/external-access/lots/')) return a.lot;
+  if (path.startsWith('/api/v1/external-access/lot-evidence/') || path.startsWith('/api/v1/portal/evidence/')) return a.lotEvidence;
   if (path.startsWith('/api/v1/portal/complaints/')) return a.portalComplaint;
   if (path.startsWith('/api/v1/portal/complaint-files/')) return a.attachment;
   if (path.startsWith('/api/v1/customers/')) return a.customer;
@@ -1376,6 +1386,10 @@ beforeAll(async () => {
     a.portalComplaint = (await admin.query(
       `insert into public.portal_complaints (organisation_id, party_id, nonconformance_id, raised_by) select $1, party_id, $2, $3 from public.external_access where id = $4 returning id`,
       [ids.orgA, a.ncr, ids.ownerA, a.externalAccess],
+    )).rows[0].id;
+    a.lotEvidence = (await admin.query(
+      `insert into public.lot_evidence_files (organisation_id, lot_id, customer_id, kind, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $3::uuid, 'other', $1::text || '/lot/' || $2::text || '/sweep.pdf', 'sweep.pdf', 1) returning id`,
+      [ids.orgA, a.lot, a.customer],
     )).rows[0].id;
     a.customerContact = (await admin.query(`insert into public.customer_contacts (organisation_id, customer_id, name) values ($1, $2, 'Sweep contact') returning id`, [ids.orgA, a.customer])).rows[0].id;
     a.portalClosure = (await admin.query(

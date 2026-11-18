@@ -327,6 +327,22 @@ export const usePortalComplaints = (organisationId, { enabled = true } = {}) => 
   });
 };
 
+/** Certificates and reports staff shared with the customer from a lot (PT5f), and a short link to open one. */
+export const usePortalEvidence = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "evidence"),
+    queryFn: () => apiFetch("/portal/evidence", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+export const openPortalEvidence = async (organisationId, fileId) => {
+  const { url } = await apiFetch(`/portal/evidence/${fileId}/download-url`, { method: "POST", organisationId });
+  window.open(url, "_blank", "noopener");
+};
+
 /** A customer's own quality figures over 30, 90 or 365 days (PT5d). */
 export const usePortalFigures = (organisationId, days = 90, { enabled = true } = {}) => {
   const { user } = useAuth();

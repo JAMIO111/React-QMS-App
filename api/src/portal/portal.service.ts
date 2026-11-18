@@ -119,6 +119,36 @@ export class PortalService {
     return party.partyId;
   }
 
+  /** Files staff shared with the customer from a lot (PT5f). */
+  evidence(ctx: RequestContext) {
+    const party = this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_evidence(${ctx.organisationId}::uuid, ${party}::uuid)`);
+      return {
+        data: r.rows.map((f) => ({
+          id: f.file_id as string,
+          lotNumber: f.lot_number as string,
+          partNumber: f.part_number as string,
+          partName: f.part_name as string,
+          kind: f.kind as 'certificate_of_conformance' | 'inspection_report' | 'other',
+          description: (f.description as string | null) ?? null,
+          fileName: f.file_name as string,
+          sizeBytes: Number(f.size_bytes),
+          addedAt: iso(f.added_at),
+        })),
+      };
+    });
+  }
+
+  async evidenceLink(ctx: RequestContext, fileId: string) {
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    const f = await this.database.asUser(ctx, async (db) => (await db.execute<{ storage_path: string; file_name: string }>(sql`select * from app.portal_evidence_file_path(${fileId}::uuid)`)).rows[0]);
+    const seconds = 600;
+    const url = await this.signer.signDownload('lot-evidence', f.storage_path, seconds, f.file_name);
+    if (!url) throw ApiError.notFound('file_not_found', 'File not found');
+    return { url, expiresIn: seconds, expiresAt: new Date(Date.now() + seconds * 1000).toISOString() };
+  }
+
   /** A customer's own quality figures (PT5d): counts and averages the database works out for their party only. */
   customerFigures(ctx: RequestContext, days?: string) {
     const party = this.customerParty(ctx);

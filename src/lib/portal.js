@@ -145,3 +145,11 @@ export const CLOSURE_STATUS = {
   declined: { label: "Not satisfied", tone: "bg-error-color/15 text-error-color" },
   withdrawn: { label: "Withdrawn", tone: "bg-border-color text-secondary-text" },
 };
+
+// ---- Evidence on a lot (PT5f) ----
+export const EVIDENCE_KINDS = [
+  { id: "certificate_of_conformance", name: "Certificate of conformance" },
+  { id: "inspection_report", name: "Inspection report" },
+  { id: "other", name: "Other" },
+];
+export const evidenceKindLabel = (id) => EVIDENCE_KINDS.find((k) => k.id === id)?.name ?? id;

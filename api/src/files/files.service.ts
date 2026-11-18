@@ -17,6 +17,7 @@ export const ORGANISATION_BUCKETS = [
   'nc-files',
   'org-logos',
   'quality-alert-files',
+  'lot-evidence',
   'scar-files',
   'supplier-files',
 ] as const;

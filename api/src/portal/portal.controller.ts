@@ -140,6 +140,21 @@ export class PortalController {
     return this.service.customerFigures(ctx, days);
   }
 
+  @Get('evidence')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The certificates of conformance, inspection reports and other files staff shared with the person’s customer, with the lot and part each belongs to' })
+  evidence(@Ctx() ctx: RequestContext) {
+    return this.service.evidence(ctx);
+  }
+
+  @Post('evidence/:id/download-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiOkResponse({ description: 'A short-lived link (ten minutes) to a file shared with the person’s customer' })
+  evidenceUrl(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.evidenceLink(ctx, Uuid.parse(id));
+  }
+
   @Get('complaints')
   @PortalScoped()
   @ApiOkResponse({ description: 'A customer’s own complaints with a plain status (received, in progress, closed, cancelled)' })

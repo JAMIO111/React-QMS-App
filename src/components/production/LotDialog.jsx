@@ -1,3 +1,4 @@
+import LotEvidence from "./LotEvidence";
 import { useState } from "react";
 import { HouseIcon } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
@@ -135,6 +136,7 @@ const LotDialog = ({ lot, onClose, readOnly = false }) => {
       </form>
       {!creating && (
         <div className="mt-4">
+          <LotEvidence lotId={current.id} />
           <CustomFieldsCard entityType="lot" record={{ ...current, customValues: lot.customValues ?? current.customValues }} editable={!readOnly && can("production.manage") && current.status !== "closed"} />
         </div>
       )}

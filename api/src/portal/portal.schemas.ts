@@ -81,3 +81,15 @@ export const ComplaintBody = z
 
 export const ClosureRequestBody = z.object({ note: z.string().trim().max(500).nullish() }).strict();
 export const ClosureDecisionBody = z.object({ confirm: z.boolean(), note: z.string().trim().max(2000).nullish() }).strict();
+
+export const LotEvidenceBody = z
+  .object({
+    customerId: z.string().uuid(),
+    kind: z.enum(['certificate_of_conformance', 'inspection_report', 'other']),
+    description: z.string().trim().max(300).nullish(),
+    path: z.string().min(1).max(500),
+    fileName: z.string().trim().min(1).max(255),
+    contentType: z.string().max(200).nullish(),
+    sizeBytes: z.number().int().min(0).max(26_214_400),
+  })
+  .strict();

@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { ExternalAccessService } from './external-access.service';
-import { CommentBody, InviteBody, PartyBody, PeopleQuery, ReasonBody, SettingsBody, ShareBody, SharesQuery, ClosureRequestBody } from './portal.schemas';
+import { CommentBody, InviteBody, PartyBody, PeopleQuery, ReasonBody, SettingsBody, ShareBody, SharesQuery, ClosureRequestBody, LotEvidenceBody } from './portal.schemas';
 
 /** Settings → External access (docs/external-portal-plan.md PT1): the staff side of the supplier and customer portal. */
 @ApiTags('external-access')
@@ -157,5 +157,28 @@ export class ExternalAccessController {
   @ApiOkResponse({ description: 'Withdraw your own comment within ten minutes of writing it' })
   withdrawComment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.withdrawComment(ctx, Uuid.parse(id));
+  }
+
+  @Get('lots/:id/evidence')
+  @OrganisationScoped('external_access.share')
+  @ApiOkResponse({ description: 'The files shared from a lot with customers (removed ones too, with the reason) and the customers the lot is for' })
+  lotEvidence(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.lotEvidence(ctx, Uuid.parse(id));
+  }
+
+  @Post('lots/:id/evidence')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(LotEvidenceBody) })
+  @ApiOkResponse({ description: 'Share an uploaded file (a certificate of conformance, an inspection report) from a lot with one customer it is for; answers with the lot’s evidence' })
+  addLotEvidence(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addLotEvidence(ctx, Uuid.parse(id), parse(LotEvidenceBody, body));
+  }
+
+  @Post('lot-evidence/:id/remove')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Stop sharing a file with the customer, with a reason; it is kept for you and disappears from them at once' })
+  removeLotEvidence(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.removeLotEvidence(ctx, Uuid.parse(id), parse(ReasonBody, body).reason);
   }
 }

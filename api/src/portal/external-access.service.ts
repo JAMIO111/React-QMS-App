@@ -313,6 +313,55 @@ export class ExternalAccessService {
     });
   }
 
+  /** The files shared from a lot, and the customers it is for (PT5f). 404 unless the lot is this organisation's and the caller may see it. */
+  private async evidenceOf(db: Db, lotId: string) {
+    const files = await db.execute<Row>(sql`select * from app.list_lot_evidence(${lotId}::uuid)`);
+    const customers = await db.execute<Row>(sql`select * from app.lot_evidence_customers(${lotId}::uuid)`);
+    return {
+      data: files.rows.map((f) => ({
+        id: f.file_id as string,
+        customerId: f.customer_id as string,
+        customerName: f.customer_name as string,
+        kind: f.kind as 'certificate_of_conformance' | 'inspection_report' | 'other',
+        description: (f.description as string | null) ?? null,
+        fileName: f.file_name as string,
+        sizeBytes: Number(f.size_bytes),
+        storagePath: f.storage_path as string,
+        addedAt: iso(f.added_at),
+        addedBy: f.added_by as string,
+        removedAt: iso(f.removed_at),
+        removeReason: (f.remove_reason as string | null) ?? null,
+      })),
+      customers: customers.rows.map((c) => ({ id: c.customer_id as string, name: c.customer_name as string })),
+    };
+  }
+
+  lotEvidence(ctx: RequestContext, lotId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const ok = await db.execute(sql`select 1 from public.lots where id = ${lotId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (ok.rows.length === 0) throw ApiError.notFound('lot_not_found', 'That lot was not found');
+      return this.evidenceOf(db, lotId);
+    });
+  }
+
+  addLotEvidence(ctx: RequestContext, lotId: string, b: { customerId: string; kind: string; description?: string | null; path: string; fileName: string; contentType?: string | null; sizeBytes: number }) {
+    return this.database.asUser(ctx, async (db) => {
+      const ok = await db.execute(sql`select 1 from public.lots where id = ${lotId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (ok.rows.length === 0) throw ApiError.notFound('lot_not_found', 'That lot was not found');
+      await db.execute(sql`select app.add_lot_evidence(${lotId}::uuid, ${b.customerId}::uuid, ${b.kind}, ${b.description ?? null}, ${b.path}, ${b.fileName}, ${b.contentType ?? null}, ${b.sizeBytes}::bigint)`);
+      return this.evidenceOf(db, lotId);
+    });
+  }
+
+  removeLotEvidence(ctx: RequestContext, fileId: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ lot_id: string }>(sql`select lot_id from public.lot_evidence_files where id = ${fileId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows[0]) throw ApiError.notFound('file_not_found', 'That file was not found');
+      await db.execute(sql`select app.remove_lot_evidence(${fileId}::uuid, ${reason})`);
+      return this.evidenceOf(db, found.rows[0].lot_id);
+    });
+  }
+
   /** Who in the party acknowledged a shared document or alert, and which revision they acknowledged. */
   acknowledgements(ctx: RequestContext, shareId: string) {
     return this.database.asUser(ctx, async (db) => {

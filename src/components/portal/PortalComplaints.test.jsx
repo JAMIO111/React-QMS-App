@@ -5,6 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 
 let list;
 let figures;
+let evidence = [];
+const openEvidence = vi.fn();
 const fileMutate = vi.fn();
 const openFile = vi.fn();
 const mutate = vi.fn();
@@ -14,10 +16,12 @@ vi.mock("../../hooks/usePortal", () => ({
   usePortalComplaintMutation: () => ({ mutate, isPending: false }),
   usePortalComplaintFileMutation: () => ({ mutate: fileMutate, isPending: false, variables: null, error: null }),
   openPortalComplaintFile: (...a) => openFile(...a),
+  usePortalEvidence: () => ({ data: { data: evidence }, isLoading: false, error: null }),
+  openPortalEvidence: (...a) => openEvidence(...a),
   usePortalFigures: () => ({ data: figures, isLoading: false, error: null }),
 }));
 
-import PortalComplaints, { PortalFigures } from "./PortalComplaints";
+import PortalComplaints, { PortalEvidence, PortalFigures } from "./PortalComplaints";
 
 const access = { organisationId: "o1", organisationName: "Alpha Precision" };
 const item = { id: "c1", reference: "SNC-26-0001", title: "Bracket cracked", description: "x", status: "received", raisedAt: "2026-11-17T09:00:00Z", raisedByMe: true, partNumber: "P-100", partName: "Bracket", quantity: 3, lot: "LOT-9", customerReference: null, detectedOn: "2026-11-16", shareId: null, files: [{ id: "f1", name: "crack.jpg", sizeBytes: 2048, addedAt: "2026-11-17T09:05:00Z", mine: true, canRemove: true }] };
@@ -26,6 +30,8 @@ beforeEach(() => {
   figures = { available: true, period: { from: "2026-08-20", to: "2026-11-17", days: 90 }, ncs: { raised: 4, critical: 0, major: 1, minor: 3, open: 2, oldestOpenDays: 12, averageOpenDays: 7.5, closedInPeriod: 2, averageDaysToClose: 9.5 }, capas: { started: 1, inProgress: 1, closedInPeriod: 0, averageDaysToClose: null } };
   mutate.mockReset();
   fileMutate.mockReset();
+  openEvidence.mockReset();
+  evidence = [];
   openFile.mockReset();
   list = [item];
 });
@@ -112,5 +118,20 @@ describe("files on a complaint", () => {
     renderIt();
     expect(screen.queryByRole("button", { name: /Add a file to/ })).toBeNull();
     expect(screen.getByRole("list", { name: "Files on SNC-26-0001" })).toBeInTheDocument();
+  });
+});
+
+describe("certificates and reports for a customer", () => {
+  it("shows nothing when nothing has been shared", () => {
+    const { container } = render(<PortalEvidence access={access} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("lists what was shared by lot and opens one", async () => {
+    evidence = [{ id: "e1", lotNumber: "LOT-9", partNumber: "P-100", partName: "Bracket", kind: "certificate_of_conformance", description: "Certificate", fileName: "coc.pdf", sizeBytes: 100, addedAt: "2026-11-17T09:00:00Z" }];
+    render(<PortalEvidence access={access} />);
+    expect(screen.getByRole("list", { name: "Certificates and reports" })).toHaveTextContent("Certificate of conformance · Lot LOT-9 · P-100 Bracket");
+    await userEvent.click(screen.getByRole("button", { name: "coc.pdf" }));
+    expect(openEvidence).toHaveBeenCalledWith("o1", "e1");
   });
 });

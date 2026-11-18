@@ -488,6 +488,11 @@ BEGIN
   INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
     SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('customer_contact', (SELECT id FROM public.customer_contacts WHERE organisation_id = a));
+  -- External portal (PT5f): a file on a lot shared with a customer (written by a function; seeded directly here).
+  INSERT INTO public.lot_evidence_files (organisation_id, lot_id, customer_id, kind, storage_path, file_name, size_bytes)
+    SELECT a, l.id, c.id, 'other', a::text || '/lot/' || l.id::text || '/sweep.pdf', 'sweep.pdf', 1
+      FROM public.lots l, public.customers c WHERE l.organisation_id = a AND c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('lot_evidence', (SELECT id FROM public.lot_evidence_files WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

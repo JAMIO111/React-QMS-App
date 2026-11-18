@@ -7,13 +7,13 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
-import { openPortalComplaintFile, usePortalComplaintFileMutation, usePortalComplaintMutation, usePortalComplaintParts, usePortalComplaints, usePortalFigures } from "../../hooks/usePortal";
+import { openPortalComplaintFile, openPortalEvidence, usePortalComplaintFileMutation, usePortalEvidence, usePortalComplaintMutation, usePortalComplaintParts, usePortalComplaints, usePortalFigures } from "../../hooks/usePortal";
 import SlidingToggle from "../ui/SlidingToggle";
 import { Chip, Tile } from "../dashboard/DashboardGraphics";
 import { PERIODS } from "../../lib/supplierPerformance";
 import { describeApiError } from "../../lib/api-client";
 import { todayIso } from "@/lib/localDate";
-import { COMPLAINT_STATUS, sharedPath, shortDate } from "../../lib/portal";
+import { COMPLAINT_STATUS, evidenceKindLabel, sharedPath, shortDate } from "../../lib/portal";
 
 /**
  * Complaints (PT5a): what a customer has raised and a way to raise another. A complaint reaches us as a draft the quality team reviews, so the status here
@@ -208,5 +208,32 @@ function ComplaintFiles({ complaint, organisationId }) {
       )}
       {mutate.error && <Callout tone="error" role="alert">{describeApiError(mutate.error)}</Callout>}
     </div>
+  );
+}
+
+/** Certificates of conformance and inspection reports we have shared with the customer, by lot (PT5f). Shown only when there are some. */
+export function PortalEvidence({ access }) {
+  const evidence = usePortalEvidence(access.organisationId);
+  const items = evidence.data?.data ?? [];
+  if (evidence.isLoading || evidence.error || items.length === 0) return null;
+  return (
+    <section aria-labelledby="portal-evidence" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-5">
+      <div>
+        <h2 id="portal-evidence" className="text-lg font-semibold">Certificates and reports</h2>
+        <p className="text-sm text-secondary-text">Documents {access.organisationName} has shared with you for the lots they supplied.</p>
+      </div>
+      <ul aria-label="Certificates and reports" className="flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+        {items.map((f) => (
+          <li key={f.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+            <div className="min-w-0 grow">
+              <button type="button" className="truncate font-medium text-link-color hover:underline" onClick={() => openPortalEvidence(access.organisationId, f.id)}>{f.fileName}</button>
+              <p className="truncate text-xs text-secondary-text">
+                {evidenceKindLabel(f.kind)} · Lot {f.lotNumber} · {f.partNumber} {f.partName} · {shortDate(f.addedAt)}{f.description ? ` · ${f.description}` : ""}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

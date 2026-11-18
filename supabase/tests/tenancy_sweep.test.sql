@@ -460,6 +460,10 @@ BEGIN
     VALUES (a, (SELECT id FROM public.portal_shares WHERE organisation_id = a), 'staff', '50000000-0000-0000-0000-0000000000a1', 'Sweep comment');
   INSERT INTO public.portal_views (share_id, user_id, organisation_id) VALUES ((SELECT id FROM public.portal_shares WHERE organisation_id = a), '50000000-0000-0000-0000-0000000000a1', a);
   INSERT INTO sweep VALUES ('portal_share', (SELECT id FROM public.portal_shares WHERE organisation_id = a)), ('portal_comment', (SELECT id FROM public.portal_comments WHERE organisation_id = a));
+  -- External portal (PT3a): one note of something a party did (written by functions; seeded directly here).
+  INSERT INTO public.portal_activity (organisation_id, party_id, kind, record_kind, record_id, party_name, record_label, message)
+    VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'comment', 'ncr', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1), 'Sweep supplier', 'NC-1 · Sweep', 'Commented');
+  INSERT INTO sweep VALUES ('portal_activity', (SELECT id FROM public.portal_activity WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

@@ -14,6 +14,10 @@ describe('where an email links to', () => {
   it('follows the in-app links, and goes to the run for an import alert', () => {
     expect(notificationPath('nonconformances', A, {})).toBe(`/Non-Conformance/Register/${A}`);
     expect(notificationPath('nonconformances', A, { deleted: true })).toBeNull();
+    expect(notificationPath('portal_activity', 'x', { record_kind: 'scar', record_id: A })).toBe(`/Supplier-Quality/SCARs/${A}`);
+    expect(notificationPath('portal_activity', 'x', { record_kind: 'capa', record_id: A })).toBe(`/CAPA/${A}/d0`);
+    expect(notificationPath('portal_activity', 'x', { record_kind: 'ncr', record_id: A })).toBe(`/Non-Conformance/Register/${A}`);
+    expect(notificationPath('portal_activity', 'x', {})).toBe('/Settings/External-Access');
     expect(notificationPath('calibrations', A, { gauge_id: B })).toBe(`/Calibration/Gauges/${B}/calibrations/${A}`);
     expect(notificationPath('quality_alert_recipients', A, { alert_id: B })).toBe(`/Documentation/Quality-Alerts/${B}`);
     expect(notificationPath('capa_actions', A, {})).toBe('/CAPA/My-Actions');

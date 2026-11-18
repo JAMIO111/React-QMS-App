@@ -6,10 +6,10 @@ import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { useMe } from "../../hooks/useQmsApi";
-import { usePortalHome, usePortalMutation, usePortalShares } from "../../hooks/usePortal";
+import { usePortalHome, usePortalMutation, usePortalScars, usePortalShares } from "../../hooks/usePortal";
 import useSignOut from "../../hooks/useSignOut";
 import { describeApiError } from "../../lib/api-client";
-import { accessFor, partyKindLabel, rememberPortalOrganisation, rememberedPortalOrganisation, sharedPath, shareKindLabel, shortDate } from "../../lib/portal";
+import { accessFor, dueWords, partyKindLabel, rememberPortalOrganisation, rememberedPortalOrganisation, scarPath, scarStatus, sharedPath, shareKindLabel, shortDate } from "../../lib/portal";
 import PortalPeople from "./PortalPeople";
 
 /**
@@ -118,6 +118,7 @@ export function PortalHome() {
   const { access } = useOutletContext();
   const home = usePortalHome(access.organisationId);
   const shares = usePortalShares(access.organisationId, { enabled: !access.mfaRequired });
+  const scars = usePortalScars(access.organisationId, { enabled: !access.mfaRequired });
   const contact = access.contactName || access.organisationName;
 
   if (access.mfaRequired) {
@@ -138,6 +139,12 @@ export function PortalHome() {
         <p className="text-sm text-secondary-text">{partyKindLabel(access.partyKind)} portal for {access.organisationName}</p>
         <p className="text-sm text-primary-text">Your contact at {access.organisationName}: <span className="font-medium">{contact}</span></p>
       </section>
+      {home.data.scarsAwaiting.length > 0 && (
+        <section aria-labelledby="portal-scars-awaiting" className="rounded-2xl border border-warning-color/40 bg-secondary-bg p-5">
+          <h2 id="portal-scars-awaiting" className="text-lg font-semibold">Waiting for your response</h2>
+          <ScarList items={home.data.scarsAwaiting} organisationId={access.organisationId} label="Requests waiting for your response" />
+        </section>
+      )}
       <section aria-labelledby="portal-attention" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
         <h2 id="portal-attention" className="text-lg font-semibold">Needs your attention</h2>
         {home.data.attention.length === 0 ? (
@@ -150,6 +157,12 @@ export function PortalHome() {
           <SharedList items={home.data.attention} organisationId={access.organisationId} label="Needs your attention" />
         )}
       </section>
+      {(scars.data?.data ?? []).length > 0 && (
+        <section aria-labelledby="portal-scars" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
+          <h2 id="portal-scars" className="text-lg font-semibold">Corrective action requests</h2>
+          <ScarList items={scars.data.data} organisationId={access.organisationId} label="Corrective action requests" />
+        </section>
+      )}
       {(shares.data?.data ?? []).length > 0 && (
         <section aria-labelledby="portal-shared" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
           <h2 id="portal-shared" className="text-lg font-semibold">Shared with you</h2>
@@ -178,6 +191,29 @@ function SharedList({ items, organisationId, label }) {
           </Link>
         </li>
       ))}
+    </ul>
+  );
+}
+
+
+/** Corrective action requests as a list: reference and title, what is asked of them, when it is due. */
+function ScarList({ items, organisationId, label }) {
+  return (
+    <ul aria-label={label} className="mt-2 flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+      {items.map((c) => {
+        const st = scarStatus(c.status);
+        return (
+          <li key={c.id}>
+            <Link to={scarPath(c.id, organisationId)} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm hover:bg-primary-bg">
+              <div className="min-w-0 grow">
+                <p className="truncate font-medium text-primary-text">{c.reference} · {c.title}</p>
+                <p className="text-xs text-secondary-text">{st.label}{dueWords(c) ? ` · ${dueWords(c)}` : ""}{c.extensionWaiting ? " · more time asked for" : ""}</p>
+              </div>
+              {c.overdue && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs font-medium text-error-color">Overdue</span>}
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }

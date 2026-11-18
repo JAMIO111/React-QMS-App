@@ -258,3 +258,54 @@ export const usePortalShareMutation = (organisationId, shareId) => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
   });
 };
+
+// ---- Corrective action requests (PT3a) ----
+
+/** The SCARs issued to the person's supplier, those awaiting a response first. */
+export const usePortalScars = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "scars"),
+    queryFn: () => apiFetch("/portal/scars", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** One SCAR as the supplier sees it, with what they may do next. */
+export const usePortalScar = (organisationId, scarId) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "scar", scarId),
+    queryFn: () => apiFetch(`/portal/scars/${scarId}`, { organisationId }),
+    enabled: !!user && !!organisationId && !!scarId,
+    retry: false,
+  });
+};
+
+/**
+ * Acknowledge, respond, ask for more time, take that back. The server decides what is allowed, so these wait for its answer (no guess) and the answer is
+ * the SCAR, which replaces the cached copy. Everything the person has in the portal is refreshed afterwards.
+ */
+export const usePortalScarMutation = (organisationId, scarId) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      switch (action) {
+        case "acknowledge":
+          return apiFetch(`/portal/scars/${scarId}/acknowledge`, { method: "POST", body: body ?? {}, organisationId });
+        case "respond":
+          return apiFetch(`/portal/scars/${scarId}/respond`, { method: "POST", body, organisationId });
+        case "extend":
+          return apiFetch(`/portal/scars/${scarId}/extensions`, { method: "POST", body, organisationId });
+        case "withdrawExtension":
+          return apiFetch(`/portal/scar-extensions/${id}/withdraw`, { method: "POST", body, organisationId });
+        default:
+          throw new Error(`Unknown SCAR action ${action}`);
+      }
+    },
+    onSuccess: (data) => queryClient.setQueryData(portalKey(user?.id, organisationId, "scar", scarId), data),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};

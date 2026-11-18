@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessFor, accessStatus, lastSeenWords, partyKindLabel, personLine } from "./portal";
+import { accessFor, accessStatus, dueWords, lastSeenWords, partyKindLabel, personLine, scarPath, scarStatus } from "./portal";
 
 describe("portal words", () => {
   it("names the kind of party and the status of an access", () => {
@@ -30,5 +30,19 @@ describe("portal words", () => {
     expect(accessFor(portal, "o2")).toBe(portal[1]);
     expect(accessFor(portal, "nope")).toBe(portal[0]);
     expect(accessFor([], "o1")).toBeNull();
+  });
+
+  it("words a SCAR's status for the supplier, not in our internal terms", () => {
+    expect(scarStatus("issued").label).toBe("Needs your response");
+    expect(scarStatus("response_received").label).toBe("With us for review");
+    expect(scarStatus("revision_requested").tone).toBe("warning");
+    expect(scarStatus("something_new")).toEqual({ label: "something_new", tone: "neutral" });
+  });
+
+  it("says when a response is due or overdue, and nothing once it is not awaited", () => {
+    expect(dueWords({ awaitingResponse: true, overdue: false, responseDueOn: "2026-12-03" })).toBe("Due 3 Dec 2026");
+    expect(dueWords({ awaitingResponse: true, overdue: true, responseDueOn: "2026-12-03" })).toBe("Overdue since 3 Dec 2026");
+    expect(dueWords({ awaitingResponse: false, overdue: false, responseDueOn: "2026-12-03" })).toBe("");
+    expect(scarPath("c1", "o1")).toBe("/portal/scars/c1?org=o1");
   });
 });

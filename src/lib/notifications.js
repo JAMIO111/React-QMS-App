@@ -53,6 +53,13 @@ export function notificationLink(n) {
       return workflowRecordPath(d.record_kind, d.record_id);
     case "workflow_tasks":
       return "/Tasks";
+    case "portal_activity":
+      if (typeof d.record_id !== "string") return "/Settings/External-Access";
+      return d.record_kind === "scar"
+        ? `/Supplier-Quality/SCARs/${d.record_id}`
+        : d.record_kind === "capa"
+          ? `/CAPA/${d.record_id}/d0`
+          : ncrPath(d.record_id);
     case "reminder_digests":
       return "/Reminders";
     case "reminder_overdue_notices":

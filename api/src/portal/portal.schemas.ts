@@ -37,3 +37,22 @@ export const PeopleQuery = z.object({ partyId: z.string().uuid().optional() });
 export const ShareBody = z.object({ kind: z.enum(['ncr', 'capa']), recordId: z.string().uuid(), partyId: z.string().uuid() }).strict();
 export const SharesQuery = z.object({ kind: z.enum(['ncr', 'capa']), recordId: z.string().uuid() });
 export const CommentBody = z.object({ body: z.string().trim().min(1).max(4000) }).strict();
+
+const Text = (max: number) => z.string().trim().min(3).max(max);
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date as yyyy-mm-dd');
+export const ScarAcknowledgeBody = z.object({ note: z.string().trim().max(1000).optional() }).strict();
+export const ScarRespondBody = z
+  .object({
+    rootCause: Text(4000),
+    containment: z.string().trim().max(4000).optional(),
+    correctiveAction: Text(4000),
+    preventiveAction: z.string().trim().max(4000).optional(),
+    plannedCompletionOn: day.nullable().optional(),
+    extentOfCondition: z.string().trim().max(4000).optional(),
+    escapePoint: z.string().trim().max(4000).optional(),
+    responsibleName: z.string().trim().max(200).optional(),
+    rootCauseMethod: z.enum(['five_whys', 'fishbone', 'other']).nullable().optional(),
+  })
+  .strict();
+export const ScarExtensionBody = z.object({ newDueOn: day, reason: z.string().trim().min(3).max(1000) }).strict();
+export const ScarExtensionWithdrawBody = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();

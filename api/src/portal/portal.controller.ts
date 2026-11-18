@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { CommentBody, OwnPartyInviteBody, ReasonBody } from './portal.schemas';
+import { CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarRespondBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -98,5 +98,51 @@ export class PortalController {
   @ApiOkResponse({ description: 'Withdraw your own comment within ten minutes of writing it' })
   withdrawComment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.withdrawComment(ctx, Uuid.parse(id));
+  }
+
+  @Get('scars')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The corrective action requests (SCARs) issued to the person’s supplier, those awaiting a response first' })
+  scars(@Ctx() ctx: RequestContext) {
+    return this.service.listScars(ctx);
+  }
+
+  @Get('scars/:id')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'One SCAR as the supplier sees it (named fields only: the request, what is affected, their responses with our review, requests for more time) and what they may do next' })
+  scar(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getScar(ctx, Uuid.parse(id));
+  }
+
+  @Post('scars/:id/acknowledge')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarAcknowledgeBody) })
+  @ApiOkResponse({ description: 'Confirm the SCAR has been received; answers with the SCAR' })
+  acknowledgeScar(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.acknowledgeScar(ctx, Uuid.parse(id), parse(ScarAcknowledgeBody, body).note ?? null);
+  }
+
+  @Post('scars/:id/respond')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarRespondBody) })
+  @ApiOkResponse({ description: 'Send a response (root cause and corrective action are needed); it waits for review and never closes the SCAR; answers with the SCAR' })
+  respondScar(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.respondScar(ctx, Uuid.parse(id), parse(ScarRespondBody, body));
+  }
+
+  @Post('scars/:id/extensions')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarExtensionBody) })
+  @ApiOkResponse({ description: 'Ask for more time; the date moves only when someone at the organisation agrees; answers with the SCAR' })
+  requestExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.requestScarExtension(ctx, Uuid.parse(id), parse(ScarExtensionBody, body));
+  }
+
+  @Post('scar-extensions/:id/withdraw')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarExtensionWithdrawBody) })
+  @ApiOkResponse({ description: 'Take back your own request for more time while it waits; answers with the SCAR' })
+  withdrawScarExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawScarExtension(ctx, Uuid.parse(id), parse(ScarExtensionWithdrawBody, body).reason);
   }
 }

@@ -68,3 +68,32 @@ export const viewedWords = (share, now = new Date()) =>
 /** Dates for the shared record page. */
 export const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "");
 export const longDateTime = (iso) => (iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+
+/** What a SCAR's status means to the supplier (not our internal words). */
+export const SCAR_STATUS = {
+  issued: { label: "Needs your response", tone: "warning" },
+  acknowledged: { label: "Acknowledged: response due", tone: "warning" },
+  response_received: { label: "With us for review", tone: "info" },
+  under_review: { label: "Being reviewed", tone: "info" },
+  revision_requested: { label: "Revised response needed", tone: "warning" },
+  accepted: { label: "Accepted", tone: "success" },
+  verifying: { label: "Being checked", tone: "info" },
+  closed: { label: "Closed", tone: "success" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
+export const scarStatus = (status) => SCAR_STATUS[status] ?? { label: status, tone: "neutral" };
+
+export const SCAR_SEVERITY = { minor: "Minor", major: "Major", critical: "Critical" };
+
+export const EXTENSION_WORDS = {
+  pending: "Waiting for a decision",
+  approved: "Agreed",
+  rejected: "Not agreed",
+  withdrawn: "Taken back",
+};
+
+/** The portal address of one SCAR (the organisation goes in the address so a link from an email opens the right portal). */
+export const scarPath = (scarId, organisationId) => `/portal/scars/${scarId}${organisationId ? `?org=${organisationId}` : ""}`;
+
+/** "Due 3 Dec 2026", "Overdue since 3 Dec 2026" or nothing, for a SCAR awaiting a response. */
+export const dueWords = (scar) => (!scar.responseDueOn || !scar.awaitingResponse ? "" : `${scar.overdue ? "Overdue since" : "Due"} ${shortDate(`${scar.responseDueOn}T12:00:00Z`)}`);

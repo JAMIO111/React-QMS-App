@@ -4,6 +4,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { PortalMailer } from '../portal/portal-mailer.service';
 import {
   AcknowledgeScarBody, AWAITING_RESPONSE, CreateScarBody, DecideExtensionBody, ExtendBody, ImplementationBody, LinkNcrBody, RecordResponseBody, ReviewBody, ScarDetail, ScarItemInput, ScarListQuery, ScarPage,
   ScarPeople, ScarPeopleQuery, ScarReasonBody, ScarRow, UpdateScarBody, VerificationBody,
@@ -63,7 +64,74 @@ const toRow = (r: Row): ScarRow => ({
  */
 @Injectable()
 export class SupplierScarService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly portalMailer: PortalMailer,
+  ) {}
+
+  /**
+   * Email the supplier's portal people about a SCAR step of ours (issued, reviewed, extension decided). Best effort, straight after the step: a failed or
+   * unconfigured send never undoes it, and nobody without portal access is emailed (docs/external-portal-plan.md PT3a).
+   */
+  private async tellSupplier(ctx: RequestContext, scarId: string, what: 'issued' | 'accepted' | 'revision' | 'extension_approved' | 'extension_rejected', note?: string | null) {
+    try {
+      const info = await this.database.asUser(ctx, async (db) => {
+        const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.portal_scar_recipients(${scarId}::uuid)`);
+        const rec = await db.execute<{ reference: string; title: string; org_name: string; due: string | null }>(
+          sql`select c.reference, c.title, o.name as org_name, c.response_due_on::text as due from public.supplier_scars c join public.organisations o on o.id = c.organisation_id where c.id = ${scarId}::uuid`,
+        );
+        return { people: people.rows, rec: rec.rows[0] };
+      });
+      if (!info.rec || info.people.length === 0) return;
+      const { reference, title, org_name: org, due } = info.rec;
+      const dueWords = due ? new Date(`${due}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
+      const copy: Record<typeof what, { subject: string; heading: string; paragraphs: string[]; button: string }> = {
+        issued: {
+          subject: `${org} needs your response: ${reference}`,
+          heading: `${org} has raised a corrective action request with you`,
+          paragraphs: [`${reference} — ${title}`, dueWords ? `Please respond by ${dueWords}.` : 'Please respond as soon as you can.'],
+          button: 'Open the request',
+        },
+        accepted: {
+          subject: `${org} accepted your response: ${reference}`,
+          heading: 'Your response was accepted',
+          paragraphs: [`${reference} — ${title}`, 'Thank you. We will tell you if anything more is needed.'],
+          button: 'See the request',
+        },
+        revision: {
+          subject: `${org} asked for a revised response: ${reference}`,
+          heading: 'A revised response is needed',
+          paragraphs: [`${reference} — ${title}`, dueWords ? `Please respond again by ${dueWords}.` : 'Please respond again.'],
+          button: 'Read what is needed',
+        },
+        extension_approved: {
+          subject: `More time agreed: ${reference}`,
+          heading: 'Your request for more time was agreed',
+          paragraphs: [`${reference} — ${title}`, dueWords ? `The response is now due on ${dueWords}.` : 'The new date is on the request.'],
+          button: 'See the request',
+        },
+        extension_rejected: {
+          subject: `More time not agreed: ${reference}`,
+          heading: 'Your request for more time was not agreed',
+          paragraphs: [`${reference} — ${title}`, dueWords ? `The response is still due on ${dueWords}.` : 'The date has not changed.'],
+          button: 'See why',
+        },
+      };
+      const c = copy[what];
+      await this.portalMailer.send({
+        to: info.people.map((p) => ({ email: p.email, name: p.name })),
+        subject: c.subject,
+        heading: c.heading,
+        paragraphs: c.paragraphs,
+        quote: note ? { text: note } : undefined,
+        path: `/portal/scars/${scarId}?org=${orgOf(ctx)}`,
+        button: c.button,
+        footerWho: org,
+      });
+    } catch {
+      // Never undoes the step.
+    }
+  }
 
   // ---- register ------------------------------------------------------------------------------------
 
@@ -234,8 +302,10 @@ export class SupplierScarService {
   update(ctx: RequestContext, id: string, b: UpdateScarBody) {
     return this.command(ctx, id, (db) => db.execute(sql`select app.update_supplier_scar(${id}::uuid, ${JSON.stringify(b)}::jsonb)`));
   }
-  issue(ctx: RequestContext, id: string) {
-    return this.command(ctx, id, (db) => db.execute(sql`select app.issue_supplier_scar(${id}::uuid)`));
+  async issue(ctx: RequestContext, id: string) {
+    const result = await this.command(ctx, id, (db) => db.execute(sql`select app.issue_supplier_scar(${id}::uuid)`));
+    await this.tellSupplier(ctx, id, 'issued');
+    return result;
   }
   acknowledge(ctx: RequestContext, id: string, b: AcknowledgeScarBody) {
     return this.command(ctx, id, (db) => db.execute(sql`select app.acknowledge_supplier_scar(${id}::uuid, ${b.note ?? null})`));
@@ -248,8 +318,10 @@ export class SupplierScarService {
   startReview(ctx: RequestContext, id: string) {
     return this.command(ctx, id, (db) => db.execute(sql`select app.start_scar_review(${id}::uuid)`));
   }
-  review(ctx: RequestContext, id: string, b: ReviewBody) {
-    return this.command(ctx, id, (db) => db.execute(sql`select app.review_scar_response(${id}::uuid, ${b.decision}, ${b.note})`));
+  async review(ctx: RequestContext, id: string, b: ReviewBody) {
+    const result = await this.command(ctx, id, (db) => db.execute(sql`select app.review_scar_response(${id}::uuid, ${b.decision}, ${b.note})`));
+    await this.tellSupplier(ctx, id, b.decision === 'accepted' ? 'accepted' : 'revision', b.note);
+    return result;
   }
   recordImplementation(ctx: RequestContext, id: string, b: ImplementationBody) {
     return this.command(ctx, id, (db) => db.execute(sql`select app.record_scar_implementation(${id}::uuid, ${b.description}, ${b.implementedOn}::date, ${b.evidenceNote ?? null})`));
@@ -276,8 +348,10 @@ export class SupplierScarService {
   removeItem(ctx: RequestContext, itemId: string, b: ScarReasonBody) {
     return this.viaChild(ctx, 'supplier_scar_items', itemId, 'supplier_scar_item_not_found', (db) => db.execute(sql`select app.remove_scar_item(${itemId}::uuid, ${b.reason})`));
   }
-  decideExtension(ctx: RequestContext, extensionId: string, b: DecideExtensionBody) {
-    return this.viaChild(ctx, 'supplier_scar_extensions', extensionId, 'supplier_scar_extension_not_found', (db) => db.execute(sql`select app.decide_scar_extension(${extensionId}::uuid, ${b.approve}, ${b.note})`));
+  async decideExtension(ctx: RequestContext, extensionId: string, b: DecideExtensionBody) {
+    const result = await this.viaChild(ctx, 'supplier_scar_extensions', extensionId, 'supplier_scar_extension_not_found', (db) => db.execute(sql`select app.decide_scar_extension(${extensionId}::uuid, ${b.approve}, ${b.note})`));
+    await this.tellSupplier(ctx, result.id, b.approve ? 'extension_approved' : 'extension_rejected', b.note);
+    return result;
   }
   withdrawExtension(ctx: RequestContext, extensionId: string, b: ScarReasonBody) {
     return this.viaChild(ctx, 'supplier_scar_extensions', extensionId, 'supplier_scar_extension_not_found', (db) => db.execute(sql`select app.withdraw_scar_extension(${extensionId}::uuid, ${b.reason})`));

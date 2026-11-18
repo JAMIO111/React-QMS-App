@@ -153,6 +153,7 @@ const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx
 const PortalApp = lazy(() => import("./components/portal/PortalApp.jsx"));
 const PortalHome = lazy(() => import("./components/portal/PortalApp.jsx").then((m) => ({ default: m.PortalHome })));
 const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
+const PortalScarPage = lazy(() => import("./components/portal/PortalScarPage.jsx"));
 const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
@@ -231,6 +232,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <PortalHome /> },
           { path: "shared/:shareId", element: <PortalSharedPage /> },
+          { path: "scars/:scarId", element: <PortalScarPage /> },
         ],
       },
       {

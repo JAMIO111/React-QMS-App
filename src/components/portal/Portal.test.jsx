@@ -7,6 +7,7 @@ let me;
 let home;
 let people;
 let shares;
+let scars = [];
 const mutate = vi.fn();
 const signOut = vi.fn();
 
@@ -15,6 +16,7 @@ vi.mock("../../hooks/usePortal", () => ({
   usePortalHome: () => home,
   usePortalPeople: () => ({ data: { data: people }, isLoading: false }),
   usePortalShares: () => ({ data: { data: shares }, isLoading: false }),
+  usePortalScars: () => ({ data: { data: scars }, isLoading: false }),
   usePortalMutation: () => ({ mutate, isPending: false, variables: null }),
 }));
 vi.mock("../../hooks/useSignOut", () => ({ default: () => [signOut, false] }));
@@ -40,7 +42,7 @@ beforeEach(() => {
   signOut.mockReset();
   sessionStorage.clear();
   me = { profile: { email: "sam@acme.test" }, memberships: [], portal: [acme], portalInvitations: [] };
-  home = { data: { access: acme, attention: [], shared: 0 }, isLoading: false, error: null };
+  home = { data: { access: acme, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
   shares = [];
   people = [{ id: "x1", email: "sam@acme.test", name: "Sam Smith", role: "admin", status: "active", lastSignInAt: null }];
 });
@@ -57,7 +59,7 @@ describe("the supplier and customer portal", () => {
 
   it("falls back to the organisation's name when no contact is set", () => {
     me = { ...me, portal: [beta] };
-    home = { data: { access: beta, attention: [], shared: 0 }, isLoading: false, error: null };
+    home = { data: { access: beta, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();
     expect(screen.getAllByText("Beta Castings").length).toBeGreaterThan(0);
     expect(screen.getByText(/Your contact at Beta Castings:/).textContent).toMatch(/Beta Castings$/);
@@ -73,7 +75,7 @@ describe("the supplier and customer portal", () => {
 
   it("an ordinary member has no people section", () => {
     me = { ...me, portal: [beta] };
-    home = { data: { access: beta, attention: [], shared: 0 }, isLoading: false, error: null };
+    home = { data: { access: beta, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();
     expect(screen.queryByRole("heading", { name: /People at/ })).toBeNull();
   });
@@ -121,7 +123,7 @@ describe("the supplier and customer portal", () => {
   it("lists what needs attention and everything shared, with what is new", () => {
     const item = { id: "s1", kind: "ncr", reference: "NC-1", title: "Cracked bar stock", status: "open", sharedAt: "2026-11-18T09:00:00Z", comments: 2, newComments: 1, viewed: true };
     const fresh = { ...item, id: "s2", kind: "capa", reference: "CAPA-1", title: "Casting 8D", newComments: 0, viewed: false };
-    home = { data: { access: acme, attention: [item, fresh], shared: 2 }, isLoading: false, error: null };
+    home = { data: { access: acme, attention: [item, fresh], shared: 2, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     shares = [item, fresh];
     renderIt();
     const attention = screen.getByRole("list", { name: "Needs your attention" });
@@ -132,8 +134,25 @@ describe("the supplier and customer portal", () => {
     expect(screen.getByRole("list", { name: "Shared with you" })).toBeInTheDocument();
   });
 
+  it("puts the corrective action requests that wait for a response first, with when they are due", () => {
+    const due = { id: "c1", reference: "SCAR-26-0001", title: "Cracked castings", severity: "major", status: "issued", issuedAt: "2026-11-10T09:00:00Z", responseDueOn: "2099-12-03", awaitingResponse: true, overdue: false, extensionWaiting: false, responses: 0 };
+    const late = { ...due, id: "c2", reference: "SCAR-26-0002", title: "Late deliveries", status: "revision_requested", overdue: true, extensionWaiting: true };
+    const done = { ...due, id: "c3", reference: "SCAR-26-0003", title: "Old one", status: "closed", awaitingResponse: false };
+    home = { data: { access: acme, attention: [], shared: 0, scarsAwaiting: [due, late], scars: 3 }, isLoading: false, error: null };
+    scars = [due, late, done];
+    renderIt();
+    const waiting = screen.getByRole("list", { name: "Requests waiting for your response" });
+    expect(within(waiting).getByText(/SCAR-26-0001 · Cracked castings/)).toBeInTheDocument();
+    expect(within(waiting).getByText(/Needs your response · Due 3 Dec 2099/)).toBeInTheDocument();
+    expect(within(waiting).getByText(/Revised response needed · Overdue since 3 Dec 2099 · more time asked for/)).toBeInTheDocument();
+    expect(within(waiting).getByText("Overdue")).toBeInTheDocument();
+    expect(within(waiting).getAllByRole("link")[0]).toHaveAttribute("href", expect.stringContaining("/portal/scars/c1"));
+    expect(within(screen.getByRole("list", { name: "Corrective action requests" })).getByText(/Closed/)).toBeInTheDocument();
+    scars = [];
+  });
+
   it("says when everything has been seen", () => {
-    home = { data: { access: acme, attention: [], shared: 3 }, isLoading: false, error: null };
+    home = { data: { access: acme, attention: [], shared: 3, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();
     expect(screen.getByText(/You have seen everything shared with you/)).toBeInTheDocument();
   });

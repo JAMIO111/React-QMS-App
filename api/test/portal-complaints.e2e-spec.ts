@@ -69,7 +69,7 @@ describe('portal complaints', () => {
     const list = await api().get('/api/v1/portal/complaints').set(await external(cus)).expect(200);
     expect(list.body.data).toHaveLength(1);
     expect(list.body.data[0]).toMatchObject({ status: 'received', partNumber: 'P5-100', quantity: 3, lot: 'LOT-9', raisedByMe: true });
-    expect(Object.keys(list.body.data[0]).sort()).toEqual(['customerReference', 'description', 'detectedOn', 'id', 'lot', 'partName', 'partNumber', 'quantity', 'raisedAt', 'raisedByMe', 'reference', 'shareId', 'status', 'title']);
+    expect(Object.keys(list.body.data[0]).sort()).toEqual(['customerReference', 'description', 'detectedOn', 'files', 'id', 'lot', 'partName', 'partNumber', 'quantity', 'raisedAt', 'raisedByMe', 'reference', 'shareId', 'status', 'title']);
     const nc = await admin.query(`select stage, source, severity, category_id from public.nonconformances where reference = $1 and organisation_id = $2`, [list.body.data[0].reference, ids.orgA]);
     expect(nc.rows[0]).toMatchObject({ stage: 'draft', source: 'customer', severity: null, category_id: null });
   });

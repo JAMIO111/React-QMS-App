@@ -176,6 +176,11 @@ import { FileLinkSigner, SupabaseFileLinkSigner } from './files/file-links';
 import { FilesController } from './files/files.controller';
 import { FilesService } from './files/files.service';
 import { SecurityController } from './security/security.controller';
+import { ExternalAccessController } from './portal/external-access.controller';
+import { ExternalAccessService } from './portal/external-access.service';
+import { PortalController } from './portal/portal.controller';
+import { PortalGuard } from './portal/portal.guard';
+import { PortalService } from './portal/portal.service';
 import { SsoController } from './sso/sso.controller';
 import { SsoService } from './sso/sso.service';
 import { DnsTxtResolver, SystemDnsTxtResolver } from './sso/dns-txt';
@@ -222,6 +227,8 @@ export class AppModule implements NestModule {
         WorkerController,
         RemindersController,
         SecurityController,
+        ExternalAccessController,
+        PortalController,
         SsoController,
         FilesController,
         WorkflowsController,
@@ -342,6 +349,8 @@ export class AppModule implements NestModule {
         WorkerJobRegistry,
         RemindersService,
         SecurityService,
+        ExternalAccessService,
+        PortalService,
         SsoService,
         { provide: DnsTxtResolver, useClass: SystemDnsTxtResolver },
         { provide: SupabaseSsoAdmin, useClass: ManagementApiSsoAdmin },
@@ -437,6 +446,7 @@ export class AppModule implements NestModule {
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_GUARD, useClass: OrganisationGuard },
+        { provide: APP_GUARD, useClass: PortalGuard },
       ],
     };
   }

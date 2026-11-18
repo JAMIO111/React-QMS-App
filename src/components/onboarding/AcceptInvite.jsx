@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import FortressMark from "../../assets/fortress-qms.png";
 import Field from "../ui/Field";
 import { CheckIcon } from "@/components/icons";
@@ -144,6 +144,8 @@ const AcceptInvite = () => {
     }
   };
 
+  // An invitation to a supplier's or customer's portal (not to the organisation itself): the portal page accepts it.
+  if (list.length === 0 && (me.data?.portalInvitations?.length || me.data?.portal?.length)) return <Navigate to="/portal" replace />;
   if (list.length === 0) {
     return (
       <Shell>

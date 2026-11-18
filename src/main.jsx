@@ -42,6 +42,7 @@ const SettingsOrganisation = lazy(() =>
 );
 const SettingsUsers = lazy(() => import("./components/Settings/SettingsUsers.jsx"));
 const SettingsSecurity = lazy(() => import("./components/Settings/SettingsSecurity.jsx"));
+const SettingsExternalAccess = lazy(() => import("./components/Settings/SettingsExternalAccess.jsx"));
 const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
@@ -149,6 +150,7 @@ const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
 const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx"));
 const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
 const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx"));
+const PortalApp = lazy(() => import("./components/portal/PortalApp.jsx"));
 const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
@@ -220,6 +222,8 @@ const router = createBrowserRouter([
       { path: "setup/:step", element: <SetupWizard /> },
       // The invitee's page: they may belong to no organisation yet.
       { path: "accept-invite", element: <AcceptInvite /> },
+      // The supplier and customer portal (docs/external-portal-plan.md): for people who are not members of the organisation, so outside <App />.
+      { path: "portal", element: <PortalApp /> },
       {
         element: <App />, // App contains the Navbar/Header + <Outlet />
         children: [
@@ -253,6 +257,7 @@ const router = createBrowserRouter([
               { path: "Organisation", element: <SettingsOrganisation /> },
               { path: "Users", element: <SettingsUsers /> },
               { path: "Security", element: <SettingsSecurity /> },
+              { path: "External-Access", element: <SettingsExternalAccess /> },
               { path: "General", element: <Navigate to="../Organisation" replace /> },
               { path: "Subscription", element: <SettingsSubscription /> },
               { path: "Account", element: <SettingsAccount /> },

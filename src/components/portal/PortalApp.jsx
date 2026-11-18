@@ -1,0 +1,148 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import FortressMark from "../../assets/fortress-qms.png";
+import Callout from "../ui/Callout";
+import ComboField from "../ui/ComboField";
+import LoadingScreen from "../ui/LoadingScreen";
+import CTAButton from "@/components/CTAButton";
+import { useMe } from "../../hooks/useQmsApi";
+import { usePortalHome, usePortalMutation } from "../../hooks/usePortal";
+import useSignOut from "../../hooks/useSignOut";
+import { describeApiError } from "../../lib/api-client";
+import { accessFor, partyKindLabel, rememberPortalOrganisation, rememberedPortalOrganisation } from "../../lib/portal";
+import PortalPeople from "./PortalPeople";
+
+/**
+ * The supplier and customer portal (docs/external-portal-plan.md PT1), at /portal: for people who act for a supplier or customer of an organisation
+ * and are not members of it. Its own layout and no staff menu. This slice holds the foundation (where they have access, accepting an invitation, who
+ * to talk to, and an admin's own colleagues); shared records, responses and performance arrive in the next slices.
+ */
+const PortalApp = () => {
+  const me = useMe();
+  const [signOut] = useSignOut();
+  const [chosen, setChosen] = useState(rememberedPortalOrganisation());
+  const portal = useMemo(() => me.data?.portal ?? [], [me.data]);
+  const current = useMemo(() => accessFor(portal, chosen), [portal, chosen]);
+
+  useEffect(() => {
+    if (current) rememberPortalOrganisation(current.organisationId);
+  }, [current]);
+
+  if (me.isLoading) return <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>;
+  const invitations = me.data?.portalInvitations ?? [];
+  const isMember = (me.data?.memberships ?? []).length > 0;
+
+  return (
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-primary-bg text-primary-text">
+      <header className="flex flex-wrap items-center gap-3 border-b border-border-color bg-secondary-bg px-4 py-2">
+        <img src={FortressMark} alt="" className="h-8 w-8 rounded-lg" />
+        <div className="min-w-0 grow">
+          <p className="text-sm font-semibold">{current ? current.organisationName : "Fortress QMS"}</p>
+          <p className="text-xs text-secondary-text">{current ? `Portal for ${current.partyName}` : "Supplier and customer portal"}</p>
+        </div>
+        {portal.length > 1 && (
+          <div className="w-64">
+            <ComboField
+              label="Organisation"
+              value={current?.id}
+              onChange={(id) => setChosen(portal.find((a) => a.id === id)?.organisationId ?? null)}
+              options={portal.map((a) => ({ value: a.id, label: a.organisationName, hint: a.partyName }))}
+            />
+          </div>
+        )}
+        {isMember && <CTAButton to="/" type="neutral" size="default">Open the QMS</CTAButton>}
+        <CTAButton type="secondary" size="default" onClick={signOut}>Sign out</CTAButton>
+      </header>
+      <main className="min-h-0 grow overflow-y-auto p-4">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+          {invitations.length > 0 && <Invitations invitations={invitations} />}
+          {current ? <Home access={current} /> : invitations.length === 0 && <Nothing email={me.data?.profile?.email} />}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default PortalApp;
+
+const Nothing = ({ email }) => (
+  <section aria-labelledby="no-portal" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-6">
+    <h1 id="no-portal" className="text-xl font-semibold">No portal access for {email ?? "this address"}</h1>
+    <p className="text-sm text-secondary-text">
+      If you were expecting an invitation, check that you signed in with the address it was sent to, or ask the person who invited you to send it again.
+      Your access may also have been paused or removed.
+    </p>
+  </section>
+);
+
+function Invitations({ invitations }) {
+  const mutate = usePortalMutation();
+  const [error, setError] = useState(null);
+  return (
+    <section aria-labelledby="portal-invitations" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-5">
+      <div>
+        <h1 id="portal-invitations" className="text-xl font-semibold">{invitations.length === 1 ? "You have been invited" : "You have been invited to portals"}</h1>
+        <p className="text-sm text-secondary-text">Accept to see and respond to what each organisation shares with the company you work for.</p>
+      </div>
+      <ul aria-label="Portal invitations" className="flex flex-col gap-3">
+        {invitations.map((inv) => (
+          <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-color p-4">
+            <div>
+              <h2 className="text-base font-semibold">{inv.organisationName}</h2>
+              <p className="text-sm text-secondary-text">For {inv.partyName}</p>
+            </div>
+            {inv.expired ? (
+              <span className="text-sm text-error-color">Expired. Ask for a new invitation.</span>
+            ) : (
+              <CTAButton
+                type="main"
+                size="lg"
+                loading={mutate.isPending && mutate.variables?.id === inv.id}
+                onClick={() => {
+                  setError(null);
+                  mutate.mutate({ action: "accept", id: inv.id }, { onError: setError });
+                }}>
+                Accept
+              </CTAButton>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && <Callout tone="error" role="alert">{describeApiError(error)}</Callout>}
+    </section>
+  );
+}
+
+function Home({ access }) {
+  const home = usePortalHome(access.organisationId);
+  const contact = access.contactName || access.organisationName;
+
+  if (access.mfaRequired) {
+    return (
+      <Callout tone="warning" title="Two-factor authentication needed" role="alert">
+        {access.organisationName} asks everyone who signs in to its portal to use two-factor authentication.{" "}
+        <Link to={`/mfa?next=${encodeURIComponent("/portal")}`} className="font-medium text-link-color hover:underline">Set it up or enter your code</Link> to continue.
+      </Callout>
+    );
+  }
+  if (home.isLoading) return <LoadingScreen />;
+  if (home.error) return <Callout tone="error" role="alert">{describeApiError(home.error)}</Callout>;
+
+  return (
+    <>
+      <section aria-labelledby="portal-welcome" className="flex flex-col gap-2 rounded-2xl border border-border-color bg-secondary-bg p-5">
+        <h1 id="portal-welcome" className="text-xl font-semibold">{access.partyName}</h1>
+        <p className="text-sm text-secondary-text">{partyKindLabel(access.partyKind)} portal for {access.organisationName}</p>
+        <p className="text-sm text-primary-text">Your contact at {access.organisationName}: <span className="font-medium">{contact}</span></p>
+      </section>
+      <section aria-labelledby="portal-attention" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
+        <h2 id="portal-attention" className="text-lg font-semibold">Needs your attention</h2>
+        <p className="mt-1 text-sm text-secondary-text">
+          Nothing has been shared with you yet. When {access.organisationName} sends you a corrective action request, a non-conformance or a task, it will appear here.
+        </p>
+      </section>
+      {access.role === "admin" && <PortalPeople access={access} />}
+    </>
+  );
+}
+

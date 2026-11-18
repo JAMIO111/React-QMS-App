@@ -14,6 +14,8 @@ export interface InviteEmailDetails {
   message?: string | null;
   roleName?: string | null;
   expiresAt?: string | null;
+  /** Set for an external person (docs/external-portal-plan.md): the supplier or customer they act for. The email then invites them to the portal. */
+  portalParty?: string | null;
 }
 
 type LinkType = 'invite' | 'magiclink';
@@ -209,7 +211,7 @@ export class InvitationMailer {
       }
       const link = this.confirmUrl(NEXT[type], { hash: made.hash, type })!;
       const { html, text } = invitationEmail({ email, organisationName, details, link, existing: type === 'magiclink', appBaseUrl: this.appBase() });
-      const outcome = await this.transport!.send({ id: randomUUID(), to: email, subject: subjectFor(organisationName, details.inviterName?.trim() || null), text, html });
+      const outcome = await this.transport!.send({ id: randomUUID(), to: email, subject: subjectFor(organisationName, details.inviterName?.trim() || null, Boolean(details.portalParty)), text, html });
       if (outcome.outcome === 'sent') return type === 'magiclink' ? { sent: true, kind: 'sign_in_link' } : { sent: true };
       this.logger.warn({ outcome }, 'Invitation email was not sent');
       return { sent: false, reason: 'send_failed' };
@@ -220,8 +222,10 @@ export class InvitationMailer {
   }
 }
 
-const subjectFor = (organisationName: string, who: string | null) =>
-  who ? `${who} invited you to join ${organisationName} on Fortress QMS` : `You're invited to join ${organisationName} on Fortress QMS`;
+const subjectFor = (organisationName: string, who: string | null, portal = false) =>
+  portal
+    ? `${who ?? organisationName} invited you to the ${organisationName} supplier and customer portal`
+    : who ? `${who} invited you to join ${organisationName} on Fortress QMS` : `You're invited to join ${organisationName} on Fortress QMS`;
 
 const longDate = (iso?: string | null) => {
   if (!iso) return null;
@@ -234,6 +238,32 @@ export function invitationEmail(input: { email: string; organisationName: string
   const { email, organisationName: org, details, link, existing } = input;
   const who = details.inviterName?.trim() || null;
   const expires = longDate(details.expiresAt);
+  if (details.portalParty) {
+    return renderBrandedEmail({
+      appBaseUrl: input.appBaseUrl,
+      preheader: `Accept your invitation to the ${org} portal for ${details.portalParty}.`,
+      heading: `${org} has invited you to its portal`,
+      paragraphs: [
+        `${who ?? `Someone at ${org}`} has invited you to the ${org} portal on Fortress QMS, on behalf of ${details.portalParty}. There you can see and respond to the quality matters ${org} shares with ${details.portalParty}.`,
+        existing
+          ? 'You already have a Fortress QMS account, so there is nothing to set up: sign in and accept the invitation.'
+          : 'Accept the invitation to set your password. It takes less than a minute.',
+      ],
+      quote: details.message ? { text: details.message, by: who } : null,
+      facts: [
+        ['Portal of', org],
+        ['For', details.portalParty],
+        ['Invited by', who],
+        ['Invitation expires', expires],
+      ],
+      button: { label: existing ? 'Sign in and accept' : 'Accept invitation', url: link },
+      notes: [
+        `This invitation was sent to ${email}. If you weren't expecting it, you can ignore this email: nothing is set up until you accept.`,
+        `For your security the link works once. If it has expired, ask ${who ?? 'the person who invited you'} to send it again.`,
+      ],
+      footer: `You received this email because ${who ?? 'someone'} at ${org} invited ${email} to the ${org} portal on Fortress QMS.`,
+    });
+  }
   return renderBrandedEmail({
     appBaseUrl: input.appBaseUrl,
     preheader: existing ? `Sign in to accept your invitation to ${org}.` : `Accept your invitation to ${org} and set your password.`,

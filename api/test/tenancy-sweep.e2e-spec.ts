@@ -30,6 +30,9 @@ const UNSCOPED = new Set([
   'POST /api/v1/organisations',
   'GET /api/v1/invitations',
   'POST /api/v1/invitations/{id}/accept',
+  'GET /api/v1/portal/me', // the signed-in person's own portal access (external portal PT1); checked in the database
+  'GET /api/v1/portal/invitations', // portal invitations for the signed-in address only
+  'POST /api/v1/portal/invitations/{id}/accept', // accepts only an invitation sent to the signed-in, confirmed address
   'GET /api/v1/units', // global catalogue of measurement units
   'GET /api/v1/platform/me', // the operator area spans organisations; admin-only in the database (allow-list + MFA)
   'GET /api/v1/platform/overview',
@@ -527,6 +530,12 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/integrations/agent-updates/{id}/cancel': undefined,
     'GET /api/v1/integrations/agent-jobs/{id}': undefined,
     'POST /api/v1/integrations/agent-registrations/{id}/cancel': undefined,
+    'POST /api/v1/external-access/people/{id}/resend': undefined,
+    'POST /api/v1/external-access/people/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/external-access/people/{id}/suspend': { reason: 'Hijacked' },
+    'POST /api/v1/external-access/people/{id}/restore': undefined,
+    'POST /api/v1/portal/people/{id}/resend': undefined,
+    'POST /api/v1/portal/people/{id}/remove': { reason: 'Hijacked' },
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
     'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
@@ -1008,6 +1017,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/integrations/agent-updates/{id}/cancel',
     'GET /api/v1/integrations/agent-jobs/{id}',
     'POST /api/v1/integrations/agent-registrations/{id}/cancel',
+    'POST /api/v1/external-access/people/{id}/resend',
+    'POST /api/v1/external-access/people/{id}/remove',
+    'POST /api/v1/external-access/people/{id}/suspend',
+    'POST /api/v1/external-access/people/{id}/restore',
+    'POST /api/v1/portal/people/{id}/resend',
+    'POST /api/v1/portal/people/{id}/remove',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
     'POST /api/v1/inspections/{id}/abandon',
@@ -1041,6 +1056,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-imports/')) return a.inspectionImport;
   if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
+  if (path.startsWith('/api/v1/external-access/people/') || path.startsWith('/api/v1/portal/people/')) return a.externalAccess;
   if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
@@ -1265,6 +1281,11 @@ beforeAll(async () => {
     a.importRow = (await q1(`select id from public.inspection_import_rows where import_id = $1`, [a.inspectionImport])).id;
     // Security (SE1/SE2): an approved network of A's.
     a.network = (await q1(`select app.save_organisation_network($1, '{"name":"Sweep HQ","network":"203.0.113.0/28"}'::jsonb, null) as id`, [ids.orgA])).id;
+    a.externalAccess = (await admin.query(
+      `with party as (insert into public.portal_parties (organisation_id, party_kind, supplier_id, enabled) values ($1, 'supplier', $2, true) returning id)
+       insert into public.external_access (organisation_id, party_id, invited_email) select $1, id, 'sweep-external@example.test' from party returning id`,
+      [ids.orgA, a.supplier],
+    )).rows[0].id;
     // Single sign-on (SS1): a domain A claimed.
     a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;
     // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
@@ -1484,7 +1505,8 @@ describe('tenancy sweep over every API route', () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
     const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview'];
-    const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path));
+    // The portal's own routes (external people only) answer an organisation owner 404 by design; external-portal.e2e-spec.ts covers them.
+    const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path) && !o.path.startsWith('/api/v1/portal/'));
     const leaks: string[] = [];
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.
     const listQuery: Record<string, string> = {

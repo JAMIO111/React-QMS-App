@@ -449,6 +449,10 @@ BEGIN
   INSERT INTO public.organisation_networks (organisation_id, name, network) VALUES (a, 'Sweep HQ', '203.0.113.0/28');
   PERFORM app.system_record_access_denial(a, '50000000-0000-0000-0000-0000000000a1', '198.51.100.7', 'monitor', '/api/v1/ncrs');
   INSERT INTO sweep VALUES ('network', (SELECT id FROM public.organisation_networks WHERE organisation_id = a AND name = 'Sweep HQ'));
+  -- External portal (PT1): a party and one invited person (seeded directly; people write through functions).
+  INSERT INTO public.portal_parties (organisation_id, party_kind, supplier_id, enabled) VALUES (a, 'supplier', (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), true);
+  INSERT INTO public.external_access (organisation_id, party_id, invited_email) VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'sweep-supplier@example.test');
+  INSERT INTO sweep VALUES ('portal_party', (SELECT id FROM public.portal_parties WHERE organisation_id = a)), ('external_access', (SELECT id FROM public.external_access WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

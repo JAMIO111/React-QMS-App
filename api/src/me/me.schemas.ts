@@ -77,9 +77,30 @@ export const SuspendedEntry = z.object({
   /** Who suspended them (null when it was not recorded). */
   suspendedBy: z.string().nullable(),
 });
+/** Where the person acts for a supplier or customer in an organisation's portal (docs/external-portal-plan.md). They are not members there. */
+export const PortalEntry = z.object({
+  id: z.string().uuid(),
+  organisationId: z.string().uuid(),
+  organisationName: z.string(),
+  partyId: z.string().uuid(),
+  partyKind: z.enum(['supplier', 'customer']),
+  partyName: z.string(),
+  role: z.enum(['admin', 'member']),
+  contactName: z.string().nullable(),
+  /** The organisation asks external people for two-factor and this session has not passed it. */
+  mfaRequired: z.boolean(),
+});
+export const PortalInvitationEntry = z.object({
+  id: z.string().uuid(),
+  organisationName: z.string(),
+  partyName: z.string(),
+  expired: z.boolean(),
+});
 export const MeResponse = z.object({
   profile: Profile, memberships: z.array(Membership), mfa: MfaStatus, sso: SsoStatus, seats: SeatStatus, welcome: z.array(WelcomeEntry),
   suspended: z.array(SuspendedEntry),
+  portal: z.array(PortalEntry),
+  portalInvitations: z.array(PortalInvitationEntry),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

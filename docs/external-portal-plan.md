@@ -81,7 +81,7 @@ Status: **draft for agreement, nothing built.** Follows `docs/design-brief.md` a
 | Slice | Content | Exit |
 |---|---|---|
 | **PT0** | Threat model, final field lists per projection, wireframes of the supplier home. | Agreed in this file. |
-| **PT1** | Foundation: settings, `external_access`, invite and accept (reusing the invitation mailer), `PortalGuard`, `/portal/me`, portal layout and organisation switcher, audit, access report, sweep tests that externals reach nothing else. | An invited supplier contact signs in and sees an empty portal; staff cannot be impersonated; both guardrail sweeps pass. |
+| **PT1** (built; migration not yet applied live) | Foundation: settings, `external_access`, invite and accept (reusing the invitation mailer), `PortalGuard`, `/portal/me`, portal layout and organisation switcher, audit, access report, sweep tests that externals reach nothing else. | An invited supplier contact signs in and sees an empty portal; staff cannot be impersonated; both guardrail sweeps pass. |
 | **PT2** | Sharing and conversation: `portal_shares`, comments, viewed tracking, notices and email to external people, Share control on NC, 8D, document. | Staff share an NC; the supplier sees the curated view, comments, staff see "viewed". |
 | **PT3** | Supplier action: SCAR list and response (root cause, containment, corrective action, evidence upload), extension requests, tasks assigned to them, acknowledgements of documents and quality alerts. | A supplier answers a SCAR end to end; internal review works unchanged. |
 | **PT4** | Supplier performance: their scorecard, open items, trend, optional anonymised ranking band; staff choose tiles per supplier. | Scorecard equals the internal Performance tab (same database function). |
@@ -170,7 +170,7 @@ Common rule: only records **of their party**, live, `deleted_at is null`, not dr
 ```
 SCAR page: header (reference, status steps, due date), the request, **Our response** form (root cause, containment, corrective action, preventive action, planned completion, files), reviews of earlier responses, comments, history in words. Customer home (PT5): complaints and 8Ds in progress, closure confirmations waiting, quality figures for their parts.
 
-### 8.4 PT0 open points (defaults proposed)
+### 8.4 PT0 open points (defaults accepted 2026-11-18)
 
 1. **Our contact:** show the NC / SCAR / 8D owner's display name to the external party (people like to know who to talk to)? *Proposal:* show a single organisation-chosen "contact name" per party (set when sharing, defaulting to the sharer), not the owner.
 2. **Custom fields** on shared NCs: *Proposal:* a per-field switch "Show to suppliers/customers" in Settings → Custom fields, off by default; deferred to after PT2 if needed.

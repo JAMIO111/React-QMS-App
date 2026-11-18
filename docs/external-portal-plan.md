@@ -99,3 +99,79 @@ company SSO for external users, a general inbox.
 | X16 | Party admin view | The party's admin manages access **and sees an activity list of their own people** (responses, comments, uploads, acknowledgements, sign-ins). Staff see the same list per party. |
 | X17 | Customer contacts | **Add `customer_contacts`** in the shape of `supplier_contacts` (several per customer, one primary, deactivated never deleted). Done in PT5 so suppliers are not delayed; portal access rows for customers link to a contact. |
 | X18 | Retention | Everything an external user wrote **stays, under their name, marked "former contact"** once removed. The audit trail keeps the account id. |
+
+## 8. PT0 — threat model, projections and wireframe (2026-11-18)
+
+### 8.1 Threat model
+
+| # | Threat | Control (and the test that proves it) |
+|---|---|---|
+| T1 | An external user reads a table directly (Supabase client, REST) | They hold no membership, no role and no seat, so `app.is_member` is false and every RLS policy refuses. **SQL test:** an external account selects from every tenant table and gets zero rows; the tenancy sweep gains an "external" caller. |
+| T2 | An external user calls an internal API route | `OrganisationGuard` refuses a non-member (404/403); portal routes live under `/portal` only and use `PortalGuard`. **API sweep:** every non-`/portal` route answers an external token with 403/404. |
+| T3 | A portal function leaks an internal column | One projection function per record type returns named columns; no `select *`, no `to_jsonb(row)`. **Drift test:** the function's column list must equal the list in §8.2 (a new column on the table changes nothing). |
+| T4 | Reading another party's data in the same organisation | Every portal function takes the party from the access row, never from the request, and filters on it. **Test:** supplier A's contact asks for supplier B's SCAR by id → 404. |
+| T5 | Reading another organisation's data | The access row is per organisation; the guard resolves it from `X-Organisation-Id` and the person. **Test:** a contact of org 1 using org 2's id → 404. |
+| T6 | A share that was withdrawn still readable | The projection joins `portal_shares` on `withdrawn_at is null` on every call; files use short signed links (5 min) issued per request. **Test:** withdraw, then read and download → 404. |
+| T7 | Files: reading or overwriting other files | Portal uploads only into a folder named for the response / comment being written (`app.portal_file_allowed`); downloads only for files attached to a visible record. Staff files marked internal are never listed. |
+| T8 | Stolen or shared supplier login | MFA on by default (X8), invitation expiry (7 days), party admin can remove at once, session age setting applies, staff see last sign-in per person. |
+| T9 | Leaver keeps access | Access report with "last sign-in"; party admin and staff can remove; removal ends the access row immediately and is audited. |
+| T10 | Abuse: spam comments, huge uploads, scraping | Rate limit per external person (stricter than staff), comment ≤ 4,000 characters, file size and type limits as for staff, per-person daily upload cap. |
+| T11 | Existing security rules wrongly applied or wrongly skipped | Network allow-list, SSO-required and seat checks are skipped **only** on `/portal`, never for members. **Tests both ways:** a member outside the allow-list is still blocked; an external contact outside it is allowed. |
+| T12 | A staff-only internal note shown by mistake | Internal notes live in different tables from `portal_comments`; the comment function accepts no table name. |
+| T13 | Impersonation of staff in comments | Every portal comment shows the party's name and "(supplier)" badge; staff comments show the organisation's name, never a personal profile photo of staff. |
+| T14 | Audit gap | Every portal write function sets the acting external user; the audit trigger records them with their account id (X12). **Test:** each portal write produces an `audit.events` row naming the external user. |
+
+### 8.2 Projections (what the external person sees)
+
+Common rule: only records **of their party**, live, `deleted_at is null`, not draft. Staff names are never returned; the organisation's own name is.
+
+**Non-conformance** (shared NC; supplier NCs have `supplier_id` = the party, customer NCs `customer_id` = the party)
+- Shown: `reference`, `title`, `description`, `requirement`, `actual_result`, `severity`, `stage` (in words), `detected_at`, `quantity_affected`, `quantity_inspected`, part number and name, revision label, `lot_number`, `serial_number`, `purchase_order`, `customer_reference` (customer NCs), shared files, comments.
+- **Containment actions:** kind, description, due date, status, quantity contained, result note once done (not owner).
+- **Disposition:** approved dispositions only: decision, quantity, instructions, reference / RMA. Proposed or cancelled ones never.
+- Hidden: costs, `site`, `work_order`, internal notes, history, owner / detected-by / responsible people, root-cause and investigation fields, categories, 8D links, other parties, custom fields (unless marked "share with external" later).
+
+**SCAR** (automatic once issued)
+- Shown: reference, title, problem description, requirement breached, objective evidence, containment requirements, severity, status (in words), due date (and original if extended), affected items, linked shared NC references, our contact's **organisation role name** ("Supplier quality"), responses they wrote, our review outcome and note per response (accepted / revision requested + the note we wrote for them), implementation and verification outcome, extension requests and decisions.
+- Hidden: internal owner, status history, internal links to an 8D, who reviewed, anything in `supplier_scar_status_history`.
+
+**8D** (shared explicitly; customers mainly)
+- Shown: reference, title, severity, stage, problem statement, D2 (what, where, when, how many, how, who as written), D3 containment actions, D4 **verified** root causes (occurrence and escape, words only), D5 corrective actions, D6 verification result and date, D7 preventive actions and lessons learned, D8 closure date, shared files, the printable 8D report.
+- Hidden: team members (shown as "8D team" count only), analysis workings (Ishikawa / 5 whys / Is-Is-Not), unverified causes, internal notes, owner.
+
+**Task** (automatic): SCAR actions, 8D actions and acknowledgements assigned to the party's external contact — description, due date, status, the record it belongs to; completing writes findings (as the internal actionee flow does).
+
+**Documents / quality alerts** (shared explicitly): number, title, revision, effective date, the controlled copy (PDF stamped for them); acknowledge once.
+
+**Performance (supplier)** — the same figures as the Performance tab, from `app.supplier_performance` (T3 applies: one function, named outputs): on-time %, in-full %, PPM (both measures), lot rejection %, NC counts by severity, SCAR on-time %, certification status, overall score and band, the period trend, and the optional ranking **band** (X10). Hidden: other suppliers, the scoring weights' internals are shown as a short "how this is scored" text only if the organisation switches it on.
+
+**Performance (customer)**: NCs and 8Ds for their parts (counts, ageing, closure time), PPM and first-pass yield for parts supplied to them, inspection and certificate-of-conformance evidence they were shared. Delivery performance is deferred (X10).
+
+### 8.3 Wireframe — supplier home
+
+```
+┌ Fortress ▸ [Acme Aerospace ▾]            Colin Ward ▾ ┐   ← organisation switcher (X1)
+│ Home │ To do (3) │ Corrective actions │ Non-conformances │ Documents │ Performance │
+├────────────────────────────────────────────────────────┤
+│  Needs your attention                                  │
+│  ┌ 3 to do ───────────┐ ┌ 1 overdue ───┐ ┌ 2 new ─────┐│
+│  │ SCAR-26-0007 answer │ │ SCAR-26-0004 │ │ shared NCs ││
+│  │ due 21 Nov          │ │ 4 days late  │ │            ││
+│  └─────────────────────┘ └──────────────┘ └────────────┘│
+│  Your score (last 90 days)          [ 82  Good ]       │
+│  On time 94% ▮▮▮▮▮▮▮▮▮▯   In full 98%   PPM 410         │
+│  Trend ▁▂▃▃▄▅▅▆ (monthly)      Position: top half*     │
+│  Open items                                             │
+│  SCARs  2 awaiting you · 1 under review · 3 closed      │
+│  NCs    4 open (1 major) · oldest 12 days               │
+│  Recent comments from <Organisation>                    │
+└────────────────────────────────────────────────────────┘
+* only when ranking is on and ≥ 5 suppliers are scored
+```
+SCAR page: header (reference, status steps, due date), the request, **Our response** form (root cause, containment, corrective action, preventive action, planned completion, files), reviews of earlier responses, comments, history in words. Customer home (PT5): complaints and 8Ds in progress, closure confirmations waiting, quality figures for their parts.
+
+### 8.4 PT0 open points (defaults proposed)
+
+1. **Our contact:** show the NC / SCAR / 8D owner's display name to the external party (people like to know who to talk to)? *Proposal:* show a single organisation-chosen "contact name" per party (set when sharing, defaulting to the sharer), not the owner.
+2. **Custom fields** on shared NCs: *Proposal:* a per-field switch "Show to suppliers/customers" in Settings → Custom fields, off by default; deferred to after PT2 if needed.
+3. **Comment mentions / edits:** *Proposal:* no mentions; a comment can be withdrawn by its author within 10 minutes, otherwise permanent (audit stays).

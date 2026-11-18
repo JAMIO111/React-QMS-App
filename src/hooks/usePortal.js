@@ -298,6 +298,38 @@ export const usePortalPerformance = (organisationId, days = 90, { enabled = true
   });
 };
 
+/** A customer's own complaints, and the parts they can name when raising one (PT5a). */
+export const usePortalComplaints = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "complaints"),
+    queryFn: () => apiFetch("/portal/complaints", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+export const usePortalComplaintParts = (organisationId) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "complaint-parts"),
+    queryFn: () => apiFetch("/portal/complaint-parts", { organisationId }),
+    enabled: !!user && !!organisationId,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+};
+
+/** Raising a complaint waits for the server (it makes the draft and its reference); the list is refreshed afterwards. */
+export const usePortalComplaintMutation = (organisationId) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch("/portal/complaints", { method: "POST", body, organisationId }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};
+
 /** One SCAR as the supplier sees it, with what they may do next. */
 export const usePortalScar = (organisationId, scarId) => {
   const { user } = useAuth();

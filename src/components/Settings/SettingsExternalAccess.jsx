@@ -14,7 +14,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useExternalAccess, useExternalAccessMutation, useExternalPeople } from "../../hooks/usePortal";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { PERFORMANCE_TILES, ROLE_LABEL, accessStatus, lastSeenWords, partyKindLabel, personLine, tileOn } from "../../lib/portal";
+import { CUSTOMER_TILES, PERFORMANCE_TILES, ROLE_LABEL, accessStatus, lastSeenWords, partyKindLabel, personLine, tileOn } from "../../lib/portal";
 
 const Pill = ({ tone, children }) => {
   const cls = {
@@ -140,9 +140,9 @@ function Page({ canManage }) {
                     onChange={(e) => mutate.mutate({ action: "party", body: { kind: p.kind, partyId: p.recordId, enabled: e.target.checked } }, { onError: fail("Not changed") })}
                   />
                 )}
-                {p.enabled && p.kind === "supplier" && canManage && (
-                  <CTAButton type="neutral" size="default" aria-label={`Performance tiles for ${p.name}`} onClick={() => setTilesFor(p)}>
-                    Tiles
+                {p.enabled && canManage && (
+                  <CTAButton type="neutral" size="default" aria-label={p.kind === "supplier" ? `Performance tiles for ${p.name}` : `Options for ${p.name}`} onClick={() => setTilesFor(p)}>
+                    {p.kind === "supplier" ? "Tiles" : "Options"}
                   </CTAButton>
                 )}
                 {p.enabled && (
@@ -175,10 +175,14 @@ function Page({ canManage }) {
 function TilesDialog({ party, rankingOn, onChange, onClose }) {
   const current = party.tiles ?? {};
   return (
-    <Dialog title={`Performance tiles for ${party.name}`} onClose={onClose} width="max-w-lg">
-      <p className="text-sm text-secondary-text">Choose what {party.name} sees on its Performance page. The figures are the ones on your own Performance tab for this supplier.</p>
+    <Dialog title={party.kind === "supplier" ? `Performance tiles for ${party.name}` : `Options for ${party.name}`} onClose={onClose} width="max-w-lg">
+      <p className="text-sm text-secondary-text">
+        {party.kind === "supplier"
+          ? `Choose what ${party.name} sees on its Performance page. The figures are the ones on your own Performance tab for this supplier.`
+          : `Choose what ${party.name} can do in the portal.`}
+      </p>
       <ul aria-label="Performance tiles" className="mt-3 flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
-        {PERFORMANCE_TILES.map((tile) => (
+        {(party.kind === "supplier" ? PERFORMANCE_TILES : CUSTOMER_TILES).map((tile) => (
           <li key={tile.key} className="flex items-center justify-between gap-3 px-4 py-2.5">
             <span className="text-sm text-primary-text">
               {tile.label}

@@ -111,6 +111,59 @@ export class PortalService {
     });
   }
 
+  private customerParty(ctx: RequestContext) {
+    const party = ctx.portal;
+    if (!party || party.partyKind !== 'customer') throw ApiError.notFound('complaints_unavailable', 'Complaints are raised by customers');
+    return party.partyId;
+  }
+
+  /** A customer's own complaints (PT5a): a plain status from the non-conformance's stage, named fields only. */
+  listComplaints(ctx: RequestContext) {
+    const party = this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_complaints(${ctx.organisationId}::uuid, ${party}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.complaint_id as string,
+          reference: c.reference as string,
+          title: c.title as string,
+          description: c.description as string,
+          status: c.status as 'received' | 'in_progress' | 'closed' | 'cancelled',
+          raisedAt: iso(c.raised_at),
+          raisedByMe: Boolean(c.raised_by_me),
+          partNumber: (c.part_number as string | null) ?? null,
+          partName: (c.part_name as string | null) ?? null,
+          quantity: c.quantity === null ? null : Number(c.quantity),
+          lot: (c.lot_number as string | null) ?? null,
+          customerReference: (c.customer_reference as string | null) ?? null,
+          detectedOn: (c.detected_on as string | null) ?? null,
+          shareId: (c.share_id as string | null) ?? null,
+        })),
+      };
+    });
+  }
+
+  raiseComplaint(ctx: RequestContext, b: { title: string; description: string; partId?: string | null; quantity?: number | null; lot?: string | null; customerReference?: string | null; detectedOn?: string | null; clientKey?: string | null }) {
+    const party = this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ r: { id: string; created: boolean } }>(
+        sql`select app.portal_raise_complaint(${ctx.organisationId}::uuid, ${party}::uuid, ${b.title}, ${b.description}, ${b.partId ?? null}::uuid, ${b.quantity ?? null}::numeric,
+              ${b.lot ?? null}, ${b.customerReference ?? null}, ${b.detectedOn ?? null}::date, ${b.clientKey ?? null}) as r`,
+      );
+      return r.rows[0].r;
+    });
+  }
+
+  complaintParts(ctx: RequestContext) {
+    const party = this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_my_parts(${ctx.organisationId}::uuid, ${party}::uuid)`);
+      return {
+        data: r.rows.map((p) => ({ id: p.part_id as string, partNumber: p.part_number as string, name: p.part_name as string, customerPartNumber: (p.customer_part_number as string | null) ?? null })),
+      };
+    });
+  }
+
   /** A supplier's own performance (PT4): the database works it out with the staff Performance tab's function and returns named fields only. */
   async performance(ctx: RequestContext, days?: string) {
     const n = days === undefined || days === '' ? 90 : Number(days);

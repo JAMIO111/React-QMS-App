@@ -124,3 +124,13 @@ export const RANK_WORDS = {
 };
 /** A 0–1 share as a whole percentage, or a dash when there is nothing to measure. */
 export const pctWords = (v) => (v === null || v === undefined ? "—" : `${Math.round(Number(v) * 1000) / 10}%`);
+
+// ---- Complaints (PT5a) ----
+export const COMPLAINT_STATUS = {
+  received: { label: "Received", tone: "bg-brand-primary/15 text-brand-primary" },
+  in_progress: { label: "In progress", tone: "bg-warning-color/20 text-primary-text" },
+  closed: { label: "Closed", tone: "bg-success-color/15 text-success-color" },
+  cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text" },
+};
+/** What staff can switch for a customer: whether their people may raise complaints. */
+export const CUSTOMER_TILES = [{ key: "complaints", label: "Allow them to raise complaints" }];

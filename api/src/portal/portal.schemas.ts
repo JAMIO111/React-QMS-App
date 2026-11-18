@@ -65,3 +65,16 @@ export const ScarFileBody = z
 export const AcknowledgeBody = z.object({ note: z.string().trim().max(1000).optional() }).strict();
 export const ShareFileBody = z.object({ fileId: z.string().uuid() }).strict();
 export const ScarActionCompleteBody = z.object({ note: z.string().trim().min(3, 'Say what was done').max(2000) }).strict();
+
+export const ComplaintBody = z
+  .object({
+    title: z.string().trim().min(3).max(200),
+    description: z.string().trim().min(10).max(4000),
+    partId: z.string().uuid().nullish(),
+    quantity: z.number().min(0).max(100_000_000).nullish(),
+    lot: z.string().trim().max(100).nullish(),
+    customerReference: z.string().trim().max(100).nullish(),
+    detectedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+    clientKey: z.string().min(8).max(80).nullish(),
+  })
+  .strict();

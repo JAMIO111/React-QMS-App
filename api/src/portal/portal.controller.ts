@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -122,6 +122,28 @@ export class PortalController {
   @ApiOkResponse({ description: 'The supplier’s own performance over 30, 90 (default) or 365 days: the Performance tab’s figures as named fields only, in the tiles staff chose, with an optional anonymised ranking band' })
   performance(@Ctx() ctx: RequestContext, @Query('days') days?: string) {
     return this.service.performance(ctx, days);
+  }
+
+  @Get('complaints')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'A customer’s own complaints with a plain status (received, in progress, closed, cancelled)' })
+  complaints(@Ctx() ctx: RequestContext) {
+    return this.service.listComplaints(ctx);
+  }
+
+  @Post('complaints')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ComplaintBody) })
+  @ApiOkResponse({ description: 'A customer raises a complaint; it becomes a draft non-conformance for staff to review. A retry with the same clientKey returns the same complaint' })
+  raiseComplaint(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.raiseComplaint(ctx, parse(ComplaintBody, body));
+  }
+
+  @Get('complaint-parts')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The parts we make for this customer, to pick from when raising a complaint' })
+  complaintParts(@Ctx() ctx: RequestContext) {
+    return this.service.complaintParts(ctx);
   }
 
   @Get('scars')

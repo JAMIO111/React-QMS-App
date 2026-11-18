@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -153,6 +153,14 @@ export class PortalController {
   @ApiOkResponse({ description: 'Ask for more time; the date moves only when someone at the organisation agrees; answers with the SCAR' })
   requestExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.requestScarExtension(ctx, Uuid.parse(id), parse(ScarExtensionBody, body));
+  }
+
+  @Post('scar-actions/:id/complete')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ScarActionCompleteBody) })
+  @ApiOkResponse({ description: 'Complete an action the organisation asked for, with a note of what was done; answers with the SCAR' })
+  completeScarAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.completeScarAction(ctx, Uuid.parse(id), parse(ScarActionCompleteBody, body).note);
   }
 
   @Post('scar-extensions/:id/withdraw')

@@ -425,6 +425,14 @@ export const useScarMutation = () => {
           return send(`/scars/${id}/items`);
         case "removeItem":
           return send(`/scar-items/${id}/remove`);
+        case "addAction":
+          return send(`/scars/${id}/actions`);
+        case "updateAction":
+          return send(`/scar-actions/${id}`, "PATCH");
+        case "cancelAction":
+          return send(`/scar-actions/${id}/cancel`);
+        case "reopenAction":
+          return send(`/scar-actions/${id}/reopen`);
         case "decideExtension":
           return send(`/scar-extensions/${id}/decide`);
         case "withdrawExtension":

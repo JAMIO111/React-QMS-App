@@ -7,9 +7,10 @@ import { DatabaseService, Db } from '../database/database.service';
 import { PortalMailer } from '../portal/portal-mailer.service';
 import {
   AcknowledgeScarBody, AWAITING_RESPONSE, CreateScarBody, DecideExtensionBody, ExtendBody, ImplementationBody, LinkNcrBody, RecordResponseBody, ReviewBody, ScarDetail, ScarItemInput, ScarListQuery, ScarPage,
-  ScarPeople, ScarPeopleQuery, ScarReasonBody, ScarRow, UpdateScarBody, VerificationBody,
+  ScarActionBody, ScarPeople, ScarPeopleQuery, ScarReasonBody, ScarRow, UpdateScarBody, VerificationBody,
 } from './supplier-scar.schemas';
 import { z } from 'zod';
+import { todayIn } from './expiry';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -73,7 +74,7 @@ export class SupplierScarService {
    * Email the supplier's portal people about a SCAR step of ours (issued, reviewed, extension decided). Best effort, straight after the step: a failed or
    * unconfigured send never undoes it, and nobody without portal access is emailed (docs/external-portal-plan.md PT3a).
    */
-  private async tellSupplier(ctx: RequestContext, scarId: string, what: 'issued' | 'accepted' | 'revision' | 'extension_approved' | 'extension_rejected', note?: string | null) {
+  private async tellSupplier(ctx: RequestContext, scarId: string, what: 'issued' | 'accepted' | 'revision' | 'extension_approved' | 'extension_rejected' | 'action_added', note?: string | null) {
     try {
       const info = await this.database.asUser(ctx, async (db) => {
         const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.portal_scar_recipients(${scarId}::uuid)`);
@@ -109,6 +110,12 @@ export class SupplierScarService {
           heading: 'Your request for more time was agreed',
           paragraphs: [`${reference} — ${title}`, dueWords ? `The response is now due on ${dueWords}.` : 'The new date is on the request.'],
           button: 'See the request',
+        },
+        action_added: {
+          subject: `${org} asked you to take an action: ${reference}`,
+          heading: 'A new action was added to a corrective action request',
+          paragraphs: [`${reference} — ${title}`, note ? `Action: ${note}` : 'Open the request to see what is asked.'],
+          button: 'See the action',
         },
         extension_rejected: {
           subject: `More time not agreed: ${reference}`,
@@ -181,7 +188,7 @@ export class SupplierScarService {
     if (!h) throw notFound();
 
     const canApprove = (await db.execute<{ ok: boolean }>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'supplier_quality.approve') as ok`)).rows[0].ok;
-    const [ncrs, responses, implementations, verifications, extensions, history, items, files] = await Promise.all([
+    const [ncrs, responses, implementations, verifications, extensions, history, items, files, actions] = await Promise.all([
       db.execute<Row>(sql`
         select l.id as link_id, l.linked_at, l.ended_at, l.end_reason, n.id, n.reference, n.title, n.stage, n.severity
         from public.supplier_scar_ncrs l join public.nonconformances n on n.id = l.ncr_id where l.scar_id = ${id}::uuid order by (l.ended_at is not null), l.linked_at`),
@@ -201,6 +208,8 @@ export class SupplierScarService {
         where i.scar_id = ${id}::uuid order by (i.ended_at is not null), i.created_at`),
       db.execute<Row>(sql`select f.id, f.response_id, f.file_name, f.size_bytes, f.storage_path, f.created_at from public.supplier_scar_files f
         where f.scar_id = ${id}::uuid and f.response_id is not null and f.removed_at is null order by f.created_at`),
+      db.execute<Row>(sql`select a.*, a.due_on::text as due, ${sql.raw(personName('p'))} as added_by_name
+        from public.supplier_scar_actions a left join public.profiles p on p.id = a.created_by where a.scar_id = ${id}::uuid order by (a.status = 'cancelled'), (a.status = 'done'), a.due_on nulls last, a.created_at`),
     ]);
 
     return {
@@ -209,6 +218,19 @@ export class SupplierScarService {
       requirementBreached: (h.requirement_breached as string) ?? null,
       objectiveEvidence: (h.objective_evidence as string) ?? null,
       containmentRequirements: (h.containment_requirements as string) ?? null,
+      actions: actions.rows.map((r) => ({
+        id: r.id as string,
+        description: r.description as string,
+        dueOn: date(r.due),
+        status: r.status as 'open' | 'done' | 'cancelled',
+        overdue: r.status === 'open' && !!r.due && String(r.due) < todayIn(ctx.timeZone),
+        resultNote: (r.result_note as string) ?? null,
+        doneAt: iso(r.done_at),
+        doneByName: (r.done_by_name as string) ?? null,
+        cancelReason: (r.cancel_reason as string) ?? null,
+        reopenReason: (r.reopen_reason as string) ?? null,
+        addedBy: person(r.created_by, r.added_by_name),
+      })),
       items: items.rows.map((r) => ({
         id: r.id as string,
         part: r.part_id ? { id: r.part_id as string, partNumber: r.part_number as string, name: r.part_name as string } : null,
@@ -335,12 +357,26 @@ export class SupplierScarService {
   extend(ctx: RequestContext, id: string, b: ExtendBody) {
     return this.command(ctx, id, (db) => db.execute(sql`select app.request_scar_extension(${id}::uuid, ${b.newDueOn}::date, ${b.reason})`));
   }
+  async addAction(ctx: RequestContext, id: string, b: ScarActionBody) {
+    const result = await this.command(ctx, id, (db) => db.execute(sql`select app.add_scar_action(${id}::uuid, ${b.description}, ${b.dueOn ?? null}::date)`));
+    if (result.status !== 'draft') await this.tellSupplier(ctx, id, 'action_added', b.description);
+    return result;
+  }
+  updateAction(ctx: RequestContext, actionId: string, b: ScarActionBody) {
+    return this.viaChild(ctx, 'supplier_scar_actions', actionId, 'supplier_scar_action_not_found', (db) => db.execute(sql`select app.update_scar_action(${actionId}::uuid, ${b.description}, ${b.dueOn ?? null}::date)`));
+  }
+  cancelAction(ctx: RequestContext, actionId: string, b: ScarReasonBody) {
+    return this.viaChild(ctx, 'supplier_scar_actions', actionId, 'supplier_scar_action_not_found', (db) => db.execute(sql`select app.cancel_scar_action(${actionId}::uuid, ${b.reason})`));
+  }
+  reopenAction(ctx: RequestContext, actionId: string, b: ScarReasonBody) {
+    return this.viaChild(ctx, 'supplier_scar_actions', actionId, 'supplier_scar_action_not_found', (db) => db.execute(sql`select app.reopen_scar_action(${actionId}::uuid, ${b.reason})`));
+  }
   addItem(ctx: RequestContext, id: string, b: ScarItemInput) {
     return this.command(ctx, id, (db) => db.execute(sql`select app.add_scar_item(${id}::uuid, ${JSON.stringify(itemJson(b))}::jsonb)`));
   }
 
   /** Runs a command named by a child record (an item or an extension) and answers with the SCAR it belongs to. */
-  private async viaChild(ctx: RequestContext, table: 'supplier_scar_items' | 'supplier_scar_extensions', childId: string, notFoundCode: string, run: (db: Db) => Promise<unknown>): Promise<ScarDetail> {
+  private async viaChild(ctx: RequestContext, table: 'supplier_scar_items' | 'supplier_scar_extensions' | 'supplier_scar_actions', childId: string, notFoundCode: string, run: (db: Db) => Promise<unknown>): Promise<ScarDetail> {
     return this.database.asUser(ctx, async (db) => {
       const res = await db.execute<{ scar_id: string }>(sql`select scar_id from public.${sql.raw(table)} where id = ${childId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
       if (res.rows.length === 0) throw ApiError.notFound(notFoundCode, 'Not found');

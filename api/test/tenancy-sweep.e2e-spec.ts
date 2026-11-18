@@ -304,6 +304,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink': { reason: 'Hijacked' },
     'POST /api/v1/supplier-quality/scars/{id}/items': { material: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-items/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/actions': { description: 'Hijacked action' },
+    'PATCH /api/v1/supplier-quality/scar-actions/{id}': { description: 'Hijacked action' },
+    'POST /api/v1/supplier-quality/scar-actions/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scar-actions/{id}/reopen': { reason: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/purchase-orders/{id}': undefined,
@@ -551,6 +555,7 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/portal/scars/{id}/respond': { rootCause: 'Hijacked', correctiveAction: 'Hijacked' },
     'POST /api/v1/portal/scars/{id}/extensions': { newDueOn: '2099-01-01', reason: 'Hijacked' },
     'POST /api/v1/portal/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/portal/scar-actions/{id}/complete': { note: 'Hijacked' },
     'POST /api/v1/portal/scars/{id}/files/upload-url': { fileName: 'x.pdf' },
     'POST /api/v1/portal/scars/{id}/files': { path: 'x/y/z', fileName: 'x.pdf', sizeBytes: 1 },
     'POST /api/v1/portal/scar-files/{id}/remove': undefined,
@@ -809,6 +814,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink',
     'POST /api/v1/supplier-quality/scars/{id}/items',
     'POST /api/v1/supplier-quality/scar-items/{id}/remove',
+    'POST /api/v1/supplier-quality/scars/{id}/actions',
+    'PATCH /api/v1/supplier-quality/scar-actions/{id}',
+    'POST /api/v1/supplier-quality/scar-actions/{id}/cancel',
+    'POST /api/v1/supplier-quality/scar-actions/{id}/reopen',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw',
     'GET /api/v1/purchase-orders/{id}',
@@ -1053,6 +1062,7 @@ const hasSample = (op: Op) =>
     'POST /api/v1/portal/scars/{id}/respond',
     'POST /api/v1/portal/scars/{id}/extensions',
     'POST /api/v1/portal/scar-extensions/{id}/withdraw',
+    'POST /api/v1/portal/scar-actions/{id}/complete',
     'POST /api/v1/portal/scars/{id}/files/upload-url',
     'POST /api/v1/portal/scars/{id}/files',
     'POST /api/v1/portal/scar-files/{id}/remove',
@@ -1132,6 +1142,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/material-certificates/')) return a.materialCertificate;
   if (path.startsWith('/api/v1/supplier-quality/scorecards/')) return a.scorecard;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
+  if (path.startsWith('/api/v1/supplier-quality/scar-actions/')) return a.supplierScarAction;
+  if (path.startsWith('/api/v1/portal/scar-actions/')) return a.supplierScarAction;
   if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
@@ -1410,6 +1422,7 @@ beforeAll(async () => {
     a.materialCertificate = (await q1(`select app.record_material_certificate($1::uuid, jsonb_build_object('certificateNumber', 'ALPHA-MTR', 'kind', 'mill_test_report', 'heatNumber', 'HA-1', 'receiptLineId', $2::text)) as id`, [a.supplier, a.receiptLine])).id;
     a.scorecard = (await q1(`select app.save_supplier_scorecard($1::uuid, current_date - 30, current_date, 'Alpha scorecard') as id`, [a.supplier])).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;
+    a.supplierScarAction = (await q1(`select app.add_scar_action($1::uuid, 'Alpha action', null) as id`, [a.supplierScar])).id;
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');

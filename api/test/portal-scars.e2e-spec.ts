@@ -69,7 +69,7 @@ describe('what the supplier sees', () => {
   it('shows the SCAR as named fields only', async () => {
     const res = await api().get(`/api/v1/portal/scars/${scarId}`).set(await external(sam)).expect(200);
     expect(Object.keys(res.body.scar).sort()).toEqual(
-      ['canAcknowledge', 'canRequestExtension', 'canRespond', 'cancelReason', 'contact', 'containmentRequirements', 'draftFiles', 'extensions', 'issuedAt', 'items', 'objectiveEvidence', 'originalResponseDueOn', 'overdue',
+      ['actions', 'canAcknowledge', 'canRequestExtension', 'canRespond', 'cancelReason', 'contact', 'containmentRequirements', 'draftFiles', 'extensions', 'issuedAt', 'items', 'objectiveEvidence', 'originalResponseDueOn', 'overdue',
        'problemDescription', 'reference', 'requirementBreached', 'responseDueOn', 'responses', 'severity', 'status', 'title'].sort(),
     );
     expect(res.body.scar.contact).toBe('Pat in Quality');

@@ -145,6 +145,12 @@ export function PortalHome() {
           <ScarList items={home.data.scarsAwaiting} organisationId={access.organisationId} label="Requests waiting for your response" />
         </section>
       )}
+      {home.data.scarsWithActions?.length > 0 && (
+        <section aria-labelledby="portal-scar-actions" className="rounded-2xl border border-warning-color/40 bg-secondary-bg p-5">
+          <h2 id="portal-scar-actions" className="text-lg font-semibold">Actions for you</h2>
+          <ScarList items={home.data.scarsWithActions} organisationId={access.organisationId} label="Requests with actions for you" />
+        </section>
+      )}
       <section aria-labelledby="portal-attention" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
         <h2 id="portal-attention" className="text-lg font-semibold">Needs your attention</h2>
         {home.data.attention.length === 0 ? (
@@ -208,9 +214,9 @@ function ScarList({ items, organisationId, label }) {
             <Link to={scarPath(c.id, organisationId)} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm hover:bg-primary-bg">
               <div className="min-w-0 grow">
                 <p className="truncate font-medium text-primary-text">{c.reference} · {c.title}</p>
-                <p className="text-xs text-secondary-text">{st.label}{dueWords(c) ? ` · ${dueWords(c)}` : ""}{c.extensionWaiting ? " · more time asked for" : ""}</p>
+                <p className="text-xs text-secondary-text">{st.label}{dueWords(c) ? ` · ${dueWords(c)}` : ""}{c.extensionWaiting ? " · more time asked for" : ""}{c.openActions > 0 ? ` · ${c.openActions} ${c.openActions === 1 ? "action" : "actions"} to do` : ""}</p>
               </div>
-              {c.overdue && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs font-medium text-error-color">Overdue</span>}
+              {(c.overdue || c.lateActions > 0) && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs font-medium text-error-color">{c.overdue ? "Overdue" : "Action overdue"}</span>}
             </Link>
           </li>
         );

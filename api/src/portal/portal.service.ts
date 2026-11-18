@@ -95,7 +95,8 @@ export class PortalService {
       const mine = (await this.access(db)).rows.map(accessRow).find((a) => a.organisationId === ctx.organisationId);
       if (!mine) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
       const items = (await this.shares(db, ctx)).rows.map((r) => this.shareItem(r));
-      const scars = (await this.scarRows(db, ctx)).map((r) => this.scarItem(r));
+      const counts = await this.actionCounts(db, ctx);
+      const scars = (await this.scarRows(db, ctx)).map((r) => this.scarItem(r, counts));
       const pending = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_acknowledgements(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
@@ -104,12 +105,19 @@ export class PortalService {
         toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
+        scarsWithActions: scars.filter((c) => c.openActions > 0),
         scars: scars.length,
       };
     });
   }
 
-  private scarItem(r: Row) {
+  /** Open and late actions per SCAR, for the lists and the home page. */
+  private async actionCounts(db: Db, ctx: RequestContext) {
+    const r = await db.execute<{ scar_id: string; open_actions: number; late_actions: number }>(sql`select * from app.portal_scar_action_counts(${ctx.organisationId}::uuid)`);
+    return new Map(r.rows.map((x) => [x.scar_id, { open: Number(x.open_actions), late: Number(x.late_actions) }]));
+  }
+
+  private scarItem(r: Row, counts?: Map<string, { open: number; late: number }>) {
     return {
       id: r.scar_id as string,
       reference: r.reference as string,
@@ -122,6 +130,8 @@ export class PortalService {
       overdue: Boolean(r.overdue),
       extensionWaiting: Boolean(r.extension_waiting),
       responses: Number(r.responses ?? 0),
+      openActions: counts?.get(r.scar_id as string)?.open ?? 0,
+      lateActions: counts?.get(r.scar_id as string)?.late ?? 0,
     };
   }
 
@@ -130,7 +140,10 @@ export class PortalService {
   }
 
   listScars(ctx: RequestContext) {
-    return this.database.asUser(ctx, async (db) => ({ data: (await this.scarRows(db, ctx)).map((r) => this.scarItem(r)) }));
+    return this.database.asUser(ctx, async (db) => {
+      const counts = await this.actionCounts(db, ctx);
+      return { data: (await this.scarRows(db, ctx)).map((r) => this.scarItem(r, counts)) };
+    });
   }
 
   private async scarDetail(db: Db, id: string) {
@@ -161,6 +174,14 @@ export class PortalService {
               ${b.extentOfCondition ?? null}, ${b.escapePoint ?? null}, ${b.responsibleName ?? null}, ${b.rootCauseMethod ?? null})`,
       );
       return this.scarDetail(db, id);
+    });
+  }
+
+  /** The database checks the caller's own portal access to the action's SCAR (an unknown or foreign id is a 404) and answers with that SCAR's id. */
+  completeScarAction(ctx: RequestContext, actionId: string, note: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ scar_id: string }>(sql`select app.portal_complete_scar_action(${actionId}::uuid, ${note}) as scar_id`);
+      return this.scarDetail(db, r.rows[0].scar_id);
     });
   }
 

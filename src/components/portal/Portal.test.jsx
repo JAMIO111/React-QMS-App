@@ -151,6 +151,17 @@ describe("the supplier and customer portal", () => {
     scars = [];
   });
 
+  it("lists the requests with actions for the supplier to do, saying how many and when one is late", () => {
+    const withActions = { id: "c1", reference: "SCAR-26-0001", title: "Cracked castings", severity: "major", status: "response_received", issuedAt: "2026-11-10T09:00:00Z", responseDueOn: "2099-12-03", awaitingResponse: false, overdue: false, extensionWaiting: false, responses: 1, openActions: 2, lateActions: 1 };
+    home = { data: { access: acme, attention: [], shared: 0, scarsAwaiting: [], scarsWithActions: [withActions], scars: 1 }, isLoading: false, error: null };
+    scars = [withActions];
+    renderIt();
+    const list = screen.getByRole("list", { name: "Requests with actions for you" });
+    expect(within(list).getByText(/2 actions to do/)).toBeInTheDocument();
+    expect(within(list).getByText("Action overdue")).toBeInTheDocument();
+    scars = [];
+  });
+
   it("says when everything has been seen", () => {
     home = { data: { access: acme, attention: [], shared: 3, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();

@@ -314,6 +314,8 @@ export const usePortalScarMutation = (organisationId, scarId) => {
           return apiFetch(`/portal/scars/${scarId}/extensions`, { method: "POST", body, organisationId });
         case "withdrawExtension":
           return apiFetch(`/portal/scar-extensions/${id}/withdraw`, { method: "POST", body, organisationId });
+        case "completeAction":
+          return apiFetch(`/portal/scar-actions/${id}/complete`, { method: "POST", body, organisationId });
         case "removeFile":
           return apiFetch(`/portal/scar-files/${id}/remove`, { method: "POST", organisationId });
         case "uploadFile":

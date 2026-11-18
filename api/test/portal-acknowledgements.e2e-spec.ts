@@ -26,8 +26,8 @@ class FakeSigner extends FileLinkSigner {
   async remove() {}
 }
 
-const ids = makeIds('9c73');
-const u = (tail: string) => `${'9c73'.padEnd(8, '0')}-0000-0000-0000-${tail.padStart(12, '0')}`;
+const ids = makeIds('9c76');
+const u = (tail: string) => `${'9c76'.padEnd(8, '0')}-0000-0000-0000-${tail.padStart(12, '0')}`;
 const sam = u('e1');
 const sue = u('e2');
 const ben = u('e3');

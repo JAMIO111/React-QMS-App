@@ -21,7 +21,7 @@ const base = {
   reference: "SCAR-26-0001", title: "Cracked castings", severity: "major", status: "issued", issuedAt: "2026-11-10T09:00:00Z", responseDueOn: "2099-12-03", originalResponseDueOn: "2099-12-03",
   overdue: false, problemDescription: "Cracks in the bar stock", requirementBreached: "No visible cracks", objectiveEvidence: "3 of 10 cracked", containmentRequirements: "Sort the stock", cancelReason: null,
   items: [{ partNumber: "BAR-1", partName: "Bar", material: null, lotNumber: "LOT-77", receiptReference: null, quantity: 10, notes: "Whole delivery" }],
-  responses: [], draftFiles: [], extensions: [], canAcknowledge: true, canRespond: true, canRequestExtension: true, contact: "Pat in Quality",
+  responses: [], draftFiles: [], extensions: [], actions: [], canAcknowledge: true, canRespond: true, canRequestExtension: true, contact: "Pat in Quality",
 };
 
 const renderIt = () =>
@@ -152,5 +152,27 @@ describe("a corrective action request in the portal", () => {
     expect(screen.queryByRole("heading", { name: "Evidence to send with your response" })).toBeNull();
     await userEvent.click(within(screen.getByRole("list", { name: "Files with response 1" })).getByRole("button", { name: /evidence\.pdf/ }));
     expect(openFile).toHaveBeenCalledWith("o1", "f9");
+  });
+
+  const action = (over = {}) => ({ id: "a1", description: "Sort the stock in your warehouse", dueOn: "2099-12-01", status: "open", overdue: false, resultNote: null, completedAt: null, completedBy: null, canComplete: true, ...over });
+
+  it("lists the actions asked of the supplier and completes one with a note of what was done", async () => {
+    scarState = { data: { id: "c1", scar: { ...base, actions: [action(), action({ id: "a2", description: "Send the heat treatment records", status: "done", resultNote: "Sent by email", completedBy: "sam", completedAt: "2026-11-12T10:00:00Z", canComplete: false })] } }, isLoading: false, error: null };
+    renderIt();
+    const list = screen.getByRole("list", { name: "Actions" });
+    expect(list).toHaveTextContent("Sort the stock in your warehouse");
+    expect(list).toHaveTextContent("Sent by email");
+    expect(within(list).getAllByRole("button")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: /Complete: Sort the stock/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Mark as done" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("What was done"), "Sorted 480 pieces");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Mark as done" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "completeAction", id: "a1", body: { note: "Sorted 480 pieces" } }, expect.any(Object));
+  });
+
+  it("shows no actions block when there are none", () => {
+    renderIt();
+    expect(screen.queryByRole("list", { name: "Actions" })).toBeNull();
   });
 });

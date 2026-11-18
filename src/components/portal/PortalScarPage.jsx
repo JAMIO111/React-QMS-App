@@ -125,6 +125,22 @@ function ExtendDialog({ scar, mutation, onClose }) {
   );
 }
 
+function CompleteActionDialog({ action, mutation, onClose }) {
+  const [note, setNote] = useState("");
+  return (
+    <FormDialog
+      title="Complete this action"
+      ok={note.trim().length >= 3}
+      mutation={mutation}
+      submitLabel="Mark as done"
+      onClose={onClose}
+      onSubmit={() => mutation.mutate({ action: "completeAction", id: action.id, body: { note: note.trim() } }, { onSuccess: onClose })}
+      intro={action.description}>
+      <TextAreaField label="What was done" required value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={3} />
+    </FormDialog>
+  );
+}
+
 function TakeBackDialog({ extension, mutation, onClose }) {
   const [reason, setReason] = useState("");
   return (
@@ -270,6 +286,26 @@ export default function PortalScarPage() {
         </Facts>
       </Block>
 
+      {(s.actions ?? []).length > 0 && (
+        <Block title="Actions we ask of you">
+          <ul aria-label="Actions" className="flex flex-col divide-y divide-border-color">
+            {(s.actions ?? []).map((a) => (
+              <li key={a.id} className="flex flex-col gap-1 py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0 break-words text-primary-text">
+                    {a.description}
+                    <span className="text-secondary-text"> · {a.status === "done" ? "Done" : "Open"}{a.dueOn ? ` · due ${day(a.dueOn)}` : ""}</span>
+                  </span>
+                  {a.overdue && <span className="rounded-full bg-error-color/15 px-2 py-0.5 text-xs font-medium text-error-color">Overdue</span>}
+                  {a.canComplete && <CTAButton type="main" size="default" aria-label={`Complete: ${a.description}`} onClick={() => setDialog({ complete: a })}>Complete</CTAButton>}
+                </div>
+                {a.status === "done" && <p className="text-xs text-secondary-text">{a.completedBy ? `${a.completedBy}, ` : ""}{a.completedAt ? shortDate(a.completedAt) : ""}: {a.resultNote}</p>}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+
       <Block title="What is affected">
         {s.items.length === 0 ? <p className="text-sm text-secondary-text">Nothing has been listed.</p> : (
           <ul aria-label="Affected items" className="flex flex-col gap-2">
@@ -329,6 +365,7 @@ export default function PortalScarPage() {
 
       {dialog === "respond" && <RespondDialog scar={s} mutation={mutation} onClose={close} />}
       {dialog === "extend" && <ExtendDialog scar={s} mutation={mutation} onClose={close} />}
+      {dialog?.complete && <CompleteActionDialog action={dialog.complete} mutation={mutation} onClose={close} />}
       {dialog?.takeBack && <TakeBackDialog extension={dialog.takeBack} mutation={mutation} onClose={close} />}
     </>
   );

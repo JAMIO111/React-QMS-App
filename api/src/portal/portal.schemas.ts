@@ -64,3 +64,4 @@ export const ScarFileBody = z
 
 export const AcknowledgeBody = z.object({ note: z.string().trim().max(1000).optional() }).strict();
 export const ShareFileBody = z.object({ fileId: z.string().uuid() }).strict();
+export const ScarActionCompleteBody = z.object({ note: z.string().trim().min(3, 'Say what was done').max(2000) }).strict();

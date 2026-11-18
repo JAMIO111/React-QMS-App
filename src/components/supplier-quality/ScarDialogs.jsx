@@ -351,6 +351,23 @@ export const DecideExtensionDialog = ({ extension, onClose }) => {
   );
 };
 
+/** Ask the supplier to take an action, or change one that is still open. The supplier completes it in the portal. */
+export const ActionDialog = ({ scar, action = null, onClose }) => {
+  const [mutation, run] = useCommand(onClose);
+  const [description, setDescription] = useState(action?.description ?? "");
+  const [dueOn, setDueOn] = useState(action?.dueOn ?? "");
+  return (
+    <CommandDialog title={action ? "Change the action" : "Ask the supplier to take an action"} mutation={mutation} ok={description.trim().length >= 3} submitLabel={action ? "Save" : "Add action"} onClose={onClose}
+      onSubmit={() => run(action
+        ? { action: "updateAction", id: action.id, body: { description: description.trim(), dueOn: dueOn || null } }
+        : { action: "addAction", id: scar.id, body: { description: description.trim(), dueOn: dueOn || null } })}
+      intro="The supplier's people see this on their portal once the request is issued, and complete it with a note of what was done.">
+      <TextAreaField label="What is asked" required value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={3} />
+      <RHFDatePickerPopout label="Due" valueFormat="iso" clearable value={dueOn} onChange={(v) => setDueOn(v ?? "")} minDate={todayIso()} />
+    </CommandDialog>
+  );
+};
+
 /** Add something the problem affects: a part, a material, a lot, a receipt, with a quantity. */
 export const ItemDialog = ({ scar, onClose }) => {
   const [mutation, run] = useCommand(onClose);

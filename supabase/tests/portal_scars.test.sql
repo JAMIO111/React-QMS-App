@@ -61,7 +61,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT awaiting_response FROM app.portal_list_scars(org)), true, 'awaiting a response');
   j := app.portal_get_scar(sc);
   SELECT string_agg(key, ',' ORDER BY key COLLATE "C") INTO k FROM jsonb_object_keys(j) key;
-  PERFORM pg_temp.assert_eq(k, 'canAcknowledge,canRequestExtension,canRespond,cancelReason,contact,containmentRequirements,draftFiles,extensions,issuedAt,items,objectiveEvidence,originalResponseDueOn,overdue,problemDescription,reference,requirementBreached,responseDueOn,responses,severity,status,title',
+  PERFORM pg_temp.assert_eq(k, 'actions,canAcknowledge,canRequestExtension,canRespond,cancelReason,contact,containmentRequirements,draftFiles,extensions,issuedAt,items,objectiveEvidence,originalResponseDueOn,overdue,problemDescription,reference,requirementBreached,responseDueOn,responses,severity,status,title',
                             'the external view is these named fields and nothing else');
   PERFORM pg_temp.assert_eq(j ->> 'contact', 'Pat in Quality', 'the contact they are given');
   PERFORM pg_temp.assert_eq(jsonb_array_length(j -> 'items'), 1, 'what is affected');

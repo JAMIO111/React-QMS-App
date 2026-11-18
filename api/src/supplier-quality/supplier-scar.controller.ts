@@ -5,7 +5,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AcknowledgeScarBody, CreateScarBody, DecideExtensionBody, ExtendBody, ImplementationBody, LinkNcrBody, RecordResponseBody, ReviewBody, ScarDetail, ScarItemInput, ScarListQuery, ScarPage, ScarPeople,
+  AcknowledgeScarBody, CreateScarBody, DecideExtensionBody, ExtendBody, ImplementationBody, LinkNcrBody, RecordResponseBody, ReviewBody, ScarDetail, ScarActionBody, ScarItemInput, ScarListQuery, ScarPage, ScarPeople,
   ScarPeopleQuery, ScarReasonBody, UpdateScarBody, VerificationBody,
 } from './supplier-scar.schemas';
 import { SupplierScarService } from './supplier-scar.service';
@@ -150,6 +150,41 @@ export class SupplierScarController {
   @ApiOkResponse({ description: 'Withdraws a request that is still waiting (the person who asked, or an approver)', schema: openApiSchema(ScarDetail) })
   withdrawExtension(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdrawExtension(ctx, parse(Uuid, id), parse(ScarReasonBody, body));
+  }
+
+  @Post('scars/:id/actions')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarActionBody) })
+  @ApiOkResponse({ description: 'Asks the supplier to take an action (what, and by when). The supplier completes it in the portal once the SCAR is issued; emails their people (best effort)', schema: openApiSchema(ScarDetail) })
+  addAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addAction(ctx, parse(Uuid, id), parse(ScarActionBody, body));
+  }
+
+  @Patch('scar-actions/:id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarActionBody) })
+  @ApiOkResponse({ description: 'Changes the wording or the date of an open action', schema: openApiSchema(ScarDetail) })
+  updateAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateAction(ctx, parse(Uuid, id), parse(ScarActionBody, body));
+  }
+
+  @Post('scar-actions/:id/cancel')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarReasonBody) })
+  @ApiOkResponse({ description: 'Cancels an open action with a reason; the row is kept and the supplier stops seeing it', schema: openApiSchema(ScarDetail) })
+  cancelAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.cancelAction(ctx, parse(Uuid, id), parse(ScarReasonBody, body));
+  }
+
+  @Post('scar-actions/:id/reopen')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ScarReasonBody) })
+  @ApiOkResponse({ description: 'Reopens a finished action with a reason; the supplier completes it again', schema: openApiSchema(ScarDetail) })
+  reopenAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.reopenAction(ctx, parse(Uuid, id), parse(ScarReasonBody, body));
   }
 
   @Post('scars/:id/items')

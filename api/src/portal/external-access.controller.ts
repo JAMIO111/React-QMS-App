@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { ExternalAccessService } from './external-access.service';
-import { CommentBody, InviteBody, PartyBody, PeopleQuery, ReasonBody, SettingsBody, ShareBody, SharesQuery } from './portal.schemas';
+import { CommentBody, InviteBody, PartyBody, PeopleQuery, ReasonBody, SettingsBody, ShareBody, SharesQuery, ClosureRequestBody } from './portal.schemas';
 
 /** Settings → External access (docs/external-portal-plan.md PT1): the staff side of the supplier and customer portal. */
 @ApiTags('external-access')
@@ -105,6 +105,29 @@ export class ExternalAccessController {
   @ApiOkResponse({ description: 'Stop sharing, with a reason. The party stops seeing it at once; the conversation is kept for staff' })
   withdrawShare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdrawShare(ctx, Uuid.parse(id), parse(ReasonBody, body).reason);
+  }
+
+  @Get('shares/:id/closures')
+  @OrganisationScoped('external_access.share')
+  @ApiOkResponse({ description: 'The requests for a customer to confirm closure of a shared record, with who asked and who answered' })
+  closures(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.closures(ctx, Uuid.parse(id));
+  }
+
+  @Post('shares/:id/closures')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(ClosureRequestBody) })
+  @ApiOkResponse({ description: 'Ask a customer to confirm that a shared non-conformance or 8D can be closed. Information only: nothing internal changes. Emails their people (best effort)' })
+  requestClosure(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.requestClosure(ctx, Uuid.parse(id), parse(ClosureRequestBody, body).note ?? null);
+  }
+
+  @Post('closure-requests/:id/withdraw')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Withdraw a request that is still waiting for the customer’s answer, with a reason' })
+  withdrawClosure(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawClosure(ctx, Uuid.parse(id), parse(ReasonBody, body).reason);
   }
 
   @Get('shares/:id/acknowledgements')

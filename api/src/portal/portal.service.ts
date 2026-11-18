@@ -98,10 +98,12 @@ export class PortalService {
       const counts = await this.actionCounts(db, ctx);
       const scars = (await this.scarRows(db, ctx)).map((r) => this.scarItem(r, counts));
       const pending = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_acknowledgements(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
+      const closing = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_closures(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
         access: mine,
-        attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id) })),
+        attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id) || closing.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id), needsClosure: closing.has(i.id) })),
+        toConfirm: closing.size,
         toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
@@ -346,7 +348,18 @@ export class PortalService {
       );
       const comments = await this.thread(db, shareId);
       await db.execute(sql`select app.portal_mark_viewed(${shareId}::uuid)`);
-      return { id: shareId, kind, record: rec.rows[0].record, comments, newComments: Number(item.new_comments ?? 0) };
+      const closures = (await db.execute<{ c: unknown[] }>(sql`select app.portal_share_closures(${shareId}::uuid) as c`)).rows[0].c;
+      return { id: shareId, kind, record: rec.rows[0].record, comments, newComments: Number(item.new_comments ?? 0), closures };
+    });
+  }
+
+  /** A customer's answer to a request to confirm closure; the share's record page shows the result. */
+  decideClosure(ctx: RequestContext, requestId: string, confirm: boolean, note: string | null) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ share_id: string }>(sql`select app.portal_decide_closure(${requestId}::uuid, ${confirm}, ${note}) as share_id`);
+      const shareId = r.rows[0].share_id;
+      const closures = (await db.execute<{ c: unknown[] }>(sql`select app.portal_share_closures(${shareId}::uuid) as c`)).rows[0].c;
+      return { id: shareId, closures };
     });
   }
 

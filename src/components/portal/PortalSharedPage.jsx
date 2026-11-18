@@ -1,12 +1,13 @@
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import Callout from "../ui/Callout";
+import Dialog from "../ui/Dialog";
 import LoadingScreen from "../ui/LoadingScreen";
 import CommentThread from "./CommentThread";
 import { ArrowLeftIcon } from "@/components/icons";
 import { openPortalDocumentFile, usePortalShare, usePortalShareMutation } from "../../hooks/usePortal";
 import CTAButton from "@/components/CTAButton";
 import DocumentEditor from "../documents/DocumentEditor";
-import { TextAreaField } from "../master-data/shared";
+import { FormError, TextAreaField } from "../master-data/shared";
 import { useToast } from "../../contexts/ToastProvider";
 import { useState } from "react";
 import { formatBytes } from "../../lib/supplierQualification";
@@ -250,6 +251,7 @@ export default function PortalSharedPage() {
       {kind === "capa" && <CapaRecord r={r} />}
       {kind === "document" && <DocumentRecord r={r} shareId={shareId} organisationId={access.organisationId} />}
       {kind === "quality_alert" && <AlertRecord r={r} shareId={shareId} organisationId={access.organisationId} />}
+      {share.data.closures?.length > 0 && <ClosureBlock closures={share.data.closures} mutate={mutate} organisationName={access.organisationName} />}
       <Block title="Conversation">
         <CommentThread
           comments={comments}
@@ -260,6 +262,53 @@ export default function PortalSharedPage() {
         />
       </Block>
     </>
+  );
+}
+
+/** Closure confirmation (PT5b): the organisation asks whether this can be closed; the person confirms or says what is still wrong. Final once answered. */
+function ClosureBlock({ closures, mutate, organisationName }) {
+  const [declining, setDeclining] = useState(null);
+  const [note, setNote] = useState("");
+  const waiting = closures.find((c) => c.canDecide);
+  const asked = (c) => `${organisationName} asked on ${shortDate(c.requestedAt)}`;
+  return (
+    <Block title="Closure">
+      {waiting && (
+        <Callout tone="warning" title="Can this be closed?">
+          {asked(waiting)} whether this can now be closed.{waiting.requestNote ? ` They said: ${waiting.requestNote}` : ""}
+          <span className="mt-2 flex flex-wrap gap-2">
+            <CTAButton type="success" size="md" loading={mutate.isPending && mutate.variables?.action === "decideClosure" && mutate.variables?.body?.confirm} onClick={() => mutate.mutate({ action: "decideClosure", id: waiting.id, body: { confirm: true } })}>Yes, it can be closed</CTAButton>
+            <CTAButton type="neutral" size="md" onClick={() => { setNote(""); setDeclining(waiting); }}>No, something is still wrong</CTAButton>
+          </span>
+        </Callout>
+      )}
+      <ul aria-label="Closure requests" className="flex flex-col gap-1 text-sm">
+        {closures.filter((c) => !c.canDecide).map((c) => (
+          <li key={c.id} className="text-secondary-text">
+            {asked(c)}: {c.status === "confirmed" ? "you confirmed it can be closed" : "you said something is still wrong"} ({shortDate(c.decidedAt)}){c.decisionNote ? `. “${c.decisionNote}”` : ""}
+          </li>
+        ))}
+      </ul>
+      {mutate.error && mutate.variables?.action === "decideClosure" && !declining && <Callout tone="error" role="alert">{describeApiError(mutate.error)}</Callout>}
+      {declining && (
+        <Dialog title="What is still wrong?" onClose={() => setDeclining(null)}>
+          <form
+            className="flex flex-col gap-3"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              mutate.mutate({ action: "decideClosure", id: declining.id, body: { confirm: false, note: note.trim() } }, { onSuccess: () => setDeclining(null) });
+            }}>
+            <TextAreaField label="Tell them what is still wrong" required rows={3} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} />
+            <FormError error={mutate.error} />
+            <div className="flex justify-end gap-2">
+              <CTAButton type="neutral" size="md" onClick={() => setDeclining(null)}>Cancel</CTAButton>
+              <CTAButton type="main" size="md" buttonType="submit" disabled={note.trim().length < 3} loading={mutate.isPending}>Send</CTAButton>
+            </div>
+          </form>
+        </Dialog>
+      )}
+    </Block>
   );
 }
 

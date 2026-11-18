@@ -78,3 +78,6 @@ export const ComplaintBody = z
     clientKey: z.string().min(8).max(80).nullish(),
   })
   .strict();
+
+export const ClosureRequestBody = z.object({ note: z.string().trim().max(500).nullish() }).strict();
+export const ClosureDecisionBody = z.object({ confirm: z.boolean(), note: z.string().trim().max(2000).nullish() }).strict();

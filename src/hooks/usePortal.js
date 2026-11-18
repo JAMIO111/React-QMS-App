@@ -212,6 +212,17 @@ export const useShareAcknowledgements = (shareId, { enabled = true } = {}) => {
   });
 };
 
+/** The requests for a customer to confirm closure of a shared record, as staff see them (PT5b). */
+export const useShareClosures = (shareId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: ["api", "org", organisationId, "external-access", "closures", shareId],
+    queryFn: () => apiFetch(`/external-access/shares/${shareId}/closures`, { organisationId }),
+    enabled: !!organisationId && !!shareId && enabled,
+    retry: false,
+  });
+};
+
 /** Share, withdraw, comment, withdraw a comment. Every answer is the record's shares or the conversation, which replaces the cache. */
 export const useShareMutation = (kind, recordId) => {
   const { organisationId } = useOrganisation();
@@ -227,12 +238,18 @@ export const useShareMutation = (kind, recordId) => {
           return apiFetch(`/external-access/shares/${id}/comments`, { method: "POST", body, organisationId });
         case "withdrawComment":
           return apiFetch(`/external-access/comments/${id}/withdraw`, { method: "POST", organisationId });
+        case "requestClosure":
+          return apiFetch(`/external-access/shares/${id}/closures`, { method: "POST", body: body ?? {}, organisationId });
+        case "withdrawClosure":
+          return apiFetch(`/external-access/closure-requests/${id}/withdraw`, { method: "POST", body, organisationId });
         default:
           throw new Error(`Unknown share action ${action}`);
       }
     },
     onSuccess: (data, vars) => {
       if (vars.action === "share" || vars.action === "withdraw") queryClient.setQueryData(sharesKey(organisationId, kind, recordId), data);
+      if (vars.action === "requestClosure") queryClient.setQueryData(["api", "org", organisationId, "external-access", "closures", vars.id], { data: data.data });
+      if (vars.action === "withdrawClosure") queryClient.setQueryData(["api", "org", organisationId, "external-access", "closures", vars.shareId], { data: data.data });
       if (vars.action === "comment" || vars.action === "withdrawComment") queryClient.setQueryData(["api", "org", organisationId, "external-access", "comments", vars.shareId ?? vars.id], data);
     },
     onSettled: () => refreshOrganisation(queryClient, organisationId),
@@ -268,6 +285,7 @@ export const usePortalShareMutation = (organisationId, shareId) => {
     mutationFn: ({ action, id, body }) => {
       if (action === "comment") return apiFetch(`/portal/shares/${shareId}/comments`, { method: "POST", body, organisationId });
       if (action === "acknowledge") return apiFetch(`/portal/shares/${shareId}/acknowledge`, { method: "POST", body: body ?? {}, organisationId });
+      if (action === "decideClosure") return apiFetch(`/portal/closure-requests/${id}/decide`, { method: "POST", body, organisationId });
       return apiFetch(`/portal/comments/${id}/withdraw`, { method: "POST", organisationId });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),

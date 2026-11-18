@@ -143,3 +143,39 @@ describe("a shared record in the portal", () => {
     expect(screen.queryByRole("button", { name: "Acknowledge" })).toBeNull();
   });
 });
+
+describe("closure confirmation (PT5b)", () => {
+  const waiting = { id: "r1", status: "pending", requestedAt: "2026-11-19T09:00:00Z", requestNote: "We have replaced the batch.", requestedBy: null, decidedAt: null, decisionNote: null, decidedBy: null, withdrawnReason: null, canDecide: true };
+
+  it("shows nothing when nobody has asked", () => {
+    renderIt();
+    expect(screen.queryByText("Closure")).toBeNull();
+  });
+
+  it("lets the customer confirm in one click", async () => {
+    shareState = { data: { ...share, closures: [waiting] }, isLoading: false, error: null };
+    renderIt();
+    expect(screen.getByText(/We have replaced the batch/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it can be closed" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "decideClosure", id: "r1", body: { confirm: true } });
+  });
+
+  it("needs words before saying something is still wrong", async () => {
+    shareState = { data: { ...share, closures: [waiting] }, isLoading: false, error: null };
+    renderIt();
+    await userEvent.click(screen.getByRole("button", { name: "No, something is still wrong" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Send" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Tell them what is still wrong"), "Two more cracked.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "decideClosure", id: "r1", body: { confirm: false, note: "Two more cracked." } }, expect.anything());
+  });
+
+  it("says what was answered once it has been", () => {
+    shareState = { data: { ...share, closures: [{ ...waiting, status: "declined", canDecide: false, decidedAt: "2026-11-20T09:00:00Z", decisionNote: "Still cracking" }] }, isLoading: false, error: null };
+    renderIt();
+    expect(screen.queryByRole("button", { name: "Yes, it can be closed" })).toBeNull();
+    expect(screen.getByRole("list", { name: "Closure requests" })).toHaveTextContent("you said something is still wrong");
+    expect(screen.getByRole("list", { name: "Closure requests" })).toHaveTextContent("Still cracking");
+  });
+});

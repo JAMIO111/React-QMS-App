@@ -279,6 +279,40 @@ export class ExternalAccessService {
     });
   }
 
+  /** Requests for closure confirmation on a share, as staff see them. */
+  private async closuresOf(db: Db, shareId: string) {
+    const r = await db.execute<{ c: unknown }>(sql`select app.portal_share_closures(${shareId}::uuid) as c`);
+    return { data: r.rows[0].c as unknown[] };
+  }
+
+  closures(ctx: RequestContext, shareId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.ownShare(db, ctx, shareId);
+      return this.closuresOf(db, shareId);
+    });
+  }
+
+  async requestClosure(ctx: RequestContext, shareId: string, note: string | null) {
+    const result = await this.database.asUser(ctx, async (db) => {
+      await this.ownShare(db, ctx, shareId);
+      await db.execute(sql`select app.request_portal_closure(${shareId}::uuid, ${note})`);
+      return this.closuresOf(db, shareId);
+    });
+    const email = await this.tellParty(ctx, shareId, 'closure', note ?? undefined);
+    return { ...result, email };
+  }
+
+  withdrawClosure(ctx: RequestContext, requestId: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ share_id: string }>(
+        sql`select share_id from public.portal_closure_requests where id = ${requestId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
+      );
+      if (!found.rows[0]) throw ApiError.notFound('request_not_found', 'That request was not found');
+      await db.execute(sql`select app.withdraw_portal_closure(${requestId}::uuid, ${reason})`);
+      return this.closuresOf(db, found.rows[0].share_id);
+    });
+  }
+
   /** Who in the party acknowledged a shared document or alert, and which revision they acknowledged. */
   acknowledgements(ctx: RequestContext, shareId: string) {
     return this.database.asUser(ctx, async (db) => {
@@ -335,7 +369,7 @@ export class ExternalAccessService {
   }
 
   /** Email the party's active people that something was shared or said (best effort; never undoes the action). */
-  private async tellParty(ctx: RequestContext, shareId: string, what: 'shared' | 'comment', text?: string) {
+  private async tellParty(ctx: RequestContext, shareId: string, what: 'shared' | 'comment' | 'closure', text?: string) {
     try {
       const info = await this.database.asUser(ctx, async (db) => {
         const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.portal_share_recipients(${shareId}::uuid)`);
@@ -360,14 +394,21 @@ export class ExternalAccessService {
       const label = `${info.rec.reference} — ${info.rec.title}`;
       return await this.portalMailer.send({
         to: info.people.map((p) => ({ email: p.email, name: p.name })),
-        subject: what === 'shared' ? `${info.rec.org_name} shared a ${what1} with you: ${info.rec.reference}` : `${info.rec.org_name} wrote to you about ${info.rec.reference}`,
-        heading: what === 'shared' ? `${info.rec.org_name} shared a ${what1} with you` : `New comment from ${info.rec.org_name}`,
+        subject:
+          what === 'shared'
+            ? `${info.rec.org_name} shared a ${what1} with you: ${info.rec.reference}`
+            : what === 'closure'
+              ? `${info.rec.org_name} asks you to confirm closure: ${info.rec.reference}`
+              : `${info.rec.org_name} wrote to you about ${info.rec.reference}`,
+        heading: what === 'shared' ? `${info.rec.org_name} shared a ${what1} with you` : what === 'closure' ? `Please confirm closure` : `New comment from ${info.rec.org_name}`,
         paragraphs: [
           what === 'shared'
             ? `${info.rec.org_name} has shared ${label} with ${info.rec.party_name}. You can see the details and reply on your portal.`
-            : `${info.rec.org_name} has written a comment on ${label}.`,
+            : what === 'closure'
+              ? `${info.rec.org_name} believes ${label} can be closed and asks you to confirm. Open it on your portal to confirm, or to say what is still wrong.`
+              : `${info.rec.org_name} has written a comment on ${label}.`,
         ],
-        quote: what === 'comment' && text ? { text: text.length > 500 ? `${text.slice(0, 500)}…` : text, by: info.rec.org_name } : undefined,
+        quote: (what === 'comment' || what === 'closure') && text ? { text: text.length > 500 ? `${text.slice(0, 500)}…` : text, by: info.rec.org_name } : undefined,
         path: `/portal/shared/${shareId}?org=${orgOf(ctx)}`,
         button: 'Open in the portal',
         footerWho: info.rec.org_name,

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 let shares;
 let comments;
+let closures = [];
 const mutate = vi.fn();
 const mutateAsync = vi.fn();
 const showToast = vi.fn();
@@ -11,6 +12,7 @@ const showToast = vi.fn();
 vi.mock("../../hooks/usePortal", () => ({
   useShares: () => ({ data: shares, isLoading: false, error: null }),
   useShareAcknowledgements: () => ({ data: { data: [{ person: "Sam Smith", subject: "SOP-004 rev B", note: "Read it", acknowledgedAt: "2026-11-18T10:00:00Z", current: true }] }, isLoading: false }),
+  useShareClosures: () => ({ data: { data: closures }, isLoading: false }),
   useShareComments: () => ({ data: { data: comments }, isLoading: false }),
   useShareMutation: () => ({ mutate, mutateAsync, isPending: false, variables: null }),
 }));
@@ -24,6 +26,7 @@ beforeEach(() => {
   mutate.mockReset();
   mutateAsync.mockReset().mockResolvedValue({});
   showToast.mockReset();
+  closures = [];
   shares = { data: [live], eligible: [{ partyId: "p2", partyKind: "supplier", partyName: "Bolt Ltd" }] };
   comments = [{ id: "c1", side: "external", author: "Sam Smith (Acme Castings)", body: "Held in our cage", createdAt: "2026-11-17T11:00:00Z", withdrawn: false, mine: false, canWithdraw: false }];
 });
@@ -86,5 +89,41 @@ describe("the share card on a record", () => {
     await userEvent.click(screen.getByRole("button", { name: "Who at Acme Castings acknowledged" }));
     expect(screen.getByRole("list", { name: "Acknowledgements" })).toHaveTextContent("Sam Smith");
     expect(screen.getByRole("list", { name: "Acknowledgements" })).toHaveTextContent("Read it");
+  });
+});
+
+describe("closure confirmation on a customer's share (PT5b)", () => {
+  const customer = { ...live, id: "s9", partyId: "p9", partyKind: "customer", partyName: "Wayne Ltd" };
+
+  it("is offered for a customer's non-conformance only", () => {
+    shares = { data: [live, customer], eligible: [] };
+    render(<PortalShareCard kind="ncr" recordId="n1" />);
+    expect(screen.getByRole("button", { name: "Closure confirmation from Wayne Ltd" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Closure confirmation from Acme Castings" })).toBeNull();
+  });
+
+  it("asks the customer, with a message, and says it changes nothing internal", async () => {
+    shares = { data: [customer], eligible: [] };
+    render(<PortalShareCard kind="ncr" recordId="n1" />);
+    await userEvent.click(screen.getByRole("button", { name: "Closure confirmation from Wayne Ltd" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/does not close or reopen anything/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText("Message to them"), "Batch replaced.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Ask them to confirm" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "requestClosure", id: "s9", body: { note: "Batch replaced." } }, expect.anything());
+  });
+
+  it("shows a waiting request with a way to withdraw it, and no new one", async () => {
+    shares = { data: [customer], eligible: [] };
+    closures = [{ id: "r1", status: "pending", requestedAt: "2026-11-19T09:00:00Z", requestNote: null, requestedBy: "Ada Owner", decidedAt: null, decisionNote: null, decidedBy: null, withdrawnReason: null, canDecide: false }];
+    render(<PortalShareCard kind="ncr" recordId="n1" />);
+    await userEvent.click(screen.getByRole("button", { name: "Closure confirmation from Wayne Ltd" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Waiting for the customer")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Ask them to confirm" })).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw this request" }));
+    await userEvent.type(within(dialog).getByLabelText(/Why are you withdrawing it/), "Too early");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "withdrawClosure", id: "r1", shareId: "s9", body: { reason: "Too early" } }, expect.anything());
   });
 });

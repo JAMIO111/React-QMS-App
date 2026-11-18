@@ -480,6 +480,10 @@ BEGIN
   INSERT INTO public.portal_complaints (organisation_id, party_id, nonconformance_id, raised_by)
     SELECT a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), n.id, '50000000-0000-0000-0000-0000000000a1' FROM public.nonconformances n WHERE n.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_complaint', (SELECT id FROM public.portal_complaints WHERE organisation_id = a));
+  -- External portal (PT5b): a request for a customer to confirm closure (written by a function; seeded directly here).
+  INSERT INTO public.portal_closure_requests (organisation_id, share_id)
+    SELECT a, x.id FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_closure_request', (SELECT id FROM public.portal_closure_requests WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

@@ -5,9 +5,9 @@ import Dialog from "../ui/Dialog";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../master-data/shared";
 import CommentThread from "./CommentThread";
-import { useShareAcknowledgements, useShareComments, useShareMutation, useShares } from "../../hooks/usePortal";
+import { useShareAcknowledgements, useShareClosures, useShareComments, useShareMutation, useShares } from "../../hooks/usePortal";
 import { describeApiError } from "../../lib/api-client";
-import { partyKindLabel, shortDate, viewedWords } from "../../lib/portal";
+import { CLOSURE_STATUS, partyKindLabel, shortDate, viewedWords } from "../../lib/portal";
 import { useToast } from "../../contexts/ToastProvider";
 
 const RECORD_WORDS = { ncr: "non-conformance", capa: "8D", document: "document", quality_alert: "quality alert" };
@@ -33,6 +33,7 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
   const [reason, setReason] = useState("");
   const [party, setParty] = useState(null);
   const [who, setWho] = useState(null); // a share whose acknowledgements are open
+  const [closing, setClosing] = useState(null); // a customer share whose closure confirmation is open
 
   if (shares.isLoading || shares.error) return null;
   const { data: list = [], eligible = [] } = shares.data ?? {};
@@ -72,6 +73,9 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
                   {s.acknowledgement ? ` · Acknowledged by ${s.acknowledgement.acknowledged} of ${s.acknowledgement.people} (${s.acknowledgement.subject})` : ""}
                 </p>
               </div>
+              {s.partyKind === "customer" && (kind === "ncr" || kind === "capa") && (
+                <CTAButton type="neutral" size="default" aria-label={`Closure confirmation from ${s.partyName}`} onClick={() => setClosing(s)}>Closure</CTAButton>
+              )}
               {s.acknowledgement && <CTAButton type="neutral" size="default" aria-label={`Who at ${s.partyName} acknowledged`} onClick={() => setWho(s)}>Who</CTAButton>}
               <CTAButton type="neutral" size="default" aria-label={`Conversation with ${s.partyName}`} onClick={() => setTalk(s)}>Conversation</CTAButton>
               <CTAButton type="neutral" size="default" aria-label={`Stop sharing with ${s.partyName}`} onClick={() => { setReason(""); setStop(s); }}>Stop sharing</CTAButton>
@@ -99,6 +103,7 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
           </ul>
         </details>
       )}
+      {closing && <ClosureDialog share={closing} kind={kind} recordId={recordId} onClose={() => setClosing(null)} />}
       {who && <AcknowledgementsDialog share={who} onClose={() => setWho(null)} />}
       {talk && <ConversationDialog share={talk} kind={kind} recordId={recordId} onClose={() => setTalk(null)} />}
       {stop && (
@@ -171,6 +176,82 @@ function AcknowledgementsDialog({ share, onClose }) {
           ))}
         </ul>
       )}
+    </Dialog>
+  );
+}
+
+/** Closure confirmation (PT5b): ask the customer to confirm a shared record can be closed, see their answers, withdraw a request still waiting. Information only. */
+function ClosureDialog({ share, kind, recordId, onClose }) {
+  const closures = useShareClosures(share.id);
+  const mutate = useShareMutation(kind, recordId);
+  const { showToast } = useToast();
+  const [note, setNote] = useState("");
+  const [withdrawing, setWithdrawing] = useState(null);
+  const [reason, setReason] = useState("");
+  const items = closures.data?.data ?? [];
+  const waiting = items.find((c) => c.status === "pending");
+  const fail = (title) => (error) => showToast({ type: "error", title, message: describeApiError(error) });
+  return (
+    <Dialog title={`Closure confirmation from ${share.partyName}`} onClose={onClose} width="max-w-2xl">
+      <div className="flex flex-col gap-3">
+        <Callout tone="info">Ask {share.partyName} to confirm that this can be closed. It records their answer next to the record and does not close or reopen anything for you.</Callout>
+        {!waiting && (
+          <form
+            className="flex flex-col gap-2"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              mutate.mutate(
+                { action: "requestClosure", id: share.id, body: { note: note.trim() || null } },
+                { onSuccess: (res) => { setNote(""); showToast({ type: "success", title: "Asked", message: res.email?.sent ? "Their people have been emailed." : "They will see it on their portal." }); }, onError: fail("Not asked") },
+              );
+            }}>
+            <TextAreaField label="Message to them" rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} hint="Optional: what was done, so they can judge it" />
+            <div className="flex justify-end">
+              <CTAButton type="main" size="md" buttonType="submit" loading={mutate.isPending && mutate.variables?.action === "requestClosure"}>Ask them to confirm</CTAButton>
+            </div>
+          </form>
+        )}
+        {items.length === 0 ? (
+          <p className="text-sm text-secondary-text">Nothing has been asked yet.</p>
+        ) : (
+          <ul aria-label="Requests" className="flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+            {items.map((c) => {
+              const status = CLOSURE_STATUS[c.status];
+              return (
+                <li key={c.id} className="flex flex-col gap-1 px-4 py-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.tone}`}>{status.label}</span>
+                    <span className="text-xs text-secondary-text">
+                      Asked {shortDate(c.requestedAt)}{c.requestedBy ? ` by ${c.requestedBy}` : ""}
+                      {c.decidedAt ? ` · answered ${shortDate(c.decidedAt)} by ${c.decidedBy}` : ""}
+                    </span>
+                    {c.status === "pending" && <CTAButton type="neutral" size="default" aria-label="Withdraw this request" onClick={() => { setReason(""); setWithdrawing(c); }}>Withdraw</CTAButton>}
+                  </div>
+                  {c.requestNote && <p className="text-secondary-text">You wrote: {c.requestNote}</p>}
+                  {c.decisionNote && <p className="text-primary-text">They wrote: {c.decisionNote}</p>}
+                  {c.withdrawnReason && <p className="text-secondary-text">Withdrawn: {c.withdrawnReason}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {withdrawing && (
+          <form
+            className="flex flex-col gap-2 rounded-xl border border-border-color p-3"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              mutate.mutate({ action: "withdrawClosure", id: withdrawing.id, shareId: share.id, body: { reason } }, { onSuccess: () => setWithdrawing(null), onError: fail("Not withdrawn") });
+            }}>
+            <TextAreaField label="Why are you withdrawing it" required rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <CTAButton type="neutral" size="md" onClick={() => setWithdrawing(null)}>Keep it</CTAButton>
+              <CTAButton type="danger" size="md" buttonType="submit" disabled={reason.trim().length < 3} loading={mutate.isPending && mutate.variables?.action === "withdrawClosure"}>Withdraw</CTAButton>
+            </div>
+          </form>
+        )}
+      </div>
     </Dialog>
   );
 }

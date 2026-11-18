@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -122,6 +122,15 @@ export class PortalController {
   @ApiOkResponse({ description: 'The supplier’s own performance over 30, 90 (default) or 365 days: the Performance tab’s figures as named fields only, in the tiles staff chose, with an optional anonymised ranking band' })
   performance(@Ctx() ctx: RequestContext, @Query('days') days?: string) {
     return this.service.performance(ctx, days);
+  }
+
+  @Post('closure-requests/:id/decide')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ClosureDecisionBody) })
+  @ApiOkResponse({ description: 'A customer confirms that a shared record can be closed, or says what is still wrong (a note is needed then). Final; nothing internal changes' })
+  decideClosure(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    const b = parse(ClosureDecisionBody, body);
+    return this.service.decideClosure(ctx, Uuid.parse(id), b.confirm, b.note ?? null);
   }
 
   @Get('complaints')

@@ -134,3 +134,11 @@ export const COMPLAINT_STATUS = {
 };
 /** What staff can switch for a customer: whether their people may raise complaints. */
 export const CUSTOMER_TILES = [{ key: "complaints", label: "Allow them to raise complaints" }];
+
+// ---- Closure confirmation (PT5b) ----
+export const CLOSURE_STATUS = {
+  pending: { label: "Waiting for the customer", tone: "bg-warning-color/20 text-primary-text" },
+  confirmed: { label: "Confirmed", tone: "bg-success-color/15 text-success-color" },
+  declined: { label: "Not satisfied", tone: "bg-error-color/15 text-error-color" },
+  withdrawn: { label: "Withdrawn", tone: "bg-border-color text-secondary-text" },
+};

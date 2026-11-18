@@ -543,6 +543,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/external-access/shares/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/external-access/shares/{id}/comments': undefined,
     'GET /api/v1/external-access/shares/{id}/acknowledgements': undefined,
+    'GET /api/v1/external-access/shares/{id}/closures': undefined,
+    'POST /api/v1/external-access/shares/{id}/closures': { note: 'Hijacked' },
+    'POST /api/v1/external-access/closure-requests/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/portal/closure-requests/{id}/decide': { confirm: true },
     'POST /api/v1/external-access/shares/{id}/comments': { body: 'Hijacked' },
     'POST /api/v1/external-access/comments/{id}/withdraw': undefined,
     'GET /api/v1/portal/shares/{id}': undefined,
@@ -1054,6 +1058,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/external-access/shares/{id}/withdraw',
     'GET /api/v1/external-access/shares/{id}/comments',
     'GET /api/v1/external-access/shares/{id}/acknowledgements',
+    'GET /api/v1/external-access/shares/{id}/closures',
+    'POST /api/v1/external-access/shares/{id}/closures',
+    'POST /api/v1/external-access/closure-requests/{id}/withdraw',
+    'POST /api/v1/portal/closure-requests/{id}/decide',
     'POST /api/v1/external-access/shares/{id}/comments',
     'POST /api/v1/external-access/comments/{id}/withdraw',
     'GET /api/v1/portal/shares/{id}',
@@ -1106,6 +1114,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
   if (path.startsWith('/api/v1/external-access/people/') || path.startsWith('/api/v1/portal/people/')) return a.externalAccess;
   if (path.startsWith('/api/v1/external-access/shares/') || path.startsWith('/api/v1/portal/shares/')) return a.portalShare;
+  if (path.startsWith('/api/v1/external-access/closure-requests/') || path.startsWith('/api/v1/portal/closure-requests/')) return a.portalClosure;
   if (path.startsWith('/api/v1/external-access/comments/') || path.startsWith('/api/v1/portal/comments/')) return a.portalComment;
   if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
@@ -1346,6 +1355,10 @@ beforeAll(async () => {
     a.portalComment = (await admin.query(
       `insert into public.portal_comments (organisation_id, share_id, author_side, author_user_id, body) values ($1, $2, 'staff', $3, 'Sweep comment') returning id`,
       [ids.orgA, a.portalShare, ids.ownerA],
+    )).rows[0].id;
+    a.portalClosure = (await admin.query(
+      `insert into public.portal_closure_requests (organisation_id, share_id) values ($1, $2) returning id`,
+      [ids.orgA, a.portalShare],
     )).rows[0].id;
     // Single sign-on (SS1): a domain A claimed.
     a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;

@@ -153,3 +153,61 @@ export const EVIDENCE_KINDS = [
   { id: "other", name: "Other" },
 ];
 export const evidenceKindLabel = (id) => EVIDENCE_KINDS.find((k) => k.id === id)?.name ?? id;
+
+// ---- Registers and menu (PT6) ----
+
+/**
+ * The portal's side menu for one person's access: only what their kind of party has (a supplier has corrective action requests, a customer has 8Ds,
+ * complaints and certificates), and Team for a party admin. `icon` is a key into the icon map in PortalNavbar so this file stays free of components.
+ */
+export const portalMenu = (access) => {
+  const supplier = access?.partyKind === "supplier";
+  const customer = access?.partyKind === "customer";
+  return [
+    { key: "dashboard", name: "Dashboard", icon: "dashboard", path: "/portal", end: true },
+    { key: "ncrs", name: "Non-conformances", icon: "ncr", path: "/portal/non-conformances", badge: "ncrs" },
+    ...(supplier ? [{ key: "scars", name: "Corrective actions", icon: "scar", path: "/portal/scars", badge: "scars" }] : []),
+    ...(customer ? [{ key: "capas", name: "8D reports", icon: "capa", path: "/portal/8ds", badge: "capas" }] : []),
+    ...(customer ? [{ key: "complaints", name: "Complaints", icon: "complaint", path: "/portal/complaints" }] : []),
+    { key: "documents", name: "Documents and alerts", icon: "document", path: "/portal/documents", badge: "documents" },
+    ...(customer ? [{ key: "certificates", name: "Certificates and reports", icon: "certificate", path: "/portal/certificates" }] : []),
+    ...(access?.role === "admin" ? [{ key: "team", name: "Team", icon: "team", path: "/portal/team" }] : []),
+  ];
+};
+
+/** The page's name in the top bar, from its address. */
+export const portalPageTitle = (pathname) => {
+  const p = pathname.replace(/\/+$/, "");
+  if (p === "/portal" || p === "") return "Dashboard";
+  if (p.startsWith("/portal/non-conformances") || p.startsWith("/portal/shared")) return "Non-conformances";
+  if (p.startsWith("/portal/scars")) return "Corrective actions";
+  if (p.startsWith("/portal/8ds")) return "8D reports";
+  if (p.startsWith("/portal/complaints")) return "Complaints";
+  if (p.startsWith("/portal/documents")) return "Documents and alerts";
+  if (p.startsWith("/portal/certificates")) return "Certificates and reports";
+  if (p.startsWith("/portal/team")) return "Team";
+  return "Portal";
+};
+
+/** The address of a shared non-conformance or 8D from a register row. */
+export const registerPath = (kind) => (kind === "scar" ? "/portal/scars" : kind === "capa" ? "/portal/8ds" : kind === "document" ? "/portal/documents" : "/portal/non-conformances");
+
+/** What a shared 8D's stage means to the customer. */
+export const CAPA_STAGE = {
+  open: { label: "Open", tone: "bg-info-color/15 text-info-color" },
+  actions_in_progress: { label: "Actions in progress", tone: "bg-warning-color/20 text-primary-text" },
+  awaiting_verification: { label: "Awaiting verification", tone: "bg-warning-color/20 text-primary-text" },
+  verified_effective: { label: "Verified effective", tone: "bg-success-color/15 text-success-color" },
+  closed: { label: "Closed", tone: "bg-success-color/15 text-success-color" },
+  cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text" },
+};
+export const capaStage = (stage) => CAPA_STAGE[stage] ?? { label: stage, tone: "bg-border-color text-secondary-text" };
+
+/** What a shared record is waiting for from the person, in a word (empty when nothing). */
+export const waitingFor = (row) => {
+  if (row.needsClosure || row.closurePending) return "Confirm closure";
+  if (row.needsAcknowledgement) return "Acknowledge";
+  if (row.awaitingResponse) return "Respond";
+  if (row.openActions > 0) return "Actions to do";
+  return "";
+};

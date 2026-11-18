@@ -1,21 +1,20 @@
 import { useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import SlidingToggle from "../ui/SlidingToggle";
 import { ArcGauge, Chip, Meter, StatTile, Tile } from "../dashboard/DashboardGraphics";
-import { ArrowLeftIcon, GaugeIcon } from "@/components/icons";
+import { GaugeIcon } from "@/components/icons";
 import { usePortalPerformance } from "../../hooks/usePortal";
 import { describeApiError } from "../../lib/api-client";
 import { pctWords, RANK_WORDS, shortDate } from "../../lib/portal";
 import { BAND, PERIODS } from "../../lib/supplierPerformance";
 
 /**
- * Your performance (PT4): the figures our Performance tab shows for this supplier, from the same database function, as the database chose to give them.
+ * Your performance (PT4), now the supplier's dashboard (PT6): the figures our Performance tab shows for this supplier, from the same database function, as the database chose to give them.
  * Every figure is also in words, a tile staff switched off simply is not here, and no record or other supplier is named.
  */
-export default function PortalPerformancePage() {
-  const { access } = useOutletContext();
+export function PerformancePanel({ access }) {
   const [days, setDays] = useState("90");
   const perf = usePortalPerformance(access.organisationId, Number(days), { enabled: !access.mfaRequired && access.partyKind === "supplier" });
 
@@ -27,12 +26,9 @@ export default function PortalPerformancePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/portal" className="inline-flex items-center gap-1 text-sm text-link-color hover:underline">
-        <ArrowLeftIcon aria-hidden="true" /> Back to home
-      </Link>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Your performance</h1>
+          <h2 className="text-xl font-semibold">Your performance</h2>
           <p className="text-sm text-secondary-text">
             {shortDate(p.period.from)} to {shortDate(p.period.to)}, as {access.organisationName} measures it.
           </p>
@@ -153,4 +149,9 @@ export default function PortalPerformancePage() {
       )}
     </div>
   );
+}
+
+/** The old address of the performance page: it is the dashboard now. */
+export default function PortalPerformancePage() {
+  return <Navigate to="/portal" replace />;
 }

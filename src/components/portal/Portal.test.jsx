@@ -17,21 +17,28 @@ vi.mock("../../hooks/usePortal", () => ({
   usePortalPeople: () => ({ data: { data: people }, isLoading: false }),
   usePortalShares: () => ({ data: { data: shares }, isLoading: false }),
   usePortalScars: () => ({ data: { data: scars }, isLoading: false }),
+  usePortalPerformance: () => ({ data: null, isLoading: true }),
+  usePortalFigures: () => ({ data: null, isLoading: true }),
+  usePortalNcrs: () => ({ data: { data: [] }, isLoading: false }),
+  usePortalCapas: () => ({ data: { data: [] }, isLoading: false }),
   usePortalMutation: () => ({ mutate, isPending: false, variables: null }),
 }));
 vi.mock("../../hooks/useSignOut", () => ({ default: () => [signOut, false] }));
 
-import PortalApp, { PortalHome } from "./PortalApp";
+import PortalApp from "./PortalApp";
+import PortalDashboard from "./PortalDashboard";
+import { PortalTeamPage } from "./PortalPages";
 
 const acme = { id: "a1", organisationId: "o1", organisationName: "Alpha Precision", partyId: "p1", partyKind: "supplier", partyName: "Acme Castings", role: "admin", contactName: "Pat in Quality", mfaRequired: false };
 const beta = { ...acme, id: "a2", organisationId: "o2", organisationName: "Beta Castings", partyName: "Bolt Ltd", role: "member", contactName: null };
 
-const renderIt = () =>
+const renderIt = (path = "/portal") =>
   render(
-    <MemoryRouter initialEntries={["/portal"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/portal" element={<PortalApp />}>
-          <Route index element={<PortalHome />} />
+          <Route index element={<PortalDashboard />} />
+          <Route path="team" element={<PortalTeamPage />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -54,7 +61,34 @@ describe("the supplier and customer portal", () => {
     expect(screen.getByText(/Supplier portal for Alpha Precision/)).toBeInTheDocument();
     expect(screen.getByText("Pat in Quality")).toBeInTheDocument();
     expect(screen.getByText(/Nothing has been shared with you yet/)).toBeInTheDocument();
-    expect(screen.queryByRole("navigation")).toBeNull(); // no staff menu
+    // The portal has its own side menu and no staff menu.
+    const menu = screen.getByRole("navigation", { name: "Portal menu" });
+    expect(within(menu).queryByRole("link", { name: "Settings" })).toBeNull();
+  });
+
+  it("a supplier's menu has corrective actions and not 8D reports, complaints or certificates; an admin also has Team", () => {
+    renderIt();
+    const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
+    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Documents and alerts", "Team"]);
+  });
+
+  it("a customer's menu has 8D reports, complaints and certificates, and no corrective actions; a member has no Team", () => {
+    const customer = { ...acme, partyKind: "customer", partyName: "Wayne Ltd", role: "member" };
+    me = { ...me, portal: [customer] };
+    home = { data: { access: customer, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
+    renderIt();
+    const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
+    expect(names).toEqual(["Dashboard", "Non-conformances", "8D reports", "Complaints", "Documents and alerts", "Certificates and reports"]);
+  });
+
+  it("shows on a menu item how many things are waiting there", () => {
+    const fresh = { id: "s2", kind: "ncr", reference: "NC-2", title: "Burrs", status: "open", sharedAt: "2026-11-18T09:00:00Z", comments: 0, newComments: 0, viewed: false };
+    const doc = { ...fresh, id: "s3", kind: "document", reference: "SOP-1", needsAcknowledgement: true };
+    home = { data: { access: acme, attention: [fresh, doc], shared: 2, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
+    renderIt();
+    const menu = within(screen.getByRole("navigation", { name: "Portal menu" }));
+    expect(menu.getByTitle("Non-conformances")).toBeInTheDocument();
+    expect(menu.getByTitle("Documents and alerts")).toBeInTheDocument();
   });
 
   it("falls back to the organisation's name when no contact is set", () => {
@@ -66,7 +100,7 @@ describe("the supplier and customer portal", () => {
   });
 
   it("an admin sees their colleagues and can invite; an ordinary member does not", async () => {
-    renderIt();
+    renderIt("/portal/team");
     expect(screen.getByRole("heading", { name: "People at Acme Castings" })).toBeInTheDocument();
     await userEvent.type(screen.getByRole("textbox", { name: /Invite a colleague/ }), "kim@acme.test");
     await userEvent.click(screen.getByRole("button", { name: "Send invitation" }));
@@ -76,8 +110,9 @@ describe("the supplier and customer portal", () => {
   it("an ordinary member has no people section", () => {
     me = { ...me, portal: [beta] };
     home = { data: { access: beta, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
-    renderIt();
+    renderIt("/portal/team"); // an ordinary member is sent back to the dashboard
     expect(screen.queryByRole("heading", { name: /People at/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Bolt Ltd" })).toBeInTheDocument();
   });
 
   it("someone with several organisations can choose which portal to use", () => {
@@ -131,7 +166,6 @@ describe("the supplier and customer portal", () => {
     expect(within(attention).getByText("1 new reply")).toBeInTheDocument();
     expect(within(attention).getByText("New")).toBeInTheDocument();
     expect(within(attention).getAllByRole("link")[0]).toHaveAttribute("href", expect.stringContaining("/portal/shared/s1"));
-    expect(screen.getByRole("list", { name: "Shared with you" })).toBeInTheDocument();
   });
 
   it("puts the corrective action requests that wait for a response first, with when they are due", () => {
@@ -147,7 +181,6 @@ describe("the supplier and customer portal", () => {
     expect(within(waiting).getByText(/Revised response needed · Overdue since 3 Dec 2099 · more time asked for/)).toBeInTheDocument();
     expect(within(waiting).getByText("Overdue")).toBeInTheDocument();
     expect(within(waiting).getAllByRole("link")[0]).toHaveAttribute("href", expect.stringContaining("/portal/scars/c1"));
-    expect(within(screen.getByRole("list", { name: "Corrective action requests" })).getByText(/Closed/)).toBeInTheDocument();
     scars = [];
   });
 

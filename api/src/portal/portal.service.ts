@@ -399,6 +399,59 @@ export class PortalService {
     return this.database.asUser(ctx, async (db) => ({ data: (await this.shares(db, ctx)).rows.map((r) => this.shareItem(r)) }));
   }
 
+  /** The register rows of the non-conformances shared with the caller's party (PT6). */
+  listNcrs(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_ncrs(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((n) => ({
+          id: n.share_id as string,
+          reference: n.reference as string,
+          title: n.title as string,
+          stage: n.stage as string,
+          severity: n.severity as string,
+          detectedAt: n.detected_at ? String(n.detected_at).slice(0, 10) : null,
+          partNumber: (n.part_number as string | null) ?? null,
+          partName: (n.part_name as string | null) ?? null,
+          lotNumber: (n.lot_number as string | null) ?? null,
+          quantityAffected: n.quantity_affected === null || n.quantity_affected === undefined ? null : Number(n.quantity_affected),
+          customerReference: (n.customer_reference as string | null) ?? null,
+          purchaseOrder: (n.purchase_order as string | null) ?? null,
+          sharedAt: iso(n.shared_at),
+          comments: Number(n.comments ?? 0),
+          newComments: Number(n.new_comments ?? 0),
+          viewed: Boolean(n.viewed),
+          lastCommentAt: iso(n.last_comment_at),
+          closurePending: Boolean(n.closure_pending),
+        })),
+      };
+    });
+  }
+
+  /** The register rows of the 8Ds shared with the caller's party (PT6). */
+  listCapas(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_capas(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.share_id as string,
+          reference: c.reference as string,
+          title: c.title as string,
+          severity: (c.severity as string | null) ?? null,
+          stage: c.stage as string,
+          startedAt: iso(c.started_at),
+          closedAt: iso(c.closed_at),
+          sharedAt: iso(c.shared_at),
+          comments: Number(c.comments ?? 0),
+          newComments: Number(c.new_comments ?? 0),
+          viewed: Boolean(c.viewed),
+          lastCommentAt: iso(c.last_comment_at),
+          closurePending: Boolean(c.closure_pending),
+        })),
+      };
+    });
+  }
+
   private commentRow(r: Row) {
     return {
       id: r.comment_id as string,

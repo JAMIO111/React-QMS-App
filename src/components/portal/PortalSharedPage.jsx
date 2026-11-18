@@ -240,7 +240,7 @@ export default function PortalSharedPage() {
   const heading = sharedHeading(kind, r);
   return (
     <>
-      <Back />
+      <Back kind={kind} />
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-primary-text">{heading.code} <span className="font-normal text-secondary-text">·</span> {heading.title}</h1>
         <p className="text-sm text-secondary-text">
@@ -312,6 +312,8 @@ function ClosureBlock({ closures, mutate, organisationName }) {
   );
 }
 
-const Back = () => (
-  <Link to="/portal" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline"><ArrowLeftIcon className="h-4 w-4" /> Back to your portal</Link>
-);
+const BACK = { ncr: ["/portal/non-conformances", "Back to non-conformances"], capa: ["/portal/8ds", "Back to 8D reports"], document: ["/portal/documents", "Back to documents and alerts"], quality_alert: ["/portal/documents", "Back to documents and alerts"] };
+const Back = ({ kind }) => {
+  const [to, label] = BACK[kind] ?? ["/portal", "Back to your portal"];
+  return <Link to={to} className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline"><ArrowLeftIcon className="h-4 w-4" /> {label}</Link>;
+};

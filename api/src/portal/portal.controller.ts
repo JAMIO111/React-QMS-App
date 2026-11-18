@@ -78,6 +78,20 @@ export class PortalController {
     return this.service.listShares(ctx);
   }
 
+  @Get('ncrs')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The non-conformances shared with the person’s supplier or customer, as register rows (named fields only)' })
+  ncrs(@Ctx() ctx: RequestContext) {
+    return this.service.listNcrs(ctx);
+  }
+
+  @Get('capas')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The 8Ds shared with the person’s supplier or customer, as register rows (named fields only)' })
+  capas(@Ctx() ctx: RequestContext) {
+    return this.service.listCapas(ctx);
+  }
+
   @Get('shares/:id')
   @PortalScoped()
   @ApiOkResponse({ description: 'One shared record as the party sees it (a non-conformance or an 8D: named fields only), its conversation, and records that the person has seen it' })

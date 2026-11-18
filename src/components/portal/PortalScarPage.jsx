@@ -34,8 +34,8 @@ const Block = ({ title, children }) => (
 );
 
 const Back = () => (
-  <Link to="/portal" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
-    <ArrowLeftIcon className="h-4 w-4" /> Back to your portal
+  <Link to="/portal/scars" className="flex w-fit items-center gap-1 text-sm text-link-color hover:underline">
+    <ArrowLeftIcon className="h-4 w-4" /> Back to corrective actions
   </Link>
 );
 

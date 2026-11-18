@@ -267,6 +267,28 @@ export const usePortalShares = (organisationId, { enabled = true } = {}) => {
   });
 };
 
+/** The non-conformances shared with the person's supplier or customer, as register rows. */
+export const usePortalNcrs = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "ncrs"),
+    queryFn: () => apiFetch("/portal/ncrs", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** The 8Ds shared with the person's supplier or customer, as register rows. */
+export const usePortalCapas = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "capas"),
+    queryFn: () => apiFetch("/portal/capas", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
 /** One shared record as the party sees it, with its conversation (opening it records that the person has seen it). */
 export const usePortalShare = (organisationId, shareId) => {
   const { user } = useAuth();

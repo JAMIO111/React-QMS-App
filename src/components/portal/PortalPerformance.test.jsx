@@ -5,7 +5,7 @@ import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 let state;
 vi.mock("../../hooks/usePortal", () => ({ usePortalPerformance: () => state }));
 
-import PortalPerformancePage from "./PortalPerformancePage";
+import { PerformancePanel } from "./PortalPerformancePage";
 
 const access = { organisationId: "o1", organisationName: "Alpha Precision", partyName: "Acme Castings", partyKind: "supplier", mfaRequired: false };
 const full = {
@@ -34,7 +34,7 @@ const renderIt = () =>
     <MemoryRouter initialEntries={["/portal/performance"]}>
       <Routes>
         <Route path="/portal" element={<Outlet context={{ access }} />}>
-          <Route path="performance" element={<PortalPerformancePage />} />
+          <Route path="performance" element={<PerformancePanel access={access} />} />
         </Route>
       </Routes>
     </MemoryRouter>,

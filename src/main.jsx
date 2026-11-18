@@ -13,6 +13,7 @@ import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
 import LoadingScreen from "./components/ui/LoadingScreen.jsx";
 import RouteError from "./components/RouteError.jsx";
+import PortalContent from "./components/portal/portalContent.jsx";
 import { reloadPage, shouldReloadForChunkError } from "./lib/chunkErrors";
 import "./index.css";
 import { applyStoredThemeColour } from "./lib/theme-colours";
@@ -151,7 +152,15 @@ const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx")
 const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
 const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx"));
 const PortalApp = lazy(() => import("./components/portal/PortalApp.jsx"));
-const PortalHome = lazy(() => import("./components/portal/PortalApp.jsx").then((m) => ({ default: m.PortalHome })));
+const PortalDashboard = lazy(() => import("./components/portal/PortalDashboard.jsx"));
+const portalPage = (name) => lazy(() => import("./components/portal/PortalPages.jsx").then((m) => ({ default: m[name] })));
+const PortalNcrsPage = portalPage("PortalNcrsPage");
+const PortalScarsPage = portalPage("PortalScarsPage");
+const PortalCapasPage = portalPage("PortalCapasPage");
+const PortalDocumentsPage = portalPage("PortalDocumentsPage");
+const PortalComplaintsPage = portalPage("PortalComplaintsPage");
+const PortalCertificatesPage = portalPage("PortalCertificatesPage");
+const PortalTeamPage = portalPage("PortalTeamPage");
 const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
 const PortalScarPage = lazy(() => import("./components/portal/PortalScarPage.jsx"));
 const PortalPerformancePage = lazy(() => import("./components/portal/PortalPerformancePage.jsx"));
@@ -231,9 +240,17 @@ const router = createBrowserRouter([
         path: "portal",
         element: <PortalApp />,
         children: [
-          { index: true, element: <PortalHome /> },
-          { path: "shared/:shareId", element: <PortalSharedPage /> },
-          { path: "scars/:scarId", element: <PortalScarPage /> },
+          { index: true, element: <PortalDashboard /> },
+          { path: "non-conformances", element: <PortalNcrsPage /> },
+          { path: "scars", element: <PortalScarsPage /> },
+          { path: "8ds", element: <PortalCapasPage /> },
+          { path: "complaints", element: <PortalComplaintsPage /> },
+          { path: "documents", element: <PortalDocumentsPage /> },
+          { path: "certificates", element: <PortalCertificatesPage /> },
+          { path: "team", element: <PortalTeamPage /> },
+          { path: "shared/:shareId", element: <PortalContent><PortalSharedPage /></PortalContent> },
+          { path: "scars/:scarId", element: <PortalContent><PortalScarPage /></PortalContent> },
+          // The performance page is the dashboard now; the old address still works.
           { path: "performance", element: <PortalPerformancePage /> },
         ],
       },

@@ -6,7 +6,9 @@ import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCustomFieldPeople } from "../../hooks/useCustomFields";
 import { useDocument, useDocumentMutation } from "../../hooks/useDocuments";
+import { usePermissions } from "../../hooks/useQmsApi";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
+import PortalShareCard from "../portal/PortalShareCard";
 import { contentKindLabel, DOCUMENT_STATUS, formatDay, revisionLabel, revisionPath, REVISION_STATUS, statusLabel, statusPill } from "../../lib/documents";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import Callout from "../ui/Callout";
@@ -120,6 +122,7 @@ const DocumentPage = () => {
   const [editing, setEditing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const doc = query.data;
+  const { can } = usePermissions();
   useBreadcrumbNames([
     { path: `/Documentation/Documents/${id}`, label: doc ? `${doc.number} · ${doc.title}` : null },
     { path: "/Documentation", label: "Documentation", to: "/Documentation/Documents" },
@@ -238,6 +241,7 @@ const DocumentPage = () => {
         <LinksCard doc={doc} />
       </div>
       <ChangeRequestsCard doc={doc} />
+      {doc.status === "active" && can("external_access.share") && <PortalShareCard kind="document" recordId={doc.id} />}
 
       <MenuCard
         title="Revisions"

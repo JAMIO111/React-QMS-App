@@ -85,7 +85,7 @@ export class ExternalAccessController {
 
   @Get('shares')
   @OrganisationScoped('external_access.share')
-  @ApiOkResponse({ description: 'Who a record (kind ncr | capa, recordId) is shared with and how they have used it (viewed, replies), and which suppliers or customers it could still be shared with' })
+  @ApiOkResponse({ description: 'Who a record (kind ncr | capa | document | quality_alert, recordId) is shared with and how they have used it (viewed, replies), and which suppliers or customers it could still be shared with' })
   shares(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     const q = parse(SharesQuery, query);
     return this.service.shares(ctx, q.kind, q.recordId);
@@ -105,6 +105,13 @@ export class ExternalAccessController {
   @ApiOkResponse({ description: 'Stop sharing, with a reason. The party stops seeing it at once; the conversation is kept for staff' })
   withdrawShare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdrawShare(ctx, Uuid.parse(id), parse(ReasonBody, body).reason);
+  }
+
+  @Get('shares/:id/acknowledgements')
+  @OrganisationScoped('external_access.share')
+  @ApiOkResponse({ description: 'Who in the party acknowledged a shared document or quality alert, with their note and the revision they acknowledged' })
+  acknowledgements(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.acknowledgements(ctx, Uuid.parse(id));
   }
 
   @Get('shares/:id/comments')

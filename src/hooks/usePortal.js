@@ -199,6 +199,17 @@ export const useShareComments = (shareId, { enabled = true } = {}) => {
   });
 };
 
+/** Who in the party acknowledged a shared document or alert (staff). */
+export const useShareAcknowledgements = (shareId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: ["api", "org", organisationId, "external-access", "acknowledgements", shareId],
+    queryFn: () => apiFetch(`/external-access/shares/${shareId}/acknowledgements`, { organisationId }),
+    enabled: !!organisationId && !!shareId && enabled,
+    retry: false,
+  });
+};
+
 /** Share, withdraw, comment, withdraw a comment. Every answer is the record's shares or the conversation, which replaces the cache. */
 export const useShareMutation = (kind, recordId) => {
   const { organisationId } = useOrganisation();
@@ -252,10 +263,11 @@ export const usePortalShareMutation = (organisationId, shareId) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ action, id, body }) =>
-      action === "comment"
-        ? apiFetch(`/portal/shares/${shareId}/comments`, { method: "POST", body, organisationId })
-        : apiFetch(`/portal/comments/${id}/withdraw`, { method: "POST", organisationId }),
+    mutationFn: ({ action, id, body }) => {
+      if (action === "comment") return apiFetch(`/portal/shares/${shareId}/comments`, { method: "POST", body, organisationId });
+      if (action === "acknowledge") return apiFetch(`/portal/shares/${shareId}/acknowledge`, { method: "POST", body: body ?? {}, organisationId });
+      return apiFetch(`/portal/comments/${id}/withdraw`, { method: "POST", organisationId });
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
   });
 };
@@ -319,4 +331,10 @@ export const usePortalScarMutation = (organisationId, scarId) => {
 export const openPortalScarFile = async (organisationId, fileId) => {
   const { url } = await apiFetch(`/portal/scar-files/${fileId}/download-url`, { method: "POST", organisationId });
   window.open(url, "_blank", "noopener");
+};
+
+/** A short link (ten minutes) to a file of a shared document; opens it in a new tab. */
+export const openPortalDocumentFile = async (organisationId, shareId, fileId) => {
+  const res = await apiFetch(`/portal/shares/${shareId}/file-url`, { method: "POST", body: { fileId }, organisationId });
+  window.open(res.url, "_blank", "noopener");
 };

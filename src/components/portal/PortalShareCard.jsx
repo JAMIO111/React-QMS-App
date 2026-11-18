@@ -5,12 +5,19 @@ import Dialog from "../ui/Dialog";
 import CTAButton from "@/components/CTAButton";
 import { TextAreaField } from "../master-data/shared";
 import CommentThread from "./CommentThread";
-import { useShareComments, useShareMutation, useShares } from "../../hooks/usePortal";
+import { useShareAcknowledgements, useShareComments, useShareMutation, useShares } from "../../hooks/usePortal";
 import { describeApiError } from "../../lib/api-client";
 import { partyKindLabel, shortDate, viewedWords } from "../../lib/portal";
 import { useToast } from "../../contexts/ToastProvider";
 
-const RECORD_WORDS = { ncr: "non-conformance", capa: "8D" };
+const RECORD_WORDS = { ncr: "non-conformance", capa: "8D", document: "document", quality_alert: "quality alert" };
+const SHOWS = {
+  ncr: "They see the facts, containment and decisions (never costs or internal notes) and can reply here.",
+  capa: "They see the facts, containment and decisions (never costs or internal notes) and can reply here.",
+  document: "They read the revision in force (and open its files), can acknowledge it, and reply here. A new revision asks them again.",
+  quality_alert: "They see what happened and what is asked of them (never departments, machines or who is on the list), can acknowledge it, and reply here.",
+};
+const ACKNOWLEDGED = new Set(["document", "quality_alert"]);
 
 /**
  * "Shared with suppliers and customers" on a non-conformance or an 8D (docs/external-portal-plan.md PT2): who it is shared with, whether and when they
@@ -25,6 +32,7 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
   const [stop, setStop] = useState(null); // a share being withdrawn
   const [reason, setReason] = useState("");
   const [party, setParty] = useState(null);
+  const [who, setWho] = useState(null); // a share whose acknowledgements are open
 
   if (shares.isLoading || shares.error) return null;
   const { data: list = [], eligible = [] } = shares.data ?? {};
@@ -48,7 +56,7 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
   const body = (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-secondary-text">
-        Share this {word} with a supplier or customer it names. They see the facts, containment and decisions (never costs or internal notes) and can reply here.
+        Share this {word} with a supplier or customer{ACKNOWLEDGED.has(kind) ? "" : " it names"}. {SHOWS[kind]}
       </p>
       {live.length === 0 ? (
         <p className="text-sm text-secondary-text">Not shared with anyone yet.</p>
@@ -61,8 +69,10 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
                 <p className="text-xs text-secondary-text">
                   Shared {shortDate(s.sharedAt)}{s.sharedBy ? ` by ${s.sharedBy}` : ""} · {viewedWords(s)} · {s.comments} {s.comments === 1 ? "comment" : "comments"}
                   {s.externalComments > 0 ? ` (${s.externalComments} from them)` : ""}
+                  {s.acknowledgement ? ` · Acknowledged by ${s.acknowledgement.acknowledged} of ${s.acknowledgement.people} (${s.acknowledgement.subject})` : ""}
                 </p>
               </div>
+              {s.acknowledgement && <CTAButton type="neutral" size="default" aria-label={`Who at ${s.partyName} acknowledged`} onClick={() => setWho(s)}>Who</CTAButton>}
               <CTAButton type="neutral" size="default" aria-label={`Conversation with ${s.partyName}`} onClick={() => setTalk(s)}>Conversation</CTAButton>
               <CTAButton type="neutral" size="default" aria-label={`Stop sharing with ${s.partyName}`} onClick={() => { setReason(""); setStop(s); }}>Stop sharing</CTAButton>
             </li>
@@ -89,6 +99,7 @@ export default function PortalShareCard({ kind, recordId, Heading, Card }) {
           </ul>
         </details>
       )}
+      {who && <AcknowledgementsDialog share={who} onClose={() => setWho(null)} />}
       {talk && <ConversationDialog share={talk} kind={kind} recordId={recordId} onClose={() => setTalk(null)} />}
       {stop && (
         <Dialog title={`Stop sharing with ${stop.partyName}?`} onClose={() => setStop(null)}>
@@ -136,6 +147,30 @@ function ConversationDialog({ share, kind, recordId, onClose }) {
         onSend={(body) => mutate.mutateAsync({ action: "comment", id: share.id, shareId: share.id, body: { body } })}
         onWithdraw={(c) => mutate.mutate({ action: "withdrawComment", id: c.id, shareId: share.id })}
       />
+    </Dialog>
+  );
+}
+
+function AcknowledgementsDialog({ share, onClose }) {
+  const list = useShareAcknowledgements(share.id);
+  const rows = list.data?.data ?? [];
+  return (
+    <Dialog title={`Acknowledged by ${share.partyName}`} onClose={onClose} width="max-w-2xl">
+      {list.isLoading ? (
+        <p className="text-sm text-secondary-text">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-secondary-text">Nobody has acknowledged it yet.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border-color rounded-xl border border-border-color" aria-label="Acknowledgements">
+          {rows.map((k, i) => (
+            <li key={i} className="px-4 py-2 text-sm">
+              <p className="font-medium text-primary-text">{k.person} <span className="font-normal text-secondary-text">· {shortDate(k.acknowledgedAt)}</span></p>
+              <p className="text-xs text-secondary-text">{k.subject}{k.current ? "" : " (an earlier revision)"}</p>
+              {k.note && <p className="mt-1 text-secondary-text">“{k.note}”</p>}
+            </li>
+          ))}
+        </ul>
+      )}
     </Dialog>
   );
 }

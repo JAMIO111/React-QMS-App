@@ -464,6 +464,10 @@ BEGIN
   INSERT INTO public.portal_activity (organisation_id, party_id, kind, record_kind, record_id, party_name, record_label, message)
     VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'comment', 'ncr', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1), 'Sweep supplier', 'NC-1 · Sweep', 'Commented');
   INSERT INTO sweep VALUES ('portal_activity', (SELECT id FROM public.portal_activity WHERE organisation_id = a));
+  -- External portal (PT3c): an acknowledgement of a shared record (written by a function; seeded directly here).
+  INSERT INTO public.portal_acknowledgements (organisation_id, share_id, acknowledged_by, subject_id, subject_label)
+    SELECT a, x.id, '50000000-0000-0000-0000-0000000000a1', gen_random_uuid(), 'Sweep subject' FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_acknowledgement', (SELECT id FROM public.portal_acknowledgements WHERE organisation_id = a));
   -- External portal (PT3b): an evidence file on the SCAR (written by functions; seeded directly here).
   INSERT INTO public.supplier_scar_files (organisation_id, scar_id, storage_path, file_name, size_bytes)
     SELECT a, c.id, a::text || '/scar/' || c.id::text || '/sweep.pdf', 'sweep.pdf', 10 FROM public.supplier_scars c WHERE c.organisation_id = a LIMIT 1;

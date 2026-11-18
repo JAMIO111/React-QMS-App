@@ -13,6 +13,8 @@ const orgOf = (ctx: RequestContext) => {
 };
 const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
 
+export type ShareKind = 'ncr' | 'capa' | 'document' | 'quality_alert';
+
 export function personRow(r: Row) {
   return {
     id: r.access_id as string,
@@ -210,16 +212,24 @@ export class ExternalAccessService {
   }
 
   /** The card on a record: who it is shared with and how they have used it, and who it could still be shared with. */
-  private async sharesOf(db: Db, kind: 'ncr' | 'capa', recordId: string) {
+  private async sharesOf(db: Db, kind: ShareKind, recordId: string) {
     const shares = await db.execute<Row>(sql`select * from app.list_portal_shares(${kind}, ${recordId}::uuid)`);
     const eligible = await db.execute<Row>(sql`select * from app.portal_eligible_parties(${kind}, ${recordId}::uuid)`);
+    const acks = new Map<string, Row>();
+    if (kind === 'document' || kind === 'quality_alert') {
+      const summary = await db.execute<Row>(sql`select * from app.portal_ack_summary(${kind}, ${recordId}::uuid)`);
+      for (const a of summary.rows) acks.set(a.share_id as string, a);
+    }
     return {
-      data: shares.rows.map((r) => this.shareRow(r)),
+      data: shares.rows.map((r) => {
+        const a = acks.get(r.share_id as string);
+        return { ...this.shareRow(r), acknowledgement: a ? { acknowledged: Number(a.acknowledged), people: Number(a.people), subject: a.subject_label as string } : null };
+      }),
       eligible: eligible.rows.map((r) => ({ partyId: r.party_id as string, partyKind: r.party_kind as 'supplier' | 'customer', partyName: r.party_name as string })),
     };
   }
 
-  shares(ctx: RequestContext, kind: 'ncr' | 'capa', recordId: string) {
+  shares(ctx: RequestContext, kind: ShareKind, recordId: string) {
     return this.database.asUser(ctx, async (db) => {
       await this.ownRecord(db, ctx, kind, recordId);
       return this.sharesOf(db, kind, recordId);
@@ -227,16 +237,21 @@ export class ExternalAccessService {
   }
 
   /** The record must be in this organisation (404 otherwise, so another organisation's records are not confirmed). */
-  private async ownRecord(db: Db, ctx: RequestContext, kind: 'ncr' | 'capa', recordId: string) {
+  private async ownRecord(db: Db, ctx: RequestContext, kind: ShareKind, recordId: string) {
+    const org = orgOf(ctx);
     const r = await db.execute<{ id: string }>(
       kind === 'ncr'
-        ? sql`select id from public.nonconformances where id = ${recordId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`
-        : sql`select id from public.capas where id = ${recordId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
+        ? sql`select id from public.nonconformances where id = ${recordId}::uuid and organisation_id = ${org}::uuid`
+        : kind === 'capa'
+          ? sql`select id from public.capas where id = ${recordId}::uuid and organisation_id = ${org}::uuid`
+          : kind === 'document'
+            ? sql`select id from public.documents where id = ${recordId}::uuid and organisation_id = ${org}::uuid`
+            : sql`select id from public.quality_alerts where id = ${recordId}::uuid and organisation_id = ${org}::uuid`,
     );
     if (!r.rows[0]) throw ApiError.notFound('record_not_found', 'That record was not found');
   }
 
-  async share(ctx: RequestContext, body: { kind: 'ncr' | 'capa'; recordId: string; partyId: string }) {
+  async share(ctx: RequestContext, body: { kind: ShareKind; recordId: string; partyId: string }) {
     const shareId = await this.database.asUser(ctx, async (db) => {
       await this.ownRecord(db, ctx, body.kind, body.recordId);
       const r = await db.execute<{ id: string }>(sql`select app.share_with_portal(${body.kind}, ${body.recordId}::uuid, ${body.partyId}::uuid) as id`);
@@ -249,8 +264,8 @@ export class ExternalAccessService {
 
   /** The share must be in this organisation (404 otherwise, so other organisations' ids are not confirmed); returns what the record is. */
   private async ownShare(db: Db, ctx: RequestContext, id: string) {
-    const r = await db.execute<{ record_kind: 'ncr' | 'capa'; record_id: string }>(
-      sql`select record_kind, coalesce(nonconformance_id, capa_id) as record_id from public.portal_shares where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
+    const r = await db.execute<{ record_kind: ShareKind; record_id: string }>(
+      sql`select record_kind, coalesce(nonconformance_id, capa_id, document_id, quality_alert_id) as record_id from public.portal_shares where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
     );
     if (!r.rows[0]) throw ApiError.notFound('share_not_found', 'That share was not found');
     return r.rows[0];
@@ -261,6 +276,17 @@ export class ExternalAccessService {
       const record = await this.ownShare(db, ctx, id);
       await db.execute(sql`select app.withdraw_portal_share(${id}::uuid, ${reason})`);
       return this.sharesOf(db, record.record_kind, record.record_id);
+    });
+  }
+
+  /** Who in the party acknowledged a shared document or alert, and which revision they acknowledged. */
+  acknowledgements(ctx: RequestContext, shareId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.ownShare(db, ctx, shareId);
+      const r = await db.execute<Row>(sql`select * from app.portal_share_acknowledgements(${shareId}::uuid)`);
+      return {
+        data: r.rows.map((k) => ({ person: k.person_name as string, subject: k.subject_label as string, note: (k.note as string | null) ?? null, acknowledgedAt: iso(k.acknowledged_at), current: Boolean(k.current) })),
+      };
     });
   }
 
@@ -314,7 +340,7 @@ export class ExternalAccessService {
       const info = await this.database.asUser(ctx, async (db) => {
         const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.portal_share_recipients(${shareId}::uuid)`);
         const rec = await db.execute<{ reference: string; title: string; org_name: string; kind: string; party_name: string }>(
-          sql`select coalesce(n.reference, c.reference) as reference, coalesce(n.title, c.title) as title, o.name as org_name, x.record_kind as kind,
+          sql`select coalesce(n.reference, c.reference, d.number, qa.reference) as reference, coalesce(n.title, c.title, d.title, qa.title) as title, o.name as org_name, x.record_kind as kind,
                      coalesce(sup.name, cus.name) as party_name
                 from public.portal_shares x
                 join public.organisations o on o.id = x.organisation_id
@@ -323,12 +349,14 @@ export class ExternalAccessService {
                 left join public.customers cus on cus.id = p.customer_id
                 left join public.nonconformances n on n.id = x.nonconformance_id
                 left join public.capas c on c.id = x.capa_id
+                left join public.documents d on d.id = x.document_id
+                left join public.quality_alerts qa on qa.id = x.quality_alert_id
                where x.id = ${shareId}::uuid`,
         );
         return { people: people.rows, rec: rec.rows[0] };
       });
       if (!info.rec) return { attempted: 0, sent: 0 };
-      const what1 = info.rec.kind === 'capa' ? '8D' : 'non-conformance';
+      const what1 = { capa: '8D', document: 'document', quality_alert: 'quality alert' }[info.rec.kind] ?? 'non-conformance';
       const label = `${info.rec.reference} — ${info.rec.title}`;
       return await this.portalMailer.send({
         to: info.people.map((p) => ({ email: p.email, name: p.name })),

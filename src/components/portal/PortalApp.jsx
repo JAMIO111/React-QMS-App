@@ -186,6 +186,7 @@ function SharedList({ items, organisationId, label }) {
               <p className="truncate font-medium text-primary-text">{i.reference} · {i.title}</p>
               <p className="text-xs text-secondary-text">{shareKindLabel(i.kind)} · shared {shortDate(i.sharedAt)} · {i.comments} {i.comments === 1 ? "comment" : "comments"}</p>
             </div>
+            {i.needsAcknowledgement && <span className="rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">Please acknowledge</span>}
             {!i.viewed && <span className="rounded-full bg-brand-primary/15 px-2 py-0.5 text-xs font-medium text-brand-primary">New</span>}
             {i.newComments > 0 && <span className="rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">{i.newComments} new {i.newComments === 1 ? "reply" : "replies"}</span>}
           </Link>

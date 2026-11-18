@@ -34,8 +34,8 @@ export const OwnPartyInviteBody = z
 export const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 export const PeopleQuery = z.object({ partyId: z.string().uuid().optional() });
 
-export const ShareBody = z.object({ kind: z.enum(['ncr', 'capa']), recordId: z.string().uuid(), partyId: z.string().uuid() }).strict();
-export const SharesQuery = z.object({ kind: z.enum(['ncr', 'capa']), recordId: z.string().uuid() });
+export const ShareBody = z.object({ kind: z.enum(['ncr', 'capa', 'document', 'quality_alert']), recordId: z.string().uuid(), partyId: z.string().uuid() }).strict();
+export const SharesQuery = z.object({ kind: z.enum(['ncr', 'capa', 'document', 'quality_alert']), recordId: z.string().uuid() });
 export const CommentBody = z.object({ body: z.string().trim().min(1).max(4000) }).strict();
 
 const Text = (max: number) => z.string().trim().min(3).max(max);
@@ -61,3 +61,6 @@ export const ScarUploadBody = z.object({ fileName: z.string().trim().min(1).max(
 export const ScarFileBody = z
   .object({ path: z.string().min(1).max(1024), fileName: z.string().trim().min(1).max(255), contentType: z.string().max(150).optional(), sizeBytes: z.number().int().min(0).max(26_214_400) })
   .strict();
+
+export const AcknowledgeBody = z.object({ note: z.string().trim().max(1000).optional() }).strict();
+export const ShareFileBody = z.object({ fileId: z.string().uuid() }).strict();

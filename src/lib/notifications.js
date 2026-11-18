@@ -59,7 +59,11 @@ export function notificationLink(n) {
         ? `/Supplier-Quality/SCARs/${d.record_id}`
         : d.record_kind === "capa"
           ? `/CAPA/${d.record_id}/d0`
-          : ncrPath(d.record_id);
+          : d.record_kind === "document"
+            ? `/Documentation/Documents/${d.record_id}`
+            : d.record_kind === "quality_alert"
+              ? `/Documentation/Quality-Alerts/${d.record_id}`
+              : ncrPath(d.record_id);
     case "reminder_digests":
       return "/Reminders";
     case "reminder_overdue_notices":

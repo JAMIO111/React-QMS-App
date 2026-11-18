@@ -55,7 +55,11 @@ export const rememberedPortalOrganisation = () => {
 };
 
 /** What a shared record is called. */
-export const SHARE_KIND = { ncr: "Non-conformance", capa: "8D" };
+export const SHARE_KIND = { ncr: "Non-conformance", capa: "8D", document: "Document", quality_alert: "Quality alert" };
+
+/** The headline of a shared record: documents have a number and revision, alerts a reference, the rest a reference and stage. */
+export const sharedHeading = (kind, r) =>
+  kind === "document" ? { code: r.number, title: r.title } : { code: r.reference, title: r.title };
 export const shareKindLabel = (kind) => SHARE_KIND[kind] ?? kind;
 
 /** The portal address of one shared record (the organisation goes in the address so a link from an email opens the right portal). */

@@ -74,7 +74,7 @@ export class PortalService {
   private shareItem(r: Row) {
     return {
       id: r.share_id as string,
-      kind: r.kind as 'ncr' | 'capa',
+      kind: r.kind as 'ncr' | 'capa' | 'document' | 'quality_alert',
       reference: r.reference as string,
       title: r.title as string,
       status: r.status as string,
@@ -96,10 +96,12 @@ export class PortalService {
       if (!mine) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
       const items = (await this.shares(db, ctx)).rows.map((r) => this.shareItem(r));
       const scars = (await this.scarRows(db, ctx)).map((r) => this.scarItem(r));
+      const pending = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_acknowledgements(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
         access: mine,
-        attention: items.filter((i) => !i.viewed || i.newComments > 0),
+        attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id) })),
+        toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
         scars: scars.length,
@@ -246,14 +248,38 @@ export class PortalService {
     return this.database.asUser(ctx, async (db) => {
       const item = (await this.shares(db, ctx)).rows.find((r) => r.share_id === shareId);
       if (!item) throw ApiError.notFound('share_not_found', 'That record is not shared with you');
-      const kind = item.kind as 'ncr' | 'capa';
+      const kind = item.kind as 'ncr' | 'capa' | 'document' | 'quality_alert';
       const rec = await db.execute<{ record: unknown }>(
-        kind === 'ncr' ? sql`select app.portal_get_ncr(${shareId}::uuid) as record` : sql`select app.portal_get_capa(${shareId}::uuid) as record`,
+        kind === 'ncr'
+          ? sql`select app.portal_get_ncr(${shareId}::uuid) as record`
+          : kind === 'capa'
+            ? sql`select app.portal_get_capa(${shareId}::uuid) as record`
+            : kind === 'document'
+              ? sql`select app.portal_get_document(${shareId}::uuid) as record`
+              : sql`select app.portal_get_quality_alert(${shareId}::uuid) as record`,
       );
       const comments = await this.thread(db, shareId);
       await db.execute(sql`select app.portal_mark_viewed(${shareId}::uuid)`);
       return { id: shareId, kind, record: rec.rows[0].record, comments, newComments: Number(item.new_comments ?? 0) };
     });
+  }
+
+  /** Acknowledge the document revision in force or the quality alert; the database says who, when and which revision. */
+  acknowledgeShare(ctx: RequestContext, shareId: string, note: string | null) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_acknowledge_share(${shareId}::uuid, ${note})`);
+      return { ok: true };
+    });
+  }
+
+  /** A short link (ten minutes) to a file of the document revision in force that was shared with the person's party. */
+  async documentFileLink(ctx: RequestContext, shareId: string, fileId: string) {
+    const f = await this.database.asUser(ctx, async (db) => (await db.execute<{ storage_path: string; file_name: string }>(
+      sql`select * from app.portal_document_file_path(${shareId}::uuid, ${fileId}::uuid)`)).rows[0]);
+    const seconds = 600;
+    const url = await this.signer.signDownload('document-files', f.storage_path, seconds, f.file_name);
+    if (!url) throw ApiError.notFound('file_not_found', 'File not found');
+    return { url, expiresIn: seconds, expiresAt: new Date(Date.now() + seconds * 1000).toISOString() };
   }
 
   comment(ctx: RequestContext, shareId: string, body: string) {

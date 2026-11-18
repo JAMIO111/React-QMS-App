@@ -3,11 +3,17 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import CommentThread from "./CommentThread";
 import { ArrowLeftIcon } from "@/components/icons";
-import { usePortalShare, usePortalShareMutation } from "../../hooks/usePortal";
+import { openPortalDocumentFile, usePortalShare, usePortalShareMutation } from "../../hooks/usePortal";
+import CTAButton from "@/components/CTAButton";
+import DocumentEditor from "../documents/DocumentEditor";
+import { TextAreaField } from "../master-data/shared";
+import { useToast } from "../../contexts/ToastProvider";
+import { useState } from "react";
+import { formatBytes } from "../../lib/supplierQualification";
 import { describeApiError } from "../../lib/api-client";
 import { STAGES as NC_STAGES } from "../../lib/ncr";
 import { STAGES as CAPA_STAGES } from "../../lib/capa";
-import { shareKindLabel, shortDate } from "../../lib/portal";
+import { longDateTime, shareKindLabel, sharedHeading, shortDate } from "../../lib/portal";
 
 const Fact = ({ label, value }) =>
   value === null || value === undefined || value === "" ? null : (
@@ -126,6 +132,92 @@ function CapaRecord({ r }) {
   );
 }
 
+const SEVERITY = { low: "Low", medium: "Medium", high: "High", critical: "Critical" };
+
+/** Acknowledging a document revision or a quality alert: once per person; a new revision asks again. */
+function AcknowledgeBlock({ r, shareId, organisationId, what }) {
+  const mutate = usePortalShareMutation(organisationId, shareId);
+  const { showToast } = useToast();
+  const [note, setNote] = useState("");
+  if (r.acknowledgedAt) {
+    return <Callout tone="success" title="You have acknowledged this">On {longDateTime(r.acknowledgedAt)}. {what === "document" ? "If a new revision is issued you will be asked again." : ""}</Callout>;
+  }
+  if (!r.canAcknowledge) return null;
+  return (
+    <Block title="Acknowledge">
+      <p className="text-sm text-secondary-text">
+        {what === "document" ? "Confirm you have read and understood this revision." : "Confirm you have read this alert and will do what it asks."} We record your name, the time and what you acknowledged.
+      </p>
+      <TextAreaField label="Note (optional)" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      <div>
+        <CTAButton type="main" size="md" loading={mutate.isPending}
+          onClick={() => mutate.mutate({ action: "acknowledge", body: note.trim() ? { note: note.trim() } : {} }, { onError: (error) => showToast({ type: "error", title: "Not acknowledged", message: describeApiError(error) }) })}>
+          Acknowledge
+        </CTAButton>
+      </div>
+    </Block>
+  );
+}
+
+function DocumentRecord({ r, shareId, organisationId }) {
+  const { showToast } = useToast();
+  const open = (fileId) => openPortalDocumentFile(organisationId, shareId, fileId).catch((error) => showToast({ type: "error", title: "Could not open the file", message: describeApiError(error) }));
+  return (
+    <>
+      <Block title="The document">
+        <Facts>
+          <Fact label="Type" value={r.type} />
+          <Fact label="Revision" value={r.revision} />
+          <Fact label="In force from" value={shortDate(r.effectiveFrom)} />
+          <Fact label="What changed" value={r.changeSummary} />
+          <Fact label="About" value={r.description} />
+        </Facts>
+      </Block>
+      {r.contentKind === "text" && r.body && (
+        <Block title="Text"><div className="document-text"><DocumentEditor value={r.body} editable={false} label="Document text" /></div></Block>
+      )}
+      {r.files.length > 0 && (
+        <Block title="Files">
+          <ul aria-label="Files" className="flex flex-col gap-2">
+            {r.files.map((f) => (
+              <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-color px-3 py-2 text-sm">
+                <span className="min-w-0 break-words text-primary-text">{f.fileName} <span className="text-secondary-text">· {formatBytes(f.sizeBytes)}{f.role === "main" ? "" : " · attachment"}</span></span>
+                <CTAButton type="neutral" size="default" aria-label={`Open ${f.fileName}`} onClick={() => open(f.id)}>Open</CTAButton>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      <AcknowledgeBlock r={r} shareId={shareId} organisationId={organisationId} what="document" />
+    </>
+  );
+}
+
+function AlertRecord({ r, shareId, organisationId }) {
+  return (
+    <>
+      <Block title="What happened">
+        <Facts>
+          <Fact label="Severity" value={SEVERITY[r.severity] ?? r.severity} />
+          <Fact label="Category" value={caps(r.category)} />
+          <Fact label="In force from" value={shortDate(r.effectiveDate)} />
+          <Fact label="Until" value={shortDate(r.expiryDate)} />
+          <Fact label="Acknowledge by" value={shortDate(r.acknowledgeBy)} />
+          <Fact label="Details" value={r.description} />
+        </Facts>
+      </Block>
+      <Block title="What we ask of you">
+        {r.actions.length === 0 ? <p className="text-sm text-secondary-text">Nothing specific.</p> : (
+          <ol aria-label="Actions" className="flex list-decimal flex-col gap-1 pl-5 text-sm text-primary-text">
+            {r.actions.map((a) => <li key={a.position}>{a.description}</li>)}
+          </ol>
+        )}
+      </Block>
+      <AcknowledgeBlock r={r} shareId={shareId} organisationId={organisationId} what="alert" />
+    </>
+  );
+}
+
 /** One shared record as the party sees it (docs/external-portal-plan.md PT2), with the conversation. Opening it tells staff it has been seen. */
 export default function PortalSharedPage() {
   const { shareId } = useParams();
@@ -144,16 +236,20 @@ export default function PortalSharedPage() {
     );
   }
   const { kind, record: r, comments } = share.data;
+  const heading = sharedHeading(kind, r);
   return (
     <>
       <Back />
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-primary-text">{r.reference} <span className="font-normal text-secondary-text">·</span> {r.title}</h1>
+        <h1 className="text-2xl font-semibold text-primary-text">{heading.code} <span className="font-normal text-secondary-text">·</span> {heading.title}</h1>
         <p className="text-sm text-secondary-text">
-          {shareKindLabel(kind)} · {stageWords(kind, r.stage)}{r.severity ? ` · ${caps(r.severity)}` : ""} · shared by {access.organisationName} on {shortDate(r.sharedAt)} · contact: {r.contact}
+          {shareKindLabel(kind)}{kind === "ncr" || kind === "capa" ? ` · ${stageWords(kind, r.stage)}${r.severity ? ` · ${caps(r.severity)}` : ""}` : ""} · shared by {access.organisationName} on {shortDate(r.sharedAt)} · contact: {r.contact}
         </p>
       </header>
-      {kind === "ncr" ? <NcRecord r={r} /> : <CapaRecord r={r} />}
+      {kind === "ncr" && <NcRecord r={r} />}
+      {kind === "capa" && <CapaRecord r={r} />}
+      {kind === "document" && <DocumentRecord r={r} shareId={shareId} organisationId={access.organisationId} />}
+      {kind === "quality_alert" && <AlertRecord r={r} shareId={shareId} organisationId={access.organisationId} />}
       <Block title="Conversation">
         <CommentThread
           comments={comments}

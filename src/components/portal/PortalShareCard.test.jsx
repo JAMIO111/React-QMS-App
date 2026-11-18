@@ -10,6 +10,7 @@ const showToast = vi.fn();
 
 vi.mock("../../hooks/usePortal", () => ({
   useShares: () => ({ data: shares, isLoading: false, error: null }),
+  useShareAcknowledgements: () => ({ data: { data: [{ person: "Sam Smith", subject: "SOP-004 rev B", note: "Read it", acknowledgedAt: "2026-11-18T10:00:00Z", current: true }] }, isLoading: false }),
   useShareComments: () => ({ data: { data: comments }, isLoading: false }),
   useShareMutation: () => ({ mutate, mutateAsync, isPending: false, variables: null }),
 }));
@@ -76,5 +77,14 @@ describe("the share card on a record", () => {
     await userEvent.type(within(dialog).getByRole("textbox", { name: /Write a comment/ }), "Thanks, please send the certificate");
     await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
     expect(mutateAsync).toHaveBeenCalledWith({ action: "comment", id: "s1", shareId: "s1", body: { body: "Thanks, please send the certificate" } });
+  });
+
+  it("on a document it says how many have acknowledged and who", async () => {
+    shares = { data: [{ ...live, acknowledgement: { acknowledged: 1, people: 3, subject: "SOP-004 rev B" } }], eligible: [] };
+    render(<PortalShareCard kind="document" recordId="d1" />);
+    expect(screen.getByRole("list", { name: "Shared with" })).toHaveTextContent("Acknowledged by 1 of 3 (SOP-004 rev B)");
+    await userEvent.click(screen.getByRole("button", { name: "Who at Acme Castings acknowledged" }));
+    expect(screen.getByRole("list", { name: "Acknowledgements" })).toHaveTextContent("Sam Smith");
+    expect(screen.getByRole("list", { name: "Acknowledgements" })).toHaveTextContent("Read it");
   });
 });

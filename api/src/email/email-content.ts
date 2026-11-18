@@ -75,7 +75,11 @@ export function notificationPath(entityType: string, entityId: string, details: 
     case 'portal_activity': {
       const rid = id(d.record_id);
       if (!rid) return '/Settings/External-Access';
-      return d.record_kind === 'scar' ? `/Supplier-Quality/SCARs/${rid}` : d.record_kind === 'capa' ? `/CAPA/${rid}/d0` : `/Non-Conformance/Register/${rid}`;
+      if (d.record_kind === 'scar') return `/Supplier-Quality/SCARs/${rid}`;
+      if (d.record_kind === 'capa') return `/CAPA/${rid}/d0`;
+      if (d.record_kind === 'document') return `/Documentation/Documents/${rid}`;
+      if (d.record_kind === 'quality_alert') return `/Documentation/Quality-Alerts/${rid}`;
+      return `/Non-Conformance/Register/${rid}`;
     }
     case 'reminder_digests':
       return '/Reminders';

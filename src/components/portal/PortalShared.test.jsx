@@ -7,11 +7,15 @@ let share;
 let shareState;
 const mutateAsync = vi.fn();
 const mutate = vi.fn();
+const openFile = vi.fn();
 
 vi.mock("../../hooks/usePortal", () => ({
   usePortalShare: () => shareState,
   usePortalShareMutation: () => ({ mutate, mutateAsync, isPending: false, variables: null, error: null }),
+  openPortalDocumentFile: (...a) => openFile(...a),
 }));
+vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+vi.mock("../documents/DocumentEditor", () => ({ default: () => <div>Document text</div> }));
 
 import PortalSharedPage from "./PortalSharedPage";
 
@@ -48,6 +52,7 @@ const renderIt = () =>
 
 beforeEach(() => {
   mutate.mockReset();
+  openFile.mockReset().mockResolvedValue();
   mutateAsync.mockReset().mockResolvedValue({});
   share = { id: "s1", kind: "ncr", record: ncr, comments };
   shareState = { data: share, isLoading: false, error: null };
@@ -102,5 +107,39 @@ describe("a shared record in the portal", () => {
     shareState = { data: null, isLoading: false, error: Object.assign(new Error("x"), { status: 404 }) };
     renderIt();
     expect(screen.getByText(/not shared with you/)).toBeInTheDocument();
+  });
+
+  const doc = {
+    number: "SOP-004", title: "Packing instruction", type: "Procedure", revision: "B", effectiveFrom: "2026-11-17", changeSummary: "Added the label position", description: "How we pack",
+    contentKind: "file", body: null, files: [{ id: "f1", fileName: "packing.pdf", sizeBytes: 2048, role: "main" }], acknowledgedAt: null, canAcknowledge: true, sharedAt: "2026-11-18T09:00:00Z", contact: "Alpha Precision",
+  };
+
+  it("shows a document: its revision, what changed, files that open on a short link, and acknowledges with a note", async () => {
+    shareState = { data: { id: "s1", kind: "document", record: doc, comments: [] }, isLoading: false, error: null };
+    renderIt();
+    expect(screen.getByRole("heading", { name: /SOP-004/ })).toBeInTheDocument();
+    expect(screen.getByText("Added the label position")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Open packing.pdf" }));
+    expect(openFile).toHaveBeenCalledWith("o1", "s1", "f1");
+    await userEvent.type(screen.getByRole("textbox", { name: /Note/ }), "Read it");
+    await userEvent.click(screen.getByRole("button", { name: "Acknowledge" }));
+    expect(mutate).toHaveBeenCalledWith({ action: "acknowledge", body: { note: "Read it" } }, expect.any(Object));
+  });
+
+  it("a document already acknowledged says so and offers no button", () => {
+    shareState = { data: { id: "s1", kind: "document", record: { ...doc, acknowledgedAt: "2026-11-18T10:00:00Z", canAcknowledge: false }, comments: [] }, isLoading: false, error: null };
+    renderIt();
+    expect(screen.getByText("You have acknowledged this")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acknowledge" })).toBeNull();
+  });
+
+  it("shows a quality alert: what happened, what is asked, and no button once it is not in force", () => {
+    const alert = { reference: "QA-007", title: "Cracks in bar stock", severity: "high", category: "supplier", status: "expired", description: "Cracks in lot 77", effectiveDate: "2026-11-10", expiryDate: null,
+      acknowledgeBy: "2026-11-20", actions: [{ position: 1, description: "Sort your stock" }], acknowledgedAt: null, canAcknowledge: false, sharedAt: "2026-11-18T09:00:00Z", contact: "Alpha Precision", revision: 1 };
+    shareState = { data: { id: "s1", kind: "quality_alert", record: alert, comments: [] }, isLoading: false, error: null };
+    renderIt();
+    expect(screen.getByRole("heading", { name: /QA-007/ })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Actions" })).toHaveTextContent("Sort your stock");
+    expect(screen.queryByRole("button", { name: "Acknowledge" })).toBeNull();
   });
 });

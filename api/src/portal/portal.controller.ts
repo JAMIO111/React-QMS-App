@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody } from './portal.schemas';
+import { AcknowledgeBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -98,6 +98,23 @@ export class PortalController {
   @ApiOkResponse({ description: 'Withdraw your own comment within ten minutes of writing it' })
   withdrawComment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.withdrawComment(ctx, Uuid.parse(id));
+  }
+
+  @Post('shares/:id/acknowledge')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(AcknowledgeBody) })
+  @ApiOkResponse({ description: 'Acknowledge a shared document (the revision in force) or quality alert, with an optional note; once per person per revision' })
+  acknowledgeShare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.acknowledgeShare(ctx, Uuid.parse(id), parse(AcknowledgeBody, body).note ?? null);
+  }
+
+  @Post('shares/:id/file-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ShareFileBody) })
+  @ApiOkResponse({ description: 'A short-lived link (ten minutes) to a file of a shared document’s revision in force' })
+  shareFileUrl(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.documentFileLink(ctx, Uuid.parse(id), parse(ShareFileBody, body).fileId);
   }
 
   @Get('scars')

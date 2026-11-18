@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
@@ -115,6 +115,13 @@ export class PortalController {
   @ApiOkResponse({ description: 'A short-lived link (ten minutes) to a file of a shared document’s revision in force' })
   shareFileUrl(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.documentFileLink(ctx, Uuid.parse(id), parse(ShareFileBody, body).fileId);
+  }
+
+  @Get('performance')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The supplier’s own performance over 30, 90 (default) or 365 days: the Performance tab’s figures as named fields only, in the tiles staff chose, with an optional anonymised ranking band' })
+  performance(@Ctx() ctx: RequestContext, @Query('days') days?: string) {
+    return this.service.performance(ctx, days);
   }
 
   @Get('scars')

@@ -85,7 +85,9 @@ export const useExternalAccessMutation = () => {
       if (previous && vars.action === "party") {
         queryClient.setQueryData(overviewKey, {
           ...previous,
-          parties: previous.parties.map((p) => (p.recordId === vars.body.partyId && p.kind === vars.body.kind ? { ...p, enabled: vars.body.enabled ?? p.enabled } : p)),
+          parties: previous.parties.map((p) =>
+            p.recordId === vars.body.partyId && p.kind === vars.body.kind ? { ...p, enabled: vars.body.enabled ?? p.enabled, tiles: vars.body.tiles ?? p.tiles } : p,
+          ),
         });
       }
       return { previous };
@@ -280,6 +282,17 @@ export const usePortalScars = (organisationId, { enabled = true } = {}) => {
   return useQuery({
     queryKey: portalKey(user?.id, organisationId, "scars"),
     queryFn: () => apiFetch("/portal/scars", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** The supplier's own performance over 30, 90 or 365 days (the Performance tab's figures, named fields only, in the tiles staff chose). */
+export const usePortalPerformance = (organisationId, days = 90, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "performance", days),
+    queryFn: () => apiFetch(`/portal/performance?days=${days}`, { organisationId }),
     enabled: !!user && !!organisationId && enabled,
     retry: false,
   });

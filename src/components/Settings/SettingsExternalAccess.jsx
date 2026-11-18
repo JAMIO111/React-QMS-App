@@ -14,7 +14,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useExternalAccess, useExternalAccessMutation, useExternalPeople } from "../../hooks/usePortal";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { ROLE_LABEL, accessStatus, lastSeenWords, partyKindLabel, personLine } from "../../lib/portal";
+import { PERFORMANCE_TILES, ROLE_LABEL, accessStatus, lastSeenWords, partyKindLabel, personLine, tileOn } from "../../lib/portal";
 
 const Pill = ({ tone, children }) => {
   const cls = {
@@ -53,6 +53,7 @@ function Page({ canManage }) {
   const mutate = useExternalAccessMutation();
   const { showToast } = useToast();
   const [people, setPeople] = useState(null); // the party whose people dialog is open
+  const [tilesFor, setTilesFor] = useState(null); // the supplier whose performance tiles are being chosen
   const [search, setSearch] = useState("");
 
   const parties = useMemo(() => {
@@ -98,6 +99,18 @@ function Page({ canManage }) {
             onChange={(e) => mutate.mutate({ action: "settings", body: { requireMfa: e.target.checked } }, { onError: fail("Not changed") })}
           />
         </div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border-color px-4 py-3">
+          <div>
+            <p id="portal-ranking-title" className="text-sm font-medium text-primary-text">Show suppliers where they stand among your suppliers</p>
+            <p className="text-xs text-secondary-text">A band only (top quarter, upper half and so on), never names or numbers, and only once at least five suppliers have a score. You can still switch it off for one supplier.</p>
+          </div>
+          <Switch
+            checked={settings.rankingEnabled}
+            disabled={!canManage}
+            aria-labelledby="portal-ranking-title"
+            onChange={(e) => mutate.mutate({ action: "settings", body: { rankingEnabled: e.target.checked } }, { onError: fail("Not changed") })}
+          />
+        </div>
       </MenuCard>
 
       <MenuCard
@@ -127,6 +140,11 @@ function Page({ canManage }) {
                     onChange={(e) => mutate.mutate({ action: "party", body: { kind: p.kind, partyId: p.recordId, enabled: e.target.checked } }, { onError: fail("Not changed") })}
                   />
                 )}
+                {p.enabled && p.kind === "supplier" && canManage && (
+                  <CTAButton type="neutral" size="default" aria-label={`Performance tiles for ${p.name}`} onClick={() => setTilesFor(p)}>
+                    Tiles
+                  </CTAButton>
+                )}
                 {p.enabled && (
                   <CTAButton type="neutral" size="default" aria-label={`People at ${p.name}`} onClick={() => setPeople(p)}>
                     People
@@ -139,12 +157,48 @@ function Page({ canManage }) {
       </MenuCard>
 
       <AccessReport />
+      {tilesFor && (
+        <TilesDialog
+          party={(overview.data.parties.find((x) => x.kind === tilesFor.kind && x.recordId === tilesFor.recordId)) ?? tilesFor}
+          rankingOn={settings.rankingEnabled}
+          onClose={() => setTilesFor(null)}
+          onChange={(tiles) => mutate.mutate({ action: "party", body: { kind: tilesFor.kind, partyId: tilesFor.recordId, tiles } }, { onError: fail("Not changed") })}
+        />
+      )}
       {people && <PeopleDialog party={people} canManage={canManage} onClose={() => setPeople(null)} portalOn={settings.enabled} />}
     </div>
   );
 }
 
 /** Everyone with access across every supplier and customer, with their last sign-in, so leavers and stale accounts are easy to spot. */
+/** Which figures a supplier sees on its Performance page. Each switch saves at once; a tile left on follows the default. */
+function TilesDialog({ party, rankingOn, onChange, onClose }) {
+  const current = party.tiles ?? {};
+  return (
+    <Dialog title={`Performance tiles for ${party.name}`} onClose={onClose} width="max-w-lg">
+      <p className="text-sm text-secondary-text">Choose what {party.name} sees on its Performance page. The figures are the ones on your own Performance tab for this supplier.</p>
+      <ul aria-label="Performance tiles" className="mt-3 flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+        {PERFORMANCE_TILES.map((tile) => (
+          <li key={tile.key} className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <span className="text-sm text-primary-text">
+              {tile.label}
+              {tile.key === "ranking" && !rankingOn && <span className="block text-xs text-secondary-text">Switch on the position among suppliers for the portal first.</span>}
+            </span>
+            <Switch
+              checked={tileOn(current, tile.key)}
+              aria-label={tile.label}
+              onChange={(e) => onChange({ ...current, [tile.key]: e.target.checked })}
+            />
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex justify-end">
+        <CTAButton type="main" size="md" onClick={onClose}>Done</CTAButton>
+      </div>
+    </Dialog>
+  );
+}
+
 function AccessReport() {
   const people = useExternalPeople();
   const rows = (people.data?.data ?? []).filter((p) => p.status !== "removed");

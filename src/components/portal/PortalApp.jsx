@@ -139,6 +139,12 @@ export function PortalHome() {
         <p className="text-sm text-secondary-text">{partyKindLabel(access.partyKind)} portal for {access.organisationName}</p>
         <p className="text-sm text-primary-text">Your contact at {access.organisationName}: <span className="font-medium">{contact}</span></p>
       </section>
+      {access.partyKind === "supplier" && (
+        <p className="text-sm">
+          <Link to="/portal/performance" className="font-medium text-link-color hover:underline">See your performance</Link>
+          <span className="text-secondary-text"> — on time, in full and quality, as {access.organisationName} measures them.</span>
+        </p>
+      )}
       {home.data.scarsAwaiting.length > 0 && (
         <section aria-labelledby="portal-scars-awaiting" className="rounded-2xl border border-warning-color/40 bg-secondary-bg p-5">
           <h2 id="portal-scars-awaiting" className="text-lg font-semibold">Waiting for your response</h2>

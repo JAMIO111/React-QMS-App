@@ -101,3 +101,26 @@ export const scarPath = (scarId, organisationId) => `/portal/scars/${scarId}${or
 
 /** "Due 3 Dec 2026", "Overdue since 3 Dec 2026" or nothing, for a SCAR awaiting a response. */
 export const dueWords = (scar) => (!scar.responseDueOn || !scar.awaitingResponse ? "" : `${scar.overdue ? "Overdue since" : "Due"} ${shortDate(`${scar.responseDueOn}T12:00:00Z`)}`);
+
+// ---- Performance (PT4) ----
+/** The tiles staff can switch on or off for a supplier, in the order they appear. */
+export const PERFORMANCE_TILES = [
+  { key: "score", label: "Overall score" },
+  { key: "delivery", label: "Delivery (on time, in full)" },
+  { key: "quality", label: "Quality (PPM, lot rejection)" },
+  { key: "ncs", label: "Non-conformances" },
+  { key: "scars", label: "Corrective action requests" },
+  { key: "certs", label: "Certifications" },
+  { key: "trend", label: "Monthly trend" },
+  { key: "ranking", label: "Position among suppliers" },
+];
+/** A tile is on unless staff switched it off. */
+export const tileOn = (tiles, key) => tiles?.[key] !== false;
+export const RANK_WORDS = {
+  top_quarter: "In the top quarter of our suppliers",
+  upper_half: "In the upper half of our suppliers",
+  lower_half: "In the lower half of our suppliers",
+  bottom_quarter: "In the bottom quarter of our suppliers",
+};
+/** A 0–1 share as a whole percentage, or a dash when there is nothing to measure. */
+export const pctWords = (v) => (v === null || v === undefined ? "—" : `${Math.round(Number(v) * 1000) / 10}%`);

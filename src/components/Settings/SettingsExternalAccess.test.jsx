@@ -59,6 +59,18 @@ describe("Settings → External access", () => {
     expect(mutate).toHaveBeenLastCalledWith({ action: "party", body: { kind: "supplier", partyId: "s2", enabled: true } }, expect.anything());
   });
 
+  it("chooses the ranking and the performance tiles for a supplier, each saved at once", async () => {
+    render(<SettingsExternalAccess />);
+    await userEvent.click(screen.getByRole("switch", { name: /Show suppliers where they stand/ }));
+    expect(mutate).toHaveBeenCalledWith({ action: "settings", body: { rankingEnabled: true } }, expect.anything());
+    expect(screen.queryByRole("button", { name: "Performance tiles for Big Customer" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Performance tiles for Acme Castings" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("switch", { name: "Monthly trend" })).toBeChecked();
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Monthly trend" }));
+    expect(mutate).toHaveBeenLastCalledWith({ action: "party", body: { kind: "supplier", partyId: "s1", tiles: { trend: false } } }, expect.anything());
+  });
+
   it("someone who may only read cannot change anything", () => {
     permissions = ["external_access.read"];
     render(<SettingsExternalAccess />);

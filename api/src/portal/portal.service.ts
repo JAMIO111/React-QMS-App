@@ -111,6 +111,18 @@ export class PortalService {
     });
   }
 
+  /** A supplier's own performance (PT4): the database works it out with the staff Performance tab's function and returns named fields only. */
+  async performance(ctx: RequestContext, days?: string) {
+    const n = days === undefined || days === '' ? 90 : Number(days);
+    if (![30, 90, 365].includes(n)) throw ApiError.badRequest('invalid_period', 'Choose 30, 90 or 365 days');
+    const party = ctx.portal;
+    if (!party || party.partyKind !== 'supplier') throw ApiError.notFound('performance_unavailable', 'Performance is shown to suppliers');
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_performance(${ctx.organisationId}::uuid, ${party.partyId}::uuid, ${n}::int) as r`);
+      return r.rows[0].r;
+    });
+  }
+
   /** Open and late actions per SCAR, for the lists and the home page. */
   private async actionCounts(db: Db, ctx: RequestContext) {
     const r = await db.execute<{ scar_id: string; open_actions: number; late_actions: number }>(sql`select * from app.portal_scar_action_counts(${ctx.organisationId}::uuid)`);

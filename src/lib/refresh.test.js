@@ -31,7 +31,7 @@ import { useTaskMutation, useWorkflowRuleMutation } from "../hooks/useWorkflows"
 import { useDecideMissing, useIgnoreRows, useIntegrationMutation, useSetAllowedHosts, useTemplateMutation } from "../hooks/useIntegrations";
 import { useFeatureMapMutation, useImportMutation, useMatchFeature, useProfileMutation, useTryProfile } from "../hooks/useMeasurementImports";
 import { useSecurityMutation } from "../hooks/useSecurity";
-import { useExternalAccessMutation } from "../hooks/usePortal";
+import { useExternalAccessMutation, useShareMutation } from "../hooks/usePortal";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -147,6 +147,8 @@ describe("every action refreshes every module's data", () => {
     ["change the network policy", useSecurityMutation, { action: "setMode", body: { mode: "monitor" } }],
     ["switch the supplier and customer portal on", useExternalAccessMutation, { action: "settings", body: { enabled: true } }],
     ["invite a supplier's first contact", useExternalAccessMutation, { action: "invite", body: { partyId: "p1", email: "a@b.test", role: "admin" } }],
+    ["share a record with a supplier", () => useShareMutation("ncr", "n1"), { action: "share", body: { partyId: "p1" } }],
+    ["write to a supplier on a shared record", () => useShareMutation("ncr", "n1"), { action: "comment", id: "s1", shareId: "s1", body: { body: "Hello" } }],
     ["remember a feature match", useFeatureMapMutation, { action: "save", partId: "p1", body: { featureName: "OD", characteristicKey: "OD" } }],
   ];
 

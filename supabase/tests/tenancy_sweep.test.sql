@@ -453,6 +453,13 @@ BEGIN
   INSERT INTO public.portal_parties (organisation_id, party_kind, supplier_id, enabled) VALUES (a, 'supplier', (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), true);
   INSERT INTO public.external_access (organisation_id, party_id, invited_email) VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'sweep-supplier@example.test');
   INSERT INTO sweep VALUES ('portal_party', (SELECT id FROM public.portal_parties WHERE organisation_id = a)), ('external_access', (SELECT id FROM public.external_access WHERE organisation_id = a));
+  -- External portal (PT2): a share of an NC with one comment and one view (seeded directly; people write through functions).
+  INSERT INTO public.portal_shares (organisation_id, party_id, record_kind, nonconformance_id)
+    VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'ncr', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1));
+  INSERT INTO public.portal_comments (organisation_id, share_id, author_side, author_user_id, body)
+    VALUES (a, (SELECT id FROM public.portal_shares WHERE organisation_id = a), 'staff', '50000000-0000-0000-0000-0000000000a1', 'Sweep comment');
+  INSERT INTO public.portal_views (share_id, user_id, organisation_id) VALUES ((SELECT id FROM public.portal_shares WHERE organisation_id = a), '50000000-0000-0000-0000-0000000000a1', a);
+  INSERT INTO sweep VALUES ('portal_share', (SELECT id FROM public.portal_shares WHERE organisation_id = a)), ('portal_comment', (SELECT id FROM public.portal_comments WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

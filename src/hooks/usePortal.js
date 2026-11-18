@@ -171,3 +171,90 @@ export const usePortalMutation = (organisationId) => {
     },
   });
 };
+
+// ---- Sharing records (PT2) ----
+
+const sharesKey = (organisationId, kind, recordId) => ["api", "org", organisationId, "external-access", "shares", kind, recordId];
+
+/** Who a record (kind "ncr" | "capa") is shared with, how they have used it, and who it could still be shared with. */
+export const useShares = (kind, recordId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: sharesKey(organisationId, kind, recordId),
+    queryFn: () => apiFetch(`/external-access/shares?kind=${kind}&recordId=${recordId}`, { organisationId }),
+    enabled: !!organisationId && !!recordId && enabled,
+    retry: false,
+  });
+};
+
+/** The conversation on a share, as staff see it. */
+export const useShareComments = (shareId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: ["api", "org", organisationId, "external-access", "comments", shareId],
+    queryFn: () => apiFetch(`/external-access/shares/${shareId}/comments`, { organisationId }),
+    enabled: !!organisationId && !!shareId && enabled,
+    retry: false,
+  });
+};
+
+/** Share, withdraw, comment, withdraw a comment. Every answer is the record's shares or the conversation, which replaces the cache. */
+export const useShareMutation = (kind, recordId) => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      switch (action) {
+        case "share":
+          return apiFetch("/external-access/shares", { method: "POST", body: { kind, recordId, ...body }, organisationId });
+        case "withdraw":
+          return apiFetch(`/external-access/shares/${id}/withdraw`, { method: "POST", body, organisationId });
+        case "comment":
+          return apiFetch(`/external-access/shares/${id}/comments`, { method: "POST", body, organisationId });
+        case "withdrawComment":
+          return apiFetch(`/external-access/comments/${id}/withdraw`, { method: "POST", organisationId });
+        default:
+          throw new Error(`Unknown share action ${action}`);
+      }
+    },
+    onSuccess: (data, vars) => {
+      if (vars.action === "share" || vars.action === "withdraw") queryClient.setQueryData(sharesKey(organisationId, kind, recordId), data);
+      if (vars.action === "comment" || vars.action === "withdrawComment") queryClient.setQueryData(["api", "org", organisationId, "external-access", "comments", vars.shareId ?? vars.id], data);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Everything shared with the person's supplier or customer in an organisation. */
+export const usePortalShares = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "shares"),
+    queryFn: () => apiFetch("/portal/shares", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** One shared record as the party sees it, with its conversation (opening it records that the person has seen it). */
+export const usePortalShare = (organisationId, shareId) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "share", shareId),
+    queryFn: () => apiFetch(`/portal/shares/${shareId}`, { organisationId }),
+    enabled: !!user && !!organisationId && !!shareId,
+    retry: false,
+  });
+};
+
+export const usePortalShareMutation = (organisationId, shareId) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) =>
+      action === "comment"
+        ? apiFetch(`/portal/shares/${shareId}/comments`, { method: "POST", body, organisationId })
+        : apiFetch(`/portal/comments/${id}/withdraw`, { method: "POST", organisationId }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};

@@ -18,6 +18,7 @@ import D4RootCause from "./steps/D4RootCause";
 import D5Corrective from "./steps/D5Corrective";
 import D6Implement from "./steps/D6Implement";
 import D7Prevent from "./steps/D7Prevent";
+import PortalShareCard from "../portal/PortalShareCard";
 import D8Close from "./steps/D8Close";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
@@ -102,6 +103,7 @@ const CapaPage = () => {
           {Page && <Page capa={capa} editable={editable} />}
           <StepFooter capa={capa} step={step} editable={canEdit} />
         </section>
+        {can("external_access.share") && <div className="mt-4"><PortalShareCard kind="capa" recordId={capa.id} /></div>}
         </div>
       </div>
 

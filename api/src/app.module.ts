@@ -180,6 +180,7 @@ import { ExternalAccessController } from './portal/external-access.controller';
 import { ExternalAccessService } from './portal/external-access.service';
 import { PortalController } from './portal/portal.controller';
 import { PortalGuard } from './portal/portal.guard';
+import { PortalMailer } from './portal/portal-mailer.service';
 import { PortalService } from './portal/portal.service';
 import { SsoController } from './sso/sso.controller';
 import { SsoService } from './sso/sso.service';
@@ -351,6 +352,7 @@ export class AppModule implements NestModule {
         SecurityService,
         ExternalAccessService,
         PortalService,
+        PortalMailer,
         SsoService,
         { provide: DnsTxtResolver, useClass: SystemDnsTxtResolver },
         { provide: SupabaseSsoAdmin, useClass: ManagementApiSsoAdmin },

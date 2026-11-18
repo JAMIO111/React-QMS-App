@@ -4,6 +4,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { InvitationMailer } from '../members/invitation-mailer.service';
+import { PortalMailer } from './portal-mailer.service';
 
 type Row = Record<string, unknown>;
 const orgOf = (ctx: RequestContext) => {
@@ -42,6 +43,7 @@ export class ExternalAccessService {
   constructor(
     private readonly database: DatabaseService,
     private readonly mailer: InvitationMailer,
+    private readonly portalMailer: PortalMailer,
   ) {}
 
   overview(ctx: RequestContext) {
@@ -186,5 +188,164 @@ export class ExternalAccessService {
       portalParty: person.partyName,
     });
     return { person, email };
+  }
+  // ---- Sharing records with a party (PT2) ----
+
+  private shareRow(r: Row) {
+    return {
+      id: r.share_id as string,
+      partyId: r.party_id as string,
+      partyKind: r.party_kind as 'supplier' | 'customer',
+      partyName: r.party_name as string,
+      sharedAt: iso(r.shared_at),
+      sharedBy: (r.shared_by_name as string | null) ?? null,
+      withdrawnAt: iso(r.withdrawn_at),
+      withdrawnReason: (r.withdrawn_reason as string | null) ?? null,
+      viewers: Number(r.viewers ?? 0),
+      firstViewedAt: iso(r.first_viewed_at),
+      lastViewedAt: iso(r.last_viewed_at),
+      comments: Number(r.comments ?? 0),
+      externalComments: Number(r.external_comments ?? 0),
+    };
+  }
+
+  /** The card on a record: who it is shared with and how they have used it, and who it could still be shared with. */
+  private async sharesOf(db: Db, kind: 'ncr' | 'capa', recordId: string) {
+    const shares = await db.execute<Row>(sql`select * from app.list_portal_shares(${kind}, ${recordId}::uuid)`);
+    const eligible = await db.execute<Row>(sql`select * from app.portal_eligible_parties(${kind}, ${recordId}::uuid)`);
+    return {
+      data: shares.rows.map((r) => this.shareRow(r)),
+      eligible: eligible.rows.map((r) => ({ partyId: r.party_id as string, partyKind: r.party_kind as 'supplier' | 'customer', partyName: r.party_name as string })),
+    };
+  }
+
+  shares(ctx: RequestContext, kind: 'ncr' | 'capa', recordId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.ownRecord(db, ctx, kind, recordId);
+      return this.sharesOf(db, kind, recordId);
+    });
+  }
+
+  /** The record must be in this organisation (404 otherwise, so another organisation's records are not confirmed). */
+  private async ownRecord(db: Db, ctx: RequestContext, kind: 'ncr' | 'capa', recordId: string) {
+    const r = await db.execute<{ id: string }>(
+      kind === 'ncr'
+        ? sql`select id from public.nonconformances where id = ${recordId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`
+        : sql`select id from public.capas where id = ${recordId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
+    );
+    if (!r.rows[0]) throw ApiError.notFound('record_not_found', 'That record was not found');
+  }
+
+  async share(ctx: RequestContext, body: { kind: 'ncr' | 'capa'; recordId: string; partyId: string }) {
+    const shareId = await this.database.asUser(ctx, async (db) => {
+      await this.ownRecord(db, ctx, body.kind, body.recordId);
+      const r = await db.execute<{ id: string }>(sql`select app.share_with_portal(${body.kind}, ${body.recordId}::uuid, ${body.partyId}::uuid) as id`);
+      return r.rows[0].id;
+    });
+    const result = await this.database.asUser(ctx, (db) => this.sharesOf(db, body.kind, body.recordId));
+    const email = await this.tellParty(ctx, shareId, 'shared');
+    return { ...result, email };
+  }
+
+  /** The share must be in this organisation (404 otherwise, so other organisations' ids are not confirmed); returns what the record is. */
+  private async ownShare(db: Db, ctx: RequestContext, id: string) {
+    const r = await db.execute<{ record_kind: 'ncr' | 'capa'; record_id: string }>(
+      sql`select record_kind, coalesce(nonconformance_id, capa_id) as record_id from public.portal_shares where id = ${id}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
+    );
+    if (!r.rows[0]) throw ApiError.notFound('share_not_found', 'That share was not found');
+    return r.rows[0];
+  }
+
+  withdrawShare(ctx: RequestContext, id: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const record = await this.ownShare(db, ctx, id);
+      await db.execute(sql`select app.withdraw_portal_share(${id}::uuid, ${reason})`);
+      return this.sharesOf(db, record.record_kind, record.record_id);
+    });
+  }
+
+  private commentRow(r: Row) {
+    return {
+      id: r.comment_id as string,
+      side: r.side as 'staff' | 'external',
+      author: r.author_name as string,
+      body: (r.body as string | null) ?? null,
+      createdAt: iso(r.created_at),
+      withdrawn: Boolean(r.withdrawn),
+      mine: Boolean(r.mine),
+      canWithdraw: Boolean(r.can_withdraw),
+    };
+  }
+
+  comments(ctx: RequestContext, shareId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.ownShare(db, ctx, shareId);
+      const r = await db.execute<Row>(sql`select * from app.portal_share_comments(${shareId}::uuid)`);
+      return { data: r.rows.map((c) => this.commentRow(c)) };
+    });
+  }
+
+  async comment(ctx: RequestContext, shareId: string, body: string) {
+    const result = await this.database.asUser(ctx, async (db) => {
+      await this.ownShare(db, ctx, shareId);
+      await db.execute(sql`select app.add_portal_comment(${shareId}::uuid, ${body})`);
+      const r = await db.execute<Row>(sql`select * from app.portal_share_comments(${shareId}::uuid)`);
+      return { data: r.rows.map((c) => this.commentRow(c)) };
+    });
+    const email = await this.tellParty(ctx, shareId, 'comment', body);
+    return { ...result, email };
+  }
+
+  withdrawComment(ctx: RequestContext, commentId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ share_id: string }>(
+        sql`select share_id from public.portal_comments where id = ${commentId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`,
+      );
+      if (!found.rows[0]) throw ApiError.notFound('comment_not_found', 'That comment was not found');
+      await db.execute(sql`select app.withdraw_portal_comment(${commentId}::uuid)`);
+      const r = await db.execute<Row>(sql`select * from app.portal_share_comments(${found.rows[0].share_id}::uuid)`);
+      return { data: r.rows.map((c) => this.commentRow(c)) };
+    });
+  }
+
+  /** Email the party's active people that something was shared or said (best effort; never undoes the action). */
+  private async tellParty(ctx: RequestContext, shareId: string, what: 'shared' | 'comment', text?: string) {
+    try {
+      const info = await this.database.asUser(ctx, async (db) => {
+        const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.portal_share_recipients(${shareId}::uuid)`);
+        const rec = await db.execute<{ reference: string; title: string; org_name: string; kind: string; party_name: string }>(
+          sql`select coalesce(n.reference, c.reference) as reference, coalesce(n.title, c.title) as title, o.name as org_name, x.record_kind as kind,
+                     coalesce(sup.name, cus.name) as party_name
+                from public.portal_shares x
+                join public.organisations o on o.id = x.organisation_id
+                join public.portal_parties p on p.id = x.party_id
+                left join public.suppliers sup on sup.id = p.supplier_id
+                left join public.customers cus on cus.id = p.customer_id
+                left join public.nonconformances n on n.id = x.nonconformance_id
+                left join public.capas c on c.id = x.capa_id
+               where x.id = ${shareId}::uuid`,
+        );
+        return { people: people.rows, rec: rec.rows[0] };
+      });
+      if (!info.rec) return { attempted: 0, sent: 0 };
+      const what1 = info.rec.kind === 'capa' ? '8D' : 'non-conformance';
+      const label = `${info.rec.reference} — ${info.rec.title}`;
+      return await this.portalMailer.send({
+        to: info.people.map((p) => ({ email: p.email, name: p.name })),
+        subject: what === 'shared' ? `${info.rec.org_name} shared a ${what1} with you: ${info.rec.reference}` : `${info.rec.org_name} wrote to you about ${info.rec.reference}`,
+        heading: what === 'shared' ? `${info.rec.org_name} shared a ${what1} with you` : `New comment from ${info.rec.org_name}`,
+        paragraphs: [
+          what === 'shared'
+            ? `${info.rec.org_name} has shared ${label} with ${info.rec.party_name}. You can see the details and reply on your portal.`
+            : `${info.rec.org_name} has written a comment on ${label}.`,
+        ],
+        quote: what === 'comment' && text ? { text: text.length > 500 ? `${text.slice(0, 500)}…` : text, by: info.rec.org_name } : undefined,
+        path: `/portal/shared/${shareId}?org=${orgOf(ctx)}`,
+        button: 'Open in the portal',
+        footerWho: info.rec.org_name,
+      });
+    } catch {
+      return { attempted: 0, sent: 0 };
+    }
   }
 }

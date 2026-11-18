@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { ExternalAccessService } from './external-access.service';
-import { InviteBody, PartyBody, PeopleQuery, ReasonBody, SettingsBody } from './portal.schemas';
+import { CommentBody, InviteBody, PartyBody, PeopleQuery, ReasonBody, SettingsBody, ShareBody, SharesQuery } from './portal.schemas';
 
 /** Settings → External access (docs/external-portal-plan.md PT1): the staff side of the supplier and customer portal. */
 @ApiTags('external-access')
@@ -79,5 +79,53 @@ export class ExternalAccessController {
   @ApiOkResponse({ description: 'Bring suspended access back' })
   restore(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.restore(ctx, Uuid.parse(id));
+  }
+
+  // ---- Sharing records (PT2): the card on an NC or an 8D ----
+
+  @Get('shares')
+  @OrganisationScoped('external_access.share')
+  @ApiOkResponse({ description: 'Who a record (kind ncr | capa, recordId) is shared with and how they have used it (viewed, replies), and which suppliers or customers it could still be shared with' })
+  shares(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(SharesQuery, query);
+    return this.service.shares(ctx, q.kind, q.recordId);
+  }
+
+  @Post('shares')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(ShareBody) })
+  @ApiOkResponse({ description: 'Share an NC with the supplier or customer it names, or an 8D with the party of a linked NC. Emails the party’s people (best effort); answers with the record’s shares' })
+  share(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.share(ctx, parse(ShareBody, body));
+  }
+
+  @Post('shares/:id/withdraw')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Stop sharing, with a reason. The party stops seeing it at once; the conversation is kept for staff' })
+  withdrawShare(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawShare(ctx, Uuid.parse(id), parse(ReasonBody, body).reason);
+  }
+
+  @Get('shares/:id/comments')
+  @OrganisationScoped('external_access.share')
+  @ApiOkResponse({ description: 'The conversation on a shared record, with real names for staff' })
+  comments(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.comments(ctx, Uuid.parse(id));
+  }
+
+  @Post('shares/:id/comments')
+  @OrganisationScoped('external_access.share')
+  @ApiBody({ schema: openApiSchema(CommentBody) })
+  @ApiOkResponse({ description: 'Write to the party on a shared record (the party sees it as coming from the organisation); emails their people. Answers with the conversation' })
+  comment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.comment(ctx, Uuid.parse(id), parse(CommentBody, body).body);
+  }
+
+  @Post('comments/:id/withdraw')
+  @OrganisationScoped('external_access.share')
+  @ApiOkResponse({ description: 'Withdraw your own comment within ten minutes of writing it' })
+  withdrawComment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.withdrawComment(ctx, Uuid.parse(id));
   }
 }

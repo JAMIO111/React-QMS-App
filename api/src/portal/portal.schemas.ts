@@ -33,3 +33,7 @@ export const OwnPartyInviteBody = z
 
 export const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 export const PeopleQuery = z.object({ partyId: z.string().uuid().optional() });
+
+export const ShareBody = z.object({ kind: z.enum(['ncr', 'capa']), recordId: z.string().uuid(), partyId: z.string().uuid() }).strict();
+export const SharesQuery = z.object({ kind: z.enum(['ncr', 'capa']), recordId: z.string().uuid() });
+export const CommentBody = z.object({ body: z.string().trim().min(1).max(4000) }).strict();

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Outlet, useOutletContext, useSearchParams } from "react-router-dom";
 import FortressMark from "../../assets/fortress-qms.png";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import { useMe } from "../../hooks/useQmsApi";
-import { usePortalHome, usePortalMutation } from "../../hooks/usePortal";
+import { usePortalHome, usePortalMutation, usePortalShares } from "../../hooks/usePortal";
 import useSignOut from "../../hooks/useSignOut";
 import { describeApiError } from "../../lib/api-client";
-import { accessFor, partyKindLabel, rememberPortalOrganisation, rememberedPortalOrganisation } from "../../lib/portal";
+import { accessFor, partyKindLabel, rememberPortalOrganisation, rememberedPortalOrganisation, sharedPath, shareKindLabel, shortDate } from "../../lib/portal";
 import PortalPeople from "./PortalPeople";
 
 /**
@@ -20,7 +20,8 @@ import PortalPeople from "./PortalPeople";
 const PortalApp = () => {
   const me = useMe();
   const [signOut] = useSignOut();
-  const [chosen, setChosen] = useState(rememberedPortalOrganisation());
+  const [params] = useSearchParams();
+  const [chosen, setChosen] = useState(params.get("org") || rememberedPortalOrganisation());
   const portal = useMemo(() => me.data?.portal ?? [], [me.data]);
   const current = useMemo(() => accessFor(portal, chosen), [portal, chosen]);
 
@@ -56,7 +57,7 @@ const PortalApp = () => {
       <main className="min-h-0 grow overflow-y-auto p-4">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
           {invitations.length > 0 && <Invitations invitations={invitations} />}
-          {current ? <Home access={current} /> : invitations.length === 0 && <Nothing email={me.data?.profile?.email} />}
+          {current ? <Outlet context={{ access: current }} /> : invitations.length === 0 && <Nothing email={me.data?.profile?.email} />}
         </div>
       </main>
     </div>
@@ -113,8 +114,10 @@ function Invitations({ invitations }) {
   );
 }
 
-function Home({ access }) {
+export function PortalHome() {
+  const { access } = useOutletContext();
   const home = usePortalHome(access.organisationId);
+  const shares = usePortalShares(access.organisationId, { enabled: !access.mfaRequired });
   const contact = access.contactName || access.organisationName;
 
   if (access.mfaRequired) {
@@ -137,12 +140,44 @@ function Home({ access }) {
       </section>
       <section aria-labelledby="portal-attention" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
         <h2 id="portal-attention" className="text-lg font-semibold">Needs your attention</h2>
-        <p className="mt-1 text-sm text-secondary-text">
-          Nothing has been shared with you yet. When {access.organisationName} sends you a corrective action request, a non-conformance or a task, it will appear here.
-        </p>
+        {home.data.attention.length === 0 ? (
+          <p className="mt-1 text-sm text-secondary-text">
+            {home.data.shared === 0
+              ? `Nothing has been shared with you yet. When ${access.organisationName} shares a non-conformance or an 8D with you, it will appear here.`
+              : "Nothing new. You have seen everything shared with you and there are no new replies."}
+          </p>
+        ) : (
+          <SharedList items={home.data.attention} organisationId={access.organisationId} label="Needs your attention" />
+        )}
       </section>
+      {(shares.data?.data ?? []).length > 0 && (
+        <section aria-labelledby="portal-shared" className="rounded-2xl border border-border-color bg-secondary-bg p-5">
+          <h2 id="portal-shared" className="text-lg font-semibold">Shared with you</h2>
+          <SharedList items={shares.data.data} organisationId={access.organisationId} label="Shared with you" />
+        </section>
+      )}
       {access.role === "admin" && <PortalPeople access={access} />}
     </>
   );
 }
 
+
+/** The shared records as a list: kind and reference, title, when, and what is new. */
+function SharedList({ items, organisationId, label }) {
+  return (
+    <ul aria-label={label} className="mt-2 flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
+      {items.map((i) => (
+        <li key={i.id}>
+          <Link to={sharedPath(i.id, organisationId)} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm hover:bg-primary-bg">
+            <div className="min-w-0 grow">
+              <p className="truncate font-medium text-primary-text">{i.reference} · {i.title}</p>
+              <p className="text-xs text-secondary-text">{shareKindLabel(i.kind)} · shared {shortDate(i.sharedAt)} · {i.comments} {i.comments === 1 ? "comment" : "comments"}</p>
+            </div>
+            {!i.viewed && <span className="rounded-full bg-brand-primary/15 px-2 py-0.5 text-xs font-medium text-brand-primary">New</span>}
+            {i.newComments > 0 && <span className="rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">{i.newComments} new {i.newComments === 1 ? "reply" : "replies"}</span>}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}

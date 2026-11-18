@@ -68,12 +68,84 @@ export class PortalService {
     });
   }
 
-  home(ctx: RequestContext) {
+  private shareItem(r: Row) {
+    return {
+      id: r.share_id as string,
+      kind: r.kind as 'ncr' | 'capa',
+      reference: r.reference as string,
+      title: r.title as string,
+      status: r.status as string,
+      sharedAt: iso(r.shared_at),
+      comments: Number(r.comments ?? 0),
+      newComments: Number(r.new_comments ?? 0),
+      viewed: Boolean(r.viewed),
+      lastCommentAt: iso(r.last_comment_at),
+    };
+  }
+
+  private shares(db: Db, ctx: RequestContext) {
+    return db.execute<Row>(sql`select * from app.portal_list_shares(${ctx.organisationId}::uuid)`);
+  }
+
+  async home(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       const mine = (await this.access(db)).rows.map(accessRow).find((a) => a.organisationId === ctx.organisationId);
       if (!mine) throw ApiError.notFound('organisation_not_found', 'Organisation not found');
-      // Later slices fill this with what needs the person's attention; the foundation has nothing shared yet.
-      return { access: mine, attention: [] as unknown[] };
+      const items = (await this.shares(db, ctx)).rows.map((r) => this.shareItem(r));
+      // What needs the person's attention: shared with them and not yet opened, or with something new said since they last looked.
+      return { access: mine, attention: items.filter((i) => !i.viewed || i.newComments > 0), shared: items.length };
+    });
+  }
+
+  listShares(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => ({ data: (await this.shares(db, ctx)).rows.map((r) => this.shareItem(r)) }));
+  }
+
+  private commentRow(r: Row) {
+    return {
+      id: r.comment_id as string,
+      side: r.side as 'staff' | 'external',
+      author: r.author_name as string,
+      body: (r.body as string | null) ?? null,
+      createdAt: iso(r.created_at),
+      withdrawn: Boolean(r.withdrawn),
+      mine: Boolean(r.mine),
+      canWithdraw: Boolean(r.can_withdraw),
+    };
+  }
+
+  private async thread(db: Db, shareId: string) {
+    const r = await db.execute<Row>(sql`select * from app.portal_share_comments(${shareId}::uuid)`);
+    return r.rows.map((c) => this.commentRow(c));
+  }
+
+  /** One shared record as the party sees it (named fields only), its conversation, and "seen" recorded for the person. */
+  getShare(ctx: RequestContext, shareId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const item = (await this.shares(db, ctx)).rows.find((r) => r.share_id === shareId);
+      if (!item) throw ApiError.notFound('share_not_found', 'That record is not shared with you');
+      const kind = item.kind as 'ncr' | 'capa';
+      const rec = await db.execute<{ record: unknown }>(
+        kind === 'ncr' ? sql`select app.portal_get_ncr(${shareId}::uuid) as record` : sql`select app.portal_get_capa(${shareId}::uuid) as record`,
+      );
+      const comments = await this.thread(db, shareId);
+      await db.execute(sql`select app.portal_mark_viewed(${shareId}::uuid)`);
+      return { id: shareId, kind, record: rec.rows[0].record, comments, newComments: Number(item.new_comments ?? 0) };
+    });
+  }
+
+  comment(ctx: RequestContext, shareId: string, body: string) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.add_portal_comment(${shareId}::uuid, ${body})`);
+      return { data: await this.thread(db, shareId) };
+    });
+  }
+
+  withdrawComment(ctx: RequestContext, commentId: string) {
+    return this.database.asUser(ctx, async (db) => {
+      // The database decides: only your own comment, within ten minutes, in a share that is still yours (otherwise 404 / a message).
+      await db.execute(sql`select app.withdraw_portal_comment(${commentId}::uuid)`);
+      return { ok: true };
     });
   }
 

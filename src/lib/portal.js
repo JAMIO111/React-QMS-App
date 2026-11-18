@@ -53,3 +53,18 @@ export const rememberedPortalOrganisation = () => {
     return null;
   }
 };
+
+/** What a shared record is called. */
+export const SHARE_KIND = { ncr: "Non-conformance", capa: "8D" };
+export const shareKindLabel = (kind) => SHARE_KIND[kind] ?? kind;
+
+/** The portal address of one shared record (the organisation goes in the address so a link from an email opens the right portal). */
+export const sharedPath = (shareId, organisationId) => `/portal/shared/${shareId}${organisationId ? `?org=${organisationId}` : ""}`;
+
+/** "Not opened yet", "Seen by 2 people, last 3 hours ago" for staff. */
+export const viewedWords = (share, now = new Date()) =>
+  share.viewers > 0 ? `Seen by ${share.viewers} ${share.viewers === 1 ? "person" : "people"}, last ${lastSeenWords(share.lastViewedAt, now).toLowerCase()}` : "Not opened yet";
+
+/** Dates for the shared record page. */
+export const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "");
+export const longDateTime = (iso) => (iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");

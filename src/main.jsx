@@ -151,6 +151,8 @@ const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx")
 const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
 const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx"));
 const PortalApp = lazy(() => import("./components/portal/PortalApp.jsx"));
+const PortalHome = lazy(() => import("./components/portal/PortalApp.jsx").then((m) => ({ default: m.PortalHome })));
+const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
 const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
@@ -223,7 +225,14 @@ const router = createBrowserRouter([
       // The invitee's page: they may belong to no organisation yet.
       { path: "accept-invite", element: <AcceptInvite /> },
       // The supplier and customer portal (docs/external-portal-plan.md): for people who are not members of the organisation, so outside <App />.
-      { path: "portal", element: <PortalApp /> },
+      {
+        path: "portal",
+        element: <PortalApp />,
+        children: [
+          { index: true, element: <PortalHome /> },
+          { path: "shared/:shareId", element: <PortalSharedPage /> },
+        ],
+      },
       {
         element: <App />, // App contains the Navbar/Header + <Outlet />
         children: [

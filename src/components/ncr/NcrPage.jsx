@@ -55,6 +55,7 @@ import NcrCosts from "./NcrCosts";
 import NcrInspectionSource from "../inspection/NcrInspectionSource";
 import NcrAuditSource from "../audits/NcrAuditSource";
 import LinkedRisks from "../risk/LinkedRisks";
+import PortalShareCard from "../portal/PortalShareCard";
 import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
 import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
@@ -530,6 +531,8 @@ const NcrPage = () => {
                 </Card>
               </>
             )}
+
+            {!isNew && can("external_access.share") && <PortalShareCard kind="ncr" recordId={ncr.id} Heading={SectionHeading} Card={Card} />}
 
             <SectionHeading id="ncr-investigation" title="Investigation" sectionRef={refs.investigation} />
             <Card>

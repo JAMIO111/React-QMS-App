@@ -536,6 +536,13 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/external-access/people/{id}/restore': undefined,
     'POST /api/v1/portal/people/{id}/resend': undefined,
     'POST /api/v1/portal/people/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/external-access/shares/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/external-access/shares/{id}/comments': undefined,
+    'POST /api/v1/external-access/shares/{id}/comments': { body: 'Hijacked' },
+    'POST /api/v1/external-access/comments/{id}/withdraw': undefined,
+    'GET /api/v1/portal/shares/{id}': undefined,
+    'POST /api/v1/portal/shares/{id}/comments': { body: 'Hijacked' },
+    'POST /api/v1/portal/comments/{id}/withdraw': undefined,
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
     'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
@@ -1023,6 +1030,13 @@ const hasSample = (op: Op) =>
     'POST /api/v1/external-access/people/{id}/restore',
     'POST /api/v1/portal/people/{id}/resend',
     'POST /api/v1/portal/people/{id}/remove',
+    'POST /api/v1/external-access/shares/{id}/withdraw',
+    'GET /api/v1/external-access/shares/{id}/comments',
+    'POST /api/v1/external-access/shares/{id}/comments',
+    'POST /api/v1/external-access/comments/{id}/withdraw',
+    'GET /api/v1/portal/shares/{id}',
+    'POST /api/v1/portal/shares/{id}/comments',
+    'POST /api/v1/portal/comments/{id}/withdraw',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
     'POST /api/v1/inspections/{id}/abandon',
@@ -1057,6 +1071,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
   if (path.startsWith('/api/v1/external-access/people/') || path.startsWith('/api/v1/portal/people/')) return a.externalAccess;
+  if (path.startsWith('/api/v1/external-access/shares/') || path.startsWith('/api/v1/portal/shares/')) return a.portalShare;
+  if (path.startsWith('/api/v1/external-access/comments/') || path.startsWith('/api/v1/portal/comments/')) return a.portalComment;
   if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
@@ -1285,6 +1301,15 @@ beforeAll(async () => {
       `with party as (insert into public.portal_parties (organisation_id, party_kind, supplier_id, enabled) values ($1, 'supplier', $2, true) returning id)
        insert into public.external_access (organisation_id, party_id, invited_email) select $1, id, 'sweep-external@example.test' from party returning id`,
       [ids.orgA, a.supplier],
+    )).rows[0].id;
+    a.portalShare = (await admin.query(
+      `insert into public.portal_shares (organisation_id, party_id, record_kind, nonconformance_id)
+       select $1, party_id, 'ncr', $2 from public.external_access where id = $3 returning id`,
+      [ids.orgA, a.ncr, a.externalAccess],
+    )).rows[0].id;
+    a.portalComment = (await admin.query(
+      `insert into public.portal_comments (organisation_id, share_id, author_side, author_user_id, body) values ($1, $2, 'staff', $3, 'Sweep comment') returning id`,
+      [ids.orgA, a.portalShare, ids.ownerA],
     )).rows[0].id;
     // Single sign-on (SS1): a domain A claimed.
     a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;
@@ -1533,6 +1558,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/custom-values': `?entityType=part&ids=${b.part}`,
       '/api/v1/goods-receipt-lines/lookup': `?supplierId=${b.supplier}`,
       '/api/v1/workflow-test-events': '?trigger=ncr.created',
+      '/api/v1/external-access/shares': `?kind=ncr&recordId=${b.ncr}`,
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { OwnPartyInviteBody, ReasonBody } from './portal.schemas';
+import { CommentBody, OwnPartyInviteBody, ReasonBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -69,5 +69,34 @@ export class PortalController {
   @ApiOkResponse({ description: 'Remove a colleague’s access or invitation, with a reason' })
   remove(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.remove(ctx, Uuid.parse(id), parse(ReasonBody, body).reason);
+  }
+
+  @Get('shares')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Everything shared with the person’s supplier or customer, newest conversation first, with what is new since they last looked' })
+  shares(@Ctx() ctx: RequestContext) {
+    return this.service.listShares(ctx);
+  }
+
+  @Get('shares/:id')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'One shared record as the party sees it (a non-conformance or an 8D: named fields only), its conversation, and records that the person has seen it' })
+  share(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getShare(ctx, Uuid.parse(id));
+  }
+
+  @Post('shares/:id/comments')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(CommentBody) })
+  @ApiOkResponse({ description: 'Write on a shared record (1 to 4,000 characters); answers with the conversation' })
+  comment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.comment(ctx, Uuid.parse(id), parse(CommentBody, body).body);
+  }
+
+  @Post('comments/:id/withdraw')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Withdraw your own comment within ten minutes of writing it' })
+  withdrawComment(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.withdrawComment(ctx, Uuid.parse(id));
   }
 }

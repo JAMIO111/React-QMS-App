@@ -5,7 +5,7 @@ import CTAButton from "../CTAButton";
 import IconButton from "../IconButton";
 import TableWrapper from "../TableWrapper";
 import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
-import DateRangeFilter from "../ui/DateRangeFilter";
+import PortalFilterPane from "./PortalFilterPane";
 import { useTablePreferences } from "../../hooks/useTablePreferences";
 import { exportCSV } from "../../lib/csvHelper";
 import { shortDate } from "../../lib/portal";
@@ -117,12 +117,19 @@ export default function PortalRegister({
       }
     });
 
-  const togglePill = (key, value) =>
+  /** Write the drawer's choices to the address: a filter left empty is taken out of it. */
+  const applyDraft = (draft) =>
     change((p) => {
-      const now = list(p.get(`f.${key}`));
-      const next = now.includes(value) ? now.filter((v) => v !== value) : [...now, value];
-      if (next.length) p.set(`f.${key}`, next.join(","));
-      else p.delete(`f.${key}`);
+      for (const f of filters) {
+        const v = draft[f.key];
+        if (f.type === "pills") {
+          if (v.length) p.set(`f.${f.key}`, v.join(",")); else p.delete(`f.${f.key}`);
+        } else if (f.type === "dates") {
+          if (v.from) p.set(`d.${f.key}.from`, v.from); else p.delete(`d.${f.key}.from`);
+          if (v.to) p.set(`d.${f.key}.to`, v.to); else p.delete(`d.${f.key}.to`);
+        } else if (v) p.set(`s.${f.key}`, "1");
+        else p.delete(`s.${f.key}`);
+      }
     });
 
   const rowActions = (item) => [{ label: "Open", icon: ExternalLinkIcon, onSelect: () => onOpen?.(item) }];
@@ -175,57 +182,13 @@ export default function PortalRegister({
       </div>
 
       {panelOpen && filters.length > 0 && (
-        <section aria-label="Filters" className="grid gap-4 rounded-2xl border border-border-color bg-secondary-bg p-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filters.map((f) => {
-            if (f.type === "pills") {
-              const chosen = list(params.get(`f.${f.key}`));
-              return (
-                <fieldset key={f.key}>
-                  <legend className="text-sm font-medium">{f.label}</legend>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {f.options.map((o) => {
-                      const on = chosen.includes(o.key);
-                      return (
-                        <label key={o.key} className={`cursor-pointer rounded-full border px-2 py-0.5 text-xs ${on ? "border-brand-primary bg-brand-primary text-white" : "border-border-color hover:bg-border-color/40"}`}>
-                          <input type="checkbox" className="sr-only" checked={on} onChange={() => togglePill(f.key, o.key)} />
-                          {o.label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-1 text-xs text-secondary-text">{chosen.length ? `${chosen.length} selected` : `Any ${f.label.toLowerCase()}`}</p>
-                </fieldset>
-              );
-            }
-            if (f.type === "dates") {
-              return (
-                <DateRangeFilter
-                  key={f.key}
-                  label={f.label}
-                  direction={f.direction}
-                  from={params.get(`d.${f.key}.from`) || null}
-                  to={params.get(`d.${f.key}.to`) || null}
-                  onChange={({ from, to }) =>
-                    change((p) => {
-                      if (from) p.set(`d.${f.key}.from`, from); else p.delete(`d.${f.key}.from`);
-                      if (to) p.set(`d.${f.key}.to`, to); else p.delete(`d.${f.key}.to`);
-                    })
-                  }
-                />
-              );
-            }
-            if (f.type === "switch") {
-              const on = params.get(`s.${f.key}`) === "1";
-              return (
-                <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input type="checkbox" checked={on} onChange={() => change((p) => (on ? p.delete(`s.${f.key}`) : p.set(`s.${f.key}`, "1")))} />
-                  {f.label}
-                </label>
-              );
-            }
-            return null;
-          })}
-        </section>
+        <PortalFilterPane
+          filters={filters}
+          params={params}
+          noun={plural}
+          onApply={applyDraft}
+          onClose={() => setPanelOpen(false)}
+        />
       )}
 
       {chips.length > 0 && (

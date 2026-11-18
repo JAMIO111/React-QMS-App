@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
@@ -102,9 +102,12 @@ describe("the non-conformance register", () => {
   it("filters by stage and severity from the filter panel, shows a chip for each and clears them", async () => {
     renderAt("/portal/non-conformances", <PortalNcrsPage />);
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
-    const panel = within(screen.getByRole("region", { name: "Filters" }));
+    const panel = within(screen.getByRole("dialog", { name: "Filter non-conformances" }));
     await userEvent.click(panel.getByRole("checkbox", { name: "Open" }));
     await userEvent.click(panel.getByRole("checkbox", { name: "Critical" }));
+    // Nothing moves behind the drawer until Apply.
+    expect(refs("Non-conformances")).toEqual(["NC-1", "NC-10", "NC-2"]);
+    await userEvent.click(panel.getByRole("button", { name: "Apply" }));
     expect(refs("Non-conformances")).toEqual(["NC-10"]);
     const chips = screen.getByLabelText("Active filters");
     expect(chips).toHaveTextContent("Stage: Open");
@@ -118,9 +121,31 @@ describe("the non-conformance register", () => {
   it("'Needs my attention' keeps what is new, has new replies or waits for the person", async () => {
     renderAt("/portal/non-conformances", <PortalNcrsPage />);
     await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
-    await userEvent.click(within(screen.getByRole("region", { name: "Filters" })).getByRole("checkbox", { name: /Needs my attention/ }));
+    const panel = within(screen.getByRole("dialog", { name: "Filter non-conformances" }));
+    await userEvent.click(panel.getByRole("checkbox", { name: /Needs my attention/ }));
+    await userEvent.click(panel.getByRole("button", { name: "Apply" }));
     expect(refs("Non-conformances")).toEqual(["NC-1", "NC-10", "NC-2"]); // new reply, closure, not opened
     ncrs = ncrs.map((n) => ({ ...n, viewed: true, newComments: 0, closurePending: false }));
+  });
+
+  it("filters in a drawer that slides in, closes without applying on Escape, and Reset all clears what was applied", async () => {
+    renderAt("/portal/non-conformances", <PortalNcrsPage />);
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    const drawer = screen.getByRole("dialog", { name: "Filter non-conformances" });
+    expect(drawer.className).toMatch(/slide-in-from-right/);
+    await userEvent.click(within(drawer).getByRole("checkbox", { name: "Closed" }));
+    await userEvent.keyboard("{Escape}");
+    expect(drawer.className).toMatch(/slide-out-to-right/);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull());
+    expect(refs("Non-conformances")).toEqual(["NC-1", "NC-10", "NC-2"]);
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Filter non-conformances" })).getByRole("checkbox", { name: "Closed" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Filter non-conformances" })).getByRole("button", { name: "Apply" }));
+    expect(refs("Non-conformances")).toEqual(["NC-2"]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filter non-conformances" })).toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Filter non-conformances" })).getByRole("button", { name: "Reset all" }));
+    expect(refs("Non-conformances")).toEqual(["NC-1", "NC-10", "NC-2"]);
   });
 
   it("sorts from a header click and puts a column back that was hidden", async () => {

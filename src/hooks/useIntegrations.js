@@ -349,6 +349,21 @@ export const useTemplatePreview = (body, { enabled = true, delay = 300 } = {}) =
   });
 };
 
+/** The values a link to another record can take (the codes that exist in Fortress, with their names), searched and paged. */
+export const useReferenceValues = (kind, { q = "", limit = 50, enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const qs = new URLSearchParams({ kind, limit: String(limit) });
+  if (q.trim()) qs.set("q", q.trim());
+  return useQuery({
+    queryKey: key(organisationId, "reference-values", kind, q.trim(), limit),
+    queryFn: () => apiFetch(`${BASE}/reference-values?${qs}`, { organisationId }),
+    enabled: !!organisationId && enabled && !!kind,
+    retry: false,
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
+  });
+};
+
 /** Every function a formula can use (fixed; cached for long). */
 export const useFormulaFunctions = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();

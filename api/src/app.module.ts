@@ -124,7 +124,7 @@ import { IntegrationsService } from './integrations/integrations.service';
 import { IntegrationRunsController } from './integrations/integration-runs.controller';
 import { IntegrationFilesController } from './integrations/integration-files.controller';
 import { IntegrationFilesService } from './integrations/integration-files.service';
-import { IntegrationFormulasController, IntegrationTemplatesController } from './integrations/integration-templates.controller';
+import { IntegrationFormulasController, IntegrationReferencesController, IntegrationTemplatesController } from './integrations/integration-templates.controller';
 import { IntegrationTemplatesService } from './integrations/integration-templates.service';
 import { IntegrationMonitorController } from './integrations/integration-monitor.controller';
 import { IntegrationMonitorService } from './integrations/integration-monitor.service';
@@ -314,6 +314,7 @@ export class AppModule implements NestModule {
         IntegrationConflictsController,
         IntegrationMonitorController,
         IntegrationFormulasController,
+        IntegrationReferencesController,
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,

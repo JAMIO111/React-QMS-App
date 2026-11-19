@@ -1625,6 +1625,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/documents-in-force': '?operationCode=OP-1',
       '/api/v1/documents-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/risk-score': '?likelihood=3&consequence=3',
+      '/api/v1/integrations/reference-values': '?kind=part',
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ReferenceValuesDialog, { ReferenceCheckLine } from "./ReferenceValues";
 import { ArrowRightIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CircleAlertIcon, CircleCheckIcon, MinusIcon } from "@/components/icons";
 import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, OWNERSHIP_HINTS, TRANSFORM_OPTIONS, ownershipOptions, rowHasSource } from "../../lib/integrations";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -161,10 +162,12 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly, words }) => (
 );
 
 /** One Fortress field: where its value comes from, what the chosen record makes of it, and (opened) how it is cleaned. */
-const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnly, advanced, updates, words }) => {
+const MappingRow = ({ field, row, onChange, colOptions, preview, references, sample, readOnly, advanced, updates, words }) => {
   const [open, setOpen] = useState(false);
+  const [listing, setListing] = useState(false);
   const set = (patch) => onChange({ ...row, ...patch });
   const matched = rowHasSource(row);
+  const refCheck = field.ref ? references?.find((r) => r.target === field.key) ?? null : null;
   const missing = field.required && !matched;
   // What the server makes of this field on the example row (T3): taken value, after each step, the imported value or the error.
   const p = preview?.fields?.find((f) => f.target === field.key) ?? null;
@@ -228,6 +231,8 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, sample, readOnl
           </span>
         </div>
       </div>
+      {field.ref && <ReferenceCheckLine field={field} check={refCheck} matched={matched} onOpen={() => setListing(true)} />}
+      {listing && <ReferenceValuesDialog field={field} check={refCheck} onClose={() => setListing(false)} />}
       {open && (
         <div id={settingsId}>
           <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} updates={updates} words={words} />
@@ -308,6 +313,7 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
             row={rows[i]}
             colOptions={colOptions}
             preview={here}
+            references={preview?.references}
             sample={values}
             readOnly={readOnly}
             advanced={advanced}

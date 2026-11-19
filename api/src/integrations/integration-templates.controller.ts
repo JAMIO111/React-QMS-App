@@ -11,6 +11,8 @@ import {
   FormulaCheckResult,
   FunctionList,
   PreviewTemplateBody,
+  ReferenceValues,
+  ReferenceValuesQuery,
   TemplatePreview,
   CreateTemplateBody,
   DuplicateTemplateBody,
@@ -158,5 +160,20 @@ export class IntegrationFormulasController {
   @ApiOkResponse({ description: 'Reads a formula: the first problem with its position, the columns and functions it uses, and the result for a sample row', schema: openApiSchema(FormulaCheckResult) })
   check(@Body() body: unknown) {
     return this.service.checkFormula(parse(CheckFormulaBody, body));
+  }
+}
+
+/** The values a link to another record can take (the import mapping screen's list). Reading only. */
+@ApiTags('integrations')
+@ApiBearerAuth()
+@Controller('integrations/reference-values')
+export class IntegrationReferencesController {
+  constructor(private readonly service: IntegrationTemplatesService) {}
+
+  @Get()
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The codes that exist in Fortress for one kind of linked record, with their names (search and paging)', schema: openApiSchema(ReferenceValues) })
+  list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.referenceValues(ctx, parse(ReferenceValuesQuery, query));
   }
 }

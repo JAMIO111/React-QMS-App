@@ -82,6 +82,25 @@ export type TemplateDetail = z.infer<typeof TemplateDetail>;
 export const TemplateVersionList = z.object({ data: z.array(TemplateVersion.omit({ fields: true, sourceSettings: true, expectedColumns: true }).extend({ fieldCount: z.number().int() })) });
 
 /** Preview an unsaved template against an uploaded file (T3: the screen and the import always agree because both run here). */
+export const REF_KINDS = ['site', 'department', 'unit', 'category', 'supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type'] as const;
+
+/** The values a link field can take: the codes that exist in Fortress, with their names. */
+export const ReferenceValuesQuery = z
+  .object({
+    kind: z.enum(REF_KINDS),
+    q: z.string().trim().max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).max(100000).default(0),
+  })
+  .strict();
+export type ReferenceValuesQuery = z.infer<typeof ReferenceValuesQuery>;
+export const ReferenceValues = z.object({
+  kind: z.enum(REF_KINDS),
+  word: z.string(),
+  total: z.number().int(),
+  data: z.array(z.object({ code: z.string(), name: z.string().nullable(), hint: z.string().nullable(), active: z.boolean().nullable(), duplicate: z.boolean() })),
+});
+
 export const PreviewTemplateBody = z
   .object({
     entityType: z.enum(ENTITY_TYPES),
@@ -107,7 +126,27 @@ const PreviewField = z.object({
   value: z.unknown(),
   error: z.string().nullable(),
 });
+/** How a link field's values fare against what exists in Fortress: over the rows read (up to 1,000), not only the ones shown. */
+const ReferenceCheck = z.object({
+  target: z.string(),
+  label: z.string(),
+  kind: z.enum(REF_KINDS),
+  /** The kind of record in words ("part", "gauge type"). */
+  word: z.string(),
+  mode: z.enum(['code', 'source']),
+  /** Rows read, and how many different values they hold. */
+  checked: z.number().int(),
+  distinct: z.number().int(),
+  /** Different values with no record in Fortress, and ones that more than one record answers to. */
+  missing: z.number().int(),
+  ambiguous: z.number().int(),
+  /** Some of those values (up to 10), with how many rows have each. */
+  examples: z.array(z.object({ value: z.string(), reason: z.enum(['missing', 'ambiguous']), rows: z.number().int() })),
+  /** More than 2,000 different values: the rest were not checked. */
+  truncated: z.boolean(),
+});
 export const TemplatePreview = z.object({
+  references: z.array(ReferenceCheck),
   columns: z.array(z.string()),
   columnCheck: z.object({
     /** Columns the template reads that the file lacks; `blocking` when a required field or the key column needs it. */

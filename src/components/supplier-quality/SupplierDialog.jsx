@@ -2,23 +2,23 @@ import { useState } from "react";
 import { useToast } from "../../contexts/ToastProvider";
 import { useSupplierClassifications, useSupplierMutation } from "../../hooks/useSupplierQuality";
 import { describeApiError } from "../../lib/api-client";
-import { countryOptions } from "../../lib/onboarding";
 import { SUPPLIER_TYPES } from "../../lib/supplierQuality";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import Switch from "../ui/Switch";
 import { FormError } from "../master-data/shared";
+import AddressFields from "../master-data/AddressFields";
+import { addressBody, EMPTY_ADDRESS } from "../../lib/address";
 import CTAButton from "@/components/CTAButton";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 
 const emptyForm = {
-  code: "", name: "", displayName: "", supplierType: null, country: null, addressLine1: "", addressLine2: "", city: "", region: "", postcode: "",
+  code: "", name: "", displayName: "", supplierType: null, ...EMPTY_ADDRESS,
   website: "", email: "", phone: "", purchasingReference: "", companyNumber: "", vatNumber: "", notes: "", active: true,
 };
-const COUNTRIES = countryOptions();
 const nullIfEmpty = (v) => (typeof v === "string" ? v.trim() || null : v);
 
 /** Add a supplier (it always starts Pending Approval) or edit one. Approval status is changed separately, with a reason, never here. */
@@ -44,12 +44,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
       name: form.name.trim(),
       displayName: nullIfEmpty(form.displayName),
       supplierType: form.supplierType,
-      country: form.country,
-      addressLine1: nullIfEmpty(form.addressLine1),
-      addressLine2: nullIfEmpty(form.addressLine2),
-      city: nullIfEmpty(form.city),
-      region: nullIfEmpty(form.region),
-      postcode: nullIfEmpty(form.postcode),
+      ...addressBody(form),
       website: nullIfEmpty(form.website),
       email: nullIfEmpty(form.email),
       phone: nullIfEmpty(form.phone),
@@ -101,12 +96,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
           <Field label="Website" value={form.website} onChange={set("website")} maxLength={200} />
           <Field label="Email" value={form.email} onChange={set("email")} maxLength={200} />
           <Field label="Phone" value={form.phone} onChange={set("phone")} maxLength={40} />
-          <Field label="Address line 1" value={form.addressLine1} onChange={set("addressLine1")} maxLength={120} />
-          <Field label="Address line 2" value={form.addressLine2} onChange={set("addressLine2")} maxLength={120} />
-          <Field label="City" value={form.city} onChange={set("city")} maxLength={80} />
-          <Field label="Region" value={form.region} onChange={set("region")} maxLength={80} />
-          <Field label="Postcode" value={form.postcode} onChange={set("postcode")} maxLength={20} />
-          <RHFComboBox label="Country" value={form.country} onChange={pick("country")} options={COUNTRIES} placeholder="Choose a country" clearable />
+          <AddressFields form={form} set={set} pick={pick} />
         </div>
         <fieldset>
           <legend className="text-sm font-medium text-secondary-text">Classifications</legend>

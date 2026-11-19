@@ -11,7 +11,7 @@ import ComboField from "../ui/ComboField";
 import Field from "../ui/Field";
 import { TextAreaField } from "../master-data/shared";
 
-const TYPE_HINTS = { date: "date", number: "number", integer: "whole number", boolean: "yes / no", email: "email", url: "web address", enum: "one of a list", country: "country code" };
+const TYPE_HINTS = { date: "date", number: "number", integer: "whole number", boolean: "yes / no", email: "email", url: "web address", enum: "one of a list", country: "country code", currency: "currency code" };
 
 /** The limits the database sets for a field, in words ("Up to 20 characters", "From 1 to 1000"). */
 const fieldLimits = (f) => {

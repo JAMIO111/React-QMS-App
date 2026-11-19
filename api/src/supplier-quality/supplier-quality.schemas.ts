@@ -56,6 +56,7 @@ const supplierFields = {
   country: z.string().trim().regex(/^[A-Z]{2}$/, 'Use a two-letter country code, e.g. GB').nullable().optional(),
   addressLine1: text(120),
   addressLine2: text(120),
+  addressLine3: text(120),
   city: text(80),
   region: text(80),
   postcode: text(20),
@@ -63,6 +64,7 @@ const supplierFields = {
   email: text(200),
   phone: text(40),
   purchasingReference: text(60),
+  currency: z.string().trim().regex(/^[A-Z]{3}$/, 'Use a three-letter currency code, e.g. GBP').nullable().optional(),
 };
 
 export const CreateSupplierBody = z
@@ -217,6 +219,8 @@ export const SupplierDetail = SupplierRow.omit({ primaryContact: true }).extend(
   notes: z.string().nullable(),
   addressLine1: z.string().nullable(),
   addressLine2: z.string().nullable(),
+  addressLine3: z.string().nullable(),
+  currency: z.string().nullable(),
   region: z.string().nullable(),
   postcode: z.string().nullable(),
   website: z.string().nullable(),

@@ -97,6 +97,25 @@ describe('real imports from a file', () => {
     expect((await admin.query(`select count(*)::int as n from public.machines where organisation_id = $1 and code in ('CNC-01', 'MILL-02')`, [ids.orgA])).rows[0].n).toBe(2);
   });
 
+  it('imports customers with an address and a currency, capitalising the currency and changing only mapped fields on an update', async () => {
+    const fileId = await upload('customers.csv', ['Id,Code,Name,Street,Estate,Town,County,Zip,Land,Cur', '1,ADDRC1,Addr Customer,1 High St,Trading Estate,Leeds,West Yorkshire,LS1 1AA,gb,gbp'].join('\n'));
+    await api().put(`${base}/connections/${connId}/mapping`).set(await owner()).send({
+      entityType: 'customer', keyField: 'Id', fileId,
+      fields: [
+        { target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }, { target: 'addressLine1', source: 'Street' }, { target: 'addressLine3', source: 'Estate' },
+        { target: 'city', source: 'Town' }, { target: 'region', source: 'County' }, { target: 'postcode', source: 'Zip' }, { target: 'country', source: 'Land' }, { target: 'currency', source: 'Cur' },
+      ],
+    }).expect(200);
+    const first = await run('customer', 'full', fileId);
+    expect(first).toMatchObject({ status: 'succeeded', counts: { total: 1, created: 1 } });
+    const row = (await admin.query(`select address_line1, address_line2, address_line3, city, region, postcode, country, currency from public.customers where organisation_id = $1 and code = 'ADDRC1'`, [ids.orgA])).rows[0];
+    expect(row).toEqual({ address_line1: '1 High St', address_line2: null, address_line3: 'Trading Estate', city: 'Leeds', region: 'West Yorkshire', postcode: 'LS1 1AA', country: 'GB', currency: 'GBP' });
+    const bad = await upload('customers-bad.csv', ['Id,Code,Name,Cur', '2,ADDRC2,Bad currency,pounds'].join('\n'));
+    await api().put(`${base}/connections/${connId}/mapping`).set(await owner()).send({ entityType: 'customer', keyField: 'Id', fileId: bad, reason: 'A file with a bad currency', fields: [{ target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }, { target: 'currency', source: 'Cur' }] }).expect(200);
+    const rejected = await run('customer', 'full', bad);
+    expect(rejected.counts).toMatchObject({ total: 1, created: 0, rejected: 1 });
+  });
+
   it('"add new only" leaves changed records alone and says why', async () => {
     await api().put(`${base}/connections/${connId}/settings`).set(await owner()).send({ entityType: 'machine', writeMode: 'add_only' }).expect(200);
     const fileId = await upload('machines-v2.csv', ['Id,Code,Name,Site', `17,CNC-01,Lathe (renamed),${site}`, `19,DRILL-03,Drill,${site}`].join('\n'));

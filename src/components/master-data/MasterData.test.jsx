@@ -230,7 +230,10 @@ describe("PartiesPage", () => {
     await userEvent.type(within(dialog).getByLabelText("Code"), "BOREAL");
     await userEvent.type(within(dialog).getByLabelText("Name"), "Boreal Tooling Ltd");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add customer" }));
-    expect(bodies[0]).toEqual(["POST", { code: "BOREAL", name: "Boreal Tooling Ltd", displayName: "", companyNumber: "", vatNumber: "", notes: "" }]);
+    expect(bodies[0]).toEqual([
+      "POST",
+      { code: "BOREAL", name: "Boreal Tooling Ltd", displayName: "", companyNumber: "", vatNumber: "", notes: "", addressLine1: null, addressLine2: null, addressLine3: null, city: null, region: null, postcode: null, country: null, currency: null },
+    ]);
 
     await userEvent.click(await screen.findByRole("button", { name: "ACME" }));
     dialog = screen.getByRole("dialog", { name: "Edit ACME" });
@@ -238,6 +241,35 @@ describe("PartiesPage", () => {
     await userEvent.click(within(dialog).getByLabelText(/Active/));
     await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
     expect(bodies[1][1]).toMatchObject({ code: "ACME", active: false });
+  });
+
+  it("asks for an address and a currency, and sends them", async () => {
+    const bodies = [];
+    routeApi({
+      "GET /customers": page([]),
+      "POST /customers": (_p, opts) => (bodies.push(opts.body), { id: "c9", ...opts.body }),
+    });
+    renderAt("/Customers");
+    await userEvent.click(await screen.findByRole("button", { name: "Add customer" }));
+    const dialog = screen.getByRole("dialog", { name: "Add customer" });
+    for (const label of ["Address line 1", "Address line 2", "Address line 3", "Town or city", "County, state or region", "Postcode"]) {
+      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+    }
+    await userEvent.type(within(dialog).getByLabelText("Code"), "ADDR");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Addressed Ltd");
+    await userEvent.type(within(dialog).getByLabelText("Address line 1"), " 1 High Street ");
+    await userEvent.type(within(dialog).getByLabelText("Address line 3"), "Trading Estate");
+    await userEvent.type(within(dialog).getByLabelText("Town or city"), "Leeds");
+    await userEvent.type(within(dialog).getByLabelText("County, state or region"), "West Yorkshire");
+    await userEvent.type(within(dialog).getByLabelText("Postcode"), "LS1 1AA");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Country" }));
+    await userEvent.click(await screen.findByRole("option", { name: /United Kingdom/ }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Currency" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^GBP/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add customer" }));
+    expect(bodies[0]).toMatchObject({
+      code: "ADDR", name: "Addressed Ltd", addressLine1: "1 High Street", addressLine2: null, addressLine3: "Trading Estate", city: "Leeds", region: "West Yorkshire", postcode: "LS1 1AA", country: "GB", currency: "GBP",
+    });
   });
 
   it("shows server validation errors in the form", async () => {

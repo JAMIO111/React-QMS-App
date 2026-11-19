@@ -39,7 +39,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       code: { column: 'code' }, name: { column: 'name' }, displayName: { column: 'display_name' }, companyNumber: { column: 'company_number' },
       vatNumber: { column: 'vat_number' }, notes: { column: 'notes' }, active: { column: 'active' }, supplierType: { column: 'supplier_type' },
       email: { column: 'email' }, phone: { column: 'phone' }, website: { column: 'website' }, addressLine1: { column: 'address_line1' },
-      addressLine2: { column: 'address_line2' }, city: { column: 'city' }, region: { column: 'region' }, postcode: { column: 'postcode' },
+      addressLine2: { column: 'address_line2' }, addressLine3: { column: 'address_line3' }, currency: { column: 'currency' }, city: { column: 'city' }, region: { column: 'region' }, postcode: { column: 'postcode' },
       country: { column: 'country' }, purchasingReference: { column: 'purchasing_reference' },
     },
     excluded: {
@@ -54,7 +54,9 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
     table: 'customers',
     fields: {
       code: { column: 'code' }, name: { column: 'name' }, displayName: { column: 'display_name' }, companyNumber: { column: 'company_number' },
-      vatNumber: { column: 'vat_number' }, notes: { column: 'notes' }, active: { column: 'active' },
+      vatNumber: { column: 'vat_number' }, notes: { column: 'notes' }, active: { column: 'active' }, addressLine1: { column: 'address_line1' },
+      addressLine2: { column: 'address_line2' }, addressLine3: { column: 'address_line3' }, city: { column: 'city' }, region: { column: 'region' },
+      postcode: { column: 'postcode' }, country: { column: 'country' }, currency: { column: 'currency' },
     },
     excluded: { ...SYSTEM },
   },

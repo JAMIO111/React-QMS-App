@@ -14,6 +14,8 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 import CustomerContacts from "./CustomerContacts";
+import AddressFields from "./AddressFields";
+import { addressBody, EMPTY_ADDRESS } from "../../lib/address";
 
 /** The custom-field kind of record for each register. */
 const ENTITY_TYPES = { customers: "customer", suppliers: "supplier" };
@@ -23,7 +25,7 @@ const LABELS = {
   suppliers: { title: "Suppliers", one: "supplier", intro: "Organisations that supply you. Supplier non-conformances link to them." },
 };
 
-const emptyForm = { code: "", name: "", displayName: "", companyNumber: "", vatNumber: "", notes: "", active: true };
+const emptyForm = { code: "", name: "", displayName: "", companyNumber: "", vatNumber: "", ...EMPTY_ADDRESS, notes: "", active: true };
 
 const PartyForm = ({ kind, party, onDone }) => {
   const mutation = useMasterDataMutation();
@@ -33,6 +35,7 @@ const PartyForm = ({ kind, party, onDone }) => {
   const [customValues, setCustomValues] = useState({});
   const [opened] = useState(party);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+  const pick = (k) => (v) => setForm((f) => ({ ...f, [k]: v ?? null }));
   const label = LABELS[kind].one;
 
   const submit = (e) => {
@@ -43,6 +46,7 @@ const PartyForm = ({ kind, party, onDone }) => {
       displayName: form.displayName.trim(),
       companyNumber: form.companyNumber.trim(),
       vatNumber: form.vatNumber.trim(),
+      ...addressBody(form),
       notes: form.notes.trim(),
       ...(party ? { active: form.active } : withCustomValues(customValues)),
     };
@@ -71,6 +75,7 @@ const PartyForm = ({ kind, party, onDone }) => {
         <Field label="Display name" value={form.displayName} onChange={set("displayName")} maxLength={100} hint="Shown in lists (optional)" />
         <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} />
         <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} />
+        <AddressFields form={form} set={set} pick={pick} />
       </div>
       <label className="flex flex-col gap-1 text-sm font-medium text-primary-text">
         Notes
@@ -168,7 +173,7 @@ const PartiesPage = ({ kind }) => {
         onOpen={canManage ? setEditing : undefined}
       />
       {editing && (
-        <Dialog title={editing === "new" ? `Add ${label.one}` : `Edit ${editing.code}`} onClose={() => setEditing(null)}>
+        <Dialog title={editing === "new" ? `Add ${label.one}` : `Edit ${editing.code}`} onClose={() => setEditing(null)} width="max-w-3xl">
           <PartyForm kind={kind} party={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
           {editing !== "new" && kind === "customers" && <CustomerContacts customerId={editing.id} canManage={canManage} />}
           {editing !== "new" && (

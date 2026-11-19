@@ -9,7 +9,7 @@ import { EntityType } from './entity-importer';
  * numeric bounds are read from the database's own rules (core/column-rules.ts, CatalogueService); the limits written here are only the fallback.
  * core/columns.ts says which column each field fills, and test/integration-catalogue-drift.e2e-spec.ts fails when the schema and these drift apart.
  */
-export type FieldType = 'text' | 'email' | 'url' | 'country' | 'number' | 'integer' | 'date' | 'boolean' | 'enum';
+export type FieldType = 'text' | 'email' | 'url' | 'country' | 'currency' | 'number' | 'integer' | 'date' | 'boolean' | 'enum';
 
 export interface CatalogueField {
   key: string;
@@ -84,6 +84,14 @@ const party = (extra: CatalogueField[] = []): CatalogueField[] => [
   { key: 'companyNumber', label: 'Company number', type: 'text', maxLength: 50 },
   { key: 'vatNumber', label: 'VAT number', type: 'text', maxLength: 50 },
   ...extra,
+  { key: 'addressLine1', label: 'Address line 1', type: 'text', maxLength: 120 },
+  { key: 'addressLine2', label: 'Address line 2', type: 'text', maxLength: 120 },
+  { key: 'addressLine3', label: 'Address line 3', type: 'text', maxLength: 120 },
+  { key: 'city', label: 'Town or city', type: 'text', maxLength: 80 },
+  { key: 'region', label: 'County, state or region', type: 'text', maxLength: 80 },
+  { key: 'postcode', label: 'Postcode', type: 'text', maxLength: 20 },
+  { key: 'country', label: 'Country', type: 'country', description: 'Two-letter code, such as GB' },
+  { key: 'currency', label: 'Currency', type: 'currency', description: 'Three-letter code, such as GBP: the currency you trade with them in' },
   { key: 'notes', label: 'Notes', type: 'text', maxLength: 2000 },
   { key: 'active', label: 'Active', type: 'boolean', description: 'Yes / no; empty keeps it active' },
 ];
@@ -98,12 +106,6 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'email', label: 'Email', type: 'email', maxLength: 200 },
       { key: 'phone', label: 'Phone', type: 'text', maxLength: 40 },
       { key: 'website', label: 'Website', type: 'url', maxLength: 300 },
-      { key: 'addressLine1', label: 'Address line 1', type: 'text', maxLength: 120 },
-      { key: 'addressLine2', label: 'Address line 2', type: 'text', maxLength: 120 },
-      { key: 'city', label: 'Town or city', type: 'text', maxLength: 80 },
-      { key: 'region', label: 'County or region', type: 'text', maxLength: 80 },
-      { key: 'postcode', label: 'Postcode', type: 'text', maxLength: 20 },
-      { key: 'country', label: 'Country', type: 'country', description: 'Two-letter code, such as GB' },
       { key: 'purchasingReference', label: 'Purchasing reference', type: 'text', maxLength: 60 },
     ]),
   },

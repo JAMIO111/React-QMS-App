@@ -129,11 +129,14 @@ describe("supplier register", () => {
     expect(dialog).toHaveTextContent("Pending Approval");
     await userEvent.type(within(dialog).getByLabelText(/Code/), "new1");
     await userEvent.type(within(dialog).getByLabelText(/Legal name/), "New Supplier Ltd");
+    await userEvent.type(within(dialog).getByLabelText("Address line 3"), "Industrial Park");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Currency" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^EUR/ }));
     await userEvent.click(within(dialog).getByText("Welding"));
     await userEvent.click(within(dialog).getByRole("button", { name: "Add supplier" }));
     await waitFor(() => expect(calls.find((c) => c.k === "POST /supplier-quality/suppliers")).toBeTruthy());
     const body = calls.find((c) => c.k === "POST /supplier-quality/suppliers").body;
-    expect(body).toMatchObject({ code: "new1", name: "New Supplier Ltd", classificationIds: ["k1"] });
+    expect(body).toMatchObject({ code: "new1", name: "New Supplier Ltd", classificationIds: ["k1"], addressLine3: "Industrial Park", currency: "EUR" });
     expect(body).not.toHaveProperty("approvalStatus");
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Suppliers/s9"));
   });

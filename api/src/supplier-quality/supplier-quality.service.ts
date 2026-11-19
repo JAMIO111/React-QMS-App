@@ -30,7 +30,7 @@ const SORT_SQL: Record<SupplierListQuery['sort'], string> = {
 /** API field → column, for creating and editing a supplier. */
 const SUPPLIER_COLUMNS: Record<string, string> = {
   code: 'code', name: 'name', displayName: 'display_name', companyNumber: 'company_number', vatNumber: 'vat_number', notes: 'notes', supplierType: 'supplier_type',
-  country: 'country', addressLine1: 'address_line1', addressLine2: 'address_line2', city: 'city', region: 'region', postcode: 'postcode', website: 'website', email: 'email',
+  country: 'country', addressLine1: 'address_line1', addressLine2: 'address_line2', addressLine3: 'address_line3', currency: 'currency', city: 'city', region: 'region', postcode: 'postcode', website: 'website', email: 'email',
   phone: 'phone', purchasingReference: 'purchasing_reference', active: 'active',
 };
 const CONTACT_COLUMNS: Record<string, string> = { name: 'name', jobTitle: 'job_title', role: 'role', email: 'email', phone: 'phone', isPrimary: 'is_primary', active: 'active', notes: 'notes' };
@@ -131,7 +131,7 @@ export class SupplierQualityService {
 
   private async load(db: Db, ctx: RequestContext, id: string): Promise<SupplierDetail> {
     const res = await db.execute<Row>(sql`
-      select ${LIST_COLUMNS}, s.company_number, s.vat_number, s.notes, s.address_line1, s.address_line2, s.region, s.postcode, s.website, s.email, s.phone, s.purchasing_reference,
+      select ${LIST_COLUMNS}, s.company_number, s.vat_number, s.notes, s.address_line1, s.address_line2, s.address_line3, s.currency, s.region, s.postcode, s.website, s.email, s.phone, s.purchasing_reference,
              s.approval_status_changed_by, ${sql.raw(personName('pc'))} as changed_by_name,
              (select h.conditions from public.supplier_status_history h where h.supplier_id = s.id and h.to_status = 'conditional' and s.approval_status = 'conditional' order by h.changed_at desc limit 1) as conditions,
              (select h.review_on::text from public.supplier_status_history h where h.supplier_id = s.id and h.to_status = 'conditional' and s.approval_status = 'conditional' order by h.changed_at desc limit 1) as review_on,
@@ -156,6 +156,8 @@ export class SupplierQualityService {
       notes: (r.notes as string) ?? null,
       addressLine1: (r.address_line1 as string) ?? null,
       addressLine2: (r.address_line2 as string) ?? null,
+      addressLine3: (r.address_line3 as string) ?? null,
+      currency: (r.currency as string) ?? null,
       region: (r.region as string) ?? null,
       postcode: (r.postcode as string) ?? null,
       website: (r.website as string) ?? null,

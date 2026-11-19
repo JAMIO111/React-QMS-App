@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { BuildingIcon, CalendarIcon, CircleAlertIcon, CircleCheckIcon, HashIcon, MapPinIcon, TagsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BuildingIcon, CalendarIcon, CircleAlertIcon, CoinsIcon, CircleCheckIcon, HashIcon, MapPinIcon, TagsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 import { typeLabel } from "../../lib/supplierQuality";
+import { countryName } from "../../lib/onboarding";
 import { formatDate } from "../../lib/ncr";
 import { ActivityBadge, ApprovalPill, RiskBadge } from "./SupplierBadges";
 
@@ -72,7 +73,14 @@ export const supplierColumns = [
     { size: 240, minSize: 120, maxSize: 600 }
   ),
   col("riskRating", "Risk", head(TriangleAlertIcon, "Risk", "table-header-number"), (i) => <RiskBadge risk={i.row.original.riskRating} />, { size: 150, minSize: 130, sortKey: "riskRating", align: "center" }),
-  col("country", "Location", head(MapPinIcon, "Location"), plain((r) => [r.city, r.country].filter(Boolean).join(", ")), { size: 160, sortKey: "country" }),
+  col("currency", "Currency", head(CoinsIcon, "Currency"), plain((r) => r.currency), { size: 110, sortKey: "currency" }),
+  col("addressLine1", "Address line 1", head(MapPinIcon, "Address line 1"), plain((r) => r.addressLine1), { size: 200, sortKey: "addressLine1" }),
+  col("addressLine2", "Address line 2", head(MapPinIcon, "Address line 2"), plain((r) => r.addressLine2), { size: 180 }),
+  col("addressLine3", "Address line 3", head(MapPinIcon, "Address line 3"), plain((r) => r.addressLine3), { size: 180 }),
+  col("city", "Town or city", head(MapPinIcon, "Town or city"), plain((r) => r.city), { size: 150, sortKey: "city" }),
+  col("region", "County, state or region", head(MapPinIcon, "County, state or region"), plain((r) => r.region), { size: 180, sortKey: "region" }),
+  col("postcode", "Postcode", head(MapPinIcon, "Postcode"), plain((r) => r.postcode), { size: 110, sortKey: "postcode" }),
+  col("country", "Country", head(MapPinIcon, "Country"), plain((r) => (r.country ? countryName(r.country) : null)), { size: 160, sortKey: "country" }),
   col(
     "primaryContact",
     "Primary contact",
@@ -108,4 +116,4 @@ export const supplierColumns = [
 ];
 
 /** Shown until a user changes the column set. */
-export const DEFAULT_HIDDEN = { primaryContact: false, createdAt: false, active: false };
+export const DEFAULT_HIDDEN = { primaryContact: false, createdAt: false, active: false, addressLine1: false, addressLine2: false, addressLine3: false, city: false, region: false, postcode: false, country: false };

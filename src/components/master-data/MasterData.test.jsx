@@ -243,6 +243,24 @@ describe("PartiesPage", () => {
     expect(bodies[1][1]).toMatchObject({ code: "ACME", active: false });
   });
 
+  it("lists the currency by default and the address columns only when chosen", async () => {
+    routeApi({
+      "GET /customers": page([{ id: "c1", code: "ACME", name: "Acme Fabrication Ltd", displayName: null, companyNumber: null, vatNumber: null, notes: null, addressLine1: "1 High Street", addressLine2: null, addressLine3: "Trading Estate", city: "Leeds", region: "West Yorkshire", postcode: "LS1 1AA", country: "GB", currency: "GBP", active: true }]),
+    });
+    renderAt("/Customers");
+    const table = await screen.findByRole("region", { name: "Customers" });
+    await within(table).findByText("ACME");
+    expect(within(table).getByRole("columnheader", { name: /Currency/ })).toBeInTheDocument();
+    expect(within(table).getByText("GBP")).toBeInTheDocument();
+    for (const name of ["Address line 1", "Address line 3", "Town or city", "County, state or region", "Postcode", "Country"]) {
+      expect(within(table).queryByRole("columnheader", { name: new RegExp(name) })).toBeNull();
+    }
+    await userEvent.click(screen.getByRole("button", { name: /^Columns/ }));
+    const menu = await screen.findByRole("dialog", { name: "Columns" });
+    await userEvent.click(within(menu).getByText("Postcode"));
+    expect(await within(table).findByText("LS1 1AA")).toBeInTheDocument();
+  });
+
   it("asks for an address and a currency, and sends them", async () => {
     const bodies = [];
     routeApi({

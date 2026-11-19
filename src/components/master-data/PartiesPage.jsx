@@ -15,6 +15,7 @@ import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 import CustomerContacts from "./CustomerContacts";
 import AddressFields from "./AddressFields";
+import { ADDRESS_DEFAULT_HIDDEN, addressColumns, currencyColumn } from "./addressColumns";
 import { addressBody, EMPTY_ADDRESS } from "../../lib/address";
 
 /** The custom-field kind of record for each register. */
@@ -140,6 +141,8 @@ const PartiesPage = ({ kind }) => {
       { id: "name", accessorKey: "name", header: "Name", headerString: "Name", size: 260, cell: (i) => <span className="table-row-item">{i.getValue()}</span> },
       { id: "displayName", accessorKey: "displayName", header: "Display name", headerString: "Display name", size: 180, cell: (i) => <span className="table-row-item">{i.getValue() ?? "—"}</span> },
       { id: "vatNumber", accessorKey: "vatNumber", header: "VAT number", headerString: "VAT number", size: 150, cell: (i) => <span className="table-row-item">{i.getValue() ?? "—"}</span> },
+      currencyColumn(),
+      ...addressColumns(),
       { id: "active", accessorKey: "active", header: "Status", headerString: "Status", size: 110, meta: { align: "center" }, cell: (i) => <ActiveBadge active={i.getValue()} /> },
     ],
     [canManage]
@@ -167,6 +170,7 @@ const PartiesPage = ({ kind }) => {
       <DataList entityType={ENTITY_TYPES[kind]}
         storageKey={`master:${kind}`}
         columns={columns}
+        defaultHidden={ADDRESS_DEFAULT_HIDDEN}
         query={query}
         ariaLabel={label.title}
         emptyMessage={q ? `No ${label.title.toLowerCase()} match “${q}”.` : `No ${label.title.toLowerCase()} yet.`}

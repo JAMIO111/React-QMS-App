@@ -29,7 +29,7 @@ const text = (max: number) =>
 
 // ---- input ---------------------------------------------------------------------------------------
 
-export const SUPPLIER_SORTS = ['code', 'name', 'supplierType', 'approvalStatus', 'riskRating', 'country', 'openNcs', 'createdAt'] as const;
+export const SUPPLIER_SORTS = ['code', 'name', 'supplierType', 'approvalStatus', 'riskRating', 'addressLine1', 'city', 'region', 'postcode', 'country', 'currency', 'openNcs', 'createdAt'] as const;
 
 export const SupplierListQuery = z.object({
   q: z.string().trim().min(1).max(100).optional(),
@@ -160,8 +160,16 @@ export const SupplierRow = z.object({
   name: z.string(),
   displayName: z.string().nullable(),
   supplierType: SupplierType.nullable(),
-  country: z.string().nullable(),
+  addressLine1: z.string().nullable(),
+  addressLine2: z.string().nullable(),
+  addressLine3: z.string().nullable(),
   city: z.string().nullable(),
+  /** County, state or region. */
+  region: z.string().nullable(),
+  postcode: z.string().nullable(),
+  country: z.string().nullable(),
+  /** ISO 4217 code: the currency they are traded with in. */
+  currency: z.string().nullable(),
   approvalStatus: ApprovalStatus,
   approvalStatusChangedAt: Iso.nullable(),
   active: z.boolean(),

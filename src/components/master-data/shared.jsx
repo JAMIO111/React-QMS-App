@@ -5,6 +5,7 @@ import Table from "../Table";
 import CTAButton from "../CTAButton";
 import { SearchIcon } from "@/components/icons";
 import { useTablePreferences } from "../../hooks/useTablePreferences";
+import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
 import { useColumnSizingInfo } from "../../hooks/useColumnSizingInfo";
 import { describeApiError } from "../../lib/api-client";
 
@@ -42,17 +43,19 @@ const NO_ROWS = [];
  * A master-data list: the shared Table with resizable, hideable, reorderable columns remembered under
  * `storageKey`, rows from a paged query, and "Load more".
  */
-export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ariaLabel, entityType }) => {
+export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ariaLabel, entityType, defaultHidden }) => {
   const prefs = useTablePreferences(storageKey);
   const sizingInfo = useColumnSizingInfo();
   // The kind of record's custom fields as extra columns, hidden until someone shows them.
   const custom = useCustomColumns(entityType);
   const allColumns = useMemo(() => (entityType ? [...columns, ...custom.columns] : columns), [columns, custom.columns, entityType]);
-  const visibility = useMemo(() => ({ ...custom.defaultHidden, ...prefs.columnVisibility }), [custom.defaultHidden, prefs.columnVisibility]);
+  // Hidden until someone shows them: the caller's own list, then the custom fields'.
+  const hiddenAtFirst = useMemo(() => ({ ...defaultHidden, ...custom.defaultHidden }), [defaultHidden, custom.defaultHidden]);
+  const visibility = useMemo(() => ({ ...hiddenAtFirst, ...prefs.columnVisibility }), [hiddenAtFirst, prefs.columnVisibility]);
   const { setColumnVisibility } = prefs;
   const onVisibility = useCallback(
-    (updater) => setColumnVisibility((saved) => (typeof updater === "function" ? updater({ ...custom.defaultHidden, ...saved }) : updater)),
-    [setColumnVisibility, custom.defaultHidden],
+    (updater) => setColumnVisibility((saved) => (typeof updater === "function" ? updater({ ...hiddenAtFirst, ...saved }) : updater)),
+    [setColumnVisibility, hiddenAtFirst],
   );
   const table = useReactTable({
     data: query.data?.items ?? NO_ROWS, // a stable fallback: a fresh [] each render re-triggers TanStack's page reset in a loop
@@ -76,6 +79,16 @@ export const DataList = ({ storageKey, columns, query, onOpen, emptyMessage, ari
   if (query.error) return <ErrorNotice error={query.error} />;
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border-color">
+      <div className="flex justify-end border-b border-border-color p-2">
+        <ColumnVisibilityMenu
+          columns={allColumns}
+          columnVisibility={visibility}
+          onColumnVisibilityChange={onVisibility}
+          columnOrder={prefs.columnOrder}
+          onColumnOrderChange={prefs.setColumnOrder}
+          onReset={prefs.resetColumns}
+        />
+      </div>
       <div className="min-h-0 flex-1">
         <Table
           table={table}

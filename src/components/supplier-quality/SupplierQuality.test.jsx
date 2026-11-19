@@ -99,7 +99,7 @@ describe("supplier register", () => {
     await within(table).findByRole("link", { name: "ACME" });
     expect(within(table).getByRole("columnheader", { name: /Currency/ })).toBeInTheDocument();
     expect(within(table).getAllByText("GBP").length).toBeGreaterThan(0);
-    for (const name of ["Address line 1", "Address line 2", "Address line 3", "Town or city", "County, state or region", "Postcode", "Country"]) {
+    for (const name of ["Company email", "Company phone", "Company website", "Address line 1", "Address line 2", "Address line 3", "Town or city", "County, state or region", "Postcode", "Country"]) {
       expect(within(table).queryByRole("columnheader", { name: new RegExp(name) })).toBeNull();
     }
     await userEvent.click(screen.getByRole("button", { name: /^Columns/ }));

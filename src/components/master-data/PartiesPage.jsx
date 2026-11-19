@@ -15,8 +15,9 @@ import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 import CustomerContacts from "./CustomerContacts";
 import AddressFields from "./AddressFields";
-import { ADDRESS_DEFAULT_HIDDEN, addressColumns, currencyColumn } from "./addressColumns";
-import { addressBody, EMPTY_ADDRESS } from "../../lib/address";
+import CompanyContactFields from "./CompanyContactFields";
+import { ADDRESS_DEFAULT_HIDDEN, addressColumns, companyContactColumns, currencyColumn } from "./addressColumns";
+import { addressBody, companyContactBody, EMPTY_ADDRESS, EMPTY_COMPANY_CONTACT } from "../../lib/address";
 
 /** The custom-field kind of record for each register. */
 const ENTITY_TYPES = { customers: "customer", suppliers: "supplier" };
@@ -26,7 +27,7 @@ const LABELS = {
   suppliers: { title: "Suppliers", one: "supplier", intro: "Organisations that supply you. Supplier non-conformances link to them." },
 };
 
-const emptyForm = { code: "", name: "", displayName: "", companyNumber: "", vatNumber: "", ...EMPTY_ADDRESS, notes: "", active: true };
+const emptyForm = { code: "", name: "", displayName: "", companyNumber: "", vatNumber: "", ...EMPTY_COMPANY_CONTACT, ...EMPTY_ADDRESS, notes: "", active: true };
 
 const PartyForm = ({ kind, party, onDone }) => {
   const mutation = useMasterDataMutation();
@@ -47,6 +48,7 @@ const PartyForm = ({ kind, party, onDone }) => {
       displayName: form.displayName.trim(),
       companyNumber: form.companyNumber.trim(),
       vatNumber: form.vatNumber.trim(),
+      ...companyContactBody(form),
       ...addressBody(form),
       notes: form.notes.trim(),
       ...(party ? { active: form.active } : withCustomValues(customValues)),
@@ -76,6 +78,7 @@ const PartyForm = ({ kind, party, onDone }) => {
         <Field label="Display name" value={form.displayName} onChange={set("displayName")} maxLength={100} hint="Shown in lists (optional)" />
         <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} />
         <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} />
+        <CompanyContactFields form={form} set={set} />
         <AddressFields form={form} set={set} pick={pick} />
       </div>
       <label className="flex flex-col gap-1 text-sm font-medium text-primary-text">
@@ -142,6 +145,7 @@ const PartiesPage = ({ kind }) => {
       { id: "displayName", accessorKey: "displayName", header: "Display name", headerString: "Display name", size: 180, cell: (i) => <span className="table-row-item">{i.getValue() ?? "—"}</span> },
       { id: "vatNumber", accessorKey: "vatNumber", header: "VAT number", headerString: "VAT number", size: 150, cell: (i) => <span className="table-row-item">{i.getValue() ?? "—"}</span> },
       currencyColumn(),
+      ...companyContactColumns(),
       ...addressColumns(),
       { id: "active", accessorKey: "active", header: "Status", headerString: "Status", size: 110, meta: { align: "center" }, cell: (i) => <ActiveBadge active={i.getValue()} /> },
     ],

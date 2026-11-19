@@ -27,6 +27,10 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT address_line3 || '|' || region || '|' || currency FROM public.customers WHERE id = c), 'Trading Estate|West Yorkshire|GBP', 'a customer keeps its address and currency');
   PERFORM pg_temp.assert_eq((SELECT address_line3 || '|' || currency FROM public.suppliers WHERE id = s), 'Industrial Park|EUR', 'a supplier keeps address line 3 and its currency');
   PERFORM pg_temp.assert_ok(format($q$INSERT INTO public.customers (organisation_id, code, name) VALUES (%L, 'PLAIN', 'No address')$q$, org), 'every address column is optional');
+  PERFORM pg_temp.assert_ok(format($q$UPDATE public.customers SET email = 'info@acme.test', phone = '0113 496 0000', website = 'https://acme.test' WHERE id = %L$q$, c), 'a customer keeps the company''s general email, phone and website, as a supplier does');
+  PERFORM pg_temp.assert_eq((SELECT email || '|' || phone || '|' || website FROM public.customers WHERE id = c), 'info@acme.test|0113 496 0000|https://acme.test', 'and they are kept');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.customers SET phone = '1' WHERE id = %L$q$, c), 'a phone number needs at least three characters, as for suppliers');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.customers SET email = %L WHERE id = %L$q$, repeat('x', 201), c), 'an email is at most 200 characters');
 
   -- shape
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.customers SET country = 'gb' WHERE id = %L$q$, c), 'a country is two capital letters');
@@ -45,10 +49,12 @@ BEGIN
   PERFORM pg_temp.logout();
 
   -- imports: a new record takes every mapped field; an update only the mapped ones; the currency is capitalised
-  v := app.import_customer(org, NULL, '{"code":"NEWCO","name":"Newco","addressLine1":"9 Road","addressLine3":"Park","city":"Hull","region":"East Yorkshire","postcode":"HU1 1AA","country":"GB","currency":"eur"}'::jsonb);
+  v := app.import_customer(org, NULL, '{"code":"NEWCO","name":"Newco","addressLine1":"9 Road","addressLine3":"Park","city":"Hull","region":"East Yorkshire","postcode":"HU1 1AA","country":"GB","currency":"eur","email":"info@newco.test","phone":"01482 000000","website":"https://newco.test"}'::jsonb);
   PERFORM pg_temp.assert_eq((SELECT address_line1 || '|' || address_line3 || '|' || city || '|' || region || '|' || postcode || '|' || country || '|' || currency FROM public.customers WHERE id = v),
     '9 Road|Park|Hull|East Yorkshire|HU1 1AA|GB|EUR', 'an imported customer takes the address and a capitalised currency');
+  PERFORM pg_temp.assert_eq((SELECT email || '|' || phone || '|' || website FROM public.customers WHERE id = v), 'info@newco.test|01482 000000|https://newco.test', 'and the company email, phone and website');
   PERFORM app.import_customer(org, v, '{"city":"York"}'::jsonb);
+  PERFORM pg_temp.assert_eq((SELECT email FROM public.customers WHERE id = v), 'info@newco.test', 'an update that does not map the email leaves it');
   PERFORM pg_temp.assert_eq((SELECT city || '|' || address_line1 || '|' || currency FROM public.customers WHERE id = v), 'York|9 Road|EUR', 'an update changes only what is mapped');
   PERFORM app.import_customer(org, v, '{"currency":null}'::jsonb);
   PERFORM pg_temp.assert_eq((SELECT currency FROM public.customers WHERE id = v) IS NULL, true, 'a mapped, empty currency clears it');

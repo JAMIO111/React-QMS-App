@@ -98,18 +98,19 @@ describe('real imports from a file', () => {
   });
 
   it('imports customers with an address and a currency, capitalising the currency and changing only mapped fields on an update', async () => {
-    const fileId = await upload('customers.csv', ['Id,Code,Name,Street,Estate,Town,County,Zip,Land,Cur', '1,ADDRC1,Addr Customer,1 High St,Trading Estate,Leeds,West Yorkshire,LS1 1AA,gb,gbp'].join('\n'));
+    const fileId = await upload('customers.csv', ['Id,Code,Name,Street,Estate,Town,County,Zip,Land,Cur,Mail,Tel', '1,ADDRC1,Addr Customer,1 High St,Trading Estate,Leeds,West Yorkshire,LS1 1AA,gb,gbp,info@addr.test,0113 000000'].join('\n'));
     await api().put(`${base}/connections/${connId}/mapping`).set(await owner()).send({
       entityType: 'customer', keyField: 'Id', fileId,
       fields: [
         { target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }, { target: 'addressLine1', source: 'Street' }, { target: 'addressLine3', source: 'Estate' },
         { target: 'city', source: 'Town' }, { target: 'region', source: 'County' }, { target: 'postcode', source: 'Zip' }, { target: 'country', source: 'Land' }, { target: 'currency', source: 'Cur' },
+        { target: 'email', source: 'Mail' }, { target: 'phone', source: 'Tel' },
       ],
     }).expect(200);
     const first = await run('customer', 'full', fileId);
     expect(first).toMatchObject({ status: 'succeeded', counts: { total: 1, created: 1 } });
-    const row = (await admin.query(`select address_line1, address_line2, address_line3, city, region, postcode, country, currency from public.customers where organisation_id = $1 and code = 'ADDRC1'`, [ids.orgA])).rows[0];
-    expect(row).toEqual({ address_line1: '1 High St', address_line2: null, address_line3: 'Trading Estate', city: 'Leeds', region: 'West Yorkshire', postcode: 'LS1 1AA', country: 'GB', currency: 'GBP' });
+    const row = (await admin.query(`select address_line1, address_line2, address_line3, city, region, postcode, country, currency, email, phone from public.customers where organisation_id = $1 and code = 'ADDRC1'`, [ids.orgA])).rows[0];
+    expect(row).toEqual({ address_line1: '1 High St', address_line2: null, address_line3: 'Trading Estate', city: 'Leeds', region: 'West Yorkshire', postcode: 'LS1 1AA', country: 'GB', currency: 'GBP', email: 'info@addr.test', phone: '0113 000000' });
     const bad = await upload('customers-bad.csv', ['Id,Code,Name,Cur', '2,ADDRC2,Bad currency,pounds'].join('\n'));
     await api().put(`${base}/connections/${connId}/mapping`).set(await owner()).send({ entityType: 'customer', keyField: 'Id', fileId: bad, reason: 'A file with a bad currency', fields: [{ target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }, { target: 'currency', source: 'Cur' }] }).expect(200);
     const rejected = await run('customer', 'full', bad);

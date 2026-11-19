@@ -9,6 +9,7 @@ import RHFComboBox from "../ui/RHFComboBox";
 import Switch from "../ui/Switch";
 import { FormError } from "../master-data/shared";
 import AddressFields from "../master-data/AddressFields";
+import CompanyContactFields from "../master-data/CompanyContactFields";
 import { addressBody, EMPTY_ADDRESS } from "../../lib/address";
 import CTAButton from "@/components/CTAButton";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
@@ -93,9 +94,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
           <Field label="Purchasing reference" value={form.purchasingReference} onChange={set("purchasingReference")} maxLength={60} hint="Their account or vendor number in purchasing" />
           <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} />
           <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} />
-          <Field label="Website" value={form.website} onChange={set("website")} maxLength={200} />
-          <Field label="Email" value={form.email} onChange={set("email")} maxLength={200} />
-          <Field label="Phone" value={form.phone} onChange={set("phone")} maxLength={40} />
+          <CompanyContactFields form={form} set={set} />
           <AddressFields form={form} set={set} pick={pick} />
         </div>
         <fieldset>

@@ -48,6 +48,9 @@ const partyColumns = (t: PartyTable) => ({
   postcode: t.postcode,
   country: t.country,
   currency: t.currency,
+  email: t.email,
+  phone: t.phone,
+  website: t.website,
   active: t.active,
 });
 

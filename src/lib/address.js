@@ -16,3 +16,11 @@ export const addressBody = (form) => {
   };
 };
 
+
+/** The company's own general line: email, phone and web site. Not a person: people are the contacts, as many as needed with one primary. */
+export const EMPTY_COMPANY_CONTACT = { email: "", phone: "", website: "" };
+
+export const companyContactBody = (form) => {
+  const text = (v) => (typeof v === "string" ? v.trim() || null : null);
+  return { email: text(form.email), phone: text(form.phone), website: text(form.website) };
+};

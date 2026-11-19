@@ -232,7 +232,7 @@ describe("PartiesPage", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Add customer" }));
     expect(bodies[0]).toEqual([
       "POST",
-      { code: "BOREAL", name: "Boreal Tooling Ltd", displayName: "", companyNumber: "", vatNumber: "", notes: "", addressLine1: null, addressLine2: null, addressLine3: null, city: null, region: null, postcode: null, country: null, currency: null },
+      { code: "BOREAL", name: "Boreal Tooling Ltd", displayName: "", companyNumber: "", vatNumber: "", notes: "", email: null, phone: null, website: null, addressLine1: null, addressLine2: null, addressLine3: null, city: null, region: null, postcode: null, country: null, currency: null },
     ]);
 
     await userEvent.click(await screen.findByRole("button", { name: "ACME" }));
@@ -252,7 +252,7 @@ describe("PartiesPage", () => {
     await within(table).findByText("ACME");
     expect(within(table).getByRole("columnheader", { name: /Currency/ })).toBeInTheDocument();
     expect(within(table).getByText("GBP")).toBeInTheDocument();
-    for (const name of ["Address line 1", "Address line 3", "Town or city", "County, state or region", "Postcode", "Country"]) {
+    for (const name of ["Company email", "Company phone", "Company website", "Address line 1", "Address line 3", "Town or city", "County, state or region", "Postcode", "Country"]) {
       expect(within(table).queryByRole("columnheader", { name: new RegExp(name) })).toBeNull();
     }
     await userEvent.click(screen.getByRole("button", { name: /^Columns/ }));
@@ -275,6 +275,9 @@ describe("PartiesPage", () => {
     }
     await userEvent.type(within(dialog).getByLabelText("Code"), "ADDR");
     await userEvent.type(within(dialog).getByLabelText("Name"), "Addressed Ltd");
+    await userEvent.type(within(dialog).getByLabelText("Company email"), "info@addressed.test");
+    await userEvent.type(within(dialog).getByLabelText("Company phone"), "0113 496 0000");
+    expect(within(dialog).getByText(/People go under Contacts/)).toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText("Address line 1"), " 1 High Street ");
     await userEvent.type(within(dialog).getByLabelText("Address line 3"), "Trading Estate");
     await userEvent.type(within(dialog).getByLabelText("Town or city"), "Leeds");
@@ -286,7 +289,7 @@ describe("PartiesPage", () => {
     await userEvent.click(await screen.findByRole("option", { name: /^GBP/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Add customer" }));
     expect(bodies[0]).toMatchObject({
-      code: "ADDR", name: "Addressed Ltd", addressLine1: "1 High Street", addressLine2: null, addressLine3: "Trading Estate", city: "Leeds", region: "West Yorkshire", postcode: "LS1 1AA", country: "GB", currency: "GBP",
+      code: "ADDR", name: "Addressed Ltd", email: "info@addressed.test", phone: "0113 496 0000", website: null, addressLine1: "1 High Street", addressLine2: null, addressLine3: "Trading Estate", city: "Leeds", region: "West Yorkshire", postcode: "LS1 1AA", country: "GB", currency: "GBP",
     });
   });
 

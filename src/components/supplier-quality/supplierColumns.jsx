@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BuildingIcon, CalendarIcon, CircleAlertIcon, CoinsIcon, CircleCheckIcon, HashIcon, MapPinIcon, TagsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BuildingIcon, CalendarIcon, CircleAlertIcon, CoinsIcon, GlobeIcon, MailIcon, PhoneIcon, CircleCheckIcon, HashIcon, MapPinIcon, TagsIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 import { typeLabel } from "../../lib/supplierQuality";
 import { countryName } from "../../lib/onboarding";
 import { formatDate } from "../../lib/ncr";
@@ -73,6 +73,9 @@ export const supplierColumns = [
     { size: 240, minSize: 120, maxSize: 600 }
   ),
   col("riskRating", "Risk", head(TriangleAlertIcon, "Risk", "table-header-number"), (i) => <RiskBadge risk={i.row.original.riskRating} />, { size: 150, minSize: 130, sortKey: "riskRating", align: "center" }),
+  col("email", "Company email", head(MailIcon, "Company email"), plain((r) => r.email), { size: 220 }),
+  col("phone", "Company phone", head(PhoneIcon, "Company phone"), plain((r) => r.phone), { size: 150 }),
+  col("website", "Company website", head(GlobeIcon, "Company website"), plain((r) => r.website), { size: 200 }),
   col("currency", "Currency", head(CoinsIcon, "Currency"), plain((r) => r.currency), { size: 110, sortKey: "currency" }),
   col("addressLine1", "Address line 1", head(MapPinIcon, "Address line 1"), plain((r) => r.addressLine1), { size: 200, sortKey: "addressLine1" }),
   col("addressLine2", "Address line 2", head(MapPinIcon, "Address line 2"), plain((r) => r.addressLine2), { size: 180 }),
@@ -116,4 +119,4 @@ export const supplierColumns = [
 ];
 
 /** Shown until a user changes the column set. */
-export const DEFAULT_HIDDEN = { primaryContact: false, createdAt: false, active: false, addressLine1: false, addressLine2: false, addressLine3: false, city: false, region: false, postcode: false, country: false };
+export const DEFAULT_HIDDEN = { primaryContact: false, createdAt: false, active: false, email: false, phone: false, website: false, addressLine1: false, addressLine2: false, addressLine3: false, city: false, region: false, postcode: false, country: false };

@@ -62,6 +62,10 @@ describe('customers and suppliers', () => {
     expect(changed.body).toMatchObject({ addressLine3: null, currency: 'EUR', city: 'Hull', addressLine1: '1 High Street' });
     const s = await api().post('/api/v1/suppliers').set(h).send({ code: 'ADDRS', name: 'Supplier', ...address, currency: 'usd' }).expect(201);
     expect(s.body).toMatchObject({ addressLine3: 'Trading Estate', currency: 'USD', country: 'GB' });
+    const company = await api().post('/api/v1/customers').set(h).send({ code: 'ADDR6', name: 'Company line', email: ' info@acme.test ', phone: '0113 496 0000', website: 'https://acme.test' }).expect(201);
+    expect(company.body).toMatchObject({ email: 'info@acme.test', phone: '0113 496 0000', website: 'https://acme.test' });
+    const cleared = await api().patch(`/api/v1/customers/${company.body.id}`).set(h).send({ phone: '' }).expect(200);
+    expect(cleared.body).toMatchObject({ phone: null, email: 'info@acme.test' });
     await api().post('/api/v1/customers').set(h).send({ code: 'ADDR3', name: 'Bad', country: 'GBR' }).expect(400);
     await api().post('/api/v1/customers').set(h).send({ code: 'ADDR4', name: 'Bad', currency: 'POUNDS' }).expect(400);
     await api().post('/api/v1/customers').set(h).send({ code: 'ADDR5', name: 'Bad', addressLine1: 'x'.repeat(121) }).expect(400);

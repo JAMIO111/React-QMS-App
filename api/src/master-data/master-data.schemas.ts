@@ -45,6 +45,10 @@ export const Party = z.object({
   country: z.string().nullable(),
   /** ISO 4217 code, e.g. GBP: the currency they are traded with in. */
   currency: z.string().nullable(),
+  /** The company's general email, phone and web site (not a person: people are contacts). */
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  website: z.string().nullable(),
   active: z.boolean(),
   customValues: CustomValues.optional(),
 });
@@ -74,6 +78,9 @@ const partyFields = {
   postcode: optionalText(20),
   country: optionalCode(/^[A-Z]{2}$/, 'Use a two-letter country code, e.g. GB'),
   currency: optionalCode(/^[A-Z]{3}$/, 'Use a three-letter currency code, e.g. GBP'),
+  email: optionalText(200),
+  phone: optionalText(40),
+  website: optionalText(200),
 };
 export const CreatePartyBody = z.object({ ...partyFields, customValues: CustomValuesInput.optional() }).strict();
 export const UpdatePartyBody = z

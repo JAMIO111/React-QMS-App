@@ -53,6 +53,10 @@ import { NcrService } from './ncr/ncr.service';
 import { NcrAttachmentsController, NcrChildRecordsController, NcrCostsController } from './ncr/ncr-records.controller';
 import { NcrRecordsService } from './ncr/ncr-records.service';
 import { NcrDashboardController, NcrDashboardService } from './ncr/ncr-dashboard';
+import { CostCurrencyService } from './currency/cost-currency.service';
+import { CurrencyController } from './currency/currency.controller';
+import { ExchangeRateGateway, FrankfurterGateway, UnavailableGateway } from './currency/exchange-rate.gateway';
+import { ExchangeRateService } from './currency/exchange-rate.service';
 import { MeController } from './me/me.controller';
 import { OnboardingController } from './onboarding/onboarding.controller';
 import { OnboardingService } from './onboarding/onboarding.service';
@@ -251,6 +255,7 @@ export class AppModule implements NestModule {
         NcrCostsController,
         NcrAttachmentsController,
         NcrDashboardController,
+        CurrencyController,
         NcrClassificationsController,
         NcrSourceCategoriesController,
         EmployeesController,
@@ -389,6 +394,13 @@ export class AppModule implements NestModule {
         BillingService,
         StripeBillingService,
         { provide: StripeGateway, useClass: StripeSdkGateway },
+        {
+          provide: ExchangeRateGateway,
+          useFactory: (env: Env): ExchangeRateGateway => (env.EXCHANGE_RATES === 'off' || env.NODE_ENV === 'test' ? new UnavailableGateway() : new FrankfurterGateway(env.FRANKFURTER_URL)),
+          inject: [ENV],
+        },
+        ExchangeRateService,
+        CostCurrencyService,
         NotificationsService,
         SavedFiltersService,
         CustomFieldsService,

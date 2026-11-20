@@ -1,3 +1,4 @@
+import { ExchangeRateService } from '../currency/exchange-rate.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
@@ -57,6 +58,7 @@ export class WorkerService {
     private readonly workflows: WorkflowEngine,
     private readonly scorecards: SupplierPerformanceService,
     private readonly sso: SsoService,
+    private readonly exchangeRates: ExchangeRateService,
   ) {}
 
   /** Small clean-ups: blocked access attempts older than 90 days (docs/security-plan.md S8) and connector agents' request nonces older than ten minutes. */
@@ -127,6 +129,7 @@ export class WorkerService {
     await step('agent-imports', () => this.agentImports(correlationId), 2_000);
     await step('imports', () => this.cron.integrationRuns(10, correlationId, Math.min(25_000, left() - 2_000)), 4_000);
     await step('housekeeping', () => this.housekeeping(correlationId), 1_000);
+    await step('exchange-rates', () => this.exchangeRates.settle(null, correlationId, Math.min(8_000, left() - 2_000)), 2_000);
     await step('sso-domains', () => this.sso.recheckDue(correlationId, 10), 2_000);
 
     // Partial when a step failed; error when every step that ran failed.

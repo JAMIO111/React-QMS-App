@@ -41,6 +41,10 @@ const EnvSchema = z
     RESEND_API_KEY: z.string().regex(/^re_[A-Za-z0-9_]{10,}$/, 'must be a Resend API key').optional(),
     /** The sender, e.g. `Fortress QMS <alerts@example.com>`; the domain must be verified with the provider. */
     MAIL_FROM: z.string().max(200).regex(/^([^<>\r\n]+<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/, 'must be an address, optionally with a name: Name <address>').optional(),
+    /** Published exchange rates for costs in another currency (docs/cost-currency-plan.md): frankfurter (default) or off (lines wait for a rate you state). */
+    EXCHANGE_RATES: z.enum(['frankfurter', 'off']).default('frankfurter'),
+    /** Where Frankfurter is (a self-hosted copy works too). */
+    FRANKFURTER_URL: z.string().url().default('https://api.frankfurter.dev'),
     JWT_AUDIENCE: z.string().default('authenticated'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),

@@ -40,7 +40,7 @@ describe('mapping problems', () => {
         { target: 'email' },
       ],
     });
-    expect(p).toEqual(expect.arrayContaining(['Code: give the value every record gets', 'Name: join at least two columns', 'Supplier type: list the values to translate', 'Email: choose a column or a default']));
+    expect(p).toEqual(expect.arrayContaining(['Code: give the value every record gets', 'Name: join at least two columns', 'Supplier type: list the values to translate', 'Company email: choose a column or a default']));
   });
 });
 

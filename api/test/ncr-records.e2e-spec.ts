@@ -3,9 +3,14 @@
  * restore, upload-folder rules, locking with the NCR, site scoping and permissions.
  */
 import { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { Test } from '@nestjs/testing';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { categoryId, makeIds, requireDb, seed, settleNcr, startApp, token } from './helpers';
+import { configureApp } from '../src/app.factory';
+import { AppModule } from '../src/app.module';
+import { ExchangeRateGateway } from '../src/currency/exchange-rate.gateway';
+import { categoryId, makeIds, requireDb, seed, settleNcr, testEnv, token } from './helpers';
 
 const ids = makeIds(8);
 let app: INestApplication;
@@ -22,7 +27,12 @@ const upload = (path: string) => admin.query(`insert into storage.objects (bucke
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-ncr-records');
-  app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
+  const env = testEnv({ RATE_LIMIT_PER_MINUTE: '10000' });
+  // Published rates come from a fake source: euros are worth 0.85 pounds.
+  const rates: ExchangeRateGateway = { fetch: async (on, _base, quotes) => ({ rateDate: on, rates: Object.fromEntries(quotes.map((q) => [q, q === 'GBP' ? 0.85 : null])) }) };
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(ExchangeRateGateway).useValue(rates).compile();
+  app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, rawBody: true }), env);
+  await app.init();
   const one = async (q: string, params: unknown[]) => (await admin.query(q, params)).rows[0];
   await admin.query(`insert into storage.buckets (id, name) values ('nc-files', 'nc-files') on conflict do nothing`);
   await admin.query(`update public.organisation_settings set base_currency = 'GBP', vat_rate = 0.2 where organisation_id = $1`, [ids.orgA]);
@@ -50,19 +60,19 @@ describe('costs', () => {
     const h = await as(ids.ownerA);
     const inc = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h)
       .send({ costType: 'scrap', currency: 'gbp', vatTreatment: 'inclusive', vatRate: 0.2, quantity: 4, unitCost: 30, description: 'Scrapped bar' }).expect(201);
-    expect(inc.body).toMatchObject({ costType: 'scrap', currency: 'GBP', quantity: 4, unitCost: 30, amount: 120, netAmount: 100, vatAmount: 20, grossAmount: 120, grossBase: 120, baseCurrency: 'GBP', createdBy: { id: ids.ownerA } });
+    expect(inc.body).toMatchObject({ costType: 'scrap', currency: 'GBP', quantity: 4, unitCost: 30, amount: 120, netAmount: 100, vatAmount: 20, grossAmount: 120, grossBase: 120, baseCurrency: 'GBP', rateStatus: 'base', createdBy: { id: ids.ownerA } });
     costId = inc.body.id;
     const eur = await api().post(`/api/v1/ncrs/${ncr}/costs`).set(h)
-      .send({ costType: 'transport', currency: 'EUR', unitCost: 50, exchangeRate: 0.85, incurredOn: '2026-10-01' }).expect(201);
-    expect(eur.body).toMatchObject({ quantity: 1, unitCost: 50, vatTreatment: 'none', grossAmount: 50, netBase: 42.5, grossBase: 42.5, incurredOn: '2026-10-01' });
+      .send({ costType: 'transport', currency: 'EUR', unitCost: 50, incurredOn: '2026-10-01' }).expect(201);
+    expect(eur.body).toMatchObject({ quantity: 1, unitCost: 50, vatTreatment: 'none', grossAmount: 50, netBase: 42.5, grossBase: 42.5, incurredOn: '2026-10-01', rateStatus: 'estimated', exchangeRate: 0.85 });
 
     const list = await api().get(`/api/v1/ncrs/${ncr}/costs`).set(h).expect(200);
-    expect(list.body.totals).toEqual({ baseCurrency: 'GBP', net: 142.5, gross: 162.5, count: 2 });
+    expect(list.body.totals).toMatchObject({ baseCurrency: 'GBP', orgCurrency: 'GBP', net: 142.5, gross: 162.5, netOrg: 142.5, count: 2, rates: { base: 1, estimated: 1, actual: 0, needed: 0 } });
 
     // The register shows each NCR's total cost and can sort by it.
     const register = await api().get('/api/v1/ncrs?source=internal&sort=totalCost&order=desc').set(h).expect(200);
     const row = register.body.data.find((n: { id: string }) => n.id === ncr);
-    expect(row).toMatchObject({ totalCost: 162.5, costCurrency: 'GBP' });
+    expect(row).toMatchObject({ totalCost: 142.5, costCurrency: 'GBP' });
     expect(register.body.data[0].id).toBe(ncr);
     expect(register.body.data.find((n: { id: string }) => n.id === ncrAtB)).toMatchObject({ totalCost: 0 });
     expect(list.body.data.map((c: { costType: string }) => c.costType)).toEqual(['scrap', 'transport']);
@@ -116,7 +126,7 @@ describe('register filters', () => {
     const h = await as(ids.ownerA);
     await api().patch(`/api/v1/ncrs/${ncr}`).set(h).send({ severity: 'major', quantityAffected: 12, detectedAt: '2026-10-05' }).expect(200);
     await api().patch(`/api/v1/ncrs/${ncrAtB}`).set(h).send({ severity: 'minor', quantityAffected: 3, detectedAt: '2026-11-01' }).expect(200);
-    // ncr has 162.50 of costs, ncrAtB has 25.00 (added in the cost tests).
+    // ncr has 142.50 of net costs, ncrAtB has 25.00 (added in the cost tests).
     expect(await refs('costMin=100')).toEqual([ncr]);
     expect(await refs('costMax=100')).toEqual([ncrAtB]);
     expect(await refs('costMin=20&costMax=30')).toEqual([ncrAtB]);
@@ -136,7 +146,7 @@ describe('register filters', () => {
 
   it('reports the highest cost and quantity for the sliders', async () => {
     const res = await api().get('/api/v1/ncrs/ranges?source=internal').set(await as(ids.ownerA)).expect(200);
-    expect(res.body).toEqual({ cost: { max: 162.5 }, quantity: { max: 12 }, baseCurrency: 'GBP' });
+    expect(res.body).toEqual({ cost: { max: 142.5 }, quantity: { max: 12 }, baseCurrency: 'GBP' });
     const supplier = await api().get('/api/v1/ncrs/ranges?source=supplier').set(await as(ids.ownerA)).expect(200);
     expect(supplier.body).toMatchObject({ cost: { max: 0 }, quantity: { max: 0 } });
   });
@@ -193,9 +203,9 @@ describe('NC dashboard', () => {
     const today = new Date().toISOString().slice(0, 10);
     const res = await api().get(`/api/v1/ncr-dashboard?source=internal&from=2026-10-01&to=${today}`).set(h).expect(200);
     const d = res.body;
-    // ncr: detected 2026-10-05, minor and qty 1 (set by the locking test), £162.50, closed today.
+    // ncr: detected 2026-10-05, minor and qty 1 (set by the locking test), net £142.50, closed today.
     // ncrAtB: detected 2026-11-01, minor, qty 3, £25, draft.
-    expect(d.kpis).toMatchObject({ raised: 2, open: 1, criticalOpen: 0, closed: 1, cost: 187.5, quantity: 4, raisedPrevious: 0, costPrevious: 0 });
+    expect(d.kpis).toMatchObject({ raised: 2, open: 1, criticalOpen: 0, closed: 1, cost: 167.5, quantity: 4, raisedPrevious: 0, costPrevious: 0 });
     expect(d.kpis.avgDaysToClose).toBeGreaterThan(0);
     expect(d.baseCurrency).toBe('GBP');
     expect(d.trend.reduce((t: number, b: { total: number }) => t + b.total, 0)).toBe(2);
@@ -206,7 +216,7 @@ describe('NC dashboard', () => {
     expect(d.bySource.find((s: { key: string }) => s.key === 'internal')).toEqual({ key: 'internal', label: 'Internal', count: 2 });
     expect(d.bySource.filter((s: { count: number }) => s.count > 0)).toHaveLength(1);
     expect(d.byCategory).toEqual([{ key: expect.any(String), label: 'Product', count: 1 }, { key: 'none', label: 'Uncategorised', count: 1 }]);
-    expect(d.trend.reduce((t: number, b: { cost: number }) => t + b.cost, 0)).toBe(187.5);
+    expect(d.trend.reduce((t: number, b: { cost: number }) => t + b.cost, 0)).toBe(167.5);
     expect(d.byFailureMode).toEqual([{ key: 'none', label: 'Not classified', count: 2 }]);
     expect(d.byStage.find((s: { key: string }) => s.key === 'draft').count).toBe(1);
     expect(d.bySeverity.map((s: { count: number }) => s.count)).toEqual([0, 0, 2, 0]);

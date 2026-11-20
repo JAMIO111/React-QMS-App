@@ -49,7 +49,7 @@ const SORT_SQL: Record<NcrListQuery['sort'], string> = {
   failureMode: 'lower(fm.name)',
   source: 'n.source',
   category: 'lower(cat.name)',
-  totalCost: 'coalesce(tc.total, 0)',
+  totalCost: 'coalesce(tc.total_org, 0)',
   capaCount: 'coalesce(cl.n_capa, 0)',
   createdAt: 'n.created_at',
   raisedBy: "lower(nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), ''))",
@@ -76,7 +76,8 @@ const SELECT_SUMMARY = `
   c.id as customer_id, coalesce(c.display_name, c.name) as customer_name,
   s.id as supplier_id, coalesce(s.display_name, s.name) as supplier_name,
   fm.id as fm_id, fm.name as fm_name, sfm.id as sfm_id, sfm.name as sfm_name, cp.id as cp_id, cp.name as cp_name, cat.id as cat_id, cat.name as cat_name,
-  coalesce(tc.total, 0) as total_cost, os.base_currency,
+  case when coalesce(tc.n_ccy, 0) > 1 then coalesce(tc.total_org, 0) else coalesce(tc.total, 0) end as total_cost,
+  case when coalesce(tc.n_ccy, 0) > 1 then coalesce(tc.org_ccy, os.base_currency) else coalesce(tc.ccy, ns.currency, os.base_currency) end as cost_currency,
   coalesce(cl.n_capa, 0) as capa_count, case when cl.n_capa = 1 then cl.capa_id end as capa_id, case when cl.n_capa = 1 then cl.capa_reference end as capa_reference,
   n.created_by as raised_by_id, nullif(trim(concat_ws(' ', rb.first_name, rb.surname)), '') as raised_by_name,
   de.id as detected_employee_id, nullif(trim(concat_ws(' ', de.first_name, de.surname)), '') as detected_employee_name,
@@ -92,14 +93,18 @@ const FROM = `
   left join public.machines cp on cp.id = n.causal_process_id
   left join public.ncr_classifications cat on cat.id = n.category_id
   left join public.organisation_settings os on os.organisation_id = n.organisation_id
+  left join public.sites ns on ns.id = n.site_id and ns.organisation_id = n.organisation_id
   -- Who raised it (the person who created the record).
   left join public.profiles rb on rb.id = n.created_by
   -- Who found it (Employees register; hidden without master_data.read, like the responsible employee) and the responsible department.
   left join public."Employees" de on de.id = n.detected_by_employee_id
   left join public.departments rd on rd.id = n.responsible_department_id
-  -- Total of the NCR's costs that are not deleted, in the organisation's base currency.
+  -- Net total of the NCR's costs that are not deleted, credits (recoveries, charges) taken off: in the currency of its site (total), and in the organisation's
+  -- (total_org, which sorts, filters and adds up across sites). Lines still waiting for a rate add nothing.
   left join lateral (
-    select sum(k.gross_base) as total from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null
+    select sum(k.net_base * k.cost_sign) as total, sum(k.net_org * k.cost_sign) as total_org, min(k.base_currency) as ccy,
+           count(distinct k.base_currency) as n_ccy, min(k.org_currency) as org_ccy
+    from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null
   ) tc on true
   -- The 8Ds this is linked to (live links; only those the caller may read).
   left join lateral (
@@ -133,7 +138,7 @@ const toSummary = (r: Row): NcrSummary => ({
   subFailureMode: ref(r.sfm_id, r.sfm_name),
   causalProcess: ref(r.cp_id, r.cp_name),
   totalCost: Number(r.total_cost ?? 0),
-  costCurrency: (r.base_currency as string) ?? 'GBP',
+  costCurrency: (r.cost_currency as string) ?? 'GBP',
   capaCount: Number(r.capa_count ?? 0),
   capa: r.capa_id ? { id: r.capa_id as string, reference: r.capa_reference as string } : null,
   raisedBy: r.raised_by_id ? { id: r.raised_by_id as string, name: (r.raised_by_name as string) ?? '' } : null,
@@ -197,8 +202,8 @@ export class NcrService {
       if (q.responsibleDepartmentId) where.push(sql`n.responsible_department_id = ${q.responsibleDepartmentId}::uuid`);
       if (q.detectedByEmployeeId) where.push(sql`n.detected_by_employee_id = ${q.detectedByEmployeeId}::uuid`);
       if (q.severity.length) where.push(sql`n.severity = any(string_to_array(${q.severity.join(',')}, ','))`);
-      if (q.costMin !== undefined) where.push(sql`coalesce(tc.total, 0) >= ${q.costMin}`);
-      if (q.costMax !== undefined) where.push(sql`coalesce(tc.total, 0) <= ${q.costMax}`);
+      if (q.costMin !== undefined) where.push(sql`coalesce(tc.total_org, 0) >= ${q.costMin}`);
+      if (q.costMax !== undefined) where.push(sql`coalesce(tc.total_org, 0) <= ${q.costMax}`);
       if (q.qtyMin !== undefined) where.push(sql`coalesce(n.quantity_affected, 0) >= ${q.qtyMin}`);
       if (q.qtyMax !== undefined) where.push(sql`coalesce(n.quantity_affected, 0) <= ${q.qtyMax}`);
       if (q.q) {
@@ -229,7 +234,7 @@ export class NcrService {
   ranges(ctx: RequestContext, q: z.infer<typeof NcrRangesQuery>): Promise<z.infer<typeof NcrRanges>> {
     return this.database.asUser(ctx, async (db) => {
       const result = await db.execute<Row>(sql`
-        select coalesce(max(coalesce(tc.total, 0)), 0) as cost_max, coalesce(max(n.quantity_affected), 0) as qty_max,
+        select coalesce(max(coalesce(tc.total_org, 0)), 0) as cost_max, coalesce(max(n.quantity_affected), 0) as qty_max,
                (select base_currency from public.organisation_settings where organisation_id = ${ctx.organisationId!}::uuid) as base_currency
         ${sql.raw(FROM)}
         where n.organisation_id = ${ctx.organisationId!}::uuid and n.deleted_at is null

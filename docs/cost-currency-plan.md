@@ -84,7 +84,7 @@ The browser can therefore no longer submit a rate on create or update; `exchange
 
 ## 7. Slices
 
-*Progress: CU-A (database) is built and tested in `20260415100000_cost_currency.sql` and `supabase/tests/cost_currency.test.sql` (seven deliberate breaks of it were all caught); not applied live. CU-B, CU-C and CU-D follow.*
+*Progress: CU-A (database, `20260415100000_cost_currency.sql`, `supabase/tests/cost_currency.test.sql`) and CU-B (API: `api/src/currency/`, the cost routes, dashboard, register, worker step; `api/test/cost-currency.e2e-spec.ts`, `exchange-rate.gateway.spec.ts`) are built and tested; the migration is not applied live. CU-C (screens) and CU-D (exit) follow. While the screens are unchanged the API still accepts and ignores `exchangeRate` in cost bodies; CU-C removes it.*
 
 1. **CU-A — database.** Migration, trigger rewrite, functions, backfill and restate function, extended currency lock, `exchange_rates`, guardrails and both sweep seeds. SQL tests: same-currency, estimated, needed, weekend date, override by rate and by amount (VAT inclusive / exclusive / none), refresh rules, an edit that drops an override, rounding, every write path refused for the browser, cross-organisation isolation, backfill and restate on a fixture. Mutants for the arithmetic and the frozen rules.
 2. **CU-B — API.** Service and cache, routes, totals shape, dashboard and register, workflow fact, worker step, restate endpoint (dry run default). E2E with a fake Frankfurter: found, down, unsupported currency, weekend, retry from the worker.

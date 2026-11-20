@@ -330,15 +330,21 @@ BEGIN
   RETURN p_cost;
 END $$;
 
--- After the API has cached the rates that were missing: gives the lines waiting for one their rate (the API login only).
-CREATE FUNCTION app.system_fill_cost_rates(p_organisation_id uuid, p_ids uuid[] DEFAULT NULL) RETURNS integer
+-- After the API has cached the rates that were missing: gives the lines waiting for one their rate (the API login only). One organisation, or all of them
+-- (the worker). Only lines a cached published rate can now help are touched, so a pair the source never publishes causes no churn.
+CREATE FUNCTION app.system_fill_cost_rates(p_organisation_id uuid DEFAULT NULL, p_ids uuid[] DEFAULT NULL) RETURNS integer
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_n integer;
 BEGIN
   UPDATE public.ncr_costs SET description = description
-   WHERE organisation_id = p_organisation_id AND (p_ids IS NULL OR id = ANY (p_ids)) AND currency <> base_currency
-     AND (rate_status = 'needed' OR org_rate IS NULL)
-     AND id IN (SELECT id FROM public.ncr_costs WHERE organisation_id = p_organisation_id AND (rate_status = 'needed' OR org_rate IS NULL) ORDER BY created_at LIMIT 500);
+   WHERE id IN (
+     SELECT k.id FROM public.ncr_costs k
+      WHERE (p_organisation_id IS NULL OR k.organisation_id = p_organisation_id) AND (p_ids IS NULL OR k.id = ANY (p_ids)) AND k.currency <> k.base_currency
+        AND ((k.rate_status = 'needed' AND EXISTS (SELECT 1 FROM app.exchange_rate_lookup(least(k.incurred_on, current_date), k.currency, k.base_currency) l WHERE l.supported))
+          OR (k.org_rate IS NULL AND k.org_currency <> k.currency
+              AND (EXISTS (SELECT 1 FROM app.exchange_rate_lookup(least(k.incurred_on, current_date), k.currency, k.org_currency) l WHERE l.supported)
+                OR EXISTS (SELECT 1 FROM app.exchange_rate_lookup(least(k.incurred_on, current_date), k.base_currency, k.org_currency) l WHERE l.supported))))
+      ORDER BY k.created_at LIMIT 500);
   GET DIAGNOSTICS v_n = ROW_COUNT;
   RETURN v_n;
 END $$;

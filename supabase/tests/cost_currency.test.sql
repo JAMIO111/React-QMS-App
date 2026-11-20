@@ -178,7 +178,8 @@ BEGIN
   PERFORM pg_temp.assert_fails($q$SELECT app.system_store_exchange_rates('[{"requestedOn":"2026-01-01","base":"gbp","quote":"EUR","rate":1,"rateDate":"2026-01-01"}]'::jsonb)$q$, 'currency codes are capitals');
   PERFORM pg_temp.assert_fails($q$SELECT app.system_store_exchange_rates('[{"requestedOn":"2026-01-01","base":"GBP","quote":"EUR","rate":-1,"rateDate":"2026-01-01"}]'::jsonb)$q$, 'a rate above 0');
   PERFORM pg_temp.assert_fails($q$SELECT app.system_store_exchange_rates('[{"requestedOn":"2026-01-01","base":"GBP","quote":"GBP","rate":1,"rateDate":"2026-01-01"}]'::jsonb)$q$, 'a pair of two currencies');
-  PERFORM pg_temp.assert_eq(app.system_fill_cost_rates(org) >= 1, true, 'waiting lines are filled');
+  PERFORM pg_temp.assert_eq(app.system_fill_cost_rates(NULL) >= 1, true, 'waiting lines are filled (all organisations)');
+  PERFORM pg_temp.assert_eq(app.system_fill_cost_rates(org), 0, 'a second run touches nothing: the unpublished pair and the stale rate are left alone');
   PERFORM pg_temp.assert_eq((SELECT rate_status || '|' || net_base FROM public.ncr_costs WHERE nonconformance_id = ncr_a AND currency = 'CAD'), 'estimated|46.40', 'a waiting line takes the cached rate');
   PERFORM pg_temp.assert_eq((SELECT rate_status FROM public.ncr_costs WHERE nonconformance_id = ncr_a AND currency = 'AED'), 'needed', 'an unpublished pair stays needed');
 

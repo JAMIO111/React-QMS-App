@@ -28,7 +28,7 @@ Status: **agreed, nothing built yet.** Decisions CU1–CU4 and CU9–CU12 were a
 
 ## 3. Proposed defaults (change any of these)
 
-- **CU5 — which day's rate.** The rate for the line's `incurred_on` (a weekend or holiday uses the last business day, and the line says so). A date today or later uses the latest rate. The rate is **frozen when the line is saved**; it never drifts afterwards. **Refresh rate** on an *Estimated* line fetches it again; an *Actual* line is never refreshed.
+- **CU5 — which day's rate.** The rate for the line's `incurred_on` (a weekend or holiday uses the last business day, and the line says so). A date today or later uses the latest rate. The rate is **frozen when the line is saved**; it never drifts afterwards. **Use automatic rate** on a line drops an override and takes the published rate again (for a line dated today or later it is also the refresh).
 - **CU6 — who may override.** The same right as editing a cost (`ncr.update` at the NC's site, NC still editable). No new permission.
 - **CU7 — editing a line afterwards.** Changing the amount, quantity or VAT keeps the rate. Changing the **currency or the incurred date drops an override** (the rate no longer fits) and the line goes back to an automatic estimate, with a notice.
 - **CU8 — the amount an override applies to.** When you type a converted amount it is the converted value of **the amount you entered** (gross if you entered it VAT-inclusive, net otherwise), so VAT is never guessed.
@@ -56,7 +56,8 @@ Status: **agreed, nothing built yet.** Decisions CU1–CU4 and CU9–CU12 were a
 - the cost trigger itself, which looks the pair up in `exchange_rates` when a line is saved and sets `estimated` (found), `needed` (not found) or `base` (same currency);
 - `app.system_fill_cost_rates(...)` (API login only): after the API has fetched and cached a missing rate it fills the waiting lines;
 - `app.override_cost_rate(cost, kind, value, note)` (people, `ncr.update`): validates, sets `actual`, keeps `estimated_rate`;
-- `app.refresh_cost_rate(cost)` (people): only for an *Estimated* line, takes the cached rate again.
+- `app.reset_cost_rate(cost)` (people): drops an override and takes the published rate again. It is also what "refresh" means: a past day's published rate never changes, so it only matters for a line dated today or later.
+- `app.system_cost_rates_needed(...)` (API login only): the pairs the API has to ask the source for; `app.restate_cost_report(org)` (`organisation.manage`, changes nothing) and `app.system_restate_costs(org, site)` (API login only) for the restate (CU11).
 
 The browser can therefore no longer submit a rate on create or update; `exchangeRate` leaves the cost bodies. The database stays the one place that does the arithmetic (`round(net × rate, 2)`), so the preview and the saved line cannot disagree. An overridden line's organisation figure is derived from its site figure through the cached site→organisation rate, so consolidated totals follow the actual cost.
 
@@ -65,7 +66,7 @@ The browser can therefore no longer submit a rate on create or update; `exchange
 ## 5. API (`api/src/currency/` and the NC cost routes)
 
 - **`ExchangeRateService`**: the only code that talks to Frankfurter. One fixed host (no user-supplied address), a 4 second timeout and one retry, one call per line asking for the site and organisation currencies together, results written to the cache. **A failure never fails the request**: the line stays `needed`. Environment `FRANKFURTER_URL` (default `https://api.frankfurter.dev`). Tests inject a fake; **no test may reach the network**.
-- **Cost routes**: create and update take no rate. After the insert the service fetches any missing pair and calls `system_fill_cost_rates` in the same request, so the answer already carries the estimate in the normal case. New routes: `POST /ncr-costs/{id}/rate {kind: "rate"|"amount", value, note?}`, `POST /ncr-costs/{id}/refresh-rate`, `GET /exchange-rates/preview?from&to&date` (what the form shows before saving; nothing stored).
+- **Cost routes**: create and update take no rate. After the insert the service fetches any missing pair and calls `system_fill_cost_rates` in the same request, so the answer already carries the estimate in the normal case. New routes: `POST /ncr-costs/{id}/rate {kind: "rate"|"amount", value, note?}`, `POST /ncr-costs/{id}/reset-rate`, `GET /exchange-rates/preview?from&to&date` (what the form shows before saving; nothing stored).
 - **Totals** (`GET /ncrs/{id}/costs`): `{ siteCurrency, orgCurrency, net, gross (site), netOrg, grossOrg, byCurrency: [{currency, amount, lines}], status: {estimated, actual, needed}, mixed }`; lines carry the rate, its date, status, source and the estimated rate.
 - **Dashboard** (`/ncr-dashboard`): a `siteId` filter. One site → site currency (`net_base × cost_sign`); all sites → organisation currency (`net_org × cost_sign`). The answer carries `currency`. A person limited to one site gets that site automatically. Lines with `needed` are excluded and counted in `unconverted`.
 - **Register** total cost per row in the NC's own site currency, sorted by the organisation-currency value so mixed sites sort correctly.
@@ -77,11 +78,13 @@ The browser can therefore no longer submit a rate on create or update; `exchange
 
 - **Cost dialog**: currency chosen as today; the exchange-rate box goes. Once currency and date are set it shows the automatic rate and its date from the preview ("1 EUR = 0.8355 GBP, ECB 13 Nov"), or "No automatic rate for AED — it will be marked *Rate needed*". Saving never needs a rate.
 - **Tracker** (`NcrCosts.jsx`): headline total in the site currency with an Estimated / Actual / Mixed chip, the per-currency breakdown, the extra organisation-currency line when it differs, a warning and a link for lines needing a rate. Per line: Amount, Rate (with its date and a chip), Converted net and gross.
-- **Row menu**: **Set actual rate…** (rate *or* converted amount, a note, and the automatic rate and the difference shown for comparison), **Refresh rate** (estimated only), **Use automatic rate** (drops an override).
+- **Row menu**: **Set actual rate…** (rate *or* converted amount, a note, and the automatic rate and the difference shown for comparison), **Use automatic rate** (drops an override; also refreshes a line dated today).
 - **NC dashboard and the home/review gatherings**: a site filter, the currency in every figure's formatting, a note when lines are waiting for a rate.
 - **Settings → Organisation → Sites**: the site dialog explains that the currency becomes locked once costs exist.
 
 ## 7. Slices
+
+*Progress: CU-A (database) is built and tested in `20260415100000_cost_currency.sql` and `supabase/tests/cost_currency.test.sql` (seven deliberate breaks of it were all caught); not applied live. CU-B, CU-C and CU-D follow.*
 
 1. **CU-A — database.** Migration, trigger rewrite, functions, backfill and restate function, extended currency lock, `exchange_rates`, guardrails and both sweep seeds. SQL tests: same-currency, estimated, needed, weekend date, override by rate and by amount (VAT inclusive / exclusive / none), refresh rules, an edit that drops an override, rounding, every write path refused for the browser, cross-organisation isolation, backfill and restate on a fixture. Mutants for the arithmetic and the frozen rules.
 2. **CU-B — API.** Service and cache, routes, totals shape, dashboard and register, workflow fact, worker step, restate endpoint (dry run default). E2E with a fake Frankfurter: found, down, unsupported currency, weekend, retry from the worker.

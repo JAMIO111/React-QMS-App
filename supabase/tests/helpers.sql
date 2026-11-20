@@ -105,3 +105,25 @@ BEGIN
   INSERT INTO public.user_subscription_assignments (organisation_id, organisation_membership_id, subscription_plan_id, subscription_item_id)
   SELECT p_org, m.id, v_plan, v_item FROM public.organisation_users m WHERE m.organisation_id = p_org AND m.user_id = p_user;
 END $$;
+
+-- Puts a published rate in the exchange rate cache the way the API login does (rate_date = the day asked for), whoever is signed in.
+-- A rate for a past day counts as final; one for today is fresh for six hours.
+CREATE FUNCTION pg_temp.seed_rate(p_on date, p_base text, p_quote text, p_rate numeric) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_role text := current_setting('role');
+BEGIN
+  PERFORM set_config('role', 'postgres', true);
+  INSERT INTO public.exchange_rates (requested_on, base, quote, rate, rate_date, supported, fetched_at)
+  VALUES (p_on, p_base, p_quote, p_rate, p_on, true, CASE WHEN p_on >= current_date THEN now() ELSE (p_on + 1)::timestamptz + interval '12 hours' END)
+  ON CONFLICT (requested_on, base, quote) DO UPDATE SET rate = EXCLUDED.rate, rate_date = EXCLUDED.rate_date, supported = true, fetched_at = EXCLUDED.fetched_at;
+  PERFORM set_config('role', v_role, true);
+END $$;
+
+-- Records that a pair is not published by the source.
+CREATE FUNCTION pg_temp.seed_unsupported(p_on date, p_base text, p_quote text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_role text := current_setting('role');
+BEGIN
+  PERFORM set_config('role', 'postgres', true);
+  INSERT INTO public.exchange_rates (requested_on, base, quote, rate, rate_date, supported) VALUES (p_on, p_base, p_quote, NULL, NULL, false)
+  ON CONFLICT (requested_on, base, quote) DO UPDATE SET rate = NULL, rate_date = NULL, supported = false, fetched_at = now();
+  PERFORM set_config('role', v_role, true);
+END $$;

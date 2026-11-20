@@ -1,6 +1,6 @@
 # Costs in more than one currency — plan
 
-Status: **draft for agreement (nothing built).** Decisions CU1–CU4 were agreed in conversation on 2026-11-20; CU5–CU8 are proposed defaults; §10 lists what still needs an answer.
+Status: **agreed, nothing built yet.** Decisions CU1–CU4 and CU9–CU12 were agreed in conversation on 2026-11-20; CU5–CU8 are proposed defaults (change any of them before building).
 
 ## 1. What exists today (inspected 2026-11-20)
 
@@ -9,7 +9,7 @@ Status: **draft for agreement (nothing built).** Decisions CU1–CU4 were agreed
 - `base_currency` on a line is the **organisation's** base currency. `sites.currency` only pre-fills a new line; it is never used for reporting.
 - The organisation currency cannot change once any cost exists (`app.organisation_currency_locked`, QM014).
 - Consumers of the converted figures: `api/src/ncr/ncr-records.service.ts` (the tracker totals), `ncr.service.ts` (register total cost), `ncr-dashboard.ts` (**gross_base**, VAT included), the workflow fact `total_cost` (**net_base**), and the NC page (`NcrCosts.jsx`, `CostForm.jsx`, `lib/costs.js`).
-- Cost types already include `customer_charge` and `supplier_recovery`, but every line is summed as a positive cost (see §10, Q2).
+- Cost types already include `customer_charge` and `supplier_recovery`, but every line is summed as a positive cost (settled in CU10).
 - **Frankfurter** (`https://api.frankfurter.dev/v1/{date}?base=GBP&symbols=USD,EUR`) was called from this environment: no key, historical European Central Bank reference rates, a weekend date answers with the last business day and says which date it used. It publishes about 30 currencies (AUD BRL CAD CHF CNY CZK DKK EUR GBP HKD HUF IDR ILS INR ISK JPY KRW MXN MYR NOK NZD PHP PLN RON SEK SGD THB TRY USD ZAR). **AED, SAR and other currencies have no automatic rate.** The project is open source, so a self-hosted copy is possible later (`FRANKFURTER_URL`).
 
 ## 2. Agreed decisions
@@ -20,6 +20,11 @@ Status: **draft for agreement (nothing built).** Decisions CU1–CU4 were agreed
 | CU2 | The NC cost tracker shows **one headline total in the site currency** (marked Estimated / Actual / Mixed) and under it **the original amounts grouped by currency** (for example €1,200 + $300). When the organisation currency differs from the site's, one small extra line shows it. |
 | CU3 | **Override**: a person may type either the rate they actually got **or** the converted amount from the invoice or bank statement (the rate is then worked out). The line moves from Estimated to Actual, keeps the automatic rate beside it for comparison, takes an optional note, and every change is audited. |
 | CU4 | **No rate available** (Frankfurter down, or a currency it does not publish): the line saves as **Rate needed**, is left out of totals and shown with a warning until a rate arrives or is entered. A background step retries supported currencies. Recording a cost is never blocked. |
+
+| CU9 | **Net, not gross, everywhere that adds costs up**: the NC dashboard, the register total, the tracker headline and the workflow `total_cost` fact. Gross (VAT included) stays visible on each line and as a secondary figure on the tracker. This changes the NC dashboard, which adds gross today. |
+| CU10 | **Recoveries and charges are credits.** `supplier_recovery` and `customer_charge` reduce the net cost. A line keeps a positive amount (the existing check stays); a generated `cost_sign` (−1 for those two types, +1 otherwise) is what every total multiplies by. Totals can be negative. Tracker and dashboards say "net of recoveries"; a credit line is labelled **Credit** and shown negative. Existing totals therefore drop where such lines exist. |
+| CU11 | **Restating existing lines is a dry run first.** A report lists every site whose currency differs from the organisation's, how many lines and what each would become; one confirmed run restates them with estimated rates for their original dates. Nothing is restated silently. |
+| CU12 | **Currencies Frankfurter does not publish stay "Rate needed"** until someone enters a rate. A second or self-hosted rate source can be added later behind the same service; nothing is built for it now. |
 
 ## 3. Proposed defaults (change any of these)
 
@@ -39,6 +44,7 @@ Status: **draft for agreement (nothing built).** Decisions CU1–CU4 were agreed
 | Column | Meaning |
 |---|---|
 | `org_currency`, `org_rate`, `net_org`, `gross_org` | The organisation-currency figures, for the all-sites view and anything that adds up across sites |
+| `cost_sign` | Generated: −1 for `supplier_recovery` and `customer_charge`, +1 otherwise. Totals use `net × cost_sign` |
 | `rate_status` | `base` (same currency, rate 1), `estimated`, `actual`, `needed` |
 | `rate_source` | `none`, `frankfurter`, `manual` |
 | `rate_date`, `rate_fetched_at` | Which day's rate, and when it was fetched |
@@ -61,7 +67,7 @@ The browser can therefore no longer submit a rate on create or update; `exchange
 - **`ExchangeRateService`**: the only code that talks to Frankfurter. One fixed host (no user-supplied address), a 4 second timeout and one retry, one call per line asking for the site and organisation currencies together, results written to the cache. **A failure never fails the request**: the line stays `needed`. Environment `FRANKFURTER_URL` (default `https://api.frankfurter.dev`). Tests inject a fake; **no test may reach the network**.
 - **Cost routes**: create and update take no rate. After the insert the service fetches any missing pair and calls `system_fill_cost_rates` in the same request, so the answer already carries the estimate in the normal case. New routes: `POST /ncr-costs/{id}/rate {kind: "rate"|"amount", value, note?}`, `POST /ncr-costs/{id}/refresh-rate`, `GET /exchange-rates/preview?from&to&date` (what the form shows before saving; nothing stored).
 - **Totals** (`GET /ncrs/{id}/costs`): `{ siteCurrency, orgCurrency, net, gross (site), netOrg, grossOrg, byCurrency: [{currency, amount, lines}], status: {estimated, actual, needed}, mixed }`; lines carry the rate, its date, status, source and the estimated rate.
-- **Dashboard** (`/ncr-dashboard`): a `siteId` filter. One site → site currency (`net_base`); all sites → organisation currency (`net_org`). The answer carries `currency`. A person limited to one site gets that site automatically. Lines with `needed` are excluded and counted in `unconverted`.
+- **Dashboard** (`/ncr-dashboard`): a `siteId` filter. One site → site currency (`net_base × cost_sign`); all sites → organisation currency (`net_org × cost_sign`). The answer carries `currency`. A person limited to one site gets that site automatically. Lines with `needed` are excluded and counted in `unconverted`.
 - **Register** total cost per row in the NC's own site currency, sorted by the organisation-currency value so mixed sites sort correctly.
 - **Workflow fact** `total_cost` uses the organisation-currency net figure (a rule's threshold is one number across sites) and says so in the rule builder.
 - **Worker step `exchange-rates`**: retry `needed` lines for supported currencies; give up (leave `needed`, stop retrying) for a pair marked unsupported.
@@ -98,7 +104,6 @@ Automatic revaluation, month-end or invoice-date rates, per-site rate sources, e
 
 ## 10. Open questions
 
-1. **Net or gross on dashboards.** The NC dashboard adds `gross_base` (VAT included) while the workflow fact uses net. Cost of poor quality is normally ex-VAT. *Proposed: dashboards, the register and workflow facts all use **net**; gross stays on the tracker.*
-2. **Recoveries and charges.** `supplier_recovery` and `customer_charge` are summed as positive costs today. *Proposed: treat them as credits that reduce the net cost (shown negative), or leave as they are and say so. Needs your call; it changes totals.*
-3. **Restating existing lines.** Any site whose currency already differs from the organisation's has old lines in the organisation currency. *Proposed: dry-run report, then one confirmed restate with estimated rates for the original dates.*
-4. **Currencies Frankfurter does not cover.** They will always be Rate needed until someone enters a rate. *Proposed: accept this; a self-hosted or second rate source can be added later behind the same service.*
+None outstanding. The four questions raised with the first draft were answered on 2026-11-20 and are decisions CU9–CU12 above (net figures, recoveries as credits, dry-run restate, unsupported currencies accepted).
+
+Still to confirm while building, with the default shown: the restate report also lists lines with no site (an NC without a site uses the organisation currency, *default: no restate needed*).

@@ -84,10 +84,12 @@ afterAll(async () => {
 describe('published rates', () => {
   let eurLine: string;
 
-  it('looks the rate up when a line is saved and answers with it; a rate sent by the client is ignored', async () => {
-    const res = await addCost(ncrA, { currency: 'EUR', exchangeRate: 99, description: 'Freight' });
+  it('looks the rate up when a line is saved and answers with it; a rate is no longer accepted from the client', async () => {
+    const res = await addCost(ncrA, { currency: 'EUR', description: 'Freight' });
     expect(res.body).toMatchObject({ currency: 'EUR', baseCurrency: 'GBP', orgCurrency: 'GBP', rateStatus: 'estimated', rateSource: 'frankfurter', exchangeRate: 0.85, rateDate: DAY, estimatedRate: 0.85, netBase: 85, netOrg: 85, costSign: 1 });
     eurLine = res.body.id;
+    await addCost(ncrA, { currency: 'EUR', exchangeRate: 99 }, 400);
+    await api().patch(`/api/v1/ncr-costs/${eurLine}`).set(await as(ids.ownerA)).send({ exchangeRate: 5 }).expect(400);
     expect(fake.calls).toEqual([`${DAY} EUR>GBP`]);
   });
 
@@ -160,9 +162,8 @@ describe('published rates', () => {
     it('editing only the amount keeps the stated rate', async () => {
       const h = await as(ids.ownerA);
       await api().post(`/api/v1/ncr-costs/${eurLine}/rate`).set(h).send({ kind: 'rate', value: 0.9 }).expect(200);
-      const res = await api().patch(`/api/v1/ncr-costs/${eurLine}`).set(h).send({ unitCost: 200, exchangeRate: 5 }).expect(200);
+      const res = await api().patch(`/api/v1/ncr-costs/${eurLine}`).set(h).send({ unitCost: 200 }).expect(200);
       expect(res.body).toMatchObject({ rateStatus: 'actual', exchangeRate: 0.9, netAmount: 200, netBase: 180 });
-      await api().patch(`/api/v1/ncr-costs/${eurLine}`).set(h).send({ exchangeRate: 5 }).expect(200);
     });
   });
 });

@@ -57,6 +57,48 @@ beforeEach(() => {
   apiFetch.mockResolvedValue(dashboard);
 });
 
+const site = (id, name, currency) => ({ id, code: id.toUpperCase(), name, currency });
+const withSites = (extra = {}) => ({
+  ...dashboard,
+  currency: "GBP",
+  site: null,
+  sites: [site("pa", "Plant A", "GBP"), site("pb", "Plant B", "EUR")],
+  kpis: { ...dashboard.kpis, unconverted: 0 },
+  ...extra,
+});
+
+describe("NC dashboard costs: sites, currency and lines without a rate", () => {
+  it("shows all sites in the organisation currency, net of recoveries, and offers the sites to choose from", async () => {
+    apiFetch.mockResolvedValue(withSites());
+    renderAt("/Non-Conformance");
+    expect(await screen.findByText(/costs net of recoveries, in GBP \(all sites\)/)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Site" })).toBeInTheDocument();
+    expect(apiFetch.mock.calls[0][0]).not.toContain("siteId");
+  });
+
+  it("asks for one site and shows its own currency", async () => {
+    apiFetch.mockImplementation(async (path) => (path.includes("siteId=pb") ? withSites({ currency: "EUR", baseCurrency: "EUR", site: site("pb", "Plant B", "EUR"), kpis: { ...dashboard.kpis, cost: 1234, unconverted: 0 } }) : withSites()));
+    renderAt("/Non-Conformance?site=pb");
+    expect(await screen.findByText(/costs net of recoveries, in EUR \(Plant B\)/)).toBeInTheDocument();
+    expect(apiFetch.mock.calls.some(([path]) => path.includes("siteId=pb"))).toBe(true);
+    expect(screen.getAllByText(/€1,234/).length).toBeGreaterThan(0);
+  });
+
+  it("warns that cost lines waiting for a rate are not counted", async () => {
+    apiFetch.mockResolvedValue(withSites({ kpis: { ...dashboard.kpis, unconverted: 3 } }));
+    renderAt("/Non-Conformance");
+    expect(await screen.findByRole("status", { name: "" }).catch(() => null)).toBeDefined();
+    expect(await screen.findByText(/3 cost lines in this period are not counted yet/)).toBeInTheDocument();
+  });
+
+  it("offers no site choice to someone who can read one site only", async () => {
+    apiFetch.mockResolvedValue(withSites({ site: site("pb", "Plant B", "EUR"), currency: "EUR", sites: [site("pb", "Plant B", "EUR")] }));
+    renderAt("/Non-Conformance");
+    await screen.findByText(/in EUR \(Plant B\)/);
+    expect(screen.queryByRole("combobox", { name: "Site" })).toBeNull();
+  });
+});
+
 describe("NC dashboard", () => {
   it("shows shimmering placeholders, not empty figures, until the first figures arrive", async () => {
     let answer;

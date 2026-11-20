@@ -167,7 +167,7 @@ const StagedDepartments = ({ departments, onChange }) => (
 );
 
 /**
- * Add or edit a site in a pop-up: code, name, time zone and currency (the default for money entered at the site;
+ * Add or edit a site in a pop-up: code, name, time zone and currency (what costs at the site are stated in, which locks once costs exist;
  * a new site starts with the organisation's currency), and the site's departments. Departments of an existing site are
  * saved as they are added; for a new site they are collected and created with it.
  */
@@ -223,7 +223,7 @@ const SiteDialog = ({ site, onClose }) => {
             options={CURRENCY_OPTIONS}
             value={currency}
             onChange={(c) => setCurrency(c ?? orgCurrency)}
-            hint={`Default for costs and other money entered at this site. The organisation's is ${orgCurrency}.`}
+            hint={`Costs at this site are stated in this currency: other currencies are converted into it, and its dashboard shows it. The organisation's is ${orgCurrency}. It cannot be changed once costs have been recorded here.`}
           />
         </form>
         <section aria-label="Departments" className="flex flex-col gap-2">

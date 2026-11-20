@@ -99,8 +99,6 @@ const costFields = {
   vatRate: z.number().min(0).lt(1).default(0),
   quantity: z.number().gt(0).lt(1e9).default(1),
   unitCost: z.number().min(0).lt(1e12),
-  /** Ignored: rates are looked up, or stated through POST /ncr-costs/{id}/rate. Still accepted while older screens send it. */
-  exchangeRate: z.number().positive().optional(),
 };
 export const CreateCostBody = z.object(costFields).strict();
 export const UpdateCostBody = z
@@ -113,7 +111,6 @@ export const UpdateCostBody = z
     vatRate: z.number().min(0).lt(1).optional(),
     quantity: z.number().gt(0).lt(1e9).optional(),
     unitCost: costFields.unitCost.optional(),
-    exchangeRate: z.number().positive().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, 'Nothing to change');

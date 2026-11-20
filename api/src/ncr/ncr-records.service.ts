@@ -41,9 +41,15 @@ export class NcrRecordsService {
       const result = await db.execute<Row>(sql`
         ${sql.raw(COST_SELECT)} where c.nonconformance_id = ${ncrId}::uuid and ${deletedFilter('c', q.deleted)}
         order by c.incurred_on desc, c.created_at desc`);
-      const settings = await db.execute<Row>(sql`select base_currency from public.organisation_settings where organisation_id = ${ctx.organisationId!}::uuid`);
+      // An NC with no lines yet still has a currency: its site's (the organisation's when it has no site).
+      const currencies = await db.execute<Row>(sql`
+        select coalesce(si.currency, st.base_currency, 'GBP') as base_currency, coalesce(st.base_currency, 'GBP') as org_currency
+        from public.nonconformances n
+        left join public.sites si on si.id = n.site_id and si.organisation_id = n.organisation_id
+        left join public.organisation_settings st on st.organisation_id = n.organisation_id
+        where n.id = ${ncrId}::uuid`);
       const data = result.rows.map(toCost);
-      return { data, totals: costTotals(data, (settings.rows[0]?.base_currency as string) ?? 'GBP') };
+      return { data, totals: costTotals(data, (currencies.rows[0]?.base_currency as string) ?? 'GBP', (currencies.rows[0]?.org_currency as string) ?? 'GBP') };
     });
   }
 
@@ -238,7 +244,7 @@ const toCost = (r: Row): Cost => ({
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Totals of the live lines, net of credits. Lines waiting for a rate are counted but add nothing. */
-export const costTotals = (data: Cost[], fallbackBase: string): CostTotals => {
+export const costTotals = (data: Cost[], fallbackBase: string, fallbackOrg: string = fallbackBase): CostTotals => {
   const live = data.filter((c) => !c.deletedAt);
   const add = (f: (c: Cost) => number | null) => round2(live.reduce((t, c) => t + (f(c) ?? 0) * c.costSign, 0));
   const byCurrency = new Map<string, { currency: string; net: number; gross: number; lines: number }>();
@@ -252,7 +258,7 @@ export const costTotals = (data: Cost[], fallbackBase: string): CostTotals => {
   const count = (s: Cost['rateStatus']) => live.filter((c) => c.rateStatus === s).length;
   return {
     baseCurrency: live[0]?.baseCurrency ?? fallbackBase,
-    orgCurrency: live[0]?.orgCurrency ?? fallbackBase,
+    orgCurrency: live[0]?.orgCurrency ?? fallbackOrg,
     net: add((c) => c.netBase),
     gross: add((c) => c.grossBase),
     netOrg: add((c) => c.netOrg),

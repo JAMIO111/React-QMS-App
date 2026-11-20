@@ -7,6 +7,7 @@ import { CircleCheckIcon, ClipboardListIcon, HourglassIcon, LayersIcon, PoundSte
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
 import Callout from "../ui/Callout";
+import ComboField from "../ui/ComboField";
 import SlidingToggle from "../ui/SlidingToggle";
 import { DashboardPeriodPicker } from "../dashboard/DashboardPeriod";
 import { ACCENT, ChangeNote, Chip, Empty, HeroCard, Pipeline, RankList, SplitBar, StatTile } from "../dashboard/DashboardGraphics";
@@ -34,7 +35,8 @@ const NcDashboard = () => {
   const tabKey = NC_TABS.some((t) => t.key === params.get("tab")) ? params.get("tab") : "all";
   const tab = NC_TABS.find((t) => t.key === tabKey);
   const { fromIso: from, toIso: to } = period;
-  const { data, isLoading, isFetching, error } = useNcDashboard({ source: tab.source, from, to });
+  const siteId = params.get("site") || undefined;
+  const { data, isLoading, isFetching, error } = useNcDashboard({ source: tab.source, siteId, from, to });
   const [trendAsTable, setTrendAsTable] = useState(false);
 
   const set = (k, v) =>
@@ -45,7 +47,10 @@ const NcDashboard = () => {
       return next;
     });
 
-  const currency = data?.baseCurrency ?? "GBP";
+  // One site: its own currency. All sites: the organisation's. Costs are net, with recoveries and customer charges taken off.
+  const currency = data?.currency ?? data?.baseCurrency ?? "GBP";
+  const sites = data?.sites ?? [];
+  const shownSite = data?.site ?? null;
   const money = (v) => formatMoney(v, currency);
   const shortMoney = (v) => (v >= 10000 ? `${formatMoney(v / 1000, currency).replace(/\.\d+$/, "")}k` : formatMoney(v, currency).replace(/\.00$/, ""));
   const bucket = data?.period.bucket ?? "month";
@@ -80,7 +85,7 @@ const NcDashboard = () => {
             Non-conformance dashboard
           </h1>
           <p className="text-sm text-secondary-text" aria-live="polite">
-            {formatDate(from)} – {formatDate(to)} · open non-conformances as of today
+            {formatDate(from)} – {formatDate(to)} · open non-conformances as of today · costs net of recoveries, in {currency}{shownSite ? ` (${shownSite.name})` : sites.length > 1 ? " (all sites)" : ""}
             {isFetching && !isLoading ? " · updating…" : ""}
           </p>
         </div>
@@ -94,9 +99,26 @@ const NcDashboard = () => {
             onChange={(key) => set("tab", key === "all" ? "" : key)}
             className="shrink-0"
           />
+          {sites.length > 1 && (
+            <ComboField
+              label="Site"
+              value={siteId ?? "all"}
+              onChange={(v) => set("site", v === "all" ? "" : v)}
+              options={[{ value: "all", label: "All sites" }, ...sites.map((s) => ({ value: s.id, label: s.name, hint: s.currency }))]}
+              required
+              className="w-48"
+            />
+          )}
           <DashboardPeriodPicker period={period} />
         </div>
       </div>
+
+      {k?.unconverted > 0 && (
+        <Callout tone="warning" role="status">
+          {k.unconverted} cost {k.unconverted === 1 ? "line" : "lines"} in this period {k.unconverted === 1 ? "is" : "are"} not counted yet: {k.unconverted === 1 ? "it is" : "they are"} waiting for an exchange rate
+          {shownSite ? ", or still stated in another currency than this site's" : ""}. {k.unconverted === 1 ? "It appears" : "They appear"} in the totals once the rate is known; the lines show on each non-conformance.
+        </Callout>
+      )}
 
       {error && (
         <Callout tone="error" role="alert">
@@ -212,7 +234,7 @@ const NcDashboard = () => {
               )}
             </Card>
 
-            <Card title="Cost of non-conformance" subtitle={`Per ${bucket}, gross, in ${currency}`} action={k && <span className="text-2xl font-semibold text-primary-text">{money(k.cost)}</span>}>
+            <Card title="Cost of non-conformance" subtitle={`Per ${bucket}, net of recoveries, in ${currency}`} action={k && <span className="text-2xl font-semibold text-primary-text">{money(k.cost)}</span>}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 4 }} aria-label="Cost of non-conformance per period">

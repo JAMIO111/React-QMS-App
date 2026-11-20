@@ -234,6 +234,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -1980,6 +1981,48 @@ async function editConflicts({ browser, page, stack, APP, orgName, see, shot, st
   if (row.description !== 'Operator skipped the chamfer tool' || row.title !== 'Chamfer missing on op 20' || row.severity !== 'major') throw new Error(`the owner's choice was not saved: ${JSON.stringify(row)}`);
   log(`edit conflicts: ${ncr.reference} kept both changes, then the owner's description`);
   await ctx.close();
+}
+
+async function costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  step('a cost in another currency takes the published rate, then the person states the rate they really got');
+  const { rows: [org] } = await stack.admin.query(
+    `select o.id, s.id as site, s.currency as site_ccy, current_date::text as today
+       from public.organisations o join public.sites s on s.organisation_id = o.id where o.name = $1 order by s.created_at limit 1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const foreign = org.site_ccy === 'EUR' ? 'USD' : 'EUR';
+  // The API's rate source is switched off under test, so the cache holds what Frankfurter would have published.
+  await stack.admin.query(
+    `insert into public.exchange_rates (requested_on, base, quote, rate, rate_date, supported) values ($1::date, $2, $3, 0.85, $1::date, true)
+       on conflict (requested_on, base, quote) do update set rate = 0.85, rate_date = excluded.rate_date, supported = true, fetched_at = now()`,
+    [org.today, foreign, org.site_ccy]);
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Scrapped castings', siteId: org.site, categoryId: product.id });
+  await api('POST', `/ncrs/${ncr.id}/costs`, { costType: 'scrap', currency: foreign, quantity: 1, unitCost: 100, incurredOn: org.today });
+
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  await see(page.getByRole('heading', { level: 1, name: ncr.reference }));
+  const summary = page.getByRole('region', { name: 'Cost summary' });
+  await see(summary.getByText('Estimated', { exact: true }));
+  await see(summary.getByText(/85\.00/));
+  await shot(page, 'cost-estimated');
+
+  step('state the converted amount: the line becomes actual and the total follows');
+  await page.getByRole('button', { name: /^Exchange rate for .* cost$/ }).first().click();
+  const dialog = page.getByRole('dialog', { name: /^Exchange rate/ });
+  await dialog.getByRole('radio', { name: 'The converted amount' }).click().catch(async () => dialog.getByText('The converted amount').click());
+  await dialog.getByLabel(/^Converted amount/).fill('90');
+  await dialog.getByLabel('Note').fill('Bank statement');
+  await dialog.getByRole('button', { name: 'Save rate' }).click();
+  await see(summary.getByText('Actual', { exact: true }));
+  await see(summary.getByText(/90\.00/));
+  await shot(page, 'cost-actual');
+  const row = (await stack.admin.query(
+    `select rate_status, rate_source, override_kind, net_base, estimated_rate::float as estimated from public.ncr_costs where nonconformance_id = $1`, [ncr.id])).rows[0];
+  if (row.rate_status !== 'actual' || row.override_kind !== 'amount' || Number(row.net_base) !== 90 || row.estimated !== 0.85) {
+    throw new Error(`the stated amount was not kept as an actual rate: ${JSON.stringify(row)}`);
+  }
+  log(`cost currency: ${ncr.reference} ${foreign} line estimated at 0.85, then stated as 90 ${org.site_ccy}`);
 }
 
 async function networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {

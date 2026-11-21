@@ -120,6 +120,29 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       delete_reason: 'Deleting is a person\'s step with a reason',
     },
   },
+  calibration: {
+    table: 'calibrations',
+    fields: {
+      gauge: { column: 'gauge_id' }, calibratedOn: { column: 'calibrated_on' }, outcome: { column: 'outcome' }, nextDueOn: { column: 'next_due_on' },
+      certificateNumber: { column: 'certificate_number' }, performedBy: { column: 'performed_by' }, supplier: { column: 'supplier_id' },
+      technicianName: { column: 'imported_technician' }, notes: { column: 'notes' },
+    },
+    excluded: {
+      ...SYSTEM,
+      reference: 'Fortress gives every calibration its own reference',
+      technician_id: 'A technician is a Fortress user; the source\'s name goes in the technician text',
+      procedure_ref: 'A legacy record says what was concluded, not how',
+      reference_standards: 'A legacy record says what was concluded, not how',
+      temperature_c: 'A legacy record has no readings or conditions',
+      humidity_pct: 'A legacy record has no readings or conditions',
+      nonconformance_id: 'Linked from a failed calibration in Fortress',
+      is_legacy: 'Set by the import itself: it is what marks the record as legacy',
+      imported_from: 'Set by the import itself: the connection it came through',
+      deleted_at: 'Deleting is a person\'s step with a reason',
+      deleted_by: 'Deleting is a person\'s step with a reason',
+      delete_reason: 'Deleting is a person\'s step with a reason',
+    },
+  },
   nonconformance: {
     table: 'nonconformances',
     fields: {

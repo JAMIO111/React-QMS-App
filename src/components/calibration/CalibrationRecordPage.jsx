@@ -41,7 +41,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
 import TextInput from "../ui/TextInput";
 import PeoplePicker from "./PeoplePicker";
-import { GaugeStatusPill, OutcomePill } from "./Pills";
+import { GaugeStatusPill, LegacyPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -374,6 +374,7 @@ const CalibrationRecordPage = () => {
 
   const text = (name, label, props = {}) => <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder="—" {...props} />;
   const outOfTolerance = c && c.outcome !== "pass";
+  const legacy = !isNew && !!c?.legacy;
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 grow flex-col overflow-clip bg-primary-bg">
@@ -384,6 +385,7 @@ const CalibrationRecordPage = () => {
           </Link>
           <h1 className="text-xl font-semibold text-primary-text">{isNew ? "Record calibration" : `Calibration ${c.reference}`}</h1>
           {outcome && <OutcomePill outcome={outcome} />}
+          {legacy && <LegacyPill importedFrom={c.importedFrom} />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!isNew && outOfTolerance && !c.nonconformance && !c.deletedAt && can("ncr.create") && can("calibration.record") && (
@@ -435,94 +437,101 @@ const CalibrationRecordPage = () => {
         {g.deletedAt && <Callout tone="error" role="status">This gauge is deleted; its records are read-only.</Callout>}
         {mutation.error && !dialog && <Callout tone="error" role="alert">{describeApiError(mutation.error)}</Callout>}
 
-        <Card title="Readings" subtitle="As found (before any adjustment) and, if adjusted or reworked, as left. Limits include the tolerance; checks are pass or fail.">
-          {characteristics.isLoading ? (
-            <LoadingScreen size="sm" />
-          ) : rows.length === 0 ? (
-            <p className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">
-              This gauge has no characteristics. Choose the outcome below, or{" "}
-              <Link to={`/Calibration/Gauges/${gaugeId}`} className="text-link-color hover:underline">add characteristics to the gauge</Link>.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              {/* Fixed column widths: typing a reading or choosing pass / fail must never move the columns or the rows. */}
-              <table className="w-full min-w-[820px] table-fixed text-left text-sm" aria-label="Readings">
-                <colgroup>
-                  <col />
-                  <col className="w-44" />
-                  <col className="w-36" />
-                  <col className="w-36" />
-                  <col className="w-56" />
-                </colgroup>
-                <thead className="text-secondary-text">
-                  <tr>
-                    <th className="py-1 pr-2 font-medium">Characteristic</th>
-                    <th className="py-1 pr-2 font-medium">Limits</th>
-                    <th className="py-1 pr-2 text-right font-medium">As found</th>
-                    <th className="py-1 pr-2 text-right font-medium">As left</th>
-                    <th className="py-1 font-medium">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="text-primary-text">
-                  {judged.map((r) => (
-                    <tr key={r.key} className={`border-t border-border-color ${r.asFoundOk === false && !r.asLeftOk ? "bg-error-color/5" : ""}`}>
-                      <td className="py-1.5 pr-2">
-                        {r.name}
-                        {r.method && <span className="block text-xs text-secondary-text">{r.method}</span>}
-                      </td>
-                      <td className="whitespace-nowrap py-1.5 pr-2 text-secondary-text">
-                        {r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}
-                      </td>
-                      {r.kind === "attribute" ? (
-                        <>
-                          <td className="py-1.5 pr-2 text-right">
-                            <PassFail label={`${r.name} as found`} value={r.input.asFoundPass ?? null} onChange={setReading(r.key, "asFoundPass")} disabled={!canEdit} />
-                          </td>
-                          <td className="py-1.5 pr-2 text-right">
-                            {/* Always there, so the row keeps its size; shown once the check failed as found (or already has an as-left result). */}
-                            <span className={asLeftOffered(r) ? "" : "invisible"} aria-hidden={asLeftOffered(r) ? undefined : true}>
-                              <PassFail label={`${r.name} as left`} value={r.input.asLeftPass ?? null} onChange={setReading(r.key, "asLeftPass")} disabled={!canEdit || !asLeftOffered(r)} allowClear />
-                            </span>
-                          </td>
-                        </>
-                      ) : (
-                      <>
-                      <td className="py-1.5 pr-2 text-right">
-                        <ReadingInput ok={r.input.asFound === "" || r.input.asFound == null ? undefined : r.asFoundOk} aria-label={`${r.name} as found`} value={r.input.asFound ?? ""} onChange={setReading(r.key, "asFound")} disabled={!canEdit}
-                          aria-invalid={!isNum(r.input.asFound) || undefined} />
-                      </td>
-                      <td className="py-1.5 pr-2 text-right">
-                        <ReadingInput ok={r.input.asLeft === "" || r.input.asLeft == null ? undefined : r.asLeftOk} aria-label={`${r.name} as left`} value={r.input.asLeft ?? ""} onChange={setReading(r.key, "asLeft")} disabled={!canEdit}
-                          placeholder={r.asFoundOk === false ? "After adjustment" : ""} aria-invalid={!isNum(r.input.asLeft) || undefined} />
-                      </td>
-                      </>
-                      )}
-                      <td className="py-1.5">
-                        <input aria-label={`${r.name} notes`} className="w-full rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1 text-sm focus:outline-none focus:border-brand-primary disabled:opacity-60"
-                          value={r.input.notes ?? ""} onChange={setReading(r.key, "notes")} disabled={!canEdit} maxLength={500} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="flex min-h-12 flex-wrap items-center gap-3 border-t border-border-color pt-3 text-sm">
-            <span className="text-secondary-text">Outcome</span>
-            {liveOutcome ? (
-              <>
-                <OutcomePill outcome={liveOutcome} />
-                <span className="text-secondary-text">
-                  {outcomeOf(liveOutcome).help}. Worked out from the readings
-                  {entered.length < judged.length ? ` (${judged.length - entered.length} of ${judged.length} not recorded).` : "."}
-                </span>
-              </>
+        {legacy ? (
+          <Callout tone="warning" title="Legacy record" role="status">
+            Imported from {c.importedFrom ?? "an old system"}. It says what the old system concluded ({outcomeOf(c.outcome)?.label?.toLowerCase() ?? c.outcome}) and has no readings.
+            {c.importedTechnician ? ` Done by ${c.importedTechnician}.` : ""} Certificates can still be attached below.
+          </Callout>
+        ) : (
+          <Card title="Readings" subtitle="As found (before any adjustment) and, if adjusted or reworked, as left. Limits include the tolerance; checks are pass or fail.">
+            {characteristics.isLoading ? (
+              <LoadingScreen size="sm" />
+            ) : rows.length === 0 ? (
+              <p className="rounded-lg border-2 border-dashed border-border-dark-color p-4 text-center text-sm text-secondary-text">
+                This gauge has no characteristics. Choose the outcome below, or{" "}
+                <Link to={`/Calibration/Gauges/${gaugeId}`} className="text-link-color hover:underline">add characteristics to the gauge</Link>.
+              </p>
             ) : (
-              <SlidingToggle ariaLabel="Outcome" mode="radio" options={OUTCOMES.map((o) => ({ value: o.key, label: o.label, title: o.help, disabled: !canEdit }))} value={form.outcome} onChange={set("outcome")} />
+              <div className="overflow-x-auto">
+                {/* Fixed column widths: typing a reading or choosing pass / fail must never move the columns or the rows. */}
+                <table className="w-full min-w-[820px] table-fixed text-left text-sm" aria-label="Readings">
+                  <colgroup>
+                    <col />
+                    <col className="w-44" />
+                    <col className="w-36" />
+                    <col className="w-36" />
+                    <col className="w-56" />
+                  </colgroup>
+                  <thead className="text-secondary-text">
+                    <tr>
+                      <th className="py-1 pr-2 font-medium">Characteristic</th>
+                      <th className="py-1 pr-2 font-medium">Limits</th>
+                      <th className="py-1 pr-2 text-right font-medium">As found</th>
+                      <th className="py-1 pr-2 text-right font-medium">As left</th>
+                      <th className="py-1 font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-primary-text">
+                    {judged.map((r) => (
+                      <tr key={r.key} className={`border-t border-border-color ${r.asFoundOk === false && !r.asLeftOk ? "bg-error-color/5" : ""}`}>
+                        <td className="py-1.5 pr-2">
+                          {r.name}
+                          {r.method && <span className="block text-xs text-secondary-text">{r.method}</span>}
+                        </td>
+                        <td className="whitespace-nowrap py-1.5 pr-2 text-secondary-text">
+                          {r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}
+                        </td>
+                        {r.kind === "attribute" ? (
+                          <>
+                            <td className="py-1.5 pr-2 text-right">
+                              <PassFail label={`${r.name} as found`} value={r.input.asFoundPass ?? null} onChange={setReading(r.key, "asFoundPass")} disabled={!canEdit} />
+                            </td>
+                            <td className="py-1.5 pr-2 text-right">
+                              {/* Always there, so the row keeps its size; shown once the check failed as found (or already has an as-left result). */}
+                              <span className={asLeftOffered(r) ? "" : "invisible"} aria-hidden={asLeftOffered(r) ? undefined : true}>
+                                <PassFail label={`${r.name} as left`} value={r.input.asLeftPass ?? null} onChange={setReading(r.key, "asLeftPass")} disabled={!canEdit || !asLeftOffered(r)} allowClear />
+                              </span>
+                            </td>
+                          </>
+                        ) : (
+                        <>
+                        <td className="py-1.5 pr-2 text-right">
+                          <ReadingInput ok={r.input.asFound === "" || r.input.asFound == null ? undefined : r.asFoundOk} aria-label={`${r.name} as found`} value={r.input.asFound ?? ""} onChange={setReading(r.key, "asFound")} disabled={!canEdit}
+                            aria-invalid={!isNum(r.input.asFound) || undefined} />
+                        </td>
+                        <td className="py-1.5 pr-2 text-right">
+                          <ReadingInput ok={r.input.asLeft === "" || r.input.asLeft == null ? undefined : r.asLeftOk} aria-label={`${r.name} as left`} value={r.input.asLeft ?? ""} onChange={setReading(r.key, "asLeft")} disabled={!canEdit}
+                            placeholder={r.asFoundOk === false ? "After adjustment" : ""} aria-invalid={!isNum(r.input.asLeft) || undefined} />
+                        </td>
+                        </>
+                        )}
+                        <td className="py-1.5">
+                          <input aria-label={`${r.name} notes`} className="w-full rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1 text-sm focus:outline-none focus:border-brand-primary disabled:opacity-60"
+                            value={r.input.notes ?? ""} onChange={setReading(r.key, "notes")} disabled={!canEdit} maxLength={500} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-            {outcome === "fail" && isNew && <span className="text-error-color">Saving quarantines {g.assetNumber}.</span>}
-          </div>
-        </Card>
+            <div className="flex min-h-12 flex-wrap items-center gap-3 border-t border-border-color pt-3 text-sm">
+              <span className="text-secondary-text">Outcome</span>
+              {liveOutcome ? (
+                <>
+                  <OutcomePill outcome={liveOutcome} />
+                  <span className="text-secondary-text">
+                    {outcomeOf(liveOutcome).help}. Worked out from the readings
+                    {entered.length < judged.length ? ` (${judged.length - entered.length} of ${judged.length} not recorded).` : "."}
+                  </span>
+                </>
+              ) : (
+                <SlidingToggle ariaLabel="Outcome" mode="radio" options={OUTCOMES.map((o) => ({ value: o.key, label: o.label, title: o.help, disabled: !canEdit }))} value={form.outcome} onChange={set("outcome")} />
+              )}
+              {outcome === "fail" && isNew && <span className="text-error-color">Saving quarantines {g.assetNumber}.</span>}
+            </div>
+          </Card>
+        )}
 
         <Card title="Calibration details">
           <div className="grid grid-cols-1 items-start gap-x-8 gap-y-4 lg:grid-cols-2">

@@ -82,7 +82,7 @@ export type TemplateDetail = z.infer<typeof TemplateDetail>;
 export const TemplateVersionList = z.object({ data: z.array(TemplateVersion.omit({ fields: true, sourceSettings: true, expectedColumns: true }).extend({ fieldCount: z.number().int() })) });
 
 /** Preview an unsaved template against an uploaded file (T3: the screen and the import always agree because both run here). */
-export const REF_KINDS = ['site', 'department', 'unit', 'category', 'supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type'] as const;
+export const REF_KINDS = ['site', 'department', 'unit', 'category', 'supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge'] as const;
 
 /** The values a link field can take: the codes that exist in Fortress, with their names. */
 export const ReferenceValuesQuery = z

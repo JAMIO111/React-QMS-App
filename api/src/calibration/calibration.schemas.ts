@@ -316,6 +316,10 @@ export const CalibrationSummary = z.object({
   technician: Ref,
   supplier: Ref,
   certificateNumber: z.string().nullable(),
+  /** A record imported from an old system: the outcome it concluded, no readings. */
+  legacy: z.boolean(),
+  importedFrom: z.string().nullable(),
+  importedTechnician: z.string().nullable(),
   outcome: Outcome,
   nextDueOn: isoDate.nullable(),
   readingCount: z.number(),

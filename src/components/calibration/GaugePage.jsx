@@ -43,7 +43,7 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { withCustomValues } from "../../lib/customFields";
 import GaugeHistory from "./GaugeHistory";
 import PeoplePicker from "./PeoplePicker";
-import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
+import { DuePill, GaugeStatusPill, LegacyPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
@@ -129,6 +129,7 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
                 <tr key={c.id} className={`border-t border-border-color ${c.deletedAt ? "opacity-60" : ""}`}>
                   <td className="py-1.5 pr-2">
                     <Link to={`/Calibration/Gauges/${gaugeId}/calibrations/${c.id}`} className="font-medium text-link-color hover:underline">{c.reference}</Link>
+                    {c.legacy && <span className="ml-2"><LegacyPill importedFrom={c.importedFrom} /></span>}
                     {c.deletedAt && <span className="ml-2 text-xs text-error-color">Deleted</span>}
                   </td>
                   <td className="py-1.5 pr-2">{formatDate(c.calibratedOn)}</td>
@@ -136,7 +137,7 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
                     <OutcomePill outcome={c.outcome} />
                     {c.readingCount > 0 && <span className="ml-2 text-xs text-secondary-text">{c.readingCount} readings</span>}
                   </td>
-                  <td className="py-1.5 pr-2">{c.performedBy === "external" ? c.supplier?.name ?? "External" : c.technician?.name ?? "In-house"}</td>
+                  <td className="py-1.5 pr-2">{c.performedBy === "external" ? c.supplier?.name ?? "External" : c.technician?.name ?? c.importedTechnician ?? "In-house"}</td>
                   <td className="py-1.5 pr-2">{c.certificateNumber ?? "—"}{c.attachmentCount > 0 && <span className="ml-1 text-xs text-secondary-text">({c.attachmentCount} file{c.attachmentCount === 1 ? "" : "s"})</span>}</td>
                   <td className="py-1.5 pr-2">{formatDate(c.nextDueOn)}</td>
                   <td className="py-1.5 pr-2">{c.nonconformance ? <Link to={ncrPath(c.nonconformance.id)} className="text-link-color hover:underline">{c.nonconformance.reference}</Link> : "—"}</td>

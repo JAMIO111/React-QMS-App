@@ -26,3 +26,10 @@ export const DuePill = ({ state, days }) => {
     </span>
   );
 };
+
+/** A calibration imported from an old system: the outcome it concluded, no readings. Never shown for a calibration recorded in Fortress. */
+export const LegacyPill = ({ importedFrom }) => (
+  <span className={`${pill} bg-warning-color/15 text-warning-color`} title={importedFrom ? `Imported from ${importedFrom}` : "Imported from an old system"}>
+    Legacy record
+  </span>
+);

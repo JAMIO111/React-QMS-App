@@ -41,6 +41,7 @@ const REF_CODES: Partial<Record<RefKind, { table: string; column: string }>> = {
   machine: { table: 'public.machines', column: 'code' },
   employee: { table: 'public."Employees"', column: 'employee_number' },
   gauge_type: { table: 'public.gauge_types', column: 'code' },
+  gauge: { table: 'public.gauges', column: 'asset_number' },
 };
 
 const words = (field: CatalogueField | undefined, v: unknown): string | null => {

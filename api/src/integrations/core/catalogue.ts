@@ -33,7 +33,7 @@ export interface CatalogueField {
 }
 
 /** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */
-export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type';
+export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type' | 'gauge';
 export const REF_KIND_WORDS: Record<RefKind, string> = {
   site: 'site',
   department: 'department',
@@ -45,8 +45,9 @@ export const REF_KIND_WORDS: Record<RefKind, string> = {
   machine: 'machine',
   employee: 'employee',
   gauge_type: 'gauge type',
+  gauge: 'gauge',
 };
-const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type'];
+const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge'];
 
 export interface EntityCatalogue {
   entityType: EntityType;
@@ -192,6 +193,22 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'intervalUnit', label: 'Interval unit', type: 'enum', options: options(INTERVAL_UNITS) },
       { key: 'commissionedOn', label: 'Commissioned on', type: 'date' },
       { key: 'notes', label: 'Notes', type: 'text', maxLength: 5000, description: 'Calibration dates and status come from calibrations recorded in Fortress, not from the file' },
+    ],
+  },
+  {
+    entityType: 'calibration',
+    label: 'Calibration records (legacy)',
+    keyHint: 'The calibration record number in your old system',
+    fields: [
+      ref('gauge', 'Gauge', 'gauge', 'gauge asset number', { required: true, description: 'The asset number of the gauge in Fortress, or the id your source gave it when it was imported here; it must already exist' }),
+      { key: 'calibratedOn', label: 'Calibrated on', type: 'date', required: true, description: 'Not in the future' },
+      { key: 'outcome', label: 'Outcome', type: 'enum', required: true, options: options(['pass', 'adjusted', 'fail']), description: 'What the old system concluded: pass, adjusted (out as found, in tolerance as left) or fail. A fail quarantines the gauge if it is the latest calibration' },
+      { key: 'nextDueOn', label: 'Next due on', type: 'date', description: 'Empty works it out from the gauge\'s calibration interval' },
+      { key: 'certificateNumber', label: 'Certificate number', type: 'text', maxLength: 100 },
+      { key: 'performedBy', label: 'Done by', type: 'enum', options: options(['internal', 'external']), description: 'Internal or external; empty means internal' },
+      ref('supplier', 'Calibration supplier', 'supplier', 'supplier code'),
+      { key: 'technicianName', label: 'Technician', type: 'text', maxLength: 200, description: 'The name your source gives; it is text, not a link to a Fortress user' },
+      { key: 'notes', label: 'Notes', type: 'text', maxLength: 5000 },
     ],
   },
   {

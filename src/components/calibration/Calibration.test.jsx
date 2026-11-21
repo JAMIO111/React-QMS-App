@@ -179,6 +179,21 @@ describe("gauge page", () => {
   });
 });
 
+describe("legacy calibrations on the dashboard", () => {
+  it("says how many legacy calibrations are left out, and where to change it", async () => {
+    routeApi({ "GET /calibration-dashboard": { ...dashboard, legacy: { included: false, inPeriod: 3 } } });
+    renderAt("/Calibration");
+    expect(await screen.findByText(/3 legacy calibrations imported from an old system in this period are not counted/)).toBeInTheDocument();
+    expect(screen.getByText(/Settings → System preferences/)).toBeInTheDocument();
+  });
+
+  it("says they are counted when the organisation chose so, and says nothing when there are none", async () => {
+    routeApi({ "GET /calibration-dashboard": { ...dashboard, legacy: { included: true, inPeriod: 1 } } });
+    renderAt("/Calibration");
+    expect(await screen.findByText(/1 legacy calibration imported from an old system is counted/)).toBeInTheDocument();
+  });
+});
+
 describe("legacy calibration records", () => {
   const legacy = (over = {}) => record({ id: "c7", reference: "CAL-26-007", outcome: "pass", readingCount: 0, failedCount: 0, readings: [], legacy: true, technician: { id: null, name: null }, importedFrom: "oldqms", importedTechnician: "A. Hand", ...over });
 

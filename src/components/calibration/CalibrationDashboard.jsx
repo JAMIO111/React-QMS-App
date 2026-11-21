@@ -81,6 +81,13 @@ const CalibrationDashboard = () => {
         <DashboardSkeleton label="Loading the calibration dashboard" tiles={3} />
       ) : (
         <>
+          {data?.legacy && data.legacy.inPeriod > 0 && (
+            <Callout tone="info" role="status">
+              {data.legacy.included
+                ? `${data.legacy.inPeriod} legacy calibration${data.legacy.inPeriod === 1 ? "" : "s"} imported from an old system ${data.legacy.inPeriod === 1 ? "is" : "are"} counted in these figures.`
+                : `${data.legacy.inPeriod} legacy calibration${data.legacy.inPeriod === 1 ? "" : "s"} imported from an old system in this period ${data.legacy.inPeriod === 1 ? "is" : "are"} not counted below. Gauges still show their dates from ${data.legacy.inPeriod === 1 ? "it" : "them"}. This can be changed in Settings → System preferences.`}
+            </Callout>
+          )}
           {/* The gauges today beside how calibration is going. */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-busy={isLoading || undefined}>
             <HeroCard

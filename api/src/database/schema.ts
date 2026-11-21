@@ -38,6 +38,7 @@ export const organisationSettings = pgTable('organisation_settings', {
   allowInlineOrders: boolean('allow_inline_orders').notNull(),
   requireProductionOrder: boolean('require_production_order').notNull(),
   advancedImports: boolean('advanced_imports').notNull(),
+  includeLegacyCalibrations: boolean('include_legacy_calibrations').notNull(),
   reminderTime: time('reminder_time').notNull(),
   timeZone: text('time_zone'),
 });

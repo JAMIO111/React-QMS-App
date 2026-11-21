@@ -112,4 +112,21 @@ describe('legacy calibration records', () => {
     expect(again.counts).toMatchObject({ created: 0 });
     expect((await admin.query(`select count(*)::int as n from public.calibrations where organisation_id = $1`, [ids.orgA])).rows[0].n).toBe(2);
   });
+
+  it('leaves legacy calibrations out of the dashboard figures unless the organisation chooses to count them', async () => {
+    const q = '/api/v1/calibration-dashboard?from=2025-01-01&to=2026-12-31';
+    const off = (await api().get(q).set(await owner()).expect(200)).body;
+    expect(off.legacy).toEqual({ included: false, inPeriod: 2 });
+    expect(off.kpis.calibrated).toBe(0);
+    expect(off.outcomes.reduce((n: number, b: { pass: number; adjusted: number }) => n + b.pass + b.adjusted, 0)).toBe(0);
+    // The gauge's own state still follows the legacy calibration.
+    expect(off.kpis.inUse).toBeGreaterThan(0);
+
+    await api().patch('/api/v1/organisations/current').set(await owner()).send({ settings: { includeLegacyCalibrations: true } }).expect(200);
+    const on = (await api().get(q).set(await owner()).expect(200)).body;
+    expect(on.legacy).toEqual({ included: true, inPeriod: 2 });
+    expect(on.kpis.calibrated).toBe(2);
+    expect(on.outcomes.reduce((n: number, b: { pass: number; adjusted: number }) => n + b.pass + b.adjusted, 0)).toBe(2);
+    expect((await api().get('/api/v1/organisations/current').set(await owner()).expect(200)).body.settings.includeLegacyCalibrations).toBe(true);
+  });
 });

@@ -449,6 +449,8 @@ export const Dashboard = z.object({
     /** Share of in-use gauges that are not overdue (0–100), null without any. */
     compliance: z.number().nullable(),
   }),
+  /** Imported history: whether the period figures count it, and how many legacy records fall in the period. */
+  legacy: z.object({ included: z.boolean(), inPeriod: z.number() }),
   dueSchedule: z.array(z.object({ start: isoDate, count: z.number() })),
   outcomes: z.array(z.object({ start: isoDate, pass: z.number(), adjusted: z.number(), fail: z.number() })),
   byStatus: z.array(Count),

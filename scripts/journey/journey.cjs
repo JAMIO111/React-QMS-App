@@ -235,6 +235,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -2025,6 +2026,80 @@ async function costCurrency({ page, stack, APP, orgName, see, shot, step, log, o
   log(`cost currency: ${ncr.reference} ${foreign} line estimated at 0.85, then stated as 90 ${org.site_ccy}`);
 }
 
+
+/**
+ * Legacy calibration records: a file of old calibrations is imported against gauges by asset number, each record is marked legacy and has no readings, the
+ * gauge shows its last and next due dates from the latest one, and the calibration dashboard leaves them out until the organisation chooses to count them
+ * (Settings → System preferences).
+ */
+async function legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const { rows: [d] } = await stack.admin.query(
+    `select (current_date - 60)::text as recent, (current_date - 200)::text as older, (current_date + 120)::text as next, (current_date - 60 + 180)::text as recent_next`);
+  const { rows: [gauge] } = await stack.admin.query(
+    `insert into public.gauges (organisation_id, asset_number, description) values ($1, 'JT-LEGACY-1', 'Imported caliper') returning id`, [org.id]);
+
+  step('owner imports old calibrations from a file as legacy records');
+  await page.goto(`${APP}/Settings/Integrations`);
+  await page.getByRole('link', { name: /Import a file/ }).click();
+  await page.getByRole('button', { name: /^Calibration records/ }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByText('How to read the file'));
+  const csv = [
+    'Id,Gauge,Calibrated on,Outcome,Next due on,Certificate number,Technician',
+    `OLD-1,JT-LEGACY-1,${d.recent},pass,${d.next},CERT-9,A. Hand`,
+    `OLD-2,JT-LEGACY-1,${d.older},adjusted,${d.recent_next},,`,
+  ].join('\n');
+  await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'calibrations.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await see(page.getByRole('table', { name: 'First rows' }));
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByRole('listitem', { name: 'Gauge', exact: true }));
+  await shot(page, 'legacy-calibration-mapping');
+  await page.getByRole('button', { name: 'Import 2 rows' }).click();
+  const dialog = page.getByRole('dialog');
+  await see(dialog.getByLabel('Template name'));
+  await dialog.getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+  await see(page.getByText(/template Calibration records \(legacy\) from calibrations\.csv version 1/i).or(page.getByText(/calibrations\.csv/)).first());
+  const made = (await stack.admin.query(
+    `select is_legacy, imported_technician, outcome, certificate_number,
+            (select count(*)::int from public.calibration_readings r where r.calibration_id = c.id) as readings
+       from public.calibrations c where gauge_id = $1 order by calibrated_on desc`, [gauge.id])).rows;
+  log(`legacy calibrations: ${JSON.stringify(made)}`);
+  if (made.length !== 2 || !made.every((r) => r.is_legacy && r.readings === 0) || made[0].outcome !== 'pass' || made[0].imported_technician !== 'A. Hand') {
+    throw new Error(`the legacy import did not write what the file said: ${JSON.stringify(made)}`);
+  }
+
+  step('the gauge shows its dates and the records are marked legacy');
+  await page.goto(`${APP}/Calibration/Gauges/${gauge.id}`);
+  const history = page.getByRole('table', { name: 'Calibration history' });
+  await see(history);
+  await see(history.getByText('Legacy record').first());
+  await see(history.getByText('CERT-9'));
+  await shot(page, 'legacy-calibration-history');
+  const g = (await stack.admin.query(`select last_calibrated_on::text as last, next_due_on::text as next from public.gauges where id = $1`, [gauge.id])).rows[0];
+  if (g.last !== d.recent || g.next !== d.next) throw new Error(`the gauge did not follow its latest calibration: ${JSON.stringify(g)}`);
+  await history.getByRole('link', { name: /^CAL-/ }).first().click();
+  await see(page.getByText(/Imported from/));
+  await see(page.getByText(/has no readings/));
+
+  step('the dashboard leaves legacy calibrations out until they are counted');
+  await page.goto(`${APP}/Calibration`);
+  await see(page.getByText(/2 legacy calibrations imported from an old system in this period are not counted/));
+  await shot(page, 'legacy-calibration-dashboard-off');
+  await page.goto(`${APP}/Settings/System-Preferences`);
+  const toggle = page.getByRole('switch', { name: 'Include legacy calibrations in the dashboard' });
+  await see(toggle);
+  await page.locator('label', { has: toggle }).click();
+  await page.goto(`${APP}/Calibration`);
+  await see(page.getByText(/2 legacy calibrations imported from an old system are counted in these figures/));
+  await shot(page, 'legacy-calibration-dashboard-on');
+  const on = (await stack.admin.query(`select include_legacy_calibrations as on from public.organisation_settings where organisation_id = $1`, [org.id])).rows[0].on;
+  if (on !== true) throw new Error('the System preferences switch did not save');
+  // Put it back, so later steps see the default.
+  await stack.admin.query(`update public.organisation_settings set include_legacy_calibrations = false where organisation_id = $1`, [org.id]);
+  log('legacy calibrations: imported, marked, kept off the dashboard until counted');
+}
 async function networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
   const OFFICE = '203.0.113.10';
   const HOME = '198.51.100.200';

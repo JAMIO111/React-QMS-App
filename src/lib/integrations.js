@@ -468,7 +468,7 @@ export const ENTITY_DESCRIPTIONS = {
   machine: "Machines and work centres, by site.",
   employee: "People who work here (not sign-ins).",
   gauge_type: "Kinds of gauge and how often they are calibrated.",
-  gauge: "Individual gauges. Import their old calibrations as legacy records so they show when they are next due.",
+  gauge: "Individual gauges. Import their old calibrations as legacy records so they do not show as uncalibrated.",
   calibration: "A gauge's past calibrations, as the old system concluded them (no readings). Each is marked legacy in Fortress and is only ever added.",
   nonconformance: "Historical non-conformances, added as drafts.",
   production_order: "Works orders.",

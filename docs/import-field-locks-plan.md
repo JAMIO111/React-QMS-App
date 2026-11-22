@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: LK1 (database), LK2 (API) and LK3 (forms) built and tested; LK4 not started. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1–LK4 built and tested (custom fields, part revisions and order lines are not covered); the browser journey passes with the lock steps. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 
@@ -99,6 +99,10 @@ Migration `20260418100000_import_field_locks.sql`, test `supabase/tests/import_f
 ## 8c. LK3 as built
 
 `ui/Tooltip.jsx` (hover and keyboard focus, Escape closes, `data-popover` portal), `ui/LockedMark.jsx` (a lock button beside the label that carries the tooltip), `lib/importLocks.js` (`lockMessage`, `lockKey`: a form's own name → the catalogue key, e.g. `siteId` → `site`), `hooks/useImportLocks.js` (`lock("name")` → `{ lockedBy, disabled: true }` or `{}`). `lockedBy` is accepted by `Field`, `TextInput`, `RHFComboBox` (so `ComboField` and the pickers), `RHFDatePickerPopout`, `RHFTextArea`, `TextAreaField`, `Switch` and `SelectField`; `AddressFields` and `CompanyContactFields` take a `lock` function. Wired into: customers and suppliers dialog, the supplier quality dialog, part details, machines, employees, gauge types (Settings), the gauge page and the production order dialog. An accessible name of a locked field reads "Name Managed by ERP" (the lock's label is inside the field's label). Tests `ui/LockedFields.test.jsx` and two in `master-data/MasterData.test.jsx`. Row actions and registers rely on the database refusal and show its message.
+
+## 8d. LK4 as built
+
+Ownership words on the mapping page now say what each choice means for people (source wins locks the field while a schedule is on; Fortress wins and review stay editable). The connection's Schedule card (`KeepHealthy.jsx`) lists, from the schedule's template, the fields people cannot edit (`fieldsOwnedBySource` in `lib/importLocks.js`: source-wins fields of an updating template for the eight guarded kinds, leaving out custom fields and a part's revision). The journey (`importFromApi` in `scripts/journey/journey.cjs`) saves the API template as "Add new and update existing", switches a daily schedule on, sees the note, opens a machine whose name is locked (disabled, lock with tooltip), edits an unmapped field, has the database refuse a direct change (`QM033`), switches the schedule off and sees the field free. **Custom field locks were left out**: they need the same guard on `app.set_custom_values` and a lock in the More details card, so they are a separate small slice if wanted.
 
 ## 9. Slices
 

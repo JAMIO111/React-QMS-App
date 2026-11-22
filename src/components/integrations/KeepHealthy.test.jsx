@@ -103,6 +103,40 @@ describe("daily schedules", () => {
   });
 });
 
+describe("fields a schedule locks", () => {
+  const scheduled = setting({ schedule: "daily", templateId: "t1", template: { id: "t1", name: "Plant machines", version: 2, archived: false } });
+  const version = (fields, writeMode = "add_update") => ({
+    id: "t1", name: "Plant machines", entityType: "machine", currentVersion: 2, canManage: true,
+    current: { version: 2, keyField: "Id", fields, settings: { writeMode, matchExisting: false }, current: true },
+  });
+  const entities = { data: [{ entityType: "machine", label: "Machines", fields: [{ key: "code", label: "Code" }, { key: "name", label: "Name" }, { key: "description", label: "Description" }] }] };
+
+  it("lists the fields people cannot edit while the schedule is on, leaving out the ones Fortress or a reviewer owns", async () => {
+    routeApi(pageRoutes({
+      "GET /integrations/connections/c1/settings": { data: [scheduled] },
+      "GET /integrations/templates/t1": version([{ target: "code" }, { target: "name" }, { target: "description", ownership: "qms_wins" }, { target: "workCentre", ownership: "manual_review" }]),
+      "GET /integrations/entities": entities,
+    }));
+    renderAt("/Settings/Integrations/c1");
+    const row = await screen.findByRole("listitem", { name: "Machines schedule" });
+    const note = await within(row).findByText(/people cannot edit Code, Name/);
+    expect(note).toHaveTextContent("To keep a field editable, set it to “Fortress wins”");
+    expect(within(row).getByText("These fields are locked in Fortress while this schedule is on")).toBeInTheDocument();
+  });
+
+  it("says nothing when the schedule is off or the template only adds", async () => {
+    routeApi(pageRoutes({
+      "GET /integrations/connections/c1/settings": { data: [scheduled] },
+      "GET /integrations/templates/t1": version([{ target: "code" }], "add_only"),
+      "GET /integrations/entities": entities,
+    }));
+    renderAt("/Settings/Integrations/c1");
+    const row = await screen.findByRole("listitem", { name: "Machines schedule" });
+    await waitFor(() => expect(calls.some((c) => c.k === "GET /integrations/templates/t1")).toBe(true));
+    expect(within(row).queryByText(/locked in Fortress/)).toBeNull();
+  });
+});
+
 describe("records no longer in the source", () => {
   it("keeps chosen records active with a reason, and makes others inactive", async () => {
     let open = [missing(), missing({ id: "m2", externalId: "M3", record: { id: "mc3", label: "PRESS-3 — Press 3", active: true } })];

@@ -7,3 +7,20 @@ export const isLockedByImport = (error) => error?.code === "field_managed_by_imp
 
 /** A form's own name for a field → the import catalogue's key for it (`siteId` → `site`, `unitCode` → `unit`); names that already match stay as they are. */
 export const lockKey = (name) => name.replace(/(Id|Code)$/, "");
+
+/** The kinds of record the database guards (the same eight tables as `app.integration_lock_table`). */
+export const LOCKABLE_KINDS = ["supplier", "customer", "part", "machine", "employee", "gauge_type", "gauge", "production_order"];
+/** Catalogue fields that fill another table (a part's revision) or a custom value: the guard does not cover them, so they are never locked. */
+const NOT_GUARDED = { part: ["revision"] };
+
+/**
+ * The fields of a record that a scheduled import with this template version would own: mapped as "source wins" (not Fortress wins, not review), the version
+ * updates records, and the field is one the database guards. The lock itself is worked out by the database; this is what the Schedule card tells people.
+ */
+export const fieldsOwnedBySource = (entityType, version) => {
+  if (!LOCKABLE_KINDS.includes(entityType) || !["add_update", "update_only"].includes(version?.settings?.writeMode)) return [];
+  const skip = NOT_GUARDED[entityType] ?? [];
+  return (version.fields ?? [])
+    .filter((f) => f.target && !String(f.target).startsWith("cf_") && !skip.includes(f.target) && !["qms_wins", "manual_review"].includes(f.ownership))
+    .map((f) => f.target);
+};

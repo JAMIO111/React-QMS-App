@@ -1116,6 +1116,9 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await page.getByRole('option', { name: /^plant/ }).click();
   await see(code.getByLabel('Example for Code').getByText('ERP-M1'));
   await shot(page, '82-api-map-fields');
+  // A template that only adds never updates a record, so nothing could be locked: this one keeps the records in sync.
+  await page.getByRole('combobox', { name: 'Records' }).last().click();
+  await page.getByRole('option', { name: /^Add new and update existing/ }).click();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const save = page.getByRole('dialog');
   await see(save.getByLabel('Template name'));
@@ -1170,7 +1173,67 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   if (ignored.length !== 1) throw new Error(`the row was not ignored with its reason: ${JSON.stringify(ignored)}`);
   await shot(page, '84-api-rows-ignored');
 
+  step('owner switches the schedule on: the fields the import owns lock in Fortress, the others stay editable');
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
+  const sched = page.getByRole('listitem', { name: 'Machines schedule' });
+  await sched.getByRole('combobox', { name: /Import template/ }).click();
+  await page.getByRole('option', { name: /Machines from Plant ERP/ }).click();
+  await sched.getByRole('button', { name: 'Daily' }).click();
+  await see(sched.getByText('These fields are locked in Fortress while this schedule is on'));
+  await see(sched.getByText(/people cannot edit Code, Name/));
+  await shot(page, '86-schedule-locks-fields');
+  const openMachine = async (code) => {
+    await page.goto(`${APP}/Machines`);
+    await page.getByLabel('Search machines').fill(code);
+    await page.getByRole('row', { name: new RegExp(code) }).first().click();
+    return page.getByRole('dialog', { name: `Edit ${code}` });
+  };
+  let edit = await openMachine('ERP-M1');
+  const nameBox = edit.getByRole('textbox', { name: /^Name/ });
+  await see(edit.getByRole('button', { name: 'Managed by Plant ERP' }).first());
+  if (!(await nameBox.isDisabled())) throw new Error('the name of an imported machine can be edited while its schedule is on');
+  if (await edit.getByRole('textbox', { name: /^Description/ }).isDisabled()) throw new Error('the description, which the template does not map, is locked');
+  await edit.getByRole('button', { name: 'Managed by Plant ERP' }).first().hover();
+  await see(page.getByRole('tooltip').getByText(/Managed by Plant ERP\. It updates this field on a schedule/));
+  await shot(page, '87-machine-locked-field');
+  await edit.getByRole('textbox', { name: /^Description/ }).fill('Edited in Fortress');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  let desc = null;
+  for (let i = 0; i < 40 && desc !== 'Edited in Fortress'; i += 1) {
+    desc = (await stack.admin.query(`select description from public.machines where organisation_id = $1 and code = 'ERP-M1'`, [org.id])).rows[0].description;
+    if (desc !== 'Edited in Fortress') await page.waitForTimeout(250);
+  }
+  if (desc !== 'Edited in Fortress') throw new Error('the unlocked description was not saved');
+  // The database refuses a person's change to a locked field, whatever the screen does.
+  const person = (await stack.admin.query(`select created_by from public.integration_connections where id = $1`, [connId])).rows[0].created_by;
+  const client = await stack.admin.connect();
+  let refused = null;
+  try {
+    await client.query('begin');
+    await client.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: person, role: 'authenticated' })]);
+    await client.query('set local role authenticated');
+    await client.query(`update public.machines set name = 'Hacked' where organisation_id = $1 and code = 'ERP-M1'`, [org.id]);
+  } catch (e) {
+    refused = e;
+  } finally {
+    await client.query('rollback').catch(() => {});
+    client.release();
+  }
+  log(`direct edit of a locked field: ${refused ? `${refused.code} ${refused.message}` : 'allowed'}`);
+  if (!refused || refused.code !== 'QM033') throw new Error(`the database did not refuse a direct change to a locked field: ${refused?.message}`);
+
+  step('with the schedule back to by hand, the same field can be edited');
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
+  await page.getByRole('listitem', { name: 'Machines schedule' }).getByRole('button', { name: 'By hand' }).click();
+  await page.waitForTimeout(600);
+  edit = await openMachine('ERP-M1');
+  await see(edit.getByRole('textbox', { name: 'Name' }));
+  if (await edit.getByRole('textbox', { name: 'Name' }).isDisabled()) throw new Error('the name is still locked after the schedule was switched off');
+  if (await edit.getByRole('button', { name: /Managed by/ }).count()) throw new Error('the lock mark is still shown after the schedule was switched off');
+  await page.keyboard.press('Escape');
+
   step('owner revokes the credential; the connection can no longer be tested');
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
   await page.getByRole('button', { name: 'Revoke' }).click();
   const revoke = page.getByRole('dialog', { name: 'Revoke the credential' });
   await revoke.getByLabel('Reason').fill('Token rotated in the ERP');

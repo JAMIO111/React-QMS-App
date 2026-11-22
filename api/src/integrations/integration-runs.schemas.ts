@@ -85,16 +85,28 @@ export const Run = z.object({
   /** The import template and the version this run was pinned to (UI2a); null when it used a connection mapping. */
   template: z.object({ id: z.string().uuid(), name: z.string(), version: z.number().int() }).nullable(),
   /** The import settings this run used (frozen when it was asked for); null for runs from before IN4. */
-  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), onMissing: z.string(), schedule: z.string() }).nullable(),
+  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), onMissing: z.string(), schedule: z.string(), costsOnClosed: z.boolean().optional() }).nullable(),
 });
 export const RunPage = z.object({ data: z.array(Run), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
+/** What a cost import does about currencies (IC2): the lines, how many already have a published rate for their date, and which wait. */
+export const CostRunSummary = z.object({
+  lines: z.number().int(),
+  currencies: z.array(z.object({ currency: z.string(), lines: z.number().int(), withRate: z.number().int(), waiting: z.number().int() })),
+  onClosed: z.number().int(),
+  onCancelled: z.number().int(),
+  booked: z.number().int(),
+  /** Lines already written that are still waiting for a rate. */
+  waitingNow: z.number().int(),
+});
 export const RunDetail = Run.extend({
   cursorStart: z.string().nullable(),
   cursorNext: z.string().nullable(),
   errors: z.array(z.object({ attempt: z.number().int(), kind: z.string(), message: z.string(), transient: z.boolean(), at: Iso })),
   /** The rows this run staged or worked on, by their status now (a retry may have applied some since). */
   rowsNow: z.record(z.enum(ROW_STATUSES), z.number().int()),
+  /** Only for a cost import: the currency summary (null for other runs, and for someone who cannot read it). */
+  costs: CostRunSummary.nullable().optional(),
   /** Only in answers to a command: how the work done during the request ended (`paused`: carry on to continue). */
   drain: z.object({ state: z.enum(['finished', 'paused', 'waiting', 'failed', 'blocked']), reason: z.string().nullable() }).nullable(),
 });

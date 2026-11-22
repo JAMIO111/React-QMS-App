@@ -280,6 +280,12 @@ BEGIN
     jsonb_build_object('externalId', 'S-4', 'payload', '{}'::jsonb, 'canonical', jsonb_build_object('nonconformanceId', ncr_a, 'costType', 'scrap', 'incurredOn', d::text, 'currency', 'GBP', 'unitCost', 1)),
     jsonb_build_object('externalId', 'S-5', 'payload', '{}'::jsonb, 'canonical', jsonb_build_object('nonconformanceId', ncr_imp_closed, 'costType', 'scrap', 'incurredOn', d::text, 'currency', 'GBP', 'unitCost', 1)),
     jsonb_build_object('externalId', 'S-6', 'payload', '{}'::jsonb, 'canonical', jsonb_build_object('nonconformanceId', ncr_imp_cancelled, 'costType', 'scrap', 'incurredOn', d::text, 'currency', 'gbp', 'unitCost', 1))), NULL, true);
+  -- what the API fetches before it writes a line: only the pairs the cache does not answer
+  sm := app.system_integration_cost_rates_needed(org, run, owner);
+  PERFORM pg_temp.assert_eq(jsonb_array_length(sm), 1, 'only one pair is missing from the cache: the Canadian dollar');
+  PERFORM pg_temp.assert_eq(sm -> 0 ->> 'base', 'CAD', 'it is the Canadian dollar');
+  PERFORM pg_temp.assert_eq(sm -> 0 -> 'quotes', '["GBP"]'::jsonb, 'wanted in pounds, the site and organisation currency');
+  PERFORM pg_temp.assert_eq(sm -> 0 ->> 'requestedOn', d::text, 'on its own day');
   PERFORM app.system_finish_integration_run(org, run, owner);
   PERFORM pg_temp.login(ann);
   sm := app.integration_cost_run_summary(run);

@@ -147,12 +147,17 @@ export class IntegrationRunsService {
     const r = rows.rows[0];
     const rowsNow = Object.fromEntries(ROW_STATUSES.map((s) => [s, 0])) as Record<(typeof ROW_STATUSES)[number], number>;
     for (const s of statuses.rows) rowsNow[s.status as (typeof ROW_STATUSES)[number]] = Number(s.n);
+    const costs =
+      r.entity_type === 'ncr_cost'
+        ? ((await db.execute<Row>(sql`select app.integration_cost_run_summary(${runId}::uuid) as s`)).rows[0]?.s as RunDetail['costs']) ?? null
+        : null;
     return {
       ...toRun(r),
       cursorStart: (r.cursor_start as string) ?? null,
       cursorNext: (r.cursor_next as string) ?? null,
       errors: errors.rows.map((e) => ({ attempt: Number(e.attempt), kind: e.kind as string, message: e.message as string, transient: !!e.transient, at: iso(e.at)! })),
       rowsNow,
+      costs,
       drain: null,
     };
   }

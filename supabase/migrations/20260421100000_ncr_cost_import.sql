@@ -189,10 +189,17 @@ BEGIN
       LEFT JOIN public.nonconformances n ON n.id = x.ncr AND n.organisation_id = r.organisation_id
       LEFT JOIN public.sites si ON si.id = n.site_id AND si.organisation_id = n.organisation_id
       LEFT JOIN public.ncr_costs c ON c.id = x.internal_id AND c.organisation_id = r.organisation_id
+  ), pairs AS (
+    -- the cache is asked once per currency, day and site currency, however many lines share them
+    SELECT DISTINCT ccy, on_day, site_ccy FROM joined WHERE ccy IS NOT NULL
+  ), pair_rate AS (
+    SELECT p.*, CASE WHEN p.ccy = p.site_ccy THEN true
+                     ELSE EXISTS (SELECT 1 FROM app.exchange_rate_lookup(p.on_day, p.ccy, p.site_ccy) l WHERE l.supported) END AS has_rate
+      FROM pairs p
   ), rated AS (
-    SELECT j.*, CASE WHEN j.ccy = j.site_ccy THEN true
-                     ELSE EXISTS (SELECT 1 FROM app.exchange_rate_lookup(j.on_day, j.ccy, j.site_ccy) l WHERE l.supported) END AS has_rate
+    SELECT j.*, coalesce(pr.has_rate, false) AS has_rate
       FROM joined j
+      LEFT JOIN pair_rate pr ON pr.ccy IS NOT DISTINCT FROM j.ccy AND pr.on_day IS NOT DISTINCT FROM j.on_day AND pr.site_ccy = j.site_ccy
   )
   SELECT jsonb_build_object(
     'lines', (SELECT count(*) FROM rated),
@@ -207,3 +214,40 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.integration_cost_run_summary(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION app.integration_cost_run_summary(uuid) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The exchange rates a run's lines will need and the cache does not hold yet (API login only)
+-- ---------------------------------------------------------------------------
+-- Before the first line of a run is written (and for a preview, so its summary is true), the API fetches these and stores them, so most lines land with their rate
+-- instead of waiting for the worker. The shape is the one app.system_cost_rates_needed answers for lines already written: one entry per (day, currency) with the
+-- currencies it must be converted into (the NC's site currency and the organisation's), leaving out what the cache already answers.
+CREATE FUNCTION app.system_integration_cost_rates_needed(p_org uuid, p_run uuid, p_owner uuid, p_limit integer DEFAULT 200) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE r public.integration_sync_runs%ROWTYPE; v_org_ccy text; v_out jsonb;
+BEGIN
+  r := app.integration_run_for_system(p_org, p_run, p_owner);
+  IF r.entity_type <> 'ncr_cost' THEN RETURN '[]'::jsonb; END IF;
+  SELECT coalesce(s.base_currency, 'GBP') INTO v_org_ccy FROM public.organisation_settings s WHERE s.organisation_id = r.organisation_id;
+  v_org_ccy := coalesce(v_org_ccy, 'GBP');
+  SELECT coalesce(jsonb_agg(jsonb_build_object('requestedOn', p.d, 'base', p.ccy, 'quotes', p.quotes)), '[]'::jsonb) INTO v_out
+  FROM (
+    SELECT x.d, x.ccy, array_agg(DISTINCT q) FILTER (WHERE NOT EXISTS (SELECT 1 FROM app.exchange_rate_lookup(x.d, x.ccy, q))) AS quotes
+      FROM (
+        SELECT least((i.canonical ->> 'incurredOn')::date, current_date) AS d,
+               upper(nullif(btrim(i.canonical ->> 'currency'), '')) AS ccy,
+               coalesce(si.currency, v_org_ccy) AS site_ccy
+          FROM public.integration_inbox i
+          LEFT JOIN public.nonconformances n
+            ON n.organisation_id = r.organisation_id AND (i.canonical ->> 'nonconformanceId') ~ '^[0-9a-f-]{36}$' AND n.id = (i.canonical ->> 'nonconformanceId')::uuid
+          LEFT JOIN public.sites si ON si.id = n.site_id AND si.organisation_id = n.organisation_id
+         WHERE (i.run_id = r.id OR i.last_run_id = r.id) AND i.entity_type = 'ncr_cost' AND i.status IN ('staged', 'previewed')
+           AND (i.canonical ->> 'incurredOn') ~ '^\d{4}-\d{2}-\d{2}'
+      ) x, LATERAL unnest(ARRAY[x.site_ccy, v_org_ccy]) AS q
+     WHERE x.ccy ~ '^[A-Z]{3}$' AND q <> x.ccy
+     GROUP BY x.d, x.ccy
+     LIMIT greatest(least(coalesce(p_limit, 200), 500), 1)
+  ) p WHERE p.quotes IS NOT NULL;
+  RETURN v_out;
+END $$;
+REVOKE ALL ON FUNCTION app.system_integration_cost_rates_needed(uuid, uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION app.system_integration_cost_rates_needed(uuid, uuid, uuid, integer) TO qms_api;

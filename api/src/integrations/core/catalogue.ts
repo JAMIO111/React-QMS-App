@@ -1,3 +1,4 @@
+import { COST_TYPES } from '../../ncr/ncr-records.schemas';
 import { NCR_SOURCE_LABELS, NCR_SOURCES } from '../../ncr/ncr.schemas';
 import { EntityType } from './entity-importer';
 
@@ -33,7 +34,7 @@ export interface CatalogueField {
 }
 
 /** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */
-export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type' | 'gauge';
+export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type' | 'gauge' | 'nonconformance';
 export const REF_KIND_WORDS: Record<RefKind, string> = {
   site: 'site',
   department: 'department',
@@ -46,8 +47,9 @@ export const REF_KIND_WORDS: Record<RefKind, string> = {
   employee: 'employee',
   gauge_type: 'gauge type',
   gauge: 'gauge',
+  nonconformance: 'non-conformance',
 };
-const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge'];
+const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance'];
 
 export interface EntityCatalogue {
   entityType: EntityType;
@@ -64,6 +66,8 @@ const words = (v: string) => v.replace(/_/g, ' ').replace(/^./, (c) => c.toUpper
 const options = (values: readonly string[], label: (v: string) => string = words) => values.map((v) => ({ value: v, label: label(v) }));
 const INTERVAL_UNITS = ['days', 'weeks', 'months', 'years'];
 const NC_IMPORT_STAGES = ['draft', 'open', 'contained', 'investigating', 'dispositioned', 'awaiting_closure', 'closed', 'cancelled'];
+/** How a cost type reads on a screen (the same words as the cost form). */
+const COST_TYPE_LABELS: Record<string, string> = { tools_equipment: 'Tools and equipment', waste_disposal: 'Waste disposal' };
 const PRODUCTION_STATUSES = ['planned', 'released', 'in_progress', 'completed', 'closed', 'cancelled'];
 
 /** A link to another Fortress record, given in the file by its code (matched ignoring case when the record is imported). */
@@ -251,6 +255,27 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'customerReference', label: 'Customer reference', type: 'text', maxLength: 60 },
       { key: 'lotNumber', label: 'Lot number', type: 'text', maxLength: 60 },
       { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 60, description: 'Imported non-conformances get a Fortress reference' },
+    ],
+  },
+  {
+    entityType: 'ncr_cost',
+    label: 'NC cost lines',
+    keyHint: 'The id of the cost line in your system (each line is imported once)',
+    fields: [
+      ref('nonconformance', 'Non-conformance', 'nonconformance', 'non-conformance reference, such as SNC-26-0011', {
+        required: true,
+        description:
+          'The non-conformance this cost belongs to: the id your source gave it when the non-conformances were imported here (import them first, through this connection), or its Fortress reference. A closed or cancelled non-conformance takes new costs only when your template says so and an import brought it in',
+      }),
+      { key: 'costType', label: 'Cost type', type: 'enum', required: true, options: options(COST_TYPES, (v) => COST_TYPE_LABELS[v] ?? words(v)), description: 'Translate your cost codes to these. Supplier recovery and customer charge are credits: they reduce the cost of the non-conformance' },
+      { key: 'description', label: 'Description', type: 'text', maxLength: 500 },
+      { key: 'incurredOn', label: 'Incurred on', type: 'date', required: true, description: 'The date decides the exchange rate, so it is never filled in for you. A future date uses today\'s rate' },
+      { key: 'currency', label: 'Currency', type: 'currency', required: true, description: 'Three letters, such as EUR. Each line is converted on its own date into the currency of the non-conformance\'s site and into the organisation\'s currency; nothing is converted in the file' },
+      { key: 'unitCost', label: 'Unit cost', type: 'number', required: true, min: 0, description: 'Not below 0: import a credit as a supplier recovery or a customer charge. If your source has only a total, put it here and leave Quantity empty' },
+      { key: 'quantity', label: 'Quantity', type: 'number', description: 'More than 0, decimals allowed (hours, kg…); empty means 1' },
+      { key: 'vatTreatment', label: 'VAT', type: 'enum', options: options(['none', 'inclusive', 'exclusive'], (v) => ({ none: 'No VAT', inclusive: 'Amount includes VAT', exclusive: 'VAT on top' })[v] ?? words(v)), description: 'Empty means no VAT' },
+      { key: 'vatRate', label: 'VAT rate (%)', type: 'number', min: 0, description: 'A percentage such as 20. Empty with a VAT choice uses the organisation\'s rate' },
+      { key: 'bookedValue', label: 'Value in the site currency', type: 'number', min: 0, description: 'What your source booked for the whole line in the site\'s currency. When given, it is kept instead of a published rate and the line shows as Actual; ignored when the line is already in the site currency' },
     ],
   },
   {

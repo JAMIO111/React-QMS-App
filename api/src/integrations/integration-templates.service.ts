@@ -70,7 +70,11 @@ const toVersion = (r: Row): TemplateVersion => {
     fields: (r.fields as Record<string, unknown>[]) ?? [],
     sourceSettings: (r.source_settings as Record<string, unknown>) ?? {},
     expectedColumns: (r.expected_columns as string[]) ?? [],
-    settings: { writeMode: (s.writeMode as string) ?? 'add_only', matchExisting: !!s.matchExisting },
+    settings: {
+      writeMode: (s.writeMode as string) ?? 'add_only',
+      matchExisting: !!s.matchExisting,
+      ...('costsOnClosed' in s ? { costsOnClosed: !!s.costsOnClosed } : {}),
+    },
     reason: (r.reason as string) ?? null,
     current: Number(r.version) === Number(r.current_version),
     createdBy: person(r.created_by, r.created_by_name),

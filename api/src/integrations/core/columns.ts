@@ -171,6 +171,30 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       source_change_reason: 'Changing the source is a person\'s step with a reason',
     },
   },
+  ncr_cost: {
+    table: 'ncr_costs',
+    fields: {
+      nonconformance: { column: 'nonconformance_id' }, costType: { column: 'cost_type' }, description: { column: 'description' }, incurredOn: { column: 'incurred_on' },
+      currency: { column: 'currency' }, unitCost: { column: 'unit_cost' }, quantity: { column: 'quantity' }, vatTreatment: { column: 'vat_treatment' },
+      // a percentage in the file, a fraction in the column: the column's own limits do not describe the file's value
+      vatRate: { column: 'vat_rate', ownRules: true },
+    },
+    excluded: {
+      ...SYSTEM,
+      amount: 'Worked out by the database: quantity × unit cost',
+      net_amount: 'Worked out by the database', vat_amount: 'Worked out by the database', gross_amount: 'Worked out by the database',
+      base_currency: 'The currency of the non-conformance\'s site, fixed when the line is made', org_currency: 'The organisation\'s currency, fixed when the line is made',
+      exchange_rate: 'Looked up for the line\'s own date, never typed; a booked value states it instead', org_rate: 'Looked up by the database',
+      net_base: 'Worked out by the database', gross_base: 'Worked out by the database', net_org: 'Worked out by the database', gross_org: 'Worked out by the database',
+      cost_sign: 'Set by the cost type: a recovery or a charge is a credit',
+      rate_status: 'Worked out by the database', rate_source: 'Worked out by the database', rate_date: 'Worked out by the database',
+      rate_fetched_at: 'Worked out by the database', estimated_rate: 'Kept by the database when a booked value is stated',
+      override_kind: 'Set when a booked value is applied', override_note: 'Set when a booked value is applied',
+      overridden_at: 'Set when a booked value is applied', overridden_by: 'Set when a booked value is applied',
+      deleted_at: 'Deleting is a person\'s step with a reason', deleted_by: 'Deleting is a person\'s step with a reason', delete_reason: 'Deleting is a person\'s step with a reason',
+    },
+    virtual: { bookedValue: 'The value the source booked in the site currency: applied as a stated rate on the line, not stored as a column of its own' },
+  },
   purchase_order: {
     table: 'purchase_order_lines',
     fields: {

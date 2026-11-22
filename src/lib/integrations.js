@@ -470,7 +470,7 @@ export const ENTITY_DESCRIPTIONS = {
   gauge_type: "Kinds of gauge and how often they are calibrated.",
   gauge: "Individual gauges. Import their old calibrations as legacy records so they do not show as uncalibrated.",
   calibration: "A gauge's past calibrations, as the old system concluded them (no readings). Each is marked legacy in Fortress and is only ever added.",
-  nonconformance: "Historical non-conformances, added as drafts.",
+  nonconformance: "Historical non-conformances, with the stage your system gives them (a draft when it gives none).",
   production_order: "Works orders.",
   purchase_order: "Order lines placed with suppliers, one row per line.",
   goods_receipt: "Deliveries and returns, one row per transaction. Old deliveries are never sent for inspection.",

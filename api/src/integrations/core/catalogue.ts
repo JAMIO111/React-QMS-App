@@ -63,6 +63,7 @@ const SUPPLIER_TYPES = ['manufacturer', 'distributor', 'subcontractor', 'service
 const words = (v: string) => v.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const options = (values: readonly string[], label: (v: string) => string = words) => values.map((v) => ({ value: v, label: label(v) }));
 const INTERVAL_UNITS = ['days', 'weeks', 'months', 'years'];
+const NC_IMPORT_STAGES = ['draft', 'open', 'contained', 'investigating', 'dispositioned', 'awaiting_closure', 'closed', 'cancelled'];
 const PRODUCTION_STATUSES = ['planned', 'released', 'in_progress', 'completed', 'closed', 'cancelled'];
 
 /** A link to another Fortress record, given in the file by its code (matched ignoring case when the record is imported). */
@@ -218,6 +219,16 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: [
       { key: 'title', label: 'Title', type: 'text', required: true, maxLength: 200 },
       { key: 'source', label: 'Source', type: 'enum', required: true, options: options(NCR_SOURCES, (v) => NCR_SOURCE_LABELS[v as (typeof NCR_SOURCES)[number]]), description: 'Where it came from or was found' },
+      {
+        key: 'stage',
+        label: 'Stage',
+        type: 'enum',
+        options: options(NC_IMPORT_STAGES),
+        description:
+          'Where the non-conformance stands in your system; translate your statuses to these. Empty arrives as a draft. Any stage past draft needs what opening needs (severity, quantity affected, a part or a description, a category, and the customer or supplier for those sources; use "when empty" for what your system lacks), and anything past open needs the right to approve dispositions, because it skips containment and disposition. A cancelled one needs none of the opening fields. Imported stages are history: nobody is told and no workflow starts. Later changes in your system are not carried; the non-conformance is managed in Fortress once it is in',
+      },
+      { key: 'closedOn', label: 'Closed on', type: 'date', description: 'Only used when the stage is Closed: when it was closed in your system. Empty means today; it cannot be in the future or before the detected date you give (map Detected on too, or the record reads as detected today)' },
+      { key: 'stageReason', label: 'Reason cancelled', type: 'text', maxLength: 1000, description: 'Only used when the stage is Cancelled; empty gives "Cancelled in <the connection>"' },
       ref('category', 'Category', 'category', 'category code', { description: 'A category code such as PRODUCT or PROCESS; it must already exist' }),
       { key: 'severity', label: 'Severity', type: 'enum', options: options(['critical', 'major', 'minor']) },
       { key: 'description', label: 'Description', type: 'text', maxLength: 5000 },
@@ -239,7 +250,7 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'purchaseOrder', label: 'Purchase order', type: 'text', maxLength: 60 },
       { key: 'customerReference', label: 'Customer reference', type: 'text', maxLength: 60 },
       { key: 'lotNumber', label: 'Lot number', type: 'text', maxLength: 60 },
-      { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 60, description: 'Imported non-conformances arrive as drafts with a Fortress reference; opening, moving and closing them stay a person\'s steps' },
+      { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 60, description: 'Imported non-conformances get a Fortress reference' },
     ],
   },
   {

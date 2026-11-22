@@ -195,5 +195,7 @@ and the opening rules):
 | CI-D12 | Historical stage inserts raise no events or notices | **Yes** |
 | CI-D13 | Source status changes after the import | **Not carried**; NCs are add-only |
 
+**IN-NC built 2026-11-22** (migration `20260420100000_nc_import_stage.sql`, not yet applied live; see `CLAUDE.md`). Findings while building it: CI-D11 needs no new setting, because a mapping field's existing "when empty" default does the same job; stages between open and closed also need the right to approve dispositions (they skip what those stages prove), which the plan had not said; and a closed date is compared with the detected date only when the source gave a detected date (without one the table's default is today, not a date anyone gave).
+
 Slice order becomes: **IN-NC** (stage carry-over: migration, catalogue, importer, tests), then IC1–IC4 as in §5, with the cost importer's closed-NC setting added to IC1.
 

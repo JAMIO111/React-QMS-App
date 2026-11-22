@@ -317,7 +317,7 @@ export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly 
   const why = {
     goods_receipt: "Deliveries are always added: one already imported is never changed by a later file.",
     po_receipt_total: "Totals are always added and updated: a higher total records a delivery of the increase.",
-    nonconformance: "Non-conformances are always added as new drafts, never matched or updated.",
+    nonconformance: "Non-conformances are always added as new records, never matched or updated. With no stage they arrive as drafts.",
   };
   return (
     <MenuCard title="What importing may do" subtitle={fixed ? why[entityType] : "Saved with the template."}>

@@ -73,7 +73,7 @@ export const productKindLabel = (id) => PRODUCT_KINDS.find((k) => k.id === id)?.
 export const SUPPLIER_SCOPE = "supplier_register";
 
 /** One line of address for lists. */
-export const addressLine = (s) => [s.addressLine1, s.addressLine2, s.city, s.region, s.postcode, s.country].filter(Boolean).join(", ");
+export const addressLine = (s) => [s.addressLine1, s.addressLine2, s.addressLine3, s.city, s.region, s.postcode, s.country].filter(Boolean).join(", ");
 
 /** Titles used when a saved supplier filter is listed. */
 export const SUPPLIER_FILTER_TITLES = { status: "Status", type: "Type", classification: "Classification", risk: "Risk", active: "Activity", search: "Search" };

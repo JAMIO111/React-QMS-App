@@ -40,6 +40,17 @@ const partyColumns = (t: PartyTable) => ({
   companyNumber: t.companyNumber,
   vatNumber: t.vatNumber,
   notes: t.notes,
+  addressLine1: t.addressLine1,
+  addressLine2: t.addressLine2,
+  addressLine3: t.addressLine3,
+  city: t.city,
+  region: t.region,
+  postcode: t.postcode,
+  country: t.country,
+  currency: t.currency,
+  email: t.email,
+  phone: t.phone,
+  website: t.website,
   active: t.active,
 });
 

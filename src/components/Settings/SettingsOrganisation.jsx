@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Field from "../ui/Field";
 import SitesManager from "./SitesManager";
+import RestateCostsCard from "./RestateCostsCard";
 import ThemeColourPicker from "./ThemeColourPicker";
 import OrganisationLogo from "./OrganisationLogo";
 import ProductionSettings from "./ProductionSettings";
@@ -234,6 +235,7 @@ const SettingsOrganisation = () => {
       />
 
       <SitesManager canManage={canManage} />
+      {canManage && <RestateCostsCard />}
     </div>
   );
 };

@@ -34,10 +34,34 @@ export const Party = z.object({
   companyNumber: z.string().nullable(),
   vatNumber: z.string().nullable(),
   notes: z.string().nullable(),
+  addressLine1: z.string().nullable(),
+  addressLine2: z.string().nullable(),
+  addressLine3: z.string().nullable(),
+  city: z.string().nullable(),
+  /** County, state or province. */
+  region: z.string().nullable(),
+  postcode: z.string().nullable(),
+  /** Two capital letters, e.g. GB. */
+  country: z.string().nullable(),
+  /** ISO 4217 code, e.g. GBP: the currency they are traded with in. */
+  currency: z.string().nullable(),
+  /** The company's general email, phone and web site (not a person: people are contacts). */
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  website: z.string().nullable(),
   active: z.boolean(),
   customValues: CustomValues.optional(),
 });
 export type Party = z.infer<typeof Party>;
+
+/** A code of fixed shape (country, currency): capitals, empty means none. */
+const optionalCode = (pattern: RegExp, message: string) =>
+  z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? null : v.toUpperCase()))
+    .pipe(z.string().regex(pattern, message).nullable())
+    .optional();
 
 const partyFields = {
   code: PartyCode,
@@ -46,6 +70,17 @@ const partyFields = {
   companyNumber: optionalText(40),
   vatNumber: optionalText(40),
   notes: optionalText(2000),
+  addressLine1: optionalText(120),
+  addressLine2: optionalText(120),
+  addressLine3: optionalText(120),
+  city: optionalText(80),
+  region: optionalText(80),
+  postcode: optionalText(20),
+  country: optionalCode(/^[A-Z]{2}$/, 'Use a two-letter country code, e.g. GB'),
+  currency: optionalCode(/^[A-Z]{3}$/, 'Use a three-letter currency code, e.g. GBP'),
+  email: optionalText(200),
+  phone: optionalText(40),
+  website: optionalText(200),
 };
 export const CreatePartyBody = z.object({ ...partyFields, customValues: CustomValuesInput.optional() }).strict();
 export const UpdatePartyBody = z

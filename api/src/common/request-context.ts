@@ -11,10 +11,21 @@ export interface AuthenticatedUser {
   claims: JWTPayload;
 }
 
+export interface PortalAccess {
+  accessId: string;
+  partyId: string;
+  partyKind: 'supplier' | 'customer';
+  supplierId: string | null;
+  customerId: string | null;
+  role: 'admin' | 'member';
+}
+
 export type ApiRequest = Request & {
   correlationId?: string;
   user?: AuthenticatedUser;
   organisationId?: string;
+  /** Set by PortalGuard on /portal routes: the external person's own access (docs/external-portal-plan.md). */
+  portal?: PortalAccess;
   /** Versions a save says it was based on ({ "<table>:<id>": version }), set by VersionInterceptor (docs/edit-conflicts-plan.md). */
   expectedVersions?: Record<string, string>;
 };
@@ -25,6 +36,8 @@ export interface RequestContext {
   /** Optional free-text reason for a change (X-Change-Reason), recorded in the audit trail. */
   reason?: string;
   organisationId?: string;
+  /** On /portal routes: the external person's access (supplier or customer party, role). */
+  portal?: PortalAccess;
   /** The person's IANA time zone (X-Time-Zone), validated; "UTC" when absent or unknown. Postgres runs the request in it, so current_date is their today. */
   timeZone?: string;
   /** The caller's address as the API sees it (req.ip behind the trusted proxy hops; docs/security-plan.md S2), or null when it cannot be read. */
@@ -70,6 +83,7 @@ export function contextFrom(req: ApiRequest): RequestContext {
     correlationId: resolveCorrelationId(req),
     reason: reason || undefined,
     organisationId: req.organisationId,
+    portal: req.portal,
     timeZone: validTimeZone(req.headers['x-time-zone']),
     address: clientAddress(req.ip),
     expectedVersions: req.expectedVersions,

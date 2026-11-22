@@ -98,3 +98,40 @@ describe.each(CATALOGUE.map((c) => [c.entityType, c] as const))('the %s import',
     }
   });
 });
+
+/**
+ * Import field locks (docs/import-field-locks-plan.md): the database refuses a person's edit of a field an import owns, using its own copy of the
+ * catalogue-field → column map (app.integration_field_columns). That copy must say what core/columns.ts says, and every kind of record must be either
+ * lockable or listed here with the reason it is not.
+ */
+const LOCKABLE = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'production_order'];
+const NOT_LOCKABLE: Record<string, string> = {
+  calibration: 'Legacy calibrations are only ever added, never updated',
+  nonconformance: 'Non-conformances are only ever added, never updated',
+  goods_receipt: 'Deliveries are only ever added, never updated',
+  po_receipt_total: 'Received totals follow the source and are not edited by people',
+  purchase_order: 'Order lines are a later step (the agreed date is the one editable field)',
+};
+
+describe('import field locks follow the catalogue', () => {
+  it.each(LOCKABLE)('the database map for %s equals the catalogue map', async (entity) => {
+    const map = ENTITY_COLUMNS[entity as keyof typeof ENTITY_COLUMNS]!;
+    const expected = Object.fromEntries(Object.entries(map.fields).filter(([, f]) => !f.table || f.table === map.table).map(([k, f]) => [k, f.column]));
+    const r = await admin.query<{ m: Record<string, string>; t: string }>('select app.integration_field_columns($1) as m, app.integration_lock_table($1) as t', [entity]);
+    expect(r.rows[0].m).toEqual(expected);
+    expect(r.rows[0].t).toBe(map.table);
+  });
+
+  it('every kind of record is lockable or says why not', () => {
+    const undecided = Object.keys(ENTITY_COLUMNS).filter((k) => !LOCKABLE.includes(k) && !(k in NOT_LOCKABLE));
+    expect(undecided).toEqual([]);
+  });
+
+  it('has the guard on every lockable table', async () => {
+    const tables = LOCKABLE.map((k) => ENTITY_COLUMNS[k as keyof typeof ENTITY_COLUMNS]!.table);
+    const r = await admin.query<{ t: string }>(
+      `select c.relname as t from pg_trigger g join pg_class c on c.oid = g.tgrelid where g.tgname = 'zz_integration_lock_guard' and not g.tgisinternal`,
+    );
+    expect(r.rows.map((x) => x.t).sort()).toEqual([...tables].sort());
+  });
+});

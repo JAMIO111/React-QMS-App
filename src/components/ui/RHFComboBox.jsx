@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { useFloatingList } from "./useFloatingList";
 import { ChevronDownIcon, CircleAlertIcon, XIcon } from "@/components/icons";
+import LockedMark from "./LockedMark";
 
 /**
  * Searchable single-select, controlled by `value` (an option id) and `onChange(id | null)`, so it
@@ -32,6 +33,7 @@ const RHFComboBox = ({
   selectedOption: selectedOptionProp,
   placeholder = "Select...",
   label,
+  lockedBy,
   hint,
   emptyMessage = "No results",
   sort = true,
@@ -229,6 +231,7 @@ const RHFComboBox = ({
             className="text-sm font-medium text-secondary-text"
             data-required={required || undefined}>
             {label}
+            {lockedBy && <LockedMark by={lockedBy} />}
           </label>
         )}
 

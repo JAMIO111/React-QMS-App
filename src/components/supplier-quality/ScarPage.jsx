@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { generateSignedUrl } from "../../api/supabaseApi";
 import { Link, useParams } from "react-router-dom";
 import { PencilIcon, PlusIcon } from "@/components/icons";
 import { usePermissions } from "../../hooks/useQmsApi";
@@ -16,7 +17,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
 import { StagePill } from "../ncr/Pills";
-import { AcknowledgeDialog, DecideExtensionDialog, EditScarDialog, ExtendDialog, ImplementationDialog, ItemDialog, LinkNcrDialog, ReasonCommandDialog, ResponseDialog, ReviewDialog, VerificationDialog } from "./ScarDialogs";
+import { AcknowledgeDialog, ActionDialog, DecideExtensionDialog, EditScarDialog, ExtendDialog, ImplementationDialog, ItemDialog, LinkNcrDialog, ReasonCommandDialog, ResponseDialog, ReviewDialog, VerificationDialog } from "./ScarDialogs";
 import { OverdueFlag, ScarSeverityPill, ScarStatusPill } from "./ScarPills";
 
 const Fact = ({ label, children }) => (
@@ -100,6 +101,8 @@ const ScarPage = () => {
   const running = scarIsRunning(s.status);
   const actions = nextActions(s, can, open);
   const liveItems = s.items.filter((i) => !i.endedAt);
+  const liveActions = (s.actions ?? []).filter((a) => a.status !== "cancelled");
+  const cancelledActions = (s.actions ?? []).filter((a) => a.status === "cancelled");
   const endedItems = s.items.filter((i) => i.endedAt);
   const liveNcrs = s.ncrs.filter((n) => !n.endedAt);
   const endedNcrs = s.ncrs.filter((n) => n.endedAt);
@@ -195,6 +198,39 @@ const ScarPage = () => {
         )}
       </MenuCard>
 
+      <MenuCard title="Actions for the supplier" subtitle="What you ask them to do, and by when. They complete each one in their portal with a note of what was done."
+        action={manage && running ? <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => open({ kind: "action" })}>Add</CTAButton> : null}>
+        {liveActions.length === 0 ? <p className="text-sm text-secondary-text">None yet.</p> : (
+          <ul className="flex flex-col divide-y divide-border-color" aria-label="Actions for the supplier">
+            {liveActions.map((a) => (
+              <li key={a.id} className="flex flex-col gap-1 py-2 text-sm text-primary-text">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {a.description}
+                    <span className="text-secondary-text"> · {a.status === "done" ? "Done" : "Open"}{a.dueOn ? ` · due ${formatDate(a.dueOn)}` : ""}{a.overdue ? " · overdue" : ""}</span>
+                  </span>
+                  {manage && running && !isPending(a.id) && (
+                    <span className="flex gap-3 text-xs text-secondary-text">
+                      {a.status === "open" && <button type="button" className="hover:underline" onClick={() => open({ kind: "editAction", action: a })}>Edit</button>}
+                      {a.status === "open" && <button type="button" className="hover:underline" onClick={() => open({ kind: "cancelAction", actionId: a.id })}>Cancel</button>}
+                      {a.status === "done" && <button type="button" className="hover:underline" onClick={() => open({ kind: "reopenAction", actionId: a.id })}>Reopen</button>}
+                    </span>
+                  )}
+                </div>
+                {a.status === "done" && <p className="text-xs text-secondary-text">{a.doneByName ?? "The supplier"}{a.doneAt ? `, ${formatDate(a.doneAt)}` : ""}: {a.resultNote}</p>}
+                {a.reopenReason && a.status === "open" && <p className="text-xs text-secondary-text">Reopened: {a.reopenReason}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {cancelledActions.length > 0 && (
+          <details className="mt-2 text-sm text-secondary-text">
+            <summary className="cursor-pointer">{cancelledActions.length} cancelled</summary>
+            <ul className="mt-1 flex flex-col gap-1">{cancelledActions.map((a) => <li key={a.id}>{a.description} — {a.cancelReason}</li>)}</ul>
+          </details>
+        )}
+      </MenuCard>
+
       <MenuCard title="Non-conformances" subtitle="The supplier's non-conformances this request is about."
         action={manage && running ? <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => open({ kind: "link" })}>Link</CTAButton> : null}>
         {liveNcrs.length === 0 ? <p className="text-sm text-secondary-text">None linked yet. At least one is needed before the SCAR can be issued.</p> : (
@@ -234,6 +270,23 @@ const ScarPage = () => {
                   <Fact label="Preventive action">{r.preventiveAction}</Fact>
                   <Fact label="Planned completion">{r.plannedCompletionOn ? formatDate(r.plannedCompletionOn) : null}</Fact>
                 </dl>
+                {r.files?.length > 0 && (
+                  <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Files with response ${r.seq}`}>
+                    {r.files.map((f) => (
+                      <li key={f.id}>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-border-color px-3 py-1.5 text-sm text-link-color hover:bg-primary-bg"
+                          onClick={async () => {
+                            const url = await generateSignedUrl("scar-files", f.storagePath);
+                            if (url) window.open(url, "_blank", "noopener");
+                          }}>
+                          {f.fileName}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {r.review ? (
                   <Callout tone={r.review.decision === "accepted" ? "success" : "warning"} title={r.review.decision === "accepted" ? "Accepted" : "Revision requested"} className="mt-3">
                     {r.review.note} <span className="text-secondary-text">({by(r.review.reviewedBy, r.review.reviewedAt)})</span>
@@ -312,6 +365,10 @@ const ScarPage = () => {
       {dialog?.kind === "verify" && <VerificationDialog scar={s} onClose={close} />}
       {dialog?.kind === "extend" && <ExtendDialog scar={s} onClose={close} />}
       {dialog?.kind === "item" && <ItemDialog scar={s} onClose={close} />}
+      {dialog?.kind === "action" && <ActionDialog scar={s} onClose={close} />}
+      {dialog?.kind === "editAction" && <ActionDialog scar={s} action={dialog.action} onClose={close} />}
+      {dialog?.kind === "cancelAction" && <ReasonCommandDialog title="Cancel this action" intro="The supplier stops seeing it. It is kept, with the reason." label="Why is it being cancelled?" submitLabel="Cancel action" action="cancelAction" id={dialog.actionId} onClose={close} />}
+      {dialog?.kind === "reopenAction" && <ReasonCommandDialog title="Reopen this action" intro="The supplier completes it again. What they wrote is cleared." label="Why is it reopened?" submitLabel="Reopen" action="reopenAction" id={dialog.actionId} onClose={close} />}
       {dialog?.kind === "decideExtension" && <DecideExtensionDialog extension={dialog.extension} onClose={close} />}
       {dialog?.kind === "removeItem" && <ReasonCommandDialog title="Remove this item" intro="The item is removed from the list and kept, with the reason." label="Why is it being removed?" submitLabel="Remove" action="removeItem" id={dialog.itemId} onClose={close} />}
       {dialog?.kind === "withdrawExtension" && <ReasonCommandDialog title="Withdraw the request" intro="The request is withdrawn and kept, with the reason." label="Why is it being withdrawn?" submitLabel="Withdraw" action="withdrawExtension" id={dialog.extensionId} onClose={close} />}

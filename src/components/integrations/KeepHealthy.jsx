@@ -5,7 +5,9 @@ import {
   useAttentionRows,
   useDecideMissing,
   useIgnoreRows,
+  useImportTemplate,
   useImportTemplates,
+  useIntegrationEntities,
   useIntegrationHealth,
   useIntegrationSettings,
   useMissingRecords,
@@ -13,6 +15,7 @@ import {
 } from "../../hooks/useIntegrations";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
+import { fieldsOwnedBySource } from "../../lib/importLocks";
 import { ENTITY_LABELS, HEALTH_STATES, MISSING_OPTIONS, recordPath, scheduleLabel, scheduleOptions } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
@@ -33,6 +36,11 @@ const ScheduleRow = ({ connection, setting, canManage, isDatabase, folder, chang
   const send = (patch) => save.mutate({ entityType: setting.entityType, ...patch }, { onError: (e) => showToast({ type: "error", title: "Not saved", message: describeApiError(e) }) });
   const templateOptions = (templates.data ?? []).map((t) => ({ value: t.id, label: t.name, hint: `version ${t.currentVersion}` }));
   const templateId = setting.templateId ?? setting.template?.id ?? null;
+  const scheduled = setting.schedule && setting.schedule !== "manual";
+  const template = useImportTemplate(scheduled ? templateId : null);
+  const entities = useIntegrationEntities();
+  const owned = scheduled ? fieldsOwnedBySource(setting.entityType, template.data?.current) : [];
+  const fieldLabel = (key) => entities.data?.find((e) => e.entityType === setting.entityType)?.fields?.find((f) => f.key === key)?.label ?? key;
   return (
     <li aria-label={`${label(setting.entityType)} schedule`} className="flex flex-col gap-2 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -49,6 +57,11 @@ const ScheduleRow = ({ connection, setting, canManage, isDatabase, folder, chang
           />
         )}
       </div>
+      {owned.length > 0 && (
+        <Callout tone="info" title="These fields are locked in Fortress while this schedule is on">
+          On the {label(setting.entityType).toLowerCase()} this import manages, people cannot edit {owned.map(fieldLabel).join(", ")}: the next import would overwrite the change. To keep a field editable, set it to “Fortress wins” (or “Review”) in the import template.
+        </Callout>
+      )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {isDatabase && (
           <ComboField

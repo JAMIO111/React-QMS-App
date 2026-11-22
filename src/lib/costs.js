@@ -81,3 +81,40 @@ export const costAmounts = ({ amount, vatTreatment, vatRate, exchangeRate, curre
   const fx = currency === baseCurrency ? 1 : Number(exchangeRate) || 0;
   return { net, vat: round2(gross - net), gross, netBase: round2(net * fx), grossBase: round2(gross * fx) };
 };
+
+/** Cost types that bring money back (a recovery from a supplier, a charge to a customer): they reduce the NC's cost, so totals take them off. */
+export const CREDIT_COST_TYPES = ["supplier_recovery", "customer_charge"];
+export const isCreditType = (costType) => CREDIT_COST_TYPES.includes(costType);
+
+/** What a line's rate is, in the words people see. */
+export const RATE_STATUS = {
+  base: "Same currency",
+  estimated: "Estimated",
+  actual: "Actual",
+  needed: "Rate needed",
+};
+
+/** A rate as written: up to six significant digits, no trailing zeros. */
+export const formatRate = (rate) => (rate === null || rate === undefined || Number.isNaN(Number(rate)) ? "—" : new Intl.NumberFormat("en-GB", { maximumSignificantDigits: 6 }).format(rate));
+
+/** A line's converted value with its sign: credits are negative. Null while the rate is needed. */
+export const signedBase = (cost, field = "netBase") => (cost[field] === null || cost[field] === undefined ? null : round2(cost[field] * (cost.costSign ?? 1)));
+
+/** Whether the totals rest on published rates, stated ones or both: "estimated" | "actual" | "mixed" | null (every line in the site currency). */
+export const totalsRateState = (rates) => {
+  if (!rates) return null;
+  if (rates.estimated > 0 && rates.actual > 0) return "mixed";
+  if (rates.estimated > 0) return "estimated";
+  if (rates.actual > 0) return "actual";
+  return null;
+};
+
+/** "€240.00 + −£20.00": what was actually spent, in each currency (the NC's totals' byCurrency). */
+export const spentInEachCurrency = (byCurrency) => (byCurrency ?? []).map((c) => formatMoney(c.net, c.currency)).join(" + ");
+
+/** How far a stated rate is from the published one, as a signed percentage ("+5.9%"); null when there is nothing to compare. */
+export const rateDifference = (stated, published) => {
+  if (!stated || !published) return null;
+  const pct = ((stated - published) / published) * 100;
+  return `${pct > 0 ? "+" : ""}${pct.toFixed(Math.abs(pct) < 10 ? 1 : 0)}%`;
+};

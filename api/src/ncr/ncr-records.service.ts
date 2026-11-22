@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { Attachment, Cost, CreateAttachmentBody, CreateCostBody, DeletedQuery, UpdateCostBody } from './ncr-records.schemas';
+import { ExchangeRateService } from '../currency/exchange-rate.service';
+import { Attachment, Cost, CostTotals, CreateAttachmentBody, CreateCostBody, DeletedQuery, RateBody, UpdateCostBody } from './ncr-records.schemas';
 
 type Row = Record<string, unknown>;
 const num = (v: unknown) => Number(v);
@@ -18,7 +19,7 @@ const deletedFilter = (alias: string, deleted: z.infer<typeof DeletedQuery>['del
 /** Column names for cost fields the API accepts. */
 const COST_COLUMNS: Record<string, string> = {
   costType: 'cost_type', description: 'description', incurredOn: 'incurred_on', currency: 'currency',
-  vatTreatment: 'vat_treatment', vatRate: 'vat_rate', quantity: 'quantity', unitCost: 'unit_cost', exchangeRate: 'exchange_rate',
+  vatTreatment: 'vat_treatment', vatRate: 'vat_rate', quantity: 'quantity', unitCost: 'unit_cost',
 };
 
 /**
@@ -27,7 +28,10 @@ const COST_COLUMNS: Record<string, string> = {
  */
 @Injectable()
 export class NcrRecordsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly rates: ExchangeRateService,
+  ) {}
 
   // ---- costs ---------------------------------------------------------------------------------
 
@@ -37,34 +41,57 @@ export class NcrRecordsService {
       const result = await db.execute<Row>(sql`
         ${sql.raw(COST_SELECT)} where c.nonconformance_id = ${ncrId}::uuid and ${deletedFilter('c', q.deleted)}
         order by c.incurred_on desc, c.created_at desc`);
-      const settings = await db.execute<Row>(sql`select base_currency from public.organisation_settings where organisation_id = ${ctx.organisationId!}::uuid`);
+      // An NC with no lines yet still has a currency: its site's (the organisation's when it has no site).
+      const currencies = await db.execute<Row>(sql`
+        select coalesce(si.currency, st.base_currency, 'GBP') as base_currency, coalesce(st.base_currency, 'GBP') as org_currency
+        from public.nonconformances n
+        left join public.sites si on si.id = n.site_id and si.organisation_id = n.organisation_id
+        left join public.organisation_settings st on st.organisation_id = n.organisation_id
+        where n.id = ${ncrId}::uuid`);
       const data = result.rows.map(toCost);
-      const live = data.filter((c) => !c.deletedAt);
-      const sum = (k: 'netBase' | 'grossBase') => Math.round(live.reduce((t, c) => t + c[k], 0) * 100) / 100;
-      return {
-        data,
-        totals: { baseCurrency: (settings.rows[0]?.base_currency as string) ?? 'GBP', net: sum('netBase'), gross: sum('grossBase'), count: live.length },
-      };
+      return { data, totals: costTotals(data, (currencies.rows[0]?.base_currency as string) ?? 'GBP', (currencies.rows[0]?.org_currency as string) ?? 'GBP') };
     });
   }
 
-  createCost(ctx: RequestContext, ncrId: string, body: z.infer<typeof CreateCostBody>): Promise<Cost> {
-    return this.database.asUser(ctx, async (db) => {
+  /** The line's rate is looked up by the database; when none is cached yet the published one is fetched and the line filled before the answer. */
+  async createCost(ctx: RequestContext, ncrId: string, body: z.infer<typeof CreateCostBody>): Promise<Cost> {
+    const cost = await this.database.asUser(ctx, async (db) => {
       await this.assertNcrVisible(db, ctx, ncrId);
       const result = await db.execute<{ id: string }>(sql`
-        insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, description, incurred_on, currency, vat_treatment, vat_rate, quantity, unit_cost, exchange_rate)
+        insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, description, incurred_on, currency, vat_treatment, vat_rate, quantity, unit_cost)
         values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.costType}, ${body.description ?? null}, coalesce(${body.incurredOn ?? null}::date, current_date),
-                ${body.currency}, ${body.vatTreatment}, ${body.vatRate}, ${body.quantity}, ${body.unitCost}, ${body.exchangeRate})
+                ${body.currency}, ${body.vatTreatment}, ${body.vatRate}, ${body.quantity}, ${body.unitCost})
         returning id`);
       return this.loadCost(db, ctx, result.rows[0].id);
     });
+    return this.withRate(ctx, cost);
   }
 
-  updateCost(ctx: RequestContext, id: string, body: z.infer<typeof UpdateCostBody>): Promise<Cost> {
+  async updateCost(ctx: RequestContext, id: string, body: z.infer<typeof UpdateCostBody>): Promise<Cost> {
     const sets = Object.entries(body)
-      .filter(([, v]) => v !== undefined)
+      .filter(([k, v]) => v !== undefined && COST_COLUMNS[k])
       .map(([k, v]) => sql`${sql.raw(COST_COLUMNS[k])} = ${v}`);
-    return this.changeCost(ctx, id, sql.join(sets, sql`, `));
+    if (!sets.length) return this.database.asUser(ctx, (db) => this.loadCost(db, ctx, id));
+    return this.withRate(ctx, await this.changeCost(ctx, id, sql.join(sets, sql`, `)));
+  }
+
+  /** States the rate actually got, or the converted amount (the database checks who may, and keeps the published rate beside it). */
+  setRate(ctx: RequestContext, id: string, body: z.infer<typeof RateBody>): Promise<Cost> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.assertCostVisible(db, ctx, id);
+      await db.execute(sql`select app.override_cost_rate(${id}::uuid, ${body.kind}, ${body.value}::numeric, ${body.note ?? null})`);
+      return this.loadCost(db, ctx, id);
+    });
+  }
+
+  /** Drops a stated rate and takes the published one again (fetching it when it is not cached yet). */
+  async resetRate(ctx: RequestContext, id: string): Promise<Cost> {
+    const cost = await this.database.asUser(ctx, async (db) => {
+      await this.assertCostVisible(db, ctx, id);
+      await db.execute(sql`select app.reset_cost_rate(${id}::uuid)`);
+      return this.loadCost(db, ctx, id);
+    });
+    return this.withRate(ctx, cost);
   }
 
   removeCost(ctx: RequestContext, id: string, reason: string): Promise<Cost> {
@@ -123,6 +150,18 @@ export class NcrRecordsService {
     if (!found.rows.length) throw ApiError.notFound('ncr_not_found', 'Non-conformance not found');
   }
 
+  /** A line waiting for its rate: ask the source for what is missing (best effort, never fails the save) and read the line again. */
+  private async withRate(ctx: RequestContext, cost: Cost): Promise<Cost> {
+    if (cost.rateStatus !== 'needed') return cost;
+    await this.rates.settle(ctx.organisationId!, ctx.correlationId, 6000);
+    return this.database.asUser(ctx, (db) => this.loadCost(db, ctx, cost.id));
+  }
+
+  private async assertCostVisible(db: Db, ctx: RequestContext, id: string) {
+    const found = await db.execute(sql`select 1 from public.ncr_costs where id = ${id}::uuid and organisation_id = ${ctx.organisationId!}::uuid`);
+    if (!found.rows.length) throw ApiError.notFound('cost_not_found', 'Cost not found');
+  }
+
   private changeCost(ctx: RequestContext, id: string, set: SQL): Promise<Cost> {
     return this.database.asUser(ctx, async (db) => {
       const result = await db.execute(sql`
@@ -155,12 +194,15 @@ export class NcrRecordsService {
 }
 
 const COST_SELECT = `
-  select c.*, to_char(c.incurred_on, 'YYYY-MM-DD') as incurred_on_text, ${personName('pc')} as created_by_name
-  from public.ncr_costs c left join public.profiles pc on pc.id = c.created_by`;
+  select c.*, to_char(c.incurred_on, 'YYYY-MM-DD') as incurred_on_text, to_char(c.rate_date, 'YYYY-MM-DD') as rate_date_text,
+         ${personName('pc')} as created_by_name, ${personName('po')} as overridden_by_name
+  from public.ncr_costs c left join public.profiles pc on pc.id = c.created_by left join public.profiles po on po.id = c.overridden_by`;
 
 const ATTACHMENT_SELECT = `
   select a.*, ${personName('pc')} as created_by_name
   from public.ncr_attachments a left join public.profiles pc on pc.id = a.created_by`;
+
+const nullableNum = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
 const toCost = (r: Row): Cost => ({
   id: r.id as string,
@@ -173,18 +215,59 @@ const toCost = (r: Row): Cost => ({
   quantity: num(r.quantity),
   unitCost: num(r.unit_cost),
   amount: num(r.amount),
-  exchangeRate: num(r.exchange_rate),
   netAmount: num(r.net_amount),
   vatAmount: num(r.vat_amount),
   grossAmount: num(r.gross_amount),
+  costSign: num(r.cost_sign),
   baseCurrency: r.base_currency as string,
-  netBase: num(r.net_base),
-  grossBase: num(r.gross_base),
+  exchangeRate: nullableNum(r.exchange_rate),
+  netBase: nullableNum(r.net_base),
+  grossBase: nullableNum(r.gross_base),
+  orgCurrency: r.org_currency as string,
+  orgRate: nullableNum(r.org_rate),
+  netOrg: nullableNum(r.net_org),
+  grossOrg: nullableNum(r.gross_org),
+  rateStatus: r.rate_status as Cost['rateStatus'],
+  rateSource: r.rate_source as Cost['rateSource'],
+  rateDate: (r.rate_date_text as string) ?? null,
+  estimatedRate: nullableNum(r.estimated_rate),
+  overrideKind: (r.override_kind as Cost['overrideKind']) ?? null,
+  overrideNote: (r.override_note as string) ?? null,
+  overriddenAt: iso(r.overridden_at),
+  overriddenBy: ref(r.overridden_by, r.overridden_by_name),
   createdAt: iso(r.created_at)!,
   createdBy: ref(r.created_by, r.created_by_name),
   deletedAt: iso(r.deleted_at),
   deleteReason: (r.delete_reason as string) ?? null,
 });
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** Totals of the live lines, net of credits. Lines waiting for a rate are counted but add nothing. */
+export const costTotals = (data: Cost[], fallbackBase: string, fallbackOrg: string = fallbackBase): CostTotals => {
+  const live = data.filter((c) => !c.deletedAt);
+  const add = (f: (c: Cost) => number | null) => round2(live.reduce((t, c) => t + (f(c) ?? 0) * c.costSign, 0));
+  const byCurrency = new Map<string, { currency: string; net: number; gross: number; lines: number }>();
+  for (const c of live) {
+    const row = byCurrency.get(c.currency) ?? { currency: c.currency, net: 0, gross: 0, lines: 0 };
+    row.net += c.netAmount * c.costSign;
+    row.gross += c.grossAmount * c.costSign;
+    row.lines += 1;
+    byCurrency.set(c.currency, row);
+  }
+  const count = (s: Cost['rateStatus']) => live.filter((c) => c.rateStatus === s).length;
+  return {
+    baseCurrency: live[0]?.baseCurrency ?? fallbackBase,
+    orgCurrency: live[0]?.orgCurrency ?? fallbackOrg,
+    net: add((c) => c.netBase),
+    gross: add((c) => c.grossBase),
+    netOrg: add((c) => c.netOrg),
+    grossOrg: add((c) => c.grossOrg),
+    count: live.length,
+    byCurrency: [...byCurrency.values()].map((r) => ({ ...r, net: round2(r.net), gross: round2(r.gross) })),
+    rates: { base: count('base'), estimated: count('estimated'), actual: count('actual'), needed: count('needed') },
+  };
+};
 
 const toAttachment = (r: Row): Attachment => ({
   id: r.id as string,

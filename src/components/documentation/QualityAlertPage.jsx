@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Dialog from "../ui/Dialog";
+import PortalShareCard from "../portal/PortalShareCard";
 import MenuCard from "../ui/MenuCard";
 import Callout from "../ui/Callout";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
@@ -419,6 +420,8 @@ const QualityAlertPage = () => {
       <MenuCard title="Who must acknowledge" subtitle="Everyone reached by these departments, roles and named people">
         <List items={a.scope.targets.map((t) => ({ key: t.id, label: `${t.label} (${t.kind})` }))} empty="Nobody chosen yet; an alert needs at least one before it can be issued." />
       </MenuCard>
+
+      {a.status === "active" && can("external_access.share") && <PortalShareCard kind="quality_alert" recordId={a.id} />}
 
       {isDraft && manage && <RecipientsPreview id={a.id} />}
       {!isDraft && manage && <Tracking alert={a} canAdd={issue && a.status === "active"} />}

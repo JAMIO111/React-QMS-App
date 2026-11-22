@@ -92,7 +92,7 @@ const routeApi = (routes) =>
       return undefined;
     }
     // Every NCR page also loads its costs, files and history.
-    if (!(k in all) && /^GET \/ncrs\/[^/]+\/costs$/.test(k)) return { data: [], totals: { baseCurrency: "GBP", net: 0, gross: 0, count: 0 } };
+    if (!(k in all) && /^GET \/ncrs\/[^/]+\/costs$/.test(k)) return { data: [], totals: { baseCurrency: "GBP", orgCurrency: "GBP", net: 0, gross: 0, netOrg: 0, grossOrg: 0, count: 0, byCurrency: [], rates: { base: 0, estimated: 0, actual: 0, needed: 0 } } };
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/(attachments|history)$/.test(k)) return { data: [] };
     // ... and its containment, dispositions and what is still needed for each stage.
     if (!(k in all) && /^GET \/ncrs\/[^/]+\/containment$/.test(k)) return { actions: [], notNeededReason: null, resolved: false, problems: ["record a containment action, or say why none is needed"] };
@@ -1170,14 +1170,17 @@ describe("Settings → Data Management", () => {
 });
 
 describe("NC page layout, costs and files", () => {
-  const costList = {
-    data: [
-      { id: "c1", costType: "scrap", description: "Scrapped bar", incurredOn: "2026-11-01", currency: "GBP", vatTreatment: "inclusive", vatRate: 0.2, quantity: 4, unitCost: 30, amount: 120,
-        exchangeRate: 1, netAmount: 100, vatAmount: 20, grossAmount: 120, baseCurrency: "GBP", netBase: 100, grossBase: 120,
-        createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, deletedAt: null, deleteReason: null },
-    ],
-    totals: { baseCurrency: "GBP", net: 100, gross: 120, count: 1 },
-  };
+  const line = (over = {}) => ({
+    id: "c1", costType: "scrap", description: "Scrapped bar", incurredOn: "2026-11-01", currency: "GBP", vatTreatment: "inclusive", vatRate: 0.2, quantity: 4, unitCost: 30, amount: 120,
+    netAmount: 100, vatAmount: 20, grossAmount: 120, costSign: 1, baseCurrency: "GBP", exchangeRate: 1, netBase: 100, grossBase: 120, orgCurrency: "GBP", orgRate: 1, netOrg: 100, grossOrg: 120,
+    rateStatus: "base", rateSource: "none", rateDate: null, estimatedRate: null, overrideKind: null, overrideNote: null, overriddenAt: null, overriddenBy: null,
+    createdAt: "2026-11-01T09:00:00Z", createdBy: { id: "u1", name: "Ada Owner" }, deletedAt: null, deleteReason: null, ...over,
+  });
+  const totalsOf = (over = {}) => ({
+    baseCurrency: "GBP", orgCurrency: "GBP", net: 100, gross: 120, netOrg: 100, grossOrg: 120, count: 1,
+    byCurrency: [{ currency: "GBP", net: 100, gross: 120, lines: 1 }], rates: { base: 1, estimated: 0, actual: 0, needed: 0 }, ...over,
+  });
+  const costList = { data: [line()], totals: totalsOf() };
 
   it("shows the old form's sections; costs and files wait until the NC is saved", async () => {
     routeApi({});
@@ -1194,7 +1197,12 @@ describe("NC page layout, costs and files", () => {
     renderAt("/Non-Conformance/Register/n1");
     const table = await screen.findByRole("table", { name: "Costs" });
     expect(within(table).getByText("Scrapped bar")).toBeInTheDocument();
-    expect(within(table).getByText("Total (1 item)")).toBeInTheDocument();
+    expect(within(table).getByText("Total (1 item, net of recoveries)")).toBeInTheDocument();
+    const summary = screen.getByRole("region", { name: "Cost summary" });
+    expect(summary).toHaveTextContent("Total cost, net of recoveries");
+    expect(summary).toHaveTextContent("£100.00");
+    expect(summary).toHaveTextContent("Including VAT: £120.00");
+    expect(within(summary).queryByText("Estimated")).toBeNull();
     expect(within(table).getAllByText("£120.00").length).toBeGreaterThan(0);
     const row = within(table).getByText("Scrapped bar").closest("tr");
     expect(within(row).getByText("4")).toBeInTheDocument();
@@ -1215,14 +1223,11 @@ describe("NC page layout, costs and files", () => {
     expect(preview).toHaveTextContent("£10.00");
     expect(preview).toHaveTextContent("£60.00");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
-    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, quantity: 2, unitCost: 25, exchangeRate: 1 }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, quantity: 2, unitCost: 25 }));
+    expect(lastCall("POST /ncrs/n1/costs").body).not.toHaveProperty("exchangeRate");
   });
 
-  it("asks for an exchange rate for a foreign currency", async () => {
-    routeApi({ "GET /ncrs/n1": ncr(), "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }) });
-    renderAt("/Non-Conformance/Register/n1");
-    await userEvent.click(await screen.findByRole("button", { name: "New item" }));
-    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+  const chooseEuro = async (dialog) => {
     await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
     await userEvent.click(await screen.findByRole("option", { name: "Transport" }));
     const currency = within(dialog).getByRole("combobox", { name: /Currency/ });
@@ -1230,12 +1235,138 @@ describe("NC page layout, costs and files", () => {
     await userEvent.type(currency, "EUR");
     await userEvent.click(screen.getByRole("option", { name: /^EUR/ }));
     await userEvent.type(within(dialog).getByLabelText(/^Unit cost/), "100");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
-    expect(await within(dialog).findByText("Enter the exchange rate")).toBeInTheDocument();
-    await userEvent.type(within(dialog).getByLabelText(/Exchange rate/), "0.85");
+  };
+
+  it("shows the published rate for a foreign currency instead of asking for one, and never sends a rate", async () => {
+    routeApi({
+      "GET /ncrs/n1": ncr(),
+      "GET /exchange-rates/preview": { from: "EUR", to: "GBP", requestedOn: "2026-11-01", rate: 0.85, rateDate: "2026-10-30", state: "published" },
+      "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }),
+    });
+    renderAt("/Non-Conformance/Register/n1");
+    await userEvent.click(await screen.findByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await chooseEuro(dialog);
+    expect(within(dialog).queryByLabelText(/Exchange rate \(/)).toBeNull();
+    const rate = await within(dialog).findByLabelText("Exchange rate");
+    await waitFor(() => expect(rate).toHaveTextContent("1 EUR = 0.85 GBP"));
+    expect(rate).toHaveTextContent("European Central Bank");
     expect(within(dialog).getByLabelText("Cost preview")).toHaveTextContent("£85.00");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
-    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "transport", currency: "EUR", quantity: 1, unitCost: 100, exchangeRate: 0.85 }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "transport", currency: "EUR", quantity: 1, unitCost: 100 }));
+    expect(lastCall("POST /ncrs/n1/costs").body).not.toHaveProperty("exchangeRate");
+  });
+
+  it("says when there is no automatic rate: the cost still saves, as 'Rate needed'", async () => {
+    routeApi({
+      "GET /ncrs/n1": ncr(),
+      "GET /exchange-rates/preview": { from: "EUR", to: "GBP", requestedOn: "2026-11-01", rate: null, rateDate: null, state: "not_published" },
+      "POST /ncrs/n1/costs": (_p, o) => ({ id: "c2", ...o.body }),
+    });
+    renderAt("/Non-Conformance/Register/n1");
+    await userEvent.click(await screen.findByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await chooseEuro(dialog);
+    expect(await within(dialog).findByText(/No automatic rate is published for EUR/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs")).toBeTruthy());
+  });
+
+  it("explains a credit: recoveries and customer charges are taken off the total", async () => {
+    routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": costList });
+    renderAt("/Non-Conformance/Register/n1");
+    await userEvent.click(await screen.findByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Supplier recovery/i }));
+    expect(within(dialog).getByText(/taken off the non-conformance's total cost/)).toBeInTheDocument();
+  });
+
+  describe("converted costs", () => {
+    const eur = line({ id: "c2", costType: "transport", description: "Freight", currency: "EUR", vatTreatment: "none", vatRate: 0, quantity: 1, unitCost: 100, amount: 100, netAmount: 100, vatAmount: 0, grossAmount: 100,
+      exchangeRate: 0.85, netBase: 85, grossBase: 85, netOrg: 85, grossOrg: 85, orgRate: 0.85, rateStatus: "estimated", rateSource: "frankfurter", rateDate: "2026-10-30", estimatedRate: 0.85 });
+    const stated = line({ id: "c3", costType: "labour", description: "Rework", currency: "USD", vatTreatment: "none", vatRate: 0, quantity: 1, unitCost: 50, amount: 50, netAmount: 50, vatAmount: 0, grossAmount: 50,
+      exchangeRate: 0.8, netBase: 40, grossBase: 40, netOrg: 40, grossOrg: 40, orgRate: 0.8, rateStatus: "actual", rateSource: "manual", estimatedRate: 0.79, overrideKind: "rate", overrideNote: "Bank rate" });
+    const waiting = line({ id: "c4", costType: "other", description: "Courier", currency: "AED", vatTreatment: "none", vatRate: 0, quantity: 1, unitCost: 30, amount: 30, netAmount: 30, vatAmount: 0, grossAmount: 30,
+      exchangeRate: null, netBase: null, grossBase: null, netOrg: null, grossOrg: null, orgRate: null, rateStatus: "needed" });
+    const credit = line({ id: "c5", costType: "supplier_recovery", description: "Supplier credit note", costSign: -1, vatTreatment: "none", vatRate: 0, quantity: 1, unitCost: 30, amount: 30, netAmount: 30, vatAmount: 0, grossAmount: 30,
+      netBase: 30, grossBase: 30, netOrg: 30, grossOrg: 30, rateStatus: "base" });
+    const list = {
+      data: [eur, stated, waiting, credit],
+      totals: totalsOf({ net: 95, gross: 95, netOrg: 95, grossOrg: 95, count: 4,
+        byCurrency: [{ currency: "EUR", net: 100, gross: 100, lines: 1 }, { currency: "USD", net: 50, gross: 50, lines: 1 }, { currency: "AED", net: 30, gross: 30, lines: 1 }, { currency: "GBP", net: -30, gross: -30, lines: 1 }],
+        rates: { base: 1, estimated: 1, actual: 1, needed: 1 } }),
+    };
+
+    it("shows the headline total with whether it is estimated, what was spent in each currency, credits as negatives and lines waiting for a rate", async () => {
+      routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": list });
+      renderAt("/Non-Conformance/Register/n1");
+      const summary = await screen.findByRole("region", { name: "Cost summary" });
+      expect(summary).toHaveTextContent("£95.00");
+      expect(within(summary).getByText("Mixed")).toBeInTheDocument();
+      expect(summary).toHaveTextContent("Spent: €100.00 + US$50.00 + AED 30.00 + -£30.00");
+      expect(within(summary).getByRole("status")).toHaveTextContent("1 line is waiting for an exchange rate");
+      const table = screen.getByRole("table", { name: "Costs" });
+      const freight = within(table).getByText("Freight").closest("tr");
+      expect(within(freight).getByText("Estimated")).toBeInTheDocument();
+      expect(within(freight).getByText("0.85")).toBeInTheDocument();
+      expect(within(freight).getByText(/ECB, /)).toBeInTheDocument();
+      const rework = within(table).getByText("Rework").closest("tr");
+      expect(within(rework).getByText("Actual")).toBeInTheDocument();
+      expect(within(rework).getByText("published 0.79")).toBeInTheDocument();
+      const courier = within(table).getByText("Courier").closest("tr");
+      expect(within(courier).getByText("Rate needed")).toBeInTheDocument();
+      expect(within(courier).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+      const note = within(table).getByText("Supplier credit note").closest("tr");
+      expect(within(note).getByText("Credit")).toBeInTheDocument();
+      expect(within(note).getAllByText("-£30.00").length).toBeGreaterThan(0);
+    });
+
+    it("shows the organisation's figure beside the total when the site works in another currency", async () => {
+      routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": { data: [line({ baseCurrency: "EUR", netBase: 117, grossBase: 140.4 })], totals: totalsOf({ baseCurrency: "EUR", orgCurrency: "GBP", net: 117, gross: 140.4, netOrg: 100 }) } });
+      renderAt("/Non-Conformance/Register/n1");
+      const summary = await screen.findByRole("region", { name: "Cost summary" });
+      expect(summary).toHaveTextContent("€117.00");
+      expect(summary).toHaveTextContent("In the organisation's currency (GBP): £100.00");
+    });
+
+    it("states the rate actually got: by the converted amount, with the published rate for comparison", async () => {
+      routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": list, "POST /ncr-costs/c2/rate": (_p, o) => ({ ...eur, ...o.body }) });
+      renderAt("/Non-Conformance/Register/n1");
+      await userEvent.click(await screen.findByRole("button", { name: "Exchange rate for Transport cost" }));
+      const dialog = screen.getByRole("dialog", { name: "Exchange rate: Transport" });
+      expect(dialog).toHaveTextContent("The published rate is 1 EUR = 0.85 GBP");
+      await userEvent.click(within(dialog).getByRole("radio", { name: "The converted amount" }));
+      await userEvent.type(within(dialog).getByLabelText(/Converted amount in GBP/), "90");
+      const result = within(dialog).getByLabelText("Result");
+      expect(result).toHaveTextContent("0.9");
+      expect(result).toHaveTextContent("£90.00");
+      expect(result).toHaveTextContent("+5.9% compared with the published rate");
+      await userEvent.type(within(dialog).getByLabelText("Note"), "Invoice 123");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Save rate" }));
+      await waitFor(() => expect(lastCall("POST /ncr-costs/c2/rate").body).toEqual({ kind: "amount", value: 90, note: "Invoice 123" }));
+    });
+
+    it("can take a stated rate back, and can state a rate for a line that is waiting", async () => {
+      routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": list, "POST /ncr-costs/c3/reset-rate": () => ({ ...stated, rateStatus: "estimated" }), "POST /ncr-costs/c4/rate": (p, o) => ({ ...waiting, ...o.body }) });
+      renderAt("/Non-Conformance/Register/n1");
+      await userEvent.click(await screen.findByRole("button", { name: "Exchange rate for Labour cost" }));
+      await userEvent.click(within(screen.getByRole("dialog", { name: "Exchange rate: Labour" })).getByRole("button", { name: "Use the published rate" }));
+      await waitFor(() => expect(lastCall("POST /ncr-costs/c3/reset-rate")).toBeTruthy());
+      await userEvent.click(await screen.findByRole("button", { name: "Exchange rate for Other cost" }));
+      const dialog = await screen.findByRole("dialog", { name: "Exchange rate: Other" });
+      expect(dialog).toHaveTextContent("There is no published rate for this line yet");
+      await userEvent.type(within(dialog).getByLabelText(/Rate \(1 AED/), "0.21");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Save rate" }));
+      await waitFor(() => expect(lastCall("POST /ncr-costs/c4/rate").body).toEqual({ kind: "rate", value: 0.21, note: null }));
+    });
+
+    it("offers no rate button for a line already in the site currency", async () => {
+      routeApi({ "GET /ncrs/n1": ncr(), "GET /ncrs/n1/costs": costList });
+      renderAt("/Non-Conformance/Register/n1");
+      await screen.findByRole("table", { name: "Costs" });
+      expect(screen.queryByRole("button", { name: /Exchange rate for/ })).toBeNull();
+    });
   });
 
   it("deletes a cost with a reason", async () => {

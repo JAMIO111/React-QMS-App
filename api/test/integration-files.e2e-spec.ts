@@ -146,7 +146,7 @@ describe('file imports', () => {
     const rejected = (await api().get(`${base}/runs/${run.id}/rows`).set(await owner()).query({ status: 'rejected' }).expect(200)).body.data;
     const byRow = Object.fromEntries(rejected.map((r: { sourceRow: number; errors: { message: string }[] }) => [r.sourceRow, r.errors.map((e) => e.message)]));
     expect(byRow[4]).toEqual(['Name is required']);
-    expect(byRow[5]).toEqual([expect.stringMatching(/^Supplier type: "Unknown" is not one of/), 'Email: "not-an-email" is not an email address']);
+    expect(byRow[5]).toEqual([expect.stringMatching(/^Supplier type: "Unknown" is not one of/), 'Company email: "not-an-email" is not an email address']);
     expect(byRow[6]).toEqual(['The record has no identifier']);
     const previewed = (await api().get(`${base}/runs/${run.id}/rows`).set(await owner()).query({ status: 'previewed' }).expect(200)).body.data;
     expect(previewed.map((r: { externalId: string }) => r.externalId)).toEqual(['S-1', 'S-2']);

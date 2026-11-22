@@ -50,6 +50,12 @@ describe("import alerts and email choices", () => {
     expect(notificationLink({ entityType: "workflow_notices", entityId: "n", details: { record_kind: "nonconformance", record_id: id } })).toBe(`/Non-Conformance/Register/${id}`);
     expect(notificationLink({ entityType: "workflow_notices", entityId: "n", details: { record_kind: "gauge", record_id: "not-an-id" } })).toBeNull();
     expect(notificationLink({ entityType: "workflow_tasks", entityId: "t", details: {} })).toBe("/Tasks");
+    const rid = "11111111-1111-4111-8111-111111111111";
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "scar", record_id: rid } })).toBe(`/Supplier-Quality/SCARs/${rid}`);
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "capa", record_id: rid } })).toBe(`/CAPA/${rid}/d0`);
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "document", record_id: rid } })).toBe(`/Documentation/Documents/${rid}`);
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "quality_alert", record_id: rid } })).toBe(`/Documentation/Quality-Alerts/${rid}`);
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: {} })).toBe("/Settings/External-Access");
   });
 
   it("leads an import alert to its run", () => {

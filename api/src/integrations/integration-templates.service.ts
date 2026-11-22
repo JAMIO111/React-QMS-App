@@ -9,11 +9,15 @@ import { DatabaseService, Db } from '../database/database.service';
 import { CatalogueService } from './core/catalogue.service';
 import { checkFormula, runFormula } from './core/formula';
 import { applyMapping, cell, fieldColumns, mappingProblems, rawValue } from './core/mapping';
+import { referenceProblem } from './core/references';
+import { REF_KIND_WORDS } from './core/catalogue';
 import {
   CheckFormulaBody,
   CreateTemplateBody,
   FormulaCheckResult,
   PreviewTemplateBody,
+  ReferenceValues,
+  ReferenceValuesQuery,
   SaveTemplateVersionBody,
   Template,
   TemplateBody,
@@ -220,10 +224,12 @@ export class IntegrationTemplatesService {
   async preview(ctx: RequestContext, b: PreviewTemplateBody): Promise<TemplatePreview> {
     const catalogue = await this.catalogues.get(b.entityType, orgOf(ctx));
     if (!catalogue) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
+    let connectionId: string | null = b.connectionId ?? null;
     const { headers, rows } = b.connectionId
       ? await this.sampleOf(ctx, b.connectionId, b.entityType, b.rows)
       : await this.database.asUser(ctx, async (db) => {
-      const f = await db.execute<Row>(sql`select headers, status from public.integration_files where id = ${b.fileId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      const f = await db.execute<Row>(sql`select headers, status, connection_id from public.integration_files where id = ${b.fileId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (f.rows[0]) connectionId = f.rows[0].connection_id as string;
       if (!f.rows[0]) throw ApiError.notFound('file_not_found', 'File not found');
       if (f.rows[0].status !== 'parsed') throw new ApiError(409, 'integration_rule', 'That file could not be read, or its rows have been cleared');
       const wanted = b.rows?.length ? b.rows : null;
@@ -249,15 +255,19 @@ export class IntegrationTemplatesService {
       const f = byKey.get(m.target);
       for (const c of fieldColumns(m)) use(c, f?.label ?? m.target, !!f?.required);
     }
+    // What each row makes of the mapping, once: the shown rows get their errors from it, and so do the link checks below.
+    const outs = rows.map((r) => applyMapping(catalogue, spec, r.v));
+    const references = await this.checkReferences(ctx, catalogue, b, byKey, connectionId, rows, outs);
     return {
+      references,
       columns: headers,
       columnCheck: {
         missing: [...used].filter(([c]) => !headerSet.has(c)).map(([column, u]) => ({ column, fields: u.fields, blocking: u.blocking })),
         unused: headers.filter((h) => !used.has(h)),
       },
       problems: mappingProblems(catalogue, spec, headers),
-      rows: rows.map((r) => {
-        const out = applyMapping(catalogue, spec, r.v);
+      rows: rows.map((r, i) => {
+        const out = outs[i];
         return {
           row: r.r,
           externalId: out.externalId,
@@ -278,6 +288,96 @@ export class IntegrationTemplatesService {
         };
       }),
     };
+  }
+
+  /** The rows of a file that links are checked over (the first 1,000), as {row, values}. */
+  private async fileRows(ctx: RequestContext, fileId: string): Promise<Array<{ r: number; v: Record<string, string> }>> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ v: { r: number; v: Record<string, string> } }>(sql`
+        select x.v from public.integration_file_chunks c cross join lateral jsonb_array_elements(c.rows) as x(v)
+         where c.file_id = ${fileId}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid order by c.seq, (x.v ->> 'r')::int limit 1000`);
+      return found.rows.map((r) => r.v);
+    });
+  }
+
+  /**
+   * Check the link fields of a mapping against what exists in Fortress while it is being built: over up to 1,000 rows of the file (the rows shown, or the
+   * sample of an API), by the same rules the import uses. A value with no record puts the reason on the shown rows too. Never stops the preview: when the
+   * check cannot be made (no right to read integrations) the preview simply has no link results.
+   */
+  private async checkReferences(
+    ctx: RequestContext,
+    catalogue: NonNullable<Awaited<ReturnType<CatalogueService['get']>>>,
+    b: PreviewTemplateBody,
+    byKey: Map<string, (typeof catalogue.fields)[number]>,
+    connectionId: string | null,
+    shown: Array<{ r: number; v: Record<string, string> }>,
+    shownOuts: Array<ReturnType<typeof applyMapping>>,
+  ): Promise<TemplatePreview['references']> {
+    const linked = b.fields.filter((m) => byKey.get(m.target)?.ref);
+    if (!linked.length) return [];
+    const spec = { keyField: b.keyField, fields: b.fields };
+    const wide = b.fileId ? await this.fileRows(ctx, b.fileId).catch(() => shown) : shown;
+    const outs = wide === shown ? shownOuts : wide.map((r) => applyMapping(catalogue, spec, r.v));
+    const text = (v: unknown): string | null => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim());
+    const result: TemplatePreview['references'] = [];
+    for (const m of linked) {
+      const f = byKey.get(m.target)!;
+      const mode: 'code' | 'source' = m.match === 'source' && f.ref!.source && connectionId ? 'source' : 'code';
+      const counts = new Map<string, number>();
+      for (const o of outs) {
+        const v = text(o.canonical[f.key]);
+        if (v && !o.errors.some((e) => e.field === f.key)) counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+      for (const o of shownOuts) {
+        const v = text(o.canonical[f.key]);
+        if (v && !counts.has(v)) counts.set(v, 1);
+      }
+      const values = [...counts.keys()];
+      const checked = values.slice(0, 2000);
+      let found: Record<string, string> = {};
+      if (checked.length) {
+        try {
+          found = await this.database.asUser(ctx, async (_db, client) =>
+            (await client.query('select app.integration_reference_check($1::uuid, $2, $3, $4::uuid, $5::text[]) as r', [orgOf(ctx), f.ref!.kind, mode, connectionId, checked])).rows[0].r as Record<string, string>,
+          );
+        } catch {
+          continue;
+        }
+      }
+      const bad = checked.filter((v) => !found[v] || found[v] === 'ambiguous');
+      for (const o of shownOuts) {
+        const v = text(o.canonical[f.key]);
+        if (v && checked.includes(v) && (!found[v] || found[v] === 'ambiguous') && !o.errors.some((e) => e.field === f.key)) {
+          o.errors.push({ field: f.key, message: referenceProblem(f, mode, v, found[v] === 'ambiguous') });
+        }
+      }
+      result.push({
+        target: f.key,
+        label: f.label,
+        kind: f.ref!.kind,
+        word: REF_KIND_WORDS[f.ref!.kind],
+        mode,
+        checked: outs.length,
+        distinct: values.length,
+        missing: bad.filter((v) => !found[v]).length,
+        ambiguous: bad.filter((v) => found[v] === 'ambiguous').length,
+        examples: bad
+          .sort((x, y) => (counts.get(y) ?? 0) - (counts.get(x) ?? 0) || x.localeCompare(y))
+          .slice(0, 10)
+          .map((v) => ({ value: v, reason: found[v] === 'ambiguous' ? ('ambiguous' as const) : ('missing' as const), rows: counts.get(v) ?? 0 })),
+        truncated: values.length > checked.length,
+      });
+    }
+    return result;
+  }
+
+  /** The values a link field can take, to choose from: the codes that exist in Fortress with their names (search and paging). */
+  async referenceValues(ctx: RequestContext, q: ReferenceValuesQuery): Promise<z.infer<typeof ReferenceValues>> {
+    const r = await this.database.asUser(ctx, async (_db, client) =>
+      (await client.query('select app.integration_reference_values($1::uuid, $2, $3, $4::int, $5::int) as r', [orgOf(ctx), q.kind, q.q ?? null, q.limit, q.offset])).rows[0].r as { total: number; data: z.infer<typeof ReferenceValues>['data'] },
+    );
+    return { kind: q.kind, word: REF_KIND_WORDS[q.kind], total: r.total, data: r.data };
   }
 
   /** Read a formula (and check its columns when the file's are given); work it out on a sample row when one is given. */

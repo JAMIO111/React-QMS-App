@@ -15,6 +15,7 @@ import { useQuickSave } from "../../hooks/useQuickSave";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
 
 const MachineForm = ({ machine, onDone }) => {
   const mutation = useProcessControlMutation();
@@ -31,6 +32,7 @@ const MachineForm = ({ machine, onDone }) => {
   });
   const [customValues, setCustomValues] = useState({});
   const [opened] = useState(machine);
+  const { lock } = useImportLocks("machine", machine?.id);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
 
   const submit = (e) => {
@@ -66,19 +68,20 @@ const MachineForm = ({ machine, onDone }) => {
       {machine && <DocumentsInForce machineId={machine.id} />}
       {machine && <LinkedRisks kind="machine" id={machine.id} plain />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Code" value={form.code} onChange={set("code")} required maxLength={40} hint="e.g. LATHE-01" />
-        <Field label="Name" value={form.name} onChange={set("name")} required maxLength={120} />
+        <Field label="Code" value={form.code} onChange={set("code")} required maxLength={40} hint="e.g. LATHE-01" {...lock("code")} />
+        <Field label="Name" value={form.name} onChange={set("name")} required maxLength={120} {...lock("name")} />
         <SelectField
           label="Site"
           value={form.siteId}
           onChange={(v) => setForm((f) => ({ ...f, siteId: v }))}
           options={(sites.data?.data ?? []).map((s) => ({ value: s.id, label: s.name }))}
+          {...lock("site")}
         />
-        <Field label="Work centre / line" value={form.workCentre} onChange={set("workCentre")} maxLength={100} />
+        <Field label="Work centre / line" value={form.workCentre} onChange={set("workCentre")} maxLength={100} {...lock("workCentre")} />
       </div>
-      <Field label="Description" value={form.description} onChange={set("description")} maxLength={1000} />
+      <Field label="Description" value={form.description} onChange={set("description")} maxLength={1000} {...lock("description")} />
       {machine && (
-        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")} {...lock("active")}>
           Active (inactive machines are hidden from pickers)
         </Switch>
       )}

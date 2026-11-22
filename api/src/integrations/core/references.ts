@@ -32,7 +32,7 @@ export async function resolveReferences(catalogue: EntityCatalogue, spec: Mappin
       }
       const id = found[v];
       if (id && id !== 'ambiguous') r.canonical[out] = id;
-      else r.errors.push({ field: field.key, message: problem(field, mode, v, id === 'ambiguous') });
+      else r.errors.push({ field: field.key, message: referenceProblem(field, mode, v, id === 'ambiguous') });
     }
   }
 }
@@ -40,7 +40,7 @@ export async function resolveReferences(catalogue: EntityCatalogue, spec: Mappin
 const text = (v: unknown): string | null => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim());
 export const outKey = (f: CatalogueField): string => (f.ref?.kind === 'unit' ? `${f.key}Code` : `${f.key}Id`);
 
-function problem(f: CatalogueField, mode: 'code' | 'source', v: string, ambiguous: boolean): string {
+export function referenceProblem(f: CatalogueField, mode: 'code' | 'source', v: string, ambiguous: boolean): string {
   const word = REF_KIND_WORDS[f.ref!.kind];
   if (ambiguous) return `${f.label}: "${v}" is used by more than one ${word}, so it cannot tell which one is meant`;
   if (mode === 'source') return `${f.label}: no ${word} "${v}" has been imported through this connection yet; import the ${word}s first`;

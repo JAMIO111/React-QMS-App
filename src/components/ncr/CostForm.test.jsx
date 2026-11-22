@@ -1,21 +1,50 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+
+let preview;
+const lastQuery = vi.fn();
+vi.mock("../../hooks/useNcr", () => ({
+  useRatePreview: (q) => {
+    lastQuery(q);
+    return preview;
+  },
+}));
+
 import CostForm from "./CostForm";
 
 const renderForm = (props = {}) => render(<CostForm baseCurrency="GBP" vatRate={0.2} onSubmit={vi.fn()} onCancel={vi.fn()} {...props} />);
 const currencyBox = () => screen.getByRole("combobox", { name: "Currency" });
 
+beforeEach(() => {
+  preview = { data: undefined, isLoading: false };
+  lastQuery.mockReset();
+});
+
 describe("CostForm currency", () => {
-  it("starts a new cost in the NC's site currency and asks for the exchange rate when it differs from the organisation's", () => {
+  it("starts a new cost in the NC's site currency and looks up the published rate instead of asking for one", () => {
+    preview = { data: { rate: 0.85, rateDate: "2026-10-30", state: "published" }, isLoading: false };
     renderForm({ defaultCurrency: "EUR" });
     expect(currencyBox()).toHaveAttribute("placeholder", expect.stringContaining("EUR"));
-    expect(screen.getByLabelText(/Exchange rate \(1 EUR = \? GBP\)/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Exchange rate \(/)).toBeNull();
+    expect(screen.getByLabelText("Exchange rate")).toHaveTextContent("1 EUR = 0.85 GBP");
+    expect(lastQuery).toHaveBeenLastCalledWith(expect.objectContaining({ from: "EUR", to: "GBP" }));
   });
 
-  it("falls back to the organisation's currency when the site has none", () => {
+  it("says what happens when there is no rate: not published, or the service cannot be reached", () => {
+    preview = { data: { rate: null, state: "not_published" }, isLoading: false };
+    const { unmount } = renderForm({ defaultCurrency: "AED" });
+    expect(screen.getByLabelText("Exchange rate")).toHaveTextContent("No automatic rate is published for AED");
+    unmount();
+    preview = { data: { rate: null, state: "unavailable" }, isLoading: false };
+    renderForm({ defaultCurrency: "AED" });
+    expect(screen.getByLabelText("Exchange rate")).toHaveTextContent("could not be looked up just now");
+  });
+
+  it("asks for no rate in the site's own currency", () => {
     renderForm();
     expect(currencyBox()).toHaveAttribute("placeholder", expect.stringContaining("GBP"));
-    expect(screen.queryByLabelText(/Exchange rate/)).toBeNull();
+    expect(screen.queryByLabelText("Exchange rate")).toBeNull();
+    expect(lastQuery).toHaveBeenLastCalledWith(expect.objectContaining({ from: null }));
   });
 
   it("keeps the currency a saved cost was entered in, whatever the site's is now", () => {
@@ -24,6 +53,20 @@ describe("CostForm currency", () => {
       cost: { costType: "scrap", description: "", incurredOn: "2026-11-01", currency: "GBP", vatTreatment: "none", vatRate: 0, amount: 10, exchangeRate: 1 },
     });
     expect(currencyBox()).toHaveAttribute("placeholder", expect.stringContaining("GBP"));
+  });
+
+  it("never sends a rate", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    preview = { data: { rate: 0.85, rateDate: "2026-10-30", state: "published" }, isLoading: false };
+    renderForm({
+      onSubmit,
+      cost: { costType: "labour", description: "", incurredOn: "2026-11-01", currency: "EUR", vatTreatment: "none", vatRate: 0, quantity: 1, unitCost: 10, amount: 10, exchangeRate: 0.9 },
+    });
+    await user.click(screen.getByRole("button", { name: /Save cost/ }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ currency: "EUR", unitCost: 10 }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("exchangeRate");
   });
 });
 

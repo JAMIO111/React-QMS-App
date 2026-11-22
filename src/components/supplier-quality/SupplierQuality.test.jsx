@@ -24,13 +24,13 @@ const classes = [
   { id: "k2", key: "casting", label: "Casting foundry", description: null, sequence: 10, active: false, suppliers: 0 },
 ];
 const row = (over = {}) => ({
-  id: "s1", code: "ACME", name: "Acme Metals Ltd", displayName: "Acme", supplierType: "subcontractor", country: "GB", city: "Sheffield", approvalStatus: "approved", approvalStatusChangedAt: "2026-11-02T09:00:00Z",
+  id: "s1", code: "ACME", name: "Acme Metals Ltd", displayName: "Acme", supplierType: "subcontractor", country: "GB", city: "Sheffield", addressLine1: "1 Steel Way", addressLine2: null, addressLine3: "Industrial Park", region: "South Yorkshire", postcode: "S1 1AA", currency: "GBP", approvalStatus: "approved", approvalStatusChangedAt: "2026-11-02T09:00:00Z",
   active: true, riskRating: null, classifications: [{ id: "k1", label: "Welding" }], primaryContact: { name: "Pat Quality", email: "pat@acme.test", phone: null }, openNcCount: 2, createdAt: "2026-11-01T09:00:00Z", ...over,
 });
 const detail = (over = {}) => {
   const { primaryContact: _omit, ...r } = row();
   return {
-    ...r, companyNumber: null, vatNumber: null, notes: "Preferred for welding", addressLine1: "1 Steel Way", addressLine2: null, region: null, postcode: "S1 1AA", website: "https://acme.test", email: null, phone: null,
+    ...r, companyNumber: null, vatNumber: null, notes: "Preferred for welding", addressLine1: "1 Steel Way", addressLine2: null, addressLine3: null, region: null, postcode: "S1 1AA", website: "https://acme.test", email: null, phone: null,
     purchasingReference: "V-100", approvalStatusChangedBy: { id: "u1", name: "Ada Owner" }, conditions: null, reviewOn: null,
     contacts: [{ id: "c1", name: "Pat Quality", jobTitle: "QA lead", role: "quality", email: "pat@acme.test", phone: null, isPrimary: true, active: true, notes: null }],
     products: [{ id: "pr1", kind: "part", part: { id: "p1", partNumber: "BAR-50", name: "Bar stock" }, description: null, supplierPartNumber: "AC-50", notes: null, active: true }],
@@ -92,6 +92,23 @@ describe("supplier register", () => {
     expect(screen.getByRole("button", { name: "Add supplier" })).toBeInTheDocument();
   });
 
+  it("shows the currency by default and keeps every address column hidden until it is chosen", async () => {
+    routeApi();
+    renderAt("/Suppliers");
+    const table = await screen.findByRole("region", { name: "Suppliers" });
+    await within(table).findByRole("link", { name: "ACME" });
+    expect(within(table).getByRole("columnheader", { name: /Currency/ })).toBeInTheDocument();
+    expect(within(table).getAllByText("GBP").length).toBeGreaterThan(0);
+    for (const name of ["Company email", "Company phone", "Company website", "Address line 1", "Address line 2", "Address line 3", "Town or city", "County, state or region", "Postcode", "Country"]) {
+      expect(within(table).queryByRole("columnheader", { name: new RegExp(name) })).toBeNull();
+    }
+    await userEvent.click(screen.getByRole("button", { name: /^Columns/ }));
+    const menu = await screen.findByRole("dialog", { name: "Columns" });
+    for (const name of ["Address line 1", "Address line 3", "County, state or region", "Postcode", "Currency"]) expect(within(menu).getByText(name)).toBeInTheDocument();
+    await userEvent.click(within(menu).getByText("Address line 3"));
+    expect((await within(table).findAllByText("Industrial Park")).length).toBeGreaterThan(0);
+  });
+
   it("filters from the drawer, shows chips and clears them", async () => {
     routeApi();
     const where = renderAt("/Suppliers");
@@ -129,11 +146,14 @@ describe("supplier register", () => {
     expect(dialog).toHaveTextContent("Pending Approval");
     await userEvent.type(within(dialog).getByLabelText(/Code/), "new1");
     await userEvent.type(within(dialog).getByLabelText(/Legal name/), "New Supplier Ltd");
+    await userEvent.type(within(dialog).getByLabelText("Address line 3"), "Industrial Park");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Currency" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^EUR/ }));
     await userEvent.click(within(dialog).getByText("Welding"));
     await userEvent.click(within(dialog).getByRole("button", { name: "Add supplier" }));
     await waitFor(() => expect(calls.find((c) => c.k === "POST /supplier-quality/suppliers")).toBeTruthy());
     const body = calls.find((c) => c.k === "POST /supplier-quality/suppliers").body;
-    expect(body).toMatchObject({ code: "new1", name: "New Supplier Ltd", classificationIds: ["k1"] });
+    expect(body).toMatchObject({ code: "new1", name: "New Supplier Ltd", classificationIds: ["k1"], addressLine3: "Industrial Park", currency: "EUR" });
     expect(body).not.toHaveProperty("approvalStatus");
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/Suppliers/s9"));
   });

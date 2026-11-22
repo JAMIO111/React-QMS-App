@@ -124,6 +124,10 @@ export type ExtendBody = z.infer<typeof ExtendBody>;
 export const DecideExtensionBody = z.object({ approve: z.boolean(), note: required(3, 1000, 'A reason for the decision') }).strict();
 export type DecideExtensionBody = z.infer<typeof DecideExtensionBody>;
 
+/** An action staff ask the supplier to take (the supplier completes it in the portal). */
+export const ScarActionBody = z.object({ description: required(3, 1000, 'What is asked'), dueOn: DateOnly.nullable().optional() }).strict();
+export type ScarActionBody = z.infer<typeof ScarActionBody>;
+
 export const ScarReasonBody = z.object({ reason: required(3, 1000, 'A reason') }).strict();
 export type ScarReasonBody = z.infer<typeof ScarReasonBody>;
 
@@ -175,6 +179,7 @@ const ResponseItem = z.object({
   receivedAt: Iso,
   receivedBy: Person,
   review: Review.nullable(),
+  files: z.array(z.object({ id: z.string().uuid(), fileName: z.string(), sizeBytes: z.number(), storagePath: z.string(), uploadedAt: Iso })),
 });
 const Implementation = z.object({ id: z.string().uuid(), description: z.string(), implementedOn: DateOnly, evidenceNote: z.string().nullable(), recordedAt: Iso, recordedBy: Person });
 const Verification = z.object({ id: z.string().uuid(), result: z.enum(['effective', 'not_effective']), method: z.string(), note: z.string(), verifiedAt: Iso, verifiedBy: Person });
@@ -214,7 +219,22 @@ const NcrLink = z.object({
 });
 const HistoryItem = z.object({ id: z.string().uuid(), fromStatus: Status.nullable(), toStatus: Status, reason: z.string().nullable(), changedAt: Iso, changedBy: Person });
 
+const ScarAction = z.object({
+  id: z.string().uuid(),
+  description: z.string(),
+  dueOn: DateOnly.nullable(),
+  status: z.enum(['open', 'done', 'cancelled']),
+  overdue: z.boolean(),
+  resultNote: z.string().nullable(),
+  doneAt: Iso.nullable(),
+  doneByName: z.string().nullable(),
+  cancelReason: z.string().nullable(),
+  reopenReason: z.string().nullable(),
+  addedBy: Person,
+});
+
 export const ScarDetail = ScarRow.extend({
+  actions: z.array(ScarAction),
   problemDescription: z.string().nullable(),
   requirementBreached: z.string().nullable(),
   objectiveEvidence: z.string().nullable(),

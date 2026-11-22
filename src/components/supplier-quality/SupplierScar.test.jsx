@@ -23,7 +23,7 @@ const detail = (over = {}) => ({
   ...row(), problemDescription: "Brackets arrive bent", requirementBreached: null, objectiveEvidence: null, containmentRequirements: null, items: [], originalResponseDueOn: "2026-12-01", contact: { id: "k1", name: "Quality contact", email: null }, capa: null, issuedBy: { id: "u1", name: "Ada Owner" },
   acknowledgedAt: null, acknowledgedBy: null, acknowledgedNote: null, closedBy: null, cancelledAt: null, cancelledBy: null, cancelReason: null, createdBy: { id: "u1", name: "Ada Owner" },
   ncrs: [{ linkId: "l1", ncr: { id: "n1", reference: "NC-000001", title: "Bent bracket", stage: "open", severity: "major" }, linkedAt: "2026-11-01T08:00:00Z", endedAt: null, endReason: null }],
-  responses: [], implementations: [], verifications: [], extensions: [], history: [{ id: "h1", fromStatus: null, toStatus: "draft", reason: "Created", changedAt: "2026-11-01T08:00:00Z", changedBy: { id: "u1", name: "Ada Owner" } }], ...over,
+  responses: [], implementations: [], verifications: [], extensions: [], actions: [], history: [{ id: "h1", fromStatus: null, toStatus: "draft", reason: "Created", changedAt: "2026-11-01T08:00:00Z", changedBy: { id: "u1", name: "Ada Owner" } }], ...over,
 });
 const calls = [];
 const routeApi = (routes = {}) =>
@@ -217,6 +217,49 @@ describe("SCAR page", () => {
     expect(await screen.findByText("Wrong supplier", { exact: false })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel SCAR" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Record a response" })).not.toBeInTheDocument();
+  });
+});
+
+describe("actions for the supplier", () => {
+  const open = (scar) => {
+    routeApi({ "GET /supplier-quality/scars/c1": scar, "GET /supplier-quality/suppliers/s1": { contacts: [] } });
+    renderAt(<ScarPage />, "/Supplier-Quality/SCARs/c1");
+  };
+  const act = (over = {}) => ({ id: "a1", description: "Sort the stock", dueOn: "2099-12-01", status: "open", overdue: false, resultNote: null, doneAt: null, doneByName: null, cancelReason: null, reopenReason: null, addedBy: null, ...over });
+
+  it("lists them with the supplier's note, and a manager adds, cancels and reopens", async () => {
+    open(detail({ status: "issued", actions: [act(), act({ id: "a2", description: "Send the records", status: "done", resultNote: "Sent by email", doneByName: "sam", doneAt: "2026-11-12T10:00:00Z" }), act({ id: "a3", description: "Old ask", status: "cancelled", cancelReason: "Already held" })] }));
+    const list = await screen.findByRole("list", { name: "Actions for the supplier" });
+    expect(list).toHaveTextContent("Sort the stock");
+    expect(list).toHaveTextContent("Sent by email");
+    expect(screen.getByText("1 cancelled")).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: "Reopen" })).toBeInTheDocument();
+    await userEvent.click(within(list).getByRole("button", { name: "Cancel" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Cancel action" })).toBeDisabled();
+  });
+
+  it("adds an action: what is asked is needed, and it goes to the SCAR's actions route", async () => {
+    open(detail({ status: "issued" }));
+    const card = (await screen.findByText("Actions for the supplier")).closest("section") ?? document.body;
+    await userEvent.click(within(card).getByRole("button", { name: "Add" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Add action" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("What is asked"), "Re-inspect the next three lots");
+    apiFetch.mockImplementation(async (path, opts = {}) => {
+      const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
+      calls.push({ k, path, body: opts.body });
+      return k.startsWith("POST") ? detail({ status: "issued" }) : detail({ status: "issued" });
+    });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add action" }));
+    await waitFor(() => expect(calls.some((c) => c.k === "POST /supplier-quality/scars/c1/actions" && c.body.description === "Re-inspect the next three lots")).toBe(true));
+  });
+
+  it("offers no add button to someone who may only read", async () => {
+    permissions = ["supplier_quality.read"];
+    open(detail({ status: "issued" }));
+    await screen.findByText("Actions for the supplier");
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
   });
 });
 

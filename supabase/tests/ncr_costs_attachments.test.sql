@@ -33,8 +33,9 @@ BEGIN
   INSERT INTO public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, vat_treatment, vat_rate, amount)
     VALUES (org, ncr, 'labour', 'GBP', 'exclusive', 0.2, 33.33) RETURNING id INTO c;
   PERFORM pg_temp.assert_eq((SELECT net_amount || '|' || vat_amount || '|' || gross_amount FROM public.ncr_costs WHERE id = c), '33.33|6.67|40.00', 'VAT added to exclusive amount');
-  INSERT INTO public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, vat_treatment, vat_rate, amount, exchange_rate)
-    VALUES (org, ncr, 'transport', 'EUR', 'none', 0.2, 50, 0.85) RETURNING id INTO c;
+  PERFORM pg_temp.seed_rate(current_date, 'EUR', 'GBP', 0.85);
+  INSERT INTO public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, vat_treatment, vat_rate, amount)
+    VALUES (org, ncr, 'transport', 'EUR', 'none', 0.2, 50) RETURNING id INTO c;
   PERFORM pg_temp.assert_eq((SELECT vat_rate || '|' || gross_amount || '|' || net_base || '|' || gross_base FROM public.ncr_costs WHERE id = c), '0|50.00|42.50|42.50', 'no VAT; converted to base currency');
   INSERT INTO public.ncr_costs (organisation_id, nonconformance_id, cost_type, currency, amount, exchange_rate)
     VALUES (org, ncr, 'admin', 'GBP', 10, 3) RETURNING id INTO c;

@@ -51,6 +51,27 @@ describe('customers and suppliers', () => {
     expect(all.body.data.some((c: { id: string }) => c.id === customerId)).toBe(true);
   });
 
+  it('keeps an address and a currency on customers and suppliers, shaped and optional', async () => {
+    const h = await as(ids.ownerA, ids.orgA);
+    const address = { addressLine1: '1 High Street', addressLine2: ' Unit 4 ', addressLine3: 'Trading Estate', city: 'Leeds', region: 'West Yorkshire', postcode: 'LS1 1AA', country: 'gb', currency: 'gbp' };
+    const c = await api().post('/api/v1/customers').set(h).send({ code: 'ADDR1', name: 'Addressed', ...address }).expect(201);
+    expect(c.body).toMatchObject({ addressLine1: '1 High Street', addressLine2: 'Unit 4', addressLine3: 'Trading Estate', city: 'Leeds', region: 'West Yorkshire', postcode: 'LS1 1AA', country: 'GB', currency: 'GBP' });
+    const plain = await api().post('/api/v1/customers').set(h).send({ code: 'ADDR2', name: 'No address' }).expect(201);
+    expect(plain.body).toMatchObject({ addressLine1: null, addressLine3: null, city: null, country: null, currency: null });
+    const changed = await api().patch(`/api/v1/customers/${c.body.id}`).set(h).send({ addressLine3: '', currency: 'eur', city: 'Hull' }).expect(200);
+    expect(changed.body).toMatchObject({ addressLine3: null, currency: 'EUR', city: 'Hull', addressLine1: '1 High Street' });
+    const s = await api().post('/api/v1/suppliers').set(h).send({ code: 'ADDRS', name: 'Supplier', ...address, currency: 'usd' }).expect(201);
+    expect(s.body).toMatchObject({ addressLine3: 'Trading Estate', currency: 'USD', country: 'GB' });
+    const company = await api().post('/api/v1/customers').set(h).send({ code: 'ADDR6', name: 'Company line', email: ' info@acme.test ', phone: '0113 496 0000', website: 'https://acme.test' }).expect(201);
+    expect(company.body).toMatchObject({ email: 'info@acme.test', phone: '0113 496 0000', website: 'https://acme.test' });
+    const cleared = await api().patch(`/api/v1/customers/${company.body.id}`).set(h).send({ phone: '' }).expect(200);
+    expect(cleared.body).toMatchObject({ phone: null, email: 'info@acme.test' });
+    await api().post('/api/v1/customers').set(h).send({ code: 'ADDR3', name: 'Bad', country: 'GBR' }).expect(400);
+    await api().post('/api/v1/customers').set(h).send({ code: 'ADDR4', name: 'Bad', currency: 'POUNDS' }).expect(400);
+    await api().post('/api/v1/customers').set(h).send({ code: 'ADDR5', name: 'Bad', addressLine1: 'x'.repeat(121) }).expect(400);
+    await api().patch(`/api/v1/customers/${c.body.id}`).set(await as(ids.inspectorA, ids.orgA)).send({ city: 'York' }).expect(403);
+  });
+
   it('rejects duplicate codes and bad input', async () => {
     const h = await as(ids.ownerA, ids.orgA);
     const dup = await api().post('/api/v1/customers').set(h).send({ code: 'ACME', name: 'Again' }).expect(409);

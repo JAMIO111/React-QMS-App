@@ -1,12 +1,14 @@
 import { useId } from "react";
+import LockedMark from "./LockedMark";
 
 /** Labelled input styled like the app's other form controls; extra props go to the <input>. */
-const Field = ({ label, hint, error, className = "", inputClassName = "", required, ...inputProps }) => {
+const Field = ({ label, hint, error, className = "", inputClassName = "", required, lockedBy, ...inputProps }) => {
   const id = useId();
   return (
     <div className={`flex flex-col gap-1 min-w-0 ${className}`}>
       <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
+        {lockedBy && <LockedMark by={lockedBy} />}
       </label>
       <input
         id={id}
@@ -17,6 +19,7 @@ const Field = ({ label, hint, error, className = "", inputClassName = "", requir
           error ? "border-error-color focus:ring-3 focus:ring-error-color/20" : "border-border-color hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20"
         } ${inputClassName}`}
         {...inputProps}
+        disabled={inputProps.disabled || !!lockedBy}
       />
       {(error || hint) && (
         <p id={`${id}-help`} className={`text-xs ${error ? "text-error-color" : "text-secondary-text"}`}>

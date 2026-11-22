@@ -15,6 +15,7 @@ import { useQuickSave } from "../../hooks/useQuickSave";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
 
 
 /**
@@ -41,6 +42,7 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
   });
   const [customValues, setCustomValues] = useState({});
   const [opened] = useState(order);
+  const { lock } = useImportLocks("production_order", order?.id);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const disabled = readOnly || frozen;
   const quantity = Number(form.quantityPlanned);
@@ -76,22 +78,22 @@ const OrderDialog = ({ order, onClose, readOnly = false, onSaved }) => {
         <fieldset disabled={disabled} className="contents">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Order number" value={form.orderNumber} onChange={set("orderNumber")} required={creating} disabled={!creating || disabled} maxLength={60} hint={creating ? "Unique in the organisation, e.g. WO-1001" : "Fixed once created"} />
-            <Field label="Quantity planned" type="number" min="1" step="any" value={form.quantityPlanned} onChange={set("quantityPlanned")} required />
+            <Field label="Quantity planned" type="number" min="1" step="any" value={form.quantityPlanned} onChange={set("quantityPlanned")} required {...lock("quantityPlanned")} />
             {creating ? (
               <PartPicker required value={form.partId} onChange={(id) => setForm((f) => ({ ...f, partId: id, partRevisionId: null }))} />
             ) : (
               <Field label="Part" value={partLabel(order.part)} disabled readOnly hint="Fixed once created" />
             )}
-            <RevisionPicker partId={form.partId} value={form.partRevisionId} disabled={disabled} label="Revision released on" onChange={(id) => setForm((f) => ({ ...f, partRevisionId: id }))} />
-            <PartyPicker kind="customers" label="Customer" value={form.customerId} current={order?.customer} onChange={(id) => setForm((f) => ({ ...f, customerId: id }))} />
+            <RevisionPicker partId={form.partId} value={form.partRevisionId} disabled={disabled} label="Revision released on" onChange={(id) => setForm((f) => ({ ...f, partRevisionId: id }))} {...lock("partRevision")} />
+            <PartyPicker kind="customers" label="Customer" value={form.customerId} current={order?.customer} onChange={(id) => setForm((f) => ({ ...f, customerId: id }))} {...lock("customer")} />
             {creating ? (
-              <RHFComboBox label="Site" icon={HouseIcon} placeholder="No site" options={siteList.map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={form.siteId} onChange={(id) => setForm((f) => ({ ...f, siteId: id }))} />
+              <RHFComboBox label="Site" icon={HouseIcon} placeholder="No site" options={siteList.map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={form.siteId} onChange={(id) => setForm((f) => ({ ...f, siteId: id }))} {...lock("site")} />
             ) : (
               <Field label="Site" value={order.site?.name ?? "—"} disabled readOnly hint="Fixed once created" />
             )}
-            <RHFDatePickerPopout label="Due date" valueFormat="iso" clearable value={form.dueDate || null} onChange={(d) => setForm((f) => ({ ...f, dueDate: d ?? "" }))} placeholder="No due date" />
+            <RHFDatePickerPopout label="Due date" valueFormat="iso" clearable value={form.dueDate || null} onChange={(d) => setForm((f) => ({ ...f, dueDate: d ?? "" }))} placeholder="No due date" {...lock("dueDate")} />
           </div>
-          <TextAreaField label="Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} maxLength={2000} />
+          <TextAreaField label="Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} maxLength={2000} {...lock("notes")} />
         </fieldset>
         {creating && <CustomFieldInputs entityType="production_order" values={customValues} onChange={setCustomValues} />}
         <FormError error={mutation.error} />

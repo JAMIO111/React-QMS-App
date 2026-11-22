@@ -50,7 +50,7 @@ export class SupabaseFileLinkSigner extends FileLinkSigner {
   }
 
   async signUpload(bucket: string, path: string): Promise<{ token: string; signedUrl: string }> {
-    const res = await fetch(`${this.base}/object/upload/sign/${encodeURIComponent(bucket)}/${encodePath(path)}`, { method: 'POST', headers: this.headers() });
+    const res = await fetch(`${this.base}/object/upload/sign/${encodeURIComponent(bucket)}/${encodePath(path)}`, { method: 'POST', headers: this.headers(false) });
     if (!res.ok) throw new Error(`Storage answered ${res.status}`);
     const body = (await res.json()) as { url?: string };
     const token = body.url ? new URL(body.url, 'http://x').searchParams.get('token') : null;

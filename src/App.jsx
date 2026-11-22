@@ -94,6 +94,8 @@ function App() {
   if (organisation === null) {
     // Suspended from an organisation and not in another: say so, instead of offering to start one (their /me must have answered first).
     if (me.isLoading) return <div className="h-screen bg-primary-bg"><LoadingScreen fullscreen /></div>;
+    // Someone who acts for a supplier or customer (or has a portal invitation) and belongs to no organisation of their own goes to the portal.
+    if ((me.data?.portal?.length || me.data?.portalInvitations?.length) && !me.data?.memberships?.length) return <Navigate to="/portal" replace />;
     const suspended = suspendedFrom(me.data);
     if (suspended.length && !lookElsewhere) return <Suspended entries={suspended} onElsewhere={() => setLookElsewhere(true)} />;
     return <NoOrganisation error={error} />;

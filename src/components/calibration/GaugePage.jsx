@@ -43,11 +43,13 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { withCustomValues } from "../../lib/customFields";
 import GaugeHistory from "./GaugeHistory";
 import PeoplePicker from "./PeoplePicker";
-import { DuePill, GaugeStatusPill, OutcomePill } from "./Pills";
+import { DuePill, GaugeStatusPill, LegacyPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 import { withVersion } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
+import { lockKey } from "../../lib/importLocks";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
@@ -129,6 +131,7 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
                 <tr key={c.id} className={`border-t border-border-color ${c.deletedAt ? "opacity-60" : ""}`}>
                   <td className="py-1.5 pr-2">
                     <Link to={`/Calibration/Gauges/${gaugeId}/calibrations/${c.id}`} className="font-medium text-link-color hover:underline">{c.reference}</Link>
+                    {c.legacy && <span className="ml-2"><LegacyPill importedFrom={c.importedFrom} /></span>}
                     {c.deletedAt && <span className="ml-2 text-xs text-error-color">Deleted</span>}
                   </td>
                   <td className="py-1.5 pr-2">{formatDate(c.calibratedOn)}</td>
@@ -136,7 +139,7 @@ const CalibrationList = ({ gaugeId, canRecord }) => {
                     <OutcomePill outcome={c.outcome} />
                     {c.readingCount > 0 && <span className="ml-2 text-xs text-secondary-text">{c.readingCount} readings</span>}
                   </td>
-                  <td className="py-1.5 pr-2">{c.performedBy === "external" ? c.supplier?.name ?? "External" : c.technician?.name ?? "In-house"}</td>
+                  <td className="py-1.5 pr-2">{c.performedBy === "external" ? c.supplier?.name ?? "External" : c.technician?.name ?? c.importedTechnician ?? "In-house"}</td>
                   <td className="py-1.5 pr-2">{c.certificateNumber ?? "—"}{c.attachmentCount > 0 && <span className="ml-1 text-xs text-secondary-text">({c.attachmentCount} file{c.attachmentCount === 1 ? "" : "s"})</span>}</td>
                   <td className="py-1.5 pr-2">{formatDate(c.nextDueOn)}</td>
                   <td className="py-1.5 pr-2">{c.nonconformance ? <Link to={ncrPath(c.nonconformance.id)} className="text-link-color hover:underline">{c.nonconformance.reference}</Link> : "—"}</td>
@@ -190,6 +193,7 @@ const GaugePage = () => {
   const valid = form.assetNumber.trim() && form.description.trim() && numbersOk;
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
   const selectedType = (types ?? []).find((t) => t.id === form.gaugeTypeId);
+  const { lock } = useImportLocks("gauge", isNew ? null : gauge?.id);
 
   const save = () => {
     if (!valid) return;
@@ -232,12 +236,13 @@ const GaugePage = () => {
             then?.(v);
           },
           disabled: !canEdit,
+          ...lock(lockKey(name)),
         })
       }
     />
   );
   const text = (name, label, props = {}) => (
-    <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder={`Enter ${label.toLowerCase()}`} {...props} />
+    <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder={`Enter ${label.toLowerCase()}`} {...lock(lockKey(name))} {...props} />
   );
   const numberInput = (name, label, props = {}) =>
     text(name, label, { inputMode: "decimal", error: isNum(form[name]) ? undefined : "Enter a number", placeholder: "—", ...props });
@@ -414,7 +419,7 @@ const GaugePage = () => {
                 ))}
                 {text("statusReason", "Status reason", { maxLength: 500, icon: AlignCenterIcon, placeholder: "Why (e.g. damaged anvil)" })}
                 <div className="lg:col-span-2">
-                  <RHFTextArea label="Notes" icon={AlignCenterIcon} value={form.notes} onChange={set("notes")} disabled={!canEdit} max={5000} rows={3} placeholder="Anything else about this gauge" />
+                  <RHFTextArea label="Notes" icon={AlignCenterIcon} value={form.notes} onChange={set("notes")} disabled={!canEdit} max={5000} rows={3} placeholder="Anything else about this gauge" {...lock("notes")} />
                 </div>
               </div>
               {isNew && (

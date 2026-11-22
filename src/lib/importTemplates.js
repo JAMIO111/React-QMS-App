@@ -168,7 +168,7 @@ export const cleanSteps = (steps) =>
   });
 
 /** Kinds an import only ever adds: non-conformances and goods receipts (never matched, never updated). */
-export const ADD_ONLY_KINDS = ["nonconformance", "goods_receipt"];
+export const ADD_ONLY_KINDS = ["nonconformance", "goods_receipt", "calibration"];
 
 /** Kinds an import always adds and updates: received totals (a changed total records a delivery of the increase). */
 export const ADD_UPDATE_KINDS = ["po_receipt_total"];

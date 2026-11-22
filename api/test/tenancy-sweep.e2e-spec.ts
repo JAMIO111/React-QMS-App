@@ -30,6 +30,9 @@ const UNSCOPED = new Set([
   'POST /api/v1/organisations',
   'GET /api/v1/invitations',
   'POST /api/v1/invitations/{id}/accept',
+  'GET /api/v1/portal/me', // the signed-in person's own portal access (external portal PT1); checked in the database
+  'GET /api/v1/portal/invitations', // portal invitations for the signed-in address only
+  'POST /api/v1/portal/invitations/{id}/accept', // accepts only an invitation sent to the signed-in, confirmed address
   'GET /api/v1/units', // global catalogue of measurement units
   'GET /api/v1/platform/me', // the operator area spans organisations; admin-only in the database (allow-list + MFA)
   'GET /api/v1/platform/overview',
@@ -301,6 +304,10 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink': { reason: 'Hijacked' },
     'POST /api/v1/supplier-quality/scars/{id}/items': { material: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-items/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scars/{id}/actions': { description: 'Hijacked action' },
+    'PATCH /api/v1/supplier-quality/scar-actions/{id}': { description: 'Hijacked action' },
+    'POST /api/v1/supplier-quality/scar-actions/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/supplier-quality/scar-actions/{id}/reopen': { reason: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/purchase-orders/{id}': undefined,
@@ -344,6 +351,8 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/ncr-costs/{id}': { unitCost: 999 },
     'POST /api/v1/ncr-costs/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/ncr-costs/{id}/restore': undefined,
+    'POST /api/v1/ncr-costs/{id}/rate': { kind: 'rate', value: 1 },
+    'POST /api/v1/ncr-costs/{id}/reset-rate': undefined,
     'POST /api/v1/ncr-attachments/{id}/delete': { reason: 'Hijacked' },
     'POST /api/v1/ncr-attachments/{id}/restore': undefined,
     'GET /api/v1/gauges/{id}': undefined,
@@ -527,6 +536,47 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/integrations/agent-updates/{id}/cancel': undefined,
     'GET /api/v1/integrations/agent-jobs/{id}': undefined,
     'POST /api/v1/integrations/agent-registrations/{id}/cancel': undefined,
+    'POST /api/v1/external-access/people/{id}/resend': undefined,
+    'POST /api/v1/external-access/people/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/external-access/people/{id}/suspend': { reason: 'Hijacked' },
+    'POST /api/v1/external-access/people/{id}/restore': undefined,
+    'POST /api/v1/portal/people/{id}/resend': undefined,
+    'POST /api/v1/portal/people/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/external-access/shares/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/external-access/shares/{id}/comments': undefined,
+    'GET /api/v1/external-access/shares/{id}/acknowledgements': undefined,
+    'GET /api/v1/external-access/shares/{id}/closures': undefined,
+    'PATCH /api/v1/customer-contacts/{id}': { name: 'Hijacked' },
+    'GET /api/v1/external-access/lots/{id}/evidence': undefined,
+    'POST /api/v1/external-access/lots/{id}/evidence': { customerId: '00000000-0000-0000-0000-000000000000', kind: 'other', path: 'x/y/z', fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/external-access/lot-evidence/{id}/remove': { reason: 'Hijacked' },
+    'POST /api/v1/portal/evidence/{id}/download-url': undefined,
+    'POST /api/v1/portal/complaints/{id}/files/upload-url': { fileName: 'x.jpg' },
+    'POST /api/v1/portal/complaints/{id}/files': { path: 'x/y/z', fileName: 'x.jpg', sizeBytes: 1 },
+    'POST /api/v1/portal/complaint-files/{id}/remove': undefined,
+    'POST /api/v1/portal/complaint-files/{id}/download-url': undefined,
+    'GET /api/v1/customers/{id}/contacts': undefined,
+    'POST /api/v1/customers/{id}/contacts': { name: 'Hijacked' },
+    'POST /api/v1/external-access/shares/{id}/closures': { note: 'Hijacked' },
+    'POST /api/v1/external-access/closure-requests/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/portal/closure-requests/{id}/decide': { confirm: true },
+    'POST /api/v1/external-access/shares/{id}/comments': { body: 'Hijacked' },
+    'POST /api/v1/external-access/comments/{id}/withdraw': undefined,
+    'GET /api/v1/portal/shares/{id}': undefined,
+    'POST /api/v1/portal/shares/{id}/comments': { body: 'Hijacked' },
+    'POST /api/v1/portal/shares/{id}/acknowledge': { note: 'Hijacked' },
+    'POST /api/v1/portal/shares/{id}/file-url': { fileId: '00000000-0000-0000-0000-000000000000' },
+    'POST /api/v1/portal/comments/{id}/withdraw': undefined,
+    'GET /api/v1/portal/scars/{id}': undefined,
+    'POST /api/v1/portal/scars/{id}/acknowledge': {},
+    'POST /api/v1/portal/scars/{id}/respond': { rootCause: 'Hijacked', correctiveAction: 'Hijacked' },
+    'POST /api/v1/portal/scars/{id}/extensions': { newDueOn: '2099-01-01', reason: 'Hijacked' },
+    'POST /api/v1/portal/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
+    'POST /api/v1/portal/scar-actions/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/portal/scars/{id}/files/upload-url': { fileName: 'x.pdf' },
+    'POST /api/v1/portal/scars/{id}/files': { path: 'x/y/z', fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/portal/scar-files/{id}/remove': undefined,
+    'POST /api/v1/portal/scar-files/{id}/download-url': undefined,
     'POST /api/v1/inspections/{id}/samples': { readings: [{ requirementId: a.requirement, valueNumeric: '1' }] },
     'POST /api/v1/inspections/{id}/complete': undefined,
     'POST /api/v1/inspections/{id}/abandon': { reason: 'Hijacked' },
@@ -781,6 +831,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/scar-ncrs/{id}/unlink',
     'POST /api/v1/supplier-quality/scars/{id}/items',
     'POST /api/v1/supplier-quality/scar-items/{id}/remove',
+    'POST /api/v1/supplier-quality/scars/{id}/actions',
+    'PATCH /api/v1/supplier-quality/scar-actions/{id}',
+    'POST /api/v1/supplier-quality/scar-actions/{id}/cancel',
+    'POST /api/v1/supplier-quality/scar-actions/{id}/reopen',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw',
     'GET /api/v1/purchase-orders/{id}',
@@ -824,6 +878,8 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/ncr-costs/{id}',
     'POST /api/v1/ncr-costs/{id}/delete',
     'POST /api/v1/ncr-costs/{id}/restore',
+    'POST /api/v1/ncr-costs/{id}/rate',
+    'POST /api/v1/ncr-costs/{id}/reset-rate',
     'POST /api/v1/ncr-attachments/{id}/delete',
     'POST /api/v1/ncr-attachments/{id}/restore',
     'GET /api/v1/gauges/{id}',
@@ -1008,6 +1064,47 @@ const hasSample = (op: Op) =>
     'POST /api/v1/integrations/agent-updates/{id}/cancel',
     'GET /api/v1/integrations/agent-jobs/{id}',
     'POST /api/v1/integrations/agent-registrations/{id}/cancel',
+    'POST /api/v1/external-access/people/{id}/resend',
+    'POST /api/v1/external-access/people/{id}/remove',
+    'POST /api/v1/external-access/people/{id}/suspend',
+    'POST /api/v1/external-access/people/{id}/restore',
+    'POST /api/v1/portal/people/{id}/resend',
+    'POST /api/v1/portal/people/{id}/remove',
+    'POST /api/v1/external-access/shares/{id}/withdraw',
+    'GET /api/v1/external-access/shares/{id}/comments',
+    'GET /api/v1/external-access/shares/{id}/acknowledgements',
+    'GET /api/v1/external-access/shares/{id}/closures',
+    'PATCH /api/v1/customer-contacts/{id}',
+    'GET /api/v1/external-access/lots/{id}/evidence',
+    'POST /api/v1/external-access/lots/{id}/evidence',
+    'POST /api/v1/external-access/lot-evidence/{id}/remove',
+    'POST /api/v1/portal/evidence/{id}/download-url',
+    'POST /api/v1/portal/complaints/{id}/files/upload-url',
+    'POST /api/v1/portal/complaints/{id}/files',
+    'POST /api/v1/portal/complaint-files/{id}/remove',
+    'POST /api/v1/portal/complaint-files/{id}/download-url',
+    'GET /api/v1/customers/{id}/contacts',
+    'POST /api/v1/customers/{id}/contacts',
+    'POST /api/v1/external-access/shares/{id}/closures',
+    'POST /api/v1/external-access/closure-requests/{id}/withdraw',
+    'POST /api/v1/portal/closure-requests/{id}/decide',
+    'POST /api/v1/external-access/shares/{id}/comments',
+    'POST /api/v1/external-access/comments/{id}/withdraw',
+    'GET /api/v1/portal/shares/{id}',
+    'GET /api/v1/portal/scars/{id}',
+    'POST /api/v1/portal/scars/{id}/acknowledge',
+    'POST /api/v1/portal/scars/{id}/respond',
+    'POST /api/v1/portal/scars/{id}/extensions',
+    'POST /api/v1/portal/scar-extensions/{id}/withdraw',
+    'POST /api/v1/portal/scar-actions/{id}/complete',
+    'POST /api/v1/portal/scars/{id}/files/upload-url',
+    'POST /api/v1/portal/scars/{id}/files',
+    'POST /api/v1/portal/scar-files/{id}/remove',
+    'POST /api/v1/portal/scar-files/{id}/download-url',
+    'POST /api/v1/portal/shares/{id}/comments',
+    'POST /api/v1/portal/shares/{id}/acknowledge',
+    'POST /api/v1/portal/shares/{id}/file-url',
+    'POST /api/v1/portal/comments/{id}/withdraw',
     'POST /api/v1/inspections/{id}/samples',
     'POST /api/v1/inspections/{id}/complete',
     'POST /api/v1/inspections/{id}/abandon',
@@ -1041,6 +1138,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/inspection-imports/')) return a.inspectionImport;
   if (path.startsWith('/api/v1/inspection-import-rows/')) return a.importRow;
   if (path.startsWith('/api/v1/security/networks/')) return a.network;
+  if (path.startsWith('/api/v1/external-access/people/') || path.startsWith('/api/v1/portal/people/')) return a.externalAccess;
+  if (path.startsWith('/api/v1/external-access/shares/') || path.startsWith('/api/v1/portal/shares/')) return a.portalShare;
+  if (path.startsWith('/api/v1/external-access/closure-requests/') || path.startsWith('/api/v1/portal/closure-requests/')) return a.portalClosure;
+  if (path.startsWith('/api/v1/external-access/comments/') || path.startsWith('/api/v1/portal/comments/')) return a.portalComment;
   if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
@@ -1051,6 +1152,11 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
   if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
+  if (path.startsWith('/api/v1/customer-contacts/')) return a.customerContact;
+  if (path.startsWith('/api/v1/external-access/lots/')) return a.lot;
+  if (path.startsWith('/api/v1/external-access/lot-evidence/') || path.startsWith('/api/v1/portal/evidence/')) return a.lotEvidence;
+  if (path.startsWith('/api/v1/portal/complaints/')) return a.portalComplaint;
+  if (path.startsWith('/api/v1/portal/complaint-files/')) return a.attachment;
   if (path.startsWith('/api/v1/customers/')) return a.customer;
   if (path.startsWith('/api/v1/suppliers/')) return a.supplier;
   if (path.startsWith('/api/v1/supplier-quality/suppliers/')) return a.supplier;
@@ -1076,6 +1182,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/material-certificates/')) return a.materialCertificate;
   if (path.startsWith('/api/v1/supplier-quality/scorecards/')) return a.scorecard;
   if (path.startsWith('/api/v1/supplier-quality/scar-items/')) return a.supplierScarItem;
+  if (path.startsWith('/api/v1/supplier-quality/scar-actions/')) return a.supplierScarAction;
+  if (path.startsWith('/api/v1/portal/scar-actions/')) return a.supplierScarAction;
   if (path.startsWith('/api/v1/supplier-quality/scar-extensions/')) return a.supplierScarExtension;
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
@@ -1265,6 +1373,33 @@ beforeAll(async () => {
     a.importRow = (await q1(`select id from public.inspection_import_rows where import_id = $1`, [a.inspectionImport])).id;
     // Security (SE1/SE2): an approved network of A's.
     a.network = (await q1(`select app.save_organisation_network($1, '{"name":"Sweep HQ","network":"203.0.113.0/28"}'::jsonb, null) as id`, [ids.orgA])).id;
+    a.externalAccess = (await admin.query(
+      `with party as (insert into public.portal_parties (organisation_id, party_kind, supplier_id, enabled) values ($1, 'supplier', $2, true) returning id)
+       insert into public.external_access (organisation_id, party_id, invited_email) select $1, id, 'sweep-external@example.test' from party returning id`,
+      [ids.orgA, a.supplier],
+    )).rows[0].id;
+    a.portalShare = (await admin.query(
+      `insert into public.portal_shares (organisation_id, party_id, record_kind, nonconformance_id)
+       select $1, party_id, 'ncr', $2 from public.external_access where id = $3 returning id`,
+      [ids.orgA, a.ncr, a.externalAccess],
+    )).rows[0].id;
+    a.portalComment = (await admin.query(
+      `insert into public.portal_comments (organisation_id, share_id, author_side, author_user_id, body) values ($1, $2, 'staff', $3, 'Sweep comment') returning id`,
+      [ids.orgA, a.portalShare, ids.ownerA],
+    )).rows[0].id;
+    a.portalComplaint = (await admin.query(
+      `insert into public.portal_complaints (organisation_id, party_id, nonconformance_id, raised_by) select $1, party_id, $2, $3 from public.external_access where id = $4 returning id`,
+      [ids.orgA, a.ncr, ids.ownerA, a.externalAccess],
+    )).rows[0].id;
+    a.lotEvidence = (await admin.query(
+      `insert into public.lot_evidence_files (organisation_id, lot_id, customer_id, kind, storage_path, file_name, size_bytes) values ($1::uuid, $2::uuid, $3::uuid, 'other', $1::text || '/lot/' || $2::text || '/sweep.pdf', 'sweep.pdf', 1) returning id`,
+      [ids.orgA, a.lot, a.customer],
+    )).rows[0].id;
+    a.customerContact = (await admin.query(`insert into public.customer_contacts (organisation_id, customer_id, name) values ($1, $2, 'Sweep contact') returning id`, [ids.orgA, a.customer])).rows[0].id;
+    a.portalClosure = (await admin.query(
+      `insert into public.portal_closure_requests (organisation_id, share_id) values ($1, $2) returning id`,
+      [ids.orgA, a.portalShare],
+    )).rows[0].id;
     // Single sign-on (SS1): a domain A claimed.
     a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;
     // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
@@ -1340,6 +1475,7 @@ beforeAll(async () => {
     a.materialCertificate = (await q1(`select app.record_material_certificate($1::uuid, jsonb_build_object('certificateNumber', 'ALPHA-MTR', 'kind', 'mill_test_report', 'heatNumber', 'HA-1', 'receiptLineId', $2::text)) as id`, [a.supplier, a.receiptLine])).id;
     a.scorecard = (await q1(`select app.save_supplier_scorecard($1::uuid, current_date - 30, current_date, 'Alpha scorecard') as id`, [a.supplier])).id;
     a.supplierScarItem = (await q1(`select app.add_scar_item($1::uuid, '{"material":"Alpha steel"}'::jsonb) as id`, [a.supplierScar])).id;
+    a.supplierScarAction = (await q1(`select app.add_scar_action($1::uuid, 'Alpha action', null) as id`, [a.supplierScar])).id;
     a.supplierScarExtension = (await q1(`select app.request_scar_extension($1::uuid, current_date + 40, 'Alpha extension') as id`, [a.supplierScar])).id;
     a.supplierProduct = (await q1(`insert into public.supplier_product_links (organisation_id, supplier_id, kind, description) values ($1, $2, 'service', 'Alpha service') returning id`, [ids.orgA, a.supplier])).id;
     await client.query('commit');
@@ -1484,7 +1620,8 @@ describe('tenancy sweep over every API route', () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
     const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview'];
-    const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path));
+    // The portal's own routes (external people only) answer an organisation owner 404 by design; external-portal.e2e-spec.ts covers them.
+    const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path) && !o.path.startsWith('/api/v1/portal/'));
     const leaks: string[] = [];
     // Routes that need query parameters get a valid set, so the tenant check is what is tested.
     const listQuery: Record<string, string> = {
@@ -1492,9 +1629,11 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/documents-in-force': '?operationCode=OP-1',
       '/api/v1/documents-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/risk-score': '?likelihood=3&consequence=3',
+      '/api/v1/integrations/reference-values': '?kind=part',
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
+      '/api/v1/exchange-rates/preview': '?from=EUR&to=GBP&date=2026-01-02',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/control-plan-resolution': `?partId=${b.part}`,
       '/api/v1/jobs/preview': `?machineId=${b.machine}&partId=${b.part}`,
@@ -1508,9 +1647,11 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
       '/api/v1/traceability/search': '?q=WO',
       '/api/v1/saved-filters': '?scope=ncr_register',
+      '/api/v1/import-locks': `?entityType=part&recordId=${b.part}`,
       '/api/v1/custom-values': `?entityType=part&ids=${b.part}`,
       '/api/v1/goods-receipt-lines/lookup': `?supplierId=${b.supplier}`,
       '/api/v1/workflow-test-events': '?trigger=ncr.created',
+      '/api/v1/external-access/shares': `?kind=ncr&recordId=${b.ncr}`,
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);

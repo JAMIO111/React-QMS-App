@@ -104,6 +104,7 @@ import {
   Truck as LucideTruck,
   Factory as LucideFactory,
   Globe as LucideGlobe,
+  Phone as LucidePhone,
   KeyRound as LucideKeyRound,
   Stethoscope as LucideStethoscope,
   Copy as LucideCopy,
@@ -269,6 +270,7 @@ export const TruckIcon = withDefaults(LucideTruck);
 export const GraduationCapIcon = withDefaults(LucideGraduationCap);
 export const FactoryIcon = withDefaults(LucideFactory);
 export const GlobeIcon = withDefaults(LucideGlobe);
+export const PhoneIcon = withDefaults(LucidePhone);
 export const KeyRoundIcon = withDefaults(LucideKeyRound);
 export const StethoscopeIcon = withDefaults(LucideStethoscope);
 export const CopyIcon = withDefaults(LucideCopy);

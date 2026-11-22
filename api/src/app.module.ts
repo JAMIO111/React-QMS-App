@@ -23,6 +23,7 @@ import { CalibrationService } from './calibration/calibration.service';
 import { HealthController } from './health/health.controller';
 import { CustomersController, PartCustomersController, PartRevisionsController, PartsController, SuppliersController, UnitsController } from './master-data/master-data.controller';
 import { MasterDataService } from './master-data/master-data.service';
+import { CustomerContactsController, CustomerContactsService } from './master-data/customer-contacts';
 import { AuditAttachmentsController, AuditRecordsController } from './audits/audit-records.controller';
 import { AuditRecordsService } from './audits/audit-records.service';
 import {
@@ -52,6 +53,10 @@ import { NcrService } from './ncr/ncr.service';
 import { NcrAttachmentsController, NcrChildRecordsController, NcrCostsController } from './ncr/ncr-records.controller';
 import { NcrRecordsService } from './ncr/ncr-records.service';
 import { NcrDashboardController, NcrDashboardService } from './ncr/ncr-dashboard';
+import { CostCurrencyService } from './currency/cost-currency.service';
+import { CurrencyController } from './currency/currency.controller';
+import { ExchangeRateGateway, FrankfurterGateway, UnavailableGateway } from './currency/exchange-rate.gateway';
+import { ExchangeRateService } from './currency/exchange-rate.service';
 import { MeController } from './me/me.controller';
 import { OnboardingController } from './onboarding/onboarding.controller';
 import { OnboardingService } from './onboarding/onboarding.service';
@@ -123,10 +128,12 @@ import { IntegrationsService } from './integrations/integrations.service';
 import { IntegrationRunsController } from './integrations/integration-runs.controller';
 import { IntegrationFilesController } from './integrations/integration-files.controller';
 import { IntegrationFilesService } from './integrations/integration-files.service';
-import { IntegrationFormulasController, IntegrationTemplatesController } from './integrations/integration-templates.controller';
+import { IntegrationFormulasController, IntegrationReferencesController, IntegrationTemplatesController } from './integrations/integration-templates.controller';
 import { IntegrationTemplatesService } from './integrations/integration-templates.service';
 import { IntegrationMonitorController } from './integrations/integration-monitor.controller';
 import { IntegrationMonitorService } from './integrations/integration-monitor.service';
+import { ImportLocksController } from './integrations/import-locks.controller';
+import { ImportLocksService } from './integrations/import-locks.service';
 import { IntegrationConflictsController } from './integrations/integration-conflicts.controller';
 import { IntegrationConflictsService } from './integrations/integration-conflicts.service';
 import { IntegrationFileStore, SupabaseIntegrationFileStore } from './integrations/core/file-store';
@@ -176,6 +183,12 @@ import { FileLinkSigner, SupabaseFileLinkSigner } from './files/file-links';
 import { FilesController } from './files/files.controller';
 import { FilesService } from './files/files.service';
 import { SecurityController } from './security/security.controller';
+import { ExternalAccessController } from './portal/external-access.controller';
+import { ExternalAccessService } from './portal/external-access.service';
+import { PortalController } from './portal/portal.controller';
+import { PortalGuard } from './portal/portal.guard';
+import { PortalMailer } from './portal/portal-mailer.service';
+import { PortalService } from './portal/portal.service';
 import { SsoController } from './sso/sso.controller';
 import { SsoService } from './sso/sso.service';
 import { DnsTxtResolver, SystemDnsTxtResolver } from './sso/dns-txt';
@@ -222,6 +235,8 @@ export class AppModule implements NestModule {
         WorkerController,
         RemindersController,
         SecurityController,
+        ExternalAccessController,
+        PortalController,
         SsoController,
         FilesController,
         WorkflowsController,
@@ -232,6 +247,7 @@ export class AppModule implements NestModule {
         MembersController,
         UnitsController,
         CustomersController,
+        CustomerContactsController,
         SuppliersController,
         PartsController,
         PartRevisionsController,
@@ -241,6 +257,7 @@ export class AppModule implements NestModule {
         NcrCostsController,
         NcrAttachmentsController,
         NcrDashboardController,
+        CurrencyController,
         NcrClassificationsController,
         NcrSourceCategoriesController,
         EmployeesController,
@@ -302,8 +319,10 @@ export class AppModule implements NestModule {
         IntegrationFilesController,
         IntegrationTemplatesController,
         IntegrationConflictsController,
+        ImportLocksController,
         IntegrationMonitorController,
         IntegrationFormulasController,
+        IntegrationReferencesController,
         MaterialCertificatesController,
         InspectionsController,
         InspectionMeasurementsController,
@@ -342,6 +361,9 @@ export class AppModule implements NestModule {
         WorkerJobRegistry,
         RemindersService,
         SecurityService,
+        ExternalAccessService,
+        PortalService,
+        PortalMailer,
         SsoService,
         { provide: DnsTxtResolver, useClass: SystemDnsTxtResolver },
         { provide: SupabaseSsoAdmin, useClass: ManagementApiSsoAdmin },
@@ -352,6 +374,7 @@ export class AppModule implements NestModule {
         CronGuard,
         OnboardingService,
         MasterDataService,
+        CustomerContactsService,
         NcrService,
         EmployeesService,
         AuditsService,
@@ -374,6 +397,13 @@ export class AppModule implements NestModule {
         BillingService,
         StripeBillingService,
         { provide: StripeGateway, useClass: StripeSdkGateway },
+        {
+          provide: ExchangeRateGateway,
+          useFactory: (env: Env): ExchangeRateGateway => (env.EXCHANGE_RATES === 'off' || env.NODE_ENV === 'test' ? new UnavailableGateway() : new FrankfurterGateway(env.FRANKFURTER_URL)),
+          inject: [ENV],
+        },
+        ExchangeRateService,
+        CostCurrencyService,
         NotificationsService,
         SavedFiltersService,
         CustomFieldsService,
@@ -406,6 +436,7 @@ export class AppModule implements NestModule {
         IntegrationFilesService,
         IntegrationTemplatesService,
         IntegrationConflictsService,
+        ImportLocksService,
         IntegrationMonitorService,
         { provide: IntegrationFileStore, useClass: SupabaseIntegrationFileStore },
         SyncEngine,
@@ -437,6 +468,7 @@ export class AppModule implements NestModule {
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_GUARD, useClass: OrganisationGuard },
+        { provide: APP_GUARD, useClass: PortalGuard },
       ],
     };
   }

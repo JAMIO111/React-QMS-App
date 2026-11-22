@@ -55,6 +55,7 @@ import NcrCosts from "./NcrCosts";
 import NcrInspectionSource from "../inspection/NcrInspectionSource";
 import NcrAuditSource from "../audits/NcrAuditSource";
 import LinkedRisks from "../risk/LinkedRisks";
+import PortalShareCard from "../portal/PortalShareCard";
 import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
 import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
@@ -522,14 +523,7 @@ const NcrPage = () => {
               </>
             )}
 
-            {!isNew && can("risk.read") && (
-              <>
-                <SectionHeading id="ncr-risks" title="Risks" />
-                <Card>
-                  <LinkedRisks kind="ncr" id={ncr.id} plain title="Risks linked to this non-conformance" />
-                </Card>
-              </>
-            )}
+            {!isNew && can("external_access.share") && <PortalShareCard kind="ncr" recordId={ncr.id} Heading={SectionHeading} Card={Card} />}
 
             <SectionHeading id="ncr-investigation" title="Investigation" sectionRef={refs.investigation} />
             <Card>
@@ -610,6 +604,15 @@ const NcrPage = () => {
                   {ncr.closedAt && ` · closed ${formatDate(ncr.closedAt)} by ${ncr.closedBy?.name ?? "—"}`}
                 </p>
               </Card>
+
+              {can("risk.read") && (
+                <>
+                  <SectionHeading id="ncr-risks" title="Risks" />
+                  <Card>
+                    <LinkedRisks kind="ncr" id={ncr.id} plain title="Risks linked to this non-conformance" />
+                  </Card>
+                </>
+              )}
 
               <SectionHeading id="ncr-history" title="History" sectionRef={refs.history} />
               <Card>

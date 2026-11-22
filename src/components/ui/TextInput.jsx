@@ -1,5 +1,6 @@
 import { CircleAlertIcon, XIcon } from "@/components/icons";
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
+import LockedMark from "./LockedMark";
 
 const TextInput = forwardRef(
   (
@@ -17,6 +18,7 @@ const TextInput = forwardRef(
       suffix,
       textTransform = "none", // ⬅️ new prop
       hint,
+      lockedBy,
       id: idProp,
       ...rest
     },
@@ -80,6 +82,7 @@ const TextInput = forwardRef(
             className="block text-sm font-medium text-secondary-text"
             data-required={required || undefined}>
             {label}
+            {lockedBy && <LockedMark by={lockedBy} />}
           </label>
         )}
         <div

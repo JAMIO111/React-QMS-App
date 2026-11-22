@@ -72,6 +72,15 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return workflowRecordPath(d.record_kind, d.record_id);
     case 'workflow_tasks':
       return '/Tasks';
+    case 'portal_activity': {
+      const rid = id(d.record_id);
+      if (!rid) return '/Settings/External-Access';
+      if (d.record_kind === 'scar') return `/Supplier-Quality/SCARs/${rid}`;
+      if (d.record_kind === 'capa') return `/CAPA/${rid}/d0`;
+      if (d.record_kind === 'document') return `/Documentation/Documents/${rid}`;
+      if (d.record_kind === 'quality_alert') return `/Documentation/Quality-Alerts/${rid}`;
+      return `/Non-Conformance/Register/${rid}`;
+    }
     case 'reminder_digests':
       return '/Reminders';
     case 'reminder_overdue_notices':

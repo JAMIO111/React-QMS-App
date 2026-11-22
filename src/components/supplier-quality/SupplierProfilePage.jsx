@@ -113,9 +113,10 @@ const Overview = ({ supplier, canManage, canEditCustom, onEditContact, onAddCont
             ) : null}
           </Row>
           <Row label="Address">{addressLine({ ...s, country: s.country ? countryName(s.country) : null })}</Row>
-          <Row label="Website">{s.website}</Row>
-          <Row label="Email">{s.email}</Row>
-          <Row label="Phone">{s.phone}</Row>
+          <Row label="Currency">{s.currency}</Row>
+          <Row label="Company website">{s.website}</Row>
+          <Row label="Company email">{s.email}</Row>
+          <Row label="Company phone">{s.phone}</Row>
           <Row label="Purchasing ref.">{s.purchasingReference}</Row>
           <Row label="Company number">{s.companyNumber}</Row>
           <Row label="VAT number">{s.vatNumber}</Row>

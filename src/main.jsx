@@ -13,6 +13,7 @@ import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
 import { ModalProvider } from "./contexts/ModalContext";
 import LoadingScreen from "./components/ui/LoadingScreen.jsx";
 import RouteError from "./components/RouteError.jsx";
+import PortalContent from "./components/portal/portalContent.jsx";
 import { reloadPage, shouldReloadForChunkError } from "./lib/chunkErrors";
 import "./index.css";
 import { applyStoredThemeColour } from "./lib/theme-colours";
@@ -42,6 +43,7 @@ const SettingsOrganisation = lazy(() =>
 );
 const SettingsUsers = lazy(() => import("./components/Settings/SettingsUsers.jsx"));
 const SettingsSecurity = lazy(() => import("./components/Settings/SettingsSecurity.jsx"));
+const SettingsExternalAccess = lazy(() => import("./components/Settings/SettingsExternalAccess.jsx"));
 const SettingsAccount = lazy(() =>
   import("./components/Settings/SettingsAccount.jsx")
 );
@@ -149,6 +151,19 @@ const MyActionsPage = lazy(() => import("./components/capa/MyActionsPage.jsx"));
 const PlatformPage = lazy(() => import("./components/platform/PlatformPage.jsx"));
 const SetupWizard = lazy(() => import("./components/onboarding/SetupWizard.jsx"));
 const AcceptInvite = lazy(() => import("./components/onboarding/AcceptInvite.jsx"));
+const PortalApp = lazy(() => import("./components/portal/PortalApp.jsx"));
+const PortalDashboard = lazy(() => import("./components/portal/PortalDashboard.jsx"));
+const portalPage = (name) => lazy(() => import("./components/portal/PortalPages.jsx").then((m) => ({ default: m[name] })));
+const PortalNcrsPage = portalPage("PortalNcrsPage");
+const PortalScarsPage = portalPage("PortalScarsPage");
+const PortalCapasPage = portalPage("PortalCapasPage");
+const PortalDocumentsPage = portalPage("PortalDocumentsPage");
+const PortalComplaintsPage = portalPage("PortalComplaintsPage");
+const PortalCertificatesPage = portalPage("PortalCertificatesPage");
+const PortalTeamPage = portalPage("PortalTeamPage");
+const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
+const PortalScarPage = lazy(() => import("./components/portal/PortalScarPage.jsx"));
+const PortalPerformancePage = lazy(() => import("./components/portal/PortalPerformancePage.jsx"));
 const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
 const StartInspectionPage = lazy(() => import("./components/inspection/StartInspectionPage.jsx"));
@@ -220,6 +235,25 @@ const router = createBrowserRouter([
       { path: "setup/:step", element: <SetupWizard /> },
       // The invitee's page: they may belong to no organisation yet.
       { path: "accept-invite", element: <AcceptInvite /> },
+      // The supplier and customer portal (docs/external-portal-plan.md): for people who are not members of the organisation, so outside <App />.
+      {
+        path: "portal",
+        element: <PortalApp />,
+        children: [
+          { index: true, element: <PortalDashboard /> },
+          { path: "non-conformances", element: <PortalNcrsPage /> },
+          { path: "scars", element: <PortalScarsPage /> },
+          { path: "8ds", element: <PortalCapasPage /> },
+          { path: "complaints", element: <PortalComplaintsPage /> },
+          { path: "documents", element: <PortalDocumentsPage /> },
+          { path: "certificates", element: <PortalCertificatesPage /> },
+          { path: "team", element: <PortalTeamPage /> },
+          { path: "shared/:shareId", element: <PortalContent><PortalSharedPage /></PortalContent> },
+          { path: "scars/:scarId", element: <PortalContent><PortalScarPage /></PortalContent> },
+          // The performance page is the dashboard now; the old address still works.
+          { path: "performance", element: <PortalPerformancePage /> },
+        ],
+      },
       {
         element: <App />, // App contains the Navbar/Header + <Outlet />
         children: [
@@ -253,6 +287,7 @@ const router = createBrowserRouter([
               { path: "Organisation", element: <SettingsOrganisation /> },
               { path: "Users", element: <SettingsUsers /> },
               { path: "Security", element: <SettingsSecurity /> },
+              { path: "External-Access", element: <SettingsExternalAccess /> },
               { path: "General", element: <Navigate to="../Organisation" replace /> },
               { path: "Subscription", element: <SettingsSubscription /> },
               { path: "Account", element: <SettingsAccount /> },

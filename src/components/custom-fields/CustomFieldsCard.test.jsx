@@ -120,3 +120,35 @@ describe("custom fields on a create form", () => {
     expect(apiFetch).not.toHaveBeenCalledWith(expect.stringContaining("/custom-values"), expect.anything());
   });
 });
+
+describe("More details card, custom fields a scheduled import owns", () => {
+  const withLocks = (locked) => {
+    const base = apiFetch.getMockImplementation();
+    apiFetch.mockImplementation((path, opts = {}) => {
+      if (path.startsWith("/import-locks?")) return Promise.resolve({ data: locked.map((field) => ({ field, connection: { id: "c1", name: "ERP" } })) });
+      return base(path, opts);
+    });
+  };
+
+  it("disables those fields with the lock, leaves the others editable and never saves a locked one", async () => {
+    withLocks(["cf_finish", "cf_critical", "cf_tests", "cf_coating"]);
+    const user = userEvent.setup();
+    wrap(<CustomFieldsCard entityType="part" editable record={record({ finish: "Ra 0.8", weight: 12.5, critical: false, tests: ["salt"] })} />);
+    const card = await screen.findByRole("region", { name: "More details" });
+    expect(await within(card).findAllByRole("button", { name: "Managed by ERP" })).toHaveLength(4);
+    expect(within(card).getByRole("textbox", { name: /Surface finish/ })).toBeDisabled();
+    expect(within(card).getByRole("switch", { name: "Safety critical" })).toBeDisabled();
+    expect(within(card).getByRole("button", { name: "Salt spray" })).toBeDisabled();
+    expect(within(card).getByRole("textbox", { name: /Weight/ })).toBeEnabled();
+    await user.click(within(card).getByRole("button", { name: "Hardness" }));
+    expect(apiFetch.mock.calls.some(([path, o]) => path.startsWith("/custom-values/") && o?.method === "PUT")).toBe(false);
+  });
+
+  it("shows no lock when nothing is managed", async () => {
+    withLocks([]);
+    wrap(<CustomFieldsCard entityType="part" editable record={record({ finish: "Ra 0.8" })} />);
+    const card = await screen.findByRole("region", { name: "More details" });
+    expect(within(card).getByRole("textbox", { name: /Surface finish/ })).toBeEnabled();
+    expect(within(card).queryByRole("button", { name: /Managed by/ })).toBeNull();
+  });
+});

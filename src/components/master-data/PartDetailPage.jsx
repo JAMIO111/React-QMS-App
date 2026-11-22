@@ -27,6 +27,7 @@ import { changesSince } from "../../lib/editConflicts";
 import { useQuickSave } from "../../hooks/useQuickSave";
 import { addToList, changeRecord } from "../../lib/guessRequest";
 import { isPending, pendingId } from "../../lib/optimistic";
+import { useImportLocks } from "../../hooks/useImportLocks";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -43,6 +44,7 @@ const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { d
 
 const PartDetails = ({ part, canManage }) => {
   const quickSave = useQuickSave(useMasterDataMutation());
+  const { lock } = useImportLocks("part", part.id);
   const families = usePartFamilies();
   const toForm = (p) => ({
     partNumber: p.partNumber,
@@ -83,9 +85,9 @@ const PartDetails = ({ part, canManage }) => {
   return (
     <form onSubmit={submit} aria-label="Part details" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-5">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field label="Part number" value={form.partNumber} onChange={set("partNumber")} disabled={!canManage} required maxLength={60} />
-        <Field label="Name" value={form.name} onChange={set("name")} disabled={!canManage} required maxLength={200} />
-        <Field label="Description" value={form.description} onChange={set("description")} disabled={!canManage} maxLength={2000} className="md:col-span-2" />
+        <Field label="Part number" value={form.partNumber} onChange={set("partNumber")} disabled={!canManage} required maxLength={60} {...lock("partNumber")} />
+        <Field label="Name" value={form.name} onChange={set("name")} disabled={!canManage} required maxLength={200} {...lock("name")} />
+        <Field label="Description" value={form.description} onChange={set("description")} disabled={!canManage} maxLength={2000} className="md:col-span-2" {...lock("description")} />
         {canManage ? (
           <SelectField
             label="Part family"
@@ -103,7 +105,7 @@ const PartDetails = ({ part, canManage }) => {
           </div>
         )}
         {canManage && (
-          <Switch className="self-end pb-2 text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+          <Switch className="self-end pb-2 text-sm text-primary-text" checked={form.active} onChange={set("active")} {...lock("active")}>
             Active
           </Switch>
         )}

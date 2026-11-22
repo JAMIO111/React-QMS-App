@@ -9,7 +9,7 @@ import { EntityType } from './entity-importer';
  * numeric bounds are read from the database's own rules (core/column-rules.ts, CatalogueService); the limits written here are only the fallback.
  * core/columns.ts says which column each field fills, and test/integration-catalogue-drift.e2e-spec.ts fails when the schema and these drift apart.
  */
-export type FieldType = 'text' | 'email' | 'url' | 'country' | 'number' | 'integer' | 'date' | 'boolean' | 'enum';
+export type FieldType = 'text' | 'email' | 'url' | 'country' | 'currency' | 'number' | 'integer' | 'date' | 'boolean' | 'enum';
 
 export interface CatalogueField {
   key: string;
@@ -33,7 +33,7 @@ export interface CatalogueField {
 }
 
 /** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */
-export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type';
+export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type' | 'gauge';
 export const REF_KIND_WORDS: Record<RefKind, string> = {
   site: 'site',
   department: 'department',
@@ -45,8 +45,9 @@ export const REF_KIND_WORDS: Record<RefKind, string> = {
   machine: 'machine',
   employee: 'employee',
   gauge_type: 'gauge type',
+  gauge: 'gauge',
 };
-const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type'];
+const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge'];
 
 export interface EntityCatalogue {
   entityType: EntityType;
@@ -84,6 +85,17 @@ const party = (extra: CatalogueField[] = []): CatalogueField[] => [
   { key: 'companyNumber', label: 'Company number', type: 'text', maxLength: 50 },
   { key: 'vatNumber', label: 'VAT number', type: 'text', maxLength: 50 },
   ...extra,
+  { key: 'email', label: 'Company email', type: 'email', maxLength: 200, description: 'The company\'s general email address (such as info@), not a person\'s: people are kept under Contacts in Fortress' },
+  { key: 'phone', label: 'Company phone', type: 'text', maxLength: 40, description: 'The company\'s main phone number, not a person\'s' },
+  { key: 'website', label: 'Company website', type: 'url', maxLength: 200 },
+  { key: 'addressLine1', label: 'Address line 1', type: 'text', maxLength: 120 },
+  { key: 'addressLine2', label: 'Address line 2', type: 'text', maxLength: 120 },
+  { key: 'addressLine3', label: 'Address line 3', type: 'text', maxLength: 120 },
+  { key: 'city', label: 'Town or city', type: 'text', maxLength: 80 },
+  { key: 'region', label: 'County, state or region', type: 'text', maxLength: 80 },
+  { key: 'postcode', label: 'Postcode', type: 'text', maxLength: 20 },
+  { key: 'country', label: 'Country', type: 'country', description: 'Two-letter code, such as GB' },
+  { key: 'currency', label: 'Currency', type: 'currency', description: 'Three-letter code, such as GBP: the currency you trade with them in' },
   { key: 'notes', label: 'Notes', type: 'text', maxLength: 2000 },
   { key: 'active', label: 'Active', type: 'boolean', description: 'Yes / no; empty keeps it active' },
 ];
@@ -95,15 +107,6 @@ export const CATALOGUE: EntityCatalogue[] = [
     keyHint: 'The supplier account number in your system',
     fields: party([
       { key: 'supplierType', label: 'Supplier type', type: 'enum', options: SUPPLIER_TYPES.map((v) => ({ value: v, label: words(v) })) },
-      { key: 'email', label: 'Email', type: 'email', maxLength: 200 },
-      { key: 'phone', label: 'Phone', type: 'text', maxLength: 40 },
-      { key: 'website', label: 'Website', type: 'url', maxLength: 300 },
-      { key: 'addressLine1', label: 'Address line 1', type: 'text', maxLength: 120 },
-      { key: 'addressLine2', label: 'Address line 2', type: 'text', maxLength: 120 },
-      { key: 'city', label: 'Town or city', type: 'text', maxLength: 80 },
-      { key: 'region', label: 'County or region', type: 'text', maxLength: 80 },
-      { key: 'postcode', label: 'Postcode', type: 'text', maxLength: 20 },
-      { key: 'country', label: 'Country', type: 'country', description: 'Two-letter code, such as GB' },
       { key: 'purchasingReference', label: 'Purchasing reference', type: 'text', maxLength: 60 },
     ]),
   },
@@ -190,6 +193,22 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'intervalUnit', label: 'Interval unit', type: 'enum', options: options(INTERVAL_UNITS) },
       { key: 'commissionedOn', label: 'Commissioned on', type: 'date' },
       { key: 'notes', label: 'Notes', type: 'text', maxLength: 5000, description: 'Calibration dates and status come from calibrations recorded in Fortress, not from the file' },
+    ],
+  },
+  {
+    entityType: 'calibration',
+    label: 'Calibration records (legacy)',
+    keyHint: 'The calibration record number in your old system',
+    fields: [
+      ref('gauge', 'Gauge', 'gauge', 'gauge asset number', { required: true, description: 'The asset number of the gauge in Fortress, or the id your source gave it when it was imported here; it must already exist' }),
+      { key: 'calibratedOn', label: 'Calibrated on', type: 'date', required: true, description: 'Not in the future' },
+      { key: 'outcome', label: 'Outcome', type: 'enum', required: true, options: options(['pass', 'adjusted', 'fail']), description: 'What the old system concluded: pass, adjusted (out as found, in tolerance as left) or fail. A fail quarantines the gauge if it is the latest calibration' },
+      { key: 'nextDueOn', label: 'Next due on', type: 'date', description: 'Empty works it out from the gauge\'s calibration interval' },
+      { key: 'certificateNumber', label: 'Certificate number', type: 'text', maxLength: 100 },
+      { key: 'performedBy', label: 'Done by', type: 'enum', options: options(['internal', 'external']), description: 'Internal or external; empty means internal' },
+      ref('supplier', 'Calibration supplier', 'supplier', 'supplier code'),
+      { key: 'technicianName', label: 'Technician', type: 'text', maxLength: 200, description: 'The name your source gives; it is text, not a link to a Fortress user' },
+      { key: 'notes', label: 'Notes', type: 'text', maxLength: 5000 },
     ],
   },
   {

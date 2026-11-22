@@ -36,12 +36,18 @@ export class CalibrationDashboardService {
     const bucket = days > 92 ? 'month' : 'week';
     const org = ctx.organisationId!;
     const gauges = sql`from public.gauges g where g.organisation_id = ${org}::uuid and g.deleted_at is null`;
-    const calibrations = sql`
-      from public.calibrations c join public.gauges g on g.id = c.gauge_id and g.deleted_at is null
-      where c.organisation_id = ${org}::uuid and c.deleted_at is null`;
-
     return this.database.asUser(ctx, async (db) => {
       const rows = async (query: ReturnType<typeof sql>) => (await db.execute<Row>(query)).rows;
+
+      // Legacy (imported) calibrations count in the period figures only when the organisation chose so; the gauges' own state always follows them.
+      const [pref] = await rows(sql`select include_legacy_calibrations as inc from public.organisation_settings where organisation_id = ${org}::uuid`);
+      const includeLegacy = pref?.inc === true;
+      const calibrations = sql`
+        from public.calibrations c join public.gauges g on g.id = c.gauge_id and g.deleted_at is null
+        where c.organisation_id = ${org}::uuid and c.deleted_at is null and (${includeLegacy} or not c.is_legacy)`;
+      const [lg] = await rows(sql`
+        select count(*) as n from public.calibrations c join public.gauges g on g.id = c.gauge_id and g.deleted_at is null
+        where c.organisation_id = ${org}::uuid and c.deleted_at is null and c.is_legacy and c.calibrated_on between ${q.from}::date and ${q.to}::date`);
 
       const [k] = await rows(sql`
         select to_char(current_date, 'YYYY-MM-DD') as today,
@@ -123,6 +129,7 @@ export class CalibrationDashboardService {
           firstTimePassRate: pct(n(c.passed), n(c.calibrated)),
           compliance: pct(n(k.in_use) - n(k.overdue), n(k.in_use)),
         },
+        legacy: { included: includeLegacy, inPeriod: n(lg.n) },
         dueSchedule: schedule.map((r) => ({ start: String(r.start), count: n(r.count) })),
         outcomes: outcomes.map((r) => ({ start: String(r.start), pass: n(r.pass), adjusted: n(r.adjusted), fail: n(r.fail) })),
         byStatus: Object.keys(STATUS_LABEL).map((key) => ({ key, label: STATUS_LABEL[key], count: statusCount[key] ?? 0 })),

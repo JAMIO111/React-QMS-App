@@ -2,23 +2,26 @@ import { useState } from "react";
 import { useToast } from "../../contexts/ToastProvider";
 import { useSupplierClassifications, useSupplierMutation } from "../../hooks/useSupplierQuality";
 import { describeApiError } from "../../lib/api-client";
-import { countryOptions } from "../../lib/onboarding";
 import { SUPPLIER_TYPES } from "../../lib/supplierQuality";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFComboBox from "../ui/RHFComboBox";
 import Switch from "../ui/Switch";
 import { FormError } from "../master-data/shared";
+import AddressFields from "../master-data/AddressFields";
+import CompanyContactFields from "../master-data/CompanyContactFields";
+import { addressBody, EMPTY_ADDRESS } from "../../lib/address";
 import CTAButton from "@/components/CTAButton";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
+import LockedMark from "../ui/LockedMark";
 
 const emptyForm = {
-  code: "", name: "", displayName: "", supplierType: null, country: null, addressLine1: "", addressLine2: "", city: "", region: "", postcode: "",
+  code: "", name: "", displayName: "", supplierType: null, ...EMPTY_ADDRESS,
   website: "", email: "", phone: "", purchasingReference: "", companyNumber: "", vatNumber: "", notes: "", active: true,
 };
-const COUNTRIES = countryOptions();
 const nullIfEmpty = (v) => (typeof v === "string" ? v.trim() || null : v);
 
 /** Add a supplier (it always starts Pending Approval) or edit one. Approval status is changed separately, with a reason, never here. */
@@ -31,6 +34,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
   const [classIds, setClassIds] = useState(editing ? supplier.classifications.map((c) => c.id) : []);
   const [customValues, setCustomValues] = useState({});
   const [opened] = useState(supplier);
+  const { lock } = useImportLocks("supplier", supplier?.id);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const pick = (k) => (v) => setForm((f) => ({ ...f, [k]: v ?? null }));
   const options = classifications.data?.data ?? [];
@@ -44,12 +48,7 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
       name: form.name.trim(),
       displayName: nullIfEmpty(form.displayName),
       supplierType: form.supplierType,
-      country: form.country,
-      addressLine1: nullIfEmpty(form.addressLine1),
-      addressLine2: nullIfEmpty(form.addressLine2),
-      city: nullIfEmpty(form.city),
-      region: nullIfEmpty(form.region),
-      postcode: nullIfEmpty(form.postcode),
+      ...addressBody(form),
       website: nullIfEmpty(form.website),
       email: nullIfEmpty(form.email),
       phone: nullIfEmpty(form.phone),
@@ -92,21 +91,14 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
       <form noValidate onSubmit={submit} className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {!editing && <Field label="Code" value={form.code} onChange={set("code")} required maxLength={20} hint="Short reference, e.g. ACME" />}
-          <Field label="Legal name" value={form.name} onChange={set("name")} required maxLength={200} />
-          <Field label="Trading name" value={form.displayName} onChange={set("displayName")} maxLength={100} hint="Shown in lists (optional)" />
-          <RHFComboBox label="Supplier type" value={form.supplierType} onChange={pick("supplierType")} options={SUPPLIER_TYPES} placeholder="Choose a type" clearable sort={false} />
-          <Field label="Purchasing reference" value={form.purchasingReference} onChange={set("purchasingReference")} maxLength={60} hint="Their account or vendor number in purchasing" />
-          <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} />
-          <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} />
-          <Field label="Website" value={form.website} onChange={set("website")} maxLength={200} />
-          <Field label="Email" value={form.email} onChange={set("email")} maxLength={200} />
-          <Field label="Phone" value={form.phone} onChange={set("phone")} maxLength={40} />
-          <Field label="Address line 1" value={form.addressLine1} onChange={set("addressLine1")} maxLength={120} />
-          <Field label="Address line 2" value={form.addressLine2} onChange={set("addressLine2")} maxLength={120} />
-          <Field label="City" value={form.city} onChange={set("city")} maxLength={80} />
-          <Field label="Region" value={form.region} onChange={set("region")} maxLength={80} />
-          <Field label="Postcode" value={form.postcode} onChange={set("postcode")} maxLength={20} />
-          <RHFComboBox label="Country" value={form.country} onChange={pick("country")} options={COUNTRIES} placeholder="Choose a country" clearable />
+          <Field label="Legal name" value={form.name} onChange={set("name")} required maxLength={200} {...lock("name")} />
+          <Field label="Trading name" value={form.displayName} onChange={set("displayName")} maxLength={100} hint="Shown in lists (optional)" {...lock("displayName")} />
+          <RHFComboBox label="Supplier type" value={form.supplierType} onChange={pick("supplierType")} options={SUPPLIER_TYPES} placeholder="Choose a type" clearable sort={false} {...lock("supplierType")} />
+          <Field label="Purchasing reference" value={form.purchasingReference} onChange={set("purchasingReference")} maxLength={60} hint="Their account or vendor number in purchasing" {...lock("purchasingReference")} />
+          <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} {...lock("companyNumber")} />
+          <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} {...lock("vatNumber")} />
+          <CompanyContactFields form={form} set={set} lock={lock} />
+          <AddressFields form={form} set={set} pick={pick} lock={lock} />
         </div>
         <fieldset>
           <legend className="text-sm font-medium text-secondary-text">Classifications</legend>
@@ -125,11 +117,14 @@ const SupplierDialog = ({ supplier, onClose, onSaved }) => {
           </div>
         </fieldset>
         <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text">
-          Notes
-          <textarea value={form.notes} onChange={set("notes")} maxLength={2000} rows={3} className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary" />
+          <span>
+            Notes
+            {lock("notes").lockedBy && <LockedMark by={lock("notes").lockedBy} />}
+          </span>
+          <textarea value={form.notes} onChange={set("notes")} disabled={!!lock("notes").lockedBy} maxLength={2000} rows={3} className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary" />
         </label>
         {editing && (
-          <Switch className="text-sm text-primary-text" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}>
+          <Switch className="text-sm text-primary-text" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} {...lock("active")}>
             Active (inactive suppliers are hidden from pickers; this is separate from approval)
           </Switch>
         )}

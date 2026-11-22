@@ -179,6 +179,42 @@ describe("gauge page", () => {
   });
 });
 
+describe("legacy calibrations on the dashboard", () => {
+  it("says how many legacy calibrations are left out, and where to change it", async () => {
+    routeApi({ "GET /calibration-dashboard": { ...dashboard, legacy: { included: false, inPeriod: 3 } } });
+    renderAt("/Calibration");
+    expect(await screen.findByText(/3 legacy calibrations imported from an old system in this period are not counted/)).toBeInTheDocument();
+    expect(screen.getByText(/Settings → System preferences/)).toBeInTheDocument();
+  });
+
+  it("says they are counted when the organisation chose so, and says nothing when there are none", async () => {
+    routeApi({ "GET /calibration-dashboard": { ...dashboard, legacy: { included: true, inPeriod: 1 } } });
+    renderAt("/Calibration");
+    expect(await screen.findByText(/1 legacy calibration imported from an old system is counted/)).toBeInTheDocument();
+  });
+});
+
+describe("legacy calibration records", () => {
+  const legacy = (over = {}) => record({ id: "c7", reference: "CAL-26-007", outcome: "pass", readingCount: 0, failedCount: 0, readings: [], legacy: true, technician: { id: null, name: null }, importedFrom: "oldqms", importedTechnician: "A. Hand", ...over });
+
+  it("marks an imported record as legacy in the gauge's history", async () => {
+    routeApi({ "GET /gauges/g1/calibrations": { data: [legacy(), record()] } });
+    renderAt("/Calibration/Gauges/g1");
+    const history = await screen.findByRole("table", { name: "Calibration history" });
+    expect(within(history).getAllByText("Legacy record")).toHaveLength(1);
+    expect(within(history).getByText("A. Hand")).toBeInTheDocument();
+  });
+
+  it("says a legacy record has no readings and offers none", async () => {
+    routeApi({ "GET /calibrations/c7": legacy(), "GET /calibrations/c7/attachments": { data: [] } });
+    renderAt("/Calibration/Gauges/g1/calibrations/c7");
+    expect(await screen.findByRole("heading", { name: "Calibration CAL-26-007" })).toBeInTheDocument();
+    expect(screen.getAllByText("Legacy record").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Imported from oldqms/)).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Readings" })).not.toBeInTheDocument();
+  });
+});
+
 describe("gauge status after a calibration", () => {
   it("offers to update the status after a fail and applies the choice", async () => {
     routeApi({

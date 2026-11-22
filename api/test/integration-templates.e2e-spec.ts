@@ -260,3 +260,67 @@ describe('formulas and the preview (UI2b)', () => {
     await api().post(`${base}/templates/preview`).set(await inspector()).send({ entityType: 'machine', fileId, keyField: 'Ref', fields: [] }).expect(403);
   });
 });
+
+describe('link fields while mapping', () => {
+  let site: string;
+  let siteName: string;
+  let connId: string;
+  let fileId: string;
+
+  beforeAll(async () => {
+    const s = (await admin.query(`select code, name from public.sites where organisation_id = $1 order by created_at limit 1`, [ids.orgA])).rows[0];
+    site = s.code;
+    siteName = s.name;
+    connId = (await api().post(`${base}/connections`).set(await owner()).send({ providerKey: 'csv', name: 'Link checks', externalSystem: 'linkchecks' }).expect(201)).body.id;
+    const text = ['Ref;Description;Site', `m1;one;${site.toLowerCase()}`, `m2;two;NOWHERE`, `m3;three;NOWHERE`, `m4;four;`, `m5;five;${site}`].join('\n');
+    const path = `${ids.orgA}/integration/${connId}/x-links.csv`;
+    files.set(path, strToU8(text));
+    fileId = (await api().post(`${base}/connections/${connId}/files`).set(await owner()).send({ path, fileName: 'links.csv', size: text.length, options: { delimiter: ';' } }).expect(201)).body.id;
+  });
+
+  const preview = async (extra: Record<string, unknown> = {}, who?: Awaited<ReturnType<typeof owner>>) =>
+    (await api().post(`${base}/templates/preview`).set(who ?? (await owner())).send({
+      entityType: 'machine', fileId, keyField: 'Ref',
+      fields: [{ target: 'code', source: 'Ref' }, { target: 'name', source: 'Description' }, { target: 'site', source: 'Site', match: 'code', ...extra }],
+    }).expect(200)).body;
+
+  it('lists what a link can take, searches it, pages it, and refuses what it should', async () => {
+    const all = (await api().get(`${base}/reference-values?kind=site`).set(await owner()).expect(200)).body;
+    expect(all).toMatchObject({ kind: 'site', word: 'site' });
+    expect(all.data).toEqual(expect.arrayContaining([expect.objectContaining({ code: site, name: siteName })]));
+    const found = (await api().get(`${base}/reference-values?kind=site&q=${encodeURIComponent(site.toLowerCase())}`).set(await owner()).expect(200)).body;
+    expect(found.data.map((d: { code: string }) => d.code)).toContain(site);
+    const page = (await api().get(`${base}/reference-values?kind=unit&limit=2&offset=0`).set(await owner()).expect(200)).body;
+    expect(page.data).toHaveLength(2);
+    expect(page.total).toBeGreaterThan(2);
+    const theirs = (await api().get(`${base}/reference-values?kind=site`).set(await other()).expect(200)).body;
+    const theirCount = Number((await admin.query(`select count(*) from public.sites where organisation_id = $1`, [ids.orgB])).rows[0].count);
+    expect(theirs.total).toBe(theirCount);
+    await api().get(`${base}/reference-values?kind=nonsense`).set(await owner()).expect(400);
+    await api().get(`${base}/reference-values?kind=site&limit=500`).set(await owner()).expect(400);
+    await api().get(`${base}/reference-values?kind=site`).set(await inspector()).expect(403);
+  });
+
+  it('checks the values of a link field over the whole file, and puts the reason on the rows shown', async () => {
+    const res = await preview();
+    expect(res.references).toHaveLength(1);
+    expect(res.references[0]).toMatchObject({
+      target: 'site', label: 'Site', kind: 'site', word: 'site', mode: 'code', checked: 5, distinct: 3, missing: 1, ambiguous: 0, truncated: false,
+      examples: [{ value: 'NOWHERE', reason: 'missing', rows: 2 }],
+    });
+    const byRow = Object.fromEntries(res.rows.map((r: { row: number }) => [r.row, r]));
+    expect(byRow[2].errors).toEqual([]);
+    expect(byRow[3].errors).toEqual([{ field: 'site', message: 'Site: there is no site "NOWHERE" in Fortress' }]);
+    expect(byRow[3].fields.find((f: { target: string }) => f.target === 'site')).toMatchObject({ error: 'Site: there is no site "NOWHERE" in Fortress' });
+    expect(byRow[5].errors).toEqual([]);
+  });
+
+  it('matching by the source id checks the connection\'s imported records, and nothing is flagged when no field is a link', async () => {
+    const res = (await api().post(`${base}/templates/preview`).set(await owner()).send({ entityType: 'machine', fileId, keyField: 'Ref', fields: [{ target: 'code', source: 'Ref' }, { target: 'name', source: 'Description' }] }).expect(200)).body;
+    expect(res.references).toEqual([]);
+  });
+
+  it('a person without the right gets no link results rather than a failed preview, and another organisation\'s file is not found', async () => {
+    await api().post(`${base}/templates/preview`).set(await other()).send({ entityType: 'machine', fileId, keyField: 'Ref', fields: [] }).expect(404);
+  });
+});

@@ -8,7 +8,7 @@ const uploadToSignedUrl = vi.fn();
 vi.mock("../lib/api-client", () => ({ apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../supabase-client", () => ({ default: { storage: { from: () => ({ uploadToSignedUrl: (...a) => uploadToSignedUrl(...a) }) } } }));
 
-const { generateSignedUrl, removeOrganisationFile, uploadFileToSupabase } = await import("./supabaseApi");
+const { generateSignedUrl, removeOrganisationFile, uploadFileToSupabase, uploadPortalScarFile } = await import("./supabaseApi");
 
 describe("organisation files go through the API (security plan SE3)", () => {
   beforeEach(() => {
@@ -24,6 +24,18 @@ describe("organisation files go through the API (security plan SE3)", () => {
     expect(path).toMatch(/^org-1\/ncr\/n1\/[0-9a-f-]+-a_b\.pdf$/);
     expect(apiFetch).toHaveBeenCalledWith("/files/upload-url", { method: "POST", organisationId: "org-1", body: { bucket: "nc-files", path } });
     expect(uploadToSignedUrl).toHaveBeenCalledWith(path, "tok", file, { contentType: "application/pdf" });
+  });
+
+  it("a supplier's evidence file: the API chooses the path, then the file is recorded as waiting", async () => {
+    apiFetch.mockResolvedValueOnce({ bucket: "scar-files", path: "org-1/scar/c1/u-a.pdf", token: "tok" }).mockResolvedValueOnce({ id: "c1", scar: {} });
+    uploadToSignedUrl.mockResolvedValue({ error: null });
+    const file = new File(["xx"], "a.pdf", { type: "application/pdf" });
+    await uploadPortalScarFile(file, "org-1", "c1");
+    expect(apiFetch).toHaveBeenNthCalledWith(1, "/portal/scars/c1/files/upload-url", { method: "POST", organisationId: "org-1", body: { fileName: "a.pdf" } });
+    expect(uploadToSignedUrl).toHaveBeenCalledWith("org-1/scar/c1/u-a.pdf", "tok", file, { contentType: "application/pdf" });
+    expect(apiFetch).toHaveBeenNthCalledWith(2, "/portal/scars/c1/files", {
+      method: "POST", organisationId: "org-1", body: { path: "org-1/scar/c1/u-a.pdf", fileName: "a.pdf", contentType: "application/pdf", sizeBytes: 2 },
+    });
   });
 
   it("refused by the API: nothing is uploaded", async () => {

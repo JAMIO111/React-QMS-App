@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { Attachment, Cost, CostList, CreateAttachmentBody, CreateCostBody, DeletedQuery, UpdateCostBody } from './ncr-records.schemas';
+import { Attachment, Cost, CostList, CreateAttachmentBody, CreateCostBody, DeletedQuery, RateBody, UpdateCostBody } from './ncr-records.schemas';
 import { DeleteBody } from './ncr.schemas';
 import { NcrRecordsService } from './ncr-records.service';
 
@@ -66,6 +66,25 @@ export class NcrCostsController {
   @ApiOkResponse({ schema: openApiSchema(Cost) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.updateCost(ctx, parse(Uuid, id), parse(UpdateCostBody, body));
+  }
+
+  /** State the exchange rate actually got (kind rate) or the converted amount (kind amount); the published rate is kept beside it. */
+  @Post(':id/rate')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(RateBody) })
+  @ApiOkResponse({ schema: openApiSchema(Cost) })
+  setRate(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setRate(ctx, parse(Uuid, id), parse(RateBody, body));
+  }
+
+  /** Drop a stated rate and use the published one again. */
+  @Post(':id/reset-rate')
+  @HttpCode(200)
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @ApiOkResponse({ schema: openApiSchema(Cost) })
+  resetRate(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.resetRate(ctx, parse(Uuid, id));
   }
 
   @Post(':id/delete')

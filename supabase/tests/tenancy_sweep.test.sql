@@ -449,6 +449,50 @@ BEGIN
   INSERT INTO public.organisation_networks (organisation_id, name, network) VALUES (a, 'Sweep HQ', '203.0.113.0/28');
   PERFORM app.system_record_access_denial(a, '50000000-0000-0000-0000-0000000000a1', '198.51.100.7', 'monitor', '/api/v1/ncrs');
   INSERT INTO sweep VALUES ('network', (SELECT id FROM public.organisation_networks WHERE organisation_id = a AND name = 'Sweep HQ'));
+  -- External portal (PT1): a party and one invited person (seeded directly; people write through functions).
+  INSERT INTO public.portal_parties (organisation_id, party_kind, supplier_id, enabled) VALUES (a, 'supplier', (SELECT id FROM public.suppliers WHERE organisation_id = a LIMIT 1), true);
+  INSERT INTO public.external_access (organisation_id, party_id, invited_email) VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'sweep-supplier@example.test');
+  INSERT INTO sweep VALUES ('portal_party', (SELECT id FROM public.portal_parties WHERE organisation_id = a)), ('external_access', (SELECT id FROM public.external_access WHERE organisation_id = a));
+  -- External portal (PT2): a share of an NC with one comment and one view (seeded directly; people write through functions).
+  INSERT INTO public.portal_shares (organisation_id, party_id, record_kind, nonconformance_id)
+    VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'ncr', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1));
+  INSERT INTO public.portal_comments (organisation_id, share_id, author_side, author_user_id, body)
+    VALUES (a, (SELECT id FROM public.portal_shares WHERE organisation_id = a), 'staff', '50000000-0000-0000-0000-0000000000a1', 'Sweep comment');
+  INSERT INTO public.portal_views (share_id, user_id, organisation_id) VALUES ((SELECT id FROM public.portal_shares WHERE organisation_id = a), '50000000-0000-0000-0000-0000000000a1', a);
+  INSERT INTO sweep VALUES ('portal_share', (SELECT id FROM public.portal_shares WHERE organisation_id = a)), ('portal_comment', (SELECT id FROM public.portal_comments WHERE organisation_id = a));
+  -- External portal (PT3a): one note of something a party did (written by functions; seeded directly here).
+  INSERT INTO public.portal_activity (organisation_id, party_id, kind, record_kind, record_id, party_name, record_label, message)
+    VALUES (a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), 'comment', 'ncr', (SELECT id FROM public.nonconformances WHERE organisation_id = a LIMIT 1), 'Sweep supplier', 'NC-1 · Sweep', 'Commented');
+  INSERT INTO sweep VALUES ('portal_activity', (SELECT id FROM public.portal_activity WHERE organisation_id = a));
+  -- External portal (PT3c): an acknowledgement of a shared record (written by a function; seeded directly here).
+  INSERT INTO public.portal_acknowledgements (organisation_id, share_id, acknowledged_by, subject_id, subject_label)
+    SELECT a, x.id, '50000000-0000-0000-0000-0000000000a1', gen_random_uuid(), 'Sweep subject' FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_acknowledgement', (SELECT id FROM public.portal_acknowledgements WHERE organisation_id = a));
+  -- External portal (PT3b): an evidence file on the SCAR (written by functions; seeded directly here).
+  INSERT INTO public.supplier_scar_files (organisation_id, scar_id, storage_path, file_name, size_bytes)
+    SELECT a, c.id, a::text || '/scar/' || c.id::text || '/sweep.pdf', 'sweep.pdf', 10 FROM public.supplier_scars c WHERE c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('supplier_scar_file', (SELECT id FROM public.supplier_scar_files WHERE organisation_id = a));
+  -- External portal (PT3d): an action on the SCAR (written by functions; seeded directly here).
+  INSERT INTO public.supplier_scar_actions (organisation_id, scar_id, description)
+    SELECT a, c.id, 'Sweep action' FROM public.supplier_scars c WHERE c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('supplier_scar_action', (SELECT id FROM public.supplier_scar_actions WHERE organisation_id = a));
+  -- External portal (PT5a): a complaint raised by a customer (written by a function; seeded directly here).
+  INSERT INTO public.portal_complaints (organisation_id, party_id, nonconformance_id, raised_by)
+    SELECT a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), n.id, '50000000-0000-0000-0000-0000000000a1' FROM public.nonconformances n WHERE n.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_complaint', (SELECT id FROM public.portal_complaints WHERE organisation_id = a));
+  -- External portal (PT5b): a request for a customer to confirm closure (written by a function; seeded directly here).
+  INSERT INTO public.portal_closure_requests (organisation_id, share_id)
+    SELECT a, x.id FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_closure_request', (SELECT id FROM public.portal_closure_requests WHERE organisation_id = a));
+  -- External portal (PT5c): a customer contact.
+  INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
+    SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('customer_contact', (SELECT id FROM public.customer_contacts WHERE organisation_id = a));
+  -- External portal (PT5f): a file on a lot shared with a customer (written by a function; seeded directly here).
+  INSERT INTO public.lot_evidence_files (organisation_id, lot_id, customer_id, kind, storage_path, file_name, size_bytes)
+    SELECT a, l.id, c.id, 'other', a::text || '/lot/' || l.id::text || '/sweep.pdf', 'sweep.pdf', 1
+      FROM public.lots l, public.customers c WHERE l.organisation_id = a AND c.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('lot_evidence', (SELECT id FROM public.lot_evidence_files WHERE organisation_id = a));
   -- Single sign-on (SS1): a domain claimed (seeded directly; people add domains through app.add_sso_domain).
   INSERT INTO public.organisation_sso_domains (organisation_id, domain) VALUES (a, 'sweep-sso.test');
   INSERT INTO sweep VALUES ('sso_domain', (SELECT id FROM public.organisation_sso_domains WHERE organisation_id = a));

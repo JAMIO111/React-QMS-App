@@ -190,6 +190,7 @@ export const ENTITY_LABELS = {
   employee: "Employees",
   gauge_type: "Gauge types",
   gauge: "Gauges",
+  calibration: "Calibration records (legacy)",
   nonconformance: "Non-conformances",
   production_order: "Production orders",
   purchase_order: "Purchase orders",
@@ -399,6 +400,7 @@ export const recordPath = (entityType, id) =>
     supplier: `/Suppliers/${id}`,
     part: `/Parts/${id}`,
     gauge: `/Calibration/Gauges/${id}`,
+    calibration: "/Calibration/Gauges",
     nonconformance: `/Non-Conformance/Register/${id}`,
     production_order: `/Production/Orders/${id}`,
     purchase_order: "/Supplier-Quality/Purchase-Orders",
@@ -420,14 +422,14 @@ export const RECONCILIATION_STATES = {
 
 /** Who owns a field once the record exists (IN5): what a later import may do to it. "Review" is not offered for fields that only ever add or custom fields. */
 export const OWNERSHIP_OPTIONS = [
-  { value: "source_wins", label: "Source wins", title: "A later import overwrites it" },
-  { value: "qms_wins", label: "Fortress wins", title: "Set when the record is created; after that only people change it" },
-  { value: "manual_review", label: "Review", title: "A different value waits for someone to accept or reject it" },
+  { value: "source_wins", label: "Source wins", title: "A later import overwrites it; while a schedule is on, people cannot edit it in Fortress" },
+  { value: "qms_wins", label: "Fortress wins", title: "Set when the record is created; after that only people change it, and it stays editable" },
+  { value: "manual_review", label: "Review", title: "A different value waits for someone to accept or reject it; people can still edit it" },
 ];
 export const OWNERSHIP_HINTS = {
-  source_wins: "A later import overwrites this field with the source's value.",
-  qms_wins: "Set when the record is created. After that only people change it in Fortress; imports leave it alone.",
-  manual_review: "When a later import brings a different value it is not written: it waits under Values to review for someone to accept or reject it.",
+  source_wins: "A later import overwrites this field with the source's value. While a schedule is on, the field is locked in Fortress for the records this import manages: it shows who manages it and cannot be edited.",
+  qms_wins: "Set when the record is created. After that only people change it in Fortress; imports leave it alone. It stays editable.",
+  manual_review: "When a later import brings a different value it is not written: it waits under Values to review for someone to accept or reject it. People can still edit it in Fortress.",
 };
 /** The ownership choices for a field (`reviewable` false removes Review). */
 export const ownershipOptions = (field) => OWNERSHIP_OPTIONS.filter((o) => o.value !== "manual_review" || field?.reviewable !== false);
@@ -466,7 +468,8 @@ export const ENTITY_DESCRIPTIONS = {
   machine: "Machines and work centres, by site.",
   employee: "People who work here (not sign-ins).",
   gauge_type: "Kinds of gauge and how often they are calibrated.",
-  gauge: "Individual gauges. Calibration dates are recorded in Fortress.",
+  gauge: "Individual gauges. Import their old calibrations as legacy records so they do not show as uncalibrated.",
+  calibration: "A gauge's past calibrations, as the old system concluded them (no readings). Each is marked legacy in Fortress and is only ever added.",
   nonconformance: "Historical non-conformances, added as drafts.",
   production_order: "Works orders.",
   purchase_order: "Order lines placed with suppliers, one row per line.",

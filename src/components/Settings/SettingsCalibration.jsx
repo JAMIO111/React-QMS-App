@@ -26,6 +26,7 @@ import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
 
 const UNIT_OPTIONS = INTERVAL_UNITS.map((u) => ({ value: u.id, label: u.name }));
 
@@ -45,6 +46,7 @@ const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
   const [customValues, setCustomValues] = useState({});
   // The procedure as it was when the pop-up opened, so the picker shows it whatever the list does behind.
   const [procedure] = useState(type?.procedureDocument);
+  const { lock } = useImportLocks("gauge_type", type?.id);
   const ok = name.trim() && shownCode.trim() && Number.isInteger(Number(intervalValue)) && Number(intervalValue) >= 1;
   const submit = (e) => {
     e.preventDefault();
@@ -75,8 +77,9 @@ const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
             placeholder="e.g. CAL-150"
             inputClassName="font-mono uppercase"
             hint="Identifies the type here and in imports"
+            {...lock("code")}
           />
-          <Field label="Name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="e.g. Digital caliper 0–150 mm" />
+          <Field label="Name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="e.g. Digital caliper 0–150 mm" {...lock("name")} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
@@ -86,8 +89,9 @@ const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
             value={intervalValue}
             onChange={(e) => setIntervalValue(e.target.value)}
             hint="How often gauges of this type are calibrated"
+            {...lock("intervalValue")}
           />
-          <ComboField label="Interval unit" required value={intervalUnit} onChange={(v) => setIntervalUnit(v ?? "months")} options={UNIT_OPTIONS} />
+          <ComboField label="Interval unit" required value={intervalUnit} onChange={(v) => setIntervalUnit(v ?? "months")} options={UNIT_OPTIONS} {...lock("intervalUnit")} />
         </div>
         <ProcedureDocumentPicker
           value={procedureDocumentId}
@@ -95,7 +99,7 @@ const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
           current={procedure}
           hint="The controlled document gauges of this type are calibrated to: a document of the type Calibration procedure. A new calibration starts with its number."
         />
-        <Field label="Description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} hint="Optional" />
+        <Field label="Description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} hint="Optional" {...lock("description")} />
         {!type && <CustomFieldInputs entityType="gauge_type" values={customValues} onChange={setCustomValues} />}
         <div className="flex justify-end gap-2">
           <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>

@@ -139,6 +139,14 @@ export class MeService {
     const suspended = await db.execute<{ organisation_id: string; name: string; suspended_at: string | Date | null; suspended_by_name: string | null }>(
       sql`select organisation_id, name, suspended_at, suspended_by_name from app.my_suspensions()`,
     );
+    // Where the person acts for a supplier or customer (they are not members there), and portal invitations waiting for them.
+    const portal = await db.execute<{
+      access_id: string; organisation_id: string; organisation_name: string; party_id: string; party_kind: 'supplier' | 'customer'; party_name: string;
+      role: 'admin' | 'member'; contact_name: string | null; mfa_required: boolean;
+    }>(sql`select access_id, organisation_id, organisation_name, party_id, party_kind, party_name, role, contact_name, mfa_required from app.my_portal_access()`);
+    const portalInvitations = await db.execute<{ access_id: string; organisation_name: string; party_name: string; expired: boolean }>(
+      sql`select access_id, organisation_name, party_name, expired from app.my_portal_invitations()`,
+    );
     const blockedIds = new Set([...blocked.rows, ...ssoBlocked.rows, ...seatBlocked.rows].map((b) => b.organisation_id));
     // Organisations this company sign-in may join by itself, and password accounts of the same person waiting to be moved across (SS4, SS5).
     const joinable = await db.execute<{ organisation_id: string; name: string; role_name: string }>(
@@ -172,6 +180,18 @@ export class MeService {
         suspendedAt: s.suspended_at ? new Date(s.suspended_at).toISOString() : null,
         suspendedBy: s.suspended_by_name ?? null,
       })),
+      portal: portal.rows.map((a) => ({
+        id: a.access_id,
+        organisationId: a.organisation_id,
+        organisationName: a.organisation_name,
+        partyId: a.party_id,
+        partyKind: a.party_kind,
+        partyName: a.party_name,
+        role: a.role,
+        contactName: a.contact_name ?? null,
+        mfaRequired: Boolean(a.mfa_required),
+      })),
+      portalInvitations: portalInvitations.rows.map((i) => ({ id: i.access_id, organisationName: i.organisation_name, partyName: i.party_name, expired: Boolean(i.expired) })),
       welcome: welcome.rows.map((w) => ({
         id: w.organisation_id,
         name: w.name,

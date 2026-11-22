@@ -89,12 +89,12 @@ export const useNcrRanges = (source) => {
   });
 };
 
-/** NC dashboard figures for a period ({ source?, from, to } — YYYY-MM-DD). */
-export const useNcDashboard = ({ source, from, to }) => {
+/** NC dashboard figures for a period ({ source?, siteId?, from, to } — YYYY-MM-DD). Costs are net, in the site's currency or (all sites) the organisation's. */
+export const useNcDashboard = ({ source, siteId, from, to }) => {
   const { organisationId } = useOrganisation();
   return useQuery({
-    queryKey: key(organisationId, "dashboard", source ?? "all", from, to),
-    queryFn: () => apiFetch(`/ncr-dashboard?${toQuery({ source, from, to })}`, { organisationId }),
+    queryKey: key(organisationId, "dashboard", source ?? "all", siteId ?? "all-sites", from, to),
+    queryFn: () => apiFetch(`/ncr-dashboard?${toQuery({ source, siteId, from, to })}`, { organisationId }),
     staleTime: DASHBOARD_STALE_MS,
     enabled: !!organisationId && !!from && !!to,
     placeholderData: keepPreviousData,
@@ -102,7 +102,22 @@ export const useNcDashboard = ({ source, from, to }) => {
   });
 };
 
-/** Costs of an NCR: { data, totals: { baseCurrency, net, gross, count } }. */
+/**
+ * What an automatic conversion would use, for the cost form: { rate, rateDate, state: "published" | "not_published" | "unavailable" }. Nothing is saved.
+ * Asks only for a foreign currency and a whole date.
+ */
+export const useRatePreview = ({ from, to, date }) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "rate-preview", from, to, date),
+    queryFn: () => apiFetch(`/exchange-rates/preview?${toQuery({ from, to, date })}`, { organisationId }),
+    enabled: !!organisationId && !!from && !!to && from !== to && /^\d{4}-\d{2}-\d{2}$/.test(date ?? ""),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+};
+
+/** Costs of an NCR: { data, totals: { baseCurrency, orgCurrency, net, gross, netOrg, grossOrg, count, byCurrency, rates } }. */
 export const useNcrCosts = (id, { deleted = "exclude" } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({

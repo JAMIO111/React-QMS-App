@@ -140,6 +140,10 @@ export function convert(field: CatalogueField, raw: string, m: FieldMapping): { 
       const s = raw.toUpperCase();
       return /^[A-Z]{2}$/.test(s) ? { value: s } : { error: `"${raw}" is not a two-letter country code` };
     }
+    case 'currency': {
+      const s = raw.toUpperCase();
+      return /^[A-Z]{3}$/.test(s) ? { value: s } : { error: `"${raw}" is not a three-letter currency code (such as GBP)` };
+    }
     case 'email':
       if (!EMAIL.test(raw)) return { error: `"${raw}" is not an email address` };
       return field.maxLength && raw.length > field.maxLength ? { error: `Longer than ${field.maxLength} characters` } : { value: raw };

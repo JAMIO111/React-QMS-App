@@ -234,6 +234,8 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -1114,6 +1116,9 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await page.getByRole('option', { name: /^plant/ }).click();
   await see(code.getByLabel('Example for Code').getByText('ERP-M1'));
   await shot(page, '82-api-map-fields');
+  // A template that only adds never updates a record, so nothing could be locked: this one keeps the records in sync.
+  await page.getByRole('combobox', { name: 'Records' }).last().click();
+  await page.getByRole('option', { name: /^Add new and update existing/ }).click();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const save = page.getByRole('dialog');
   await see(save.getByLabel('Template name'));
@@ -1168,7 +1173,67 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   if (ignored.length !== 1) throw new Error(`the row was not ignored with its reason: ${JSON.stringify(ignored)}`);
   await shot(page, '84-api-rows-ignored');
 
+  step('owner switches the schedule on: the fields the import owns lock in Fortress, the others stay editable');
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
+  const sched = page.getByRole('listitem', { name: 'Machines schedule' });
+  await sched.getByRole('combobox', { name: /Import template/ }).click();
+  await page.getByRole('option', { name: /Machines from Plant ERP/ }).click();
+  await sched.getByRole('button', { name: 'Daily' }).click();
+  await see(sched.getByText('These fields are locked in Fortress while this schedule is on'));
+  await see(sched.getByText(/people cannot edit Code, Name/));
+  await shot(page, '86-schedule-locks-fields');
+  const openMachine = async (code) => {
+    await page.goto(`${APP}/Machines`);
+    await page.getByLabel('Search machines').fill(code);
+    await page.getByRole('row', { name: new RegExp(code) }).first().click();
+    return page.getByRole('dialog', { name: `Edit ${code}` });
+  };
+  let edit = await openMachine('ERP-M1');
+  const nameBox = edit.getByRole('textbox', { name: /^Name/ });
+  await see(edit.getByRole('button', { name: 'Managed by Plant ERP' }).first());
+  if (!(await nameBox.isDisabled())) throw new Error('the name of an imported machine can be edited while its schedule is on');
+  if (await edit.getByRole('textbox', { name: /^Description/ }).isDisabled()) throw new Error('the description, which the template does not map, is locked');
+  await edit.getByRole('button', { name: 'Managed by Plant ERP' }).first().hover();
+  await see(page.getByRole('tooltip').getByText(/Managed by Plant ERP\. It updates this field on a schedule/));
+  await shot(page, '87-machine-locked-field');
+  await edit.getByRole('textbox', { name: /^Description/ }).fill('Edited in Fortress');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  let desc = null;
+  for (let i = 0; i < 40 && desc !== 'Edited in Fortress'; i += 1) {
+    desc = (await stack.admin.query(`select description from public.machines where organisation_id = $1 and code = 'ERP-M1'`, [org.id])).rows[0].description;
+    if (desc !== 'Edited in Fortress') await page.waitForTimeout(250);
+  }
+  if (desc !== 'Edited in Fortress') throw new Error('the unlocked description was not saved');
+  // The database refuses a person's change to a locked field, whatever the screen does.
+  const person = (await stack.admin.query(`select created_by from public.integration_connections where id = $1`, [connId])).rows[0].created_by;
+  const client = await stack.admin.connect();
+  let refused = null;
+  try {
+    await client.query('begin');
+    await client.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: person, role: 'authenticated' })]);
+    await client.query('set local role authenticated');
+    await client.query(`update public.machines set name = 'Hacked' where organisation_id = $1 and code = 'ERP-M1'`, [org.id]);
+  } catch (e) {
+    refused = e;
+  } finally {
+    await client.query('rollback').catch(() => {});
+    client.release();
+  }
+  log(`direct edit of a locked field: ${refused ? `${refused.code} ${refused.message}` : 'allowed'}`);
+  if (!refused || refused.code !== 'QM033') throw new Error(`the database did not refuse a direct change to a locked field: ${refused?.message}`);
+
+  step('with the schedule back to by hand, the same field can be edited');
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
+  await page.getByRole('listitem', { name: 'Machines schedule' }).getByRole('button', { name: 'By hand' }).click();
+  await page.waitForTimeout(600);
+  edit = await openMachine('ERP-M1');
+  await see(edit.getByRole('textbox', { name: 'Name' }));
+  if (await edit.getByRole('textbox', { name: 'Name' }).isDisabled()) throw new Error('the name is still locked after the schedule was switched off');
+  if (await edit.getByRole('button', { name: /Managed by/ }).count()) throw new Error('the lock mark is still shown after the schedule was switched off');
+  await page.keyboard.press('Escape');
+
   step('owner revokes the credential; the connection can no longer be tested');
+  await page.goto(`${APP}/Settings/Integrations/${connId}`);
   await page.getByRole('button', { name: 'Revoke' }).click();
   const revoke = page.getByRole('dialog', { name: 'Revoke the credential' });
   await revoke.getByLabel('Reason').fill('Token rotated in the ERP');
@@ -1982,6 +2047,122 @@ async function editConflicts({ browser, page, stack, APP, orgName, see, shot, st
   await ctx.close();
 }
 
+async function costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  step('a cost in another currency takes the published rate, then the person states the rate they really got');
+  const { rows: [org] } = await stack.admin.query(
+    `select o.id, s.id as site, s.currency as site_ccy, current_date::text as today
+       from public.organisations o join public.sites s on s.organisation_id = o.id where o.name = $1 order by s.created_at limit 1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const foreign = org.site_ccy === 'EUR' ? 'USD' : 'EUR';
+  // The API's rate source is switched off under test, so the cache holds what Frankfurter would have published.
+  await stack.admin.query(
+    `insert into public.exchange_rates (requested_on, base, quote, rate, rate_date, supported) values ($1::date, $2, $3, 0.85, $1::date, true)
+       on conflict (requested_on, base, quote) do update set rate = 0.85, rate_date = excluded.rate_date, supported = true, fetched_at = now()`,
+    [org.today, foreign, org.site_ccy]);
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Scrapped castings', siteId: org.site, categoryId: product.id });
+  await api('POST', `/ncrs/${ncr.id}/costs`, { costType: 'scrap', currency: foreign, quantity: 1, unitCost: 100, incurredOn: org.today });
+
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  await see(page.getByRole('heading', { level: 1, name: ncr.reference }));
+  const summary = page.getByRole('region', { name: 'Cost summary' });
+  await see(summary.getByText('Estimated', { exact: true }));
+  await see(summary.getByText(/85\.00/));
+  await shot(page, 'cost-estimated');
+
+  step('state the converted amount: the line becomes actual and the total follows');
+  await page.getByRole('button', { name: /^Exchange rate for .* cost$/ }).first().click();
+  const dialog = page.getByRole('dialog', { name: /^Exchange rate/ });
+  await dialog.getByRole('radio', { name: 'The converted amount' }).click().catch(async () => dialog.getByText('The converted amount').click());
+  await dialog.getByLabel(/^Converted amount/).fill('90');
+  await dialog.getByLabel('Note').fill('Bank statement');
+  await dialog.getByRole('button', { name: 'Save rate' }).click();
+  await see(summary.getByText('Actual', { exact: true }));
+  await see(summary.getByText(/90\.00/));
+  await shot(page, 'cost-actual');
+  const row = (await stack.admin.query(
+    `select rate_status, rate_source, override_kind, net_base, estimated_rate::float as estimated from public.ncr_costs where nonconformance_id = $1`, [ncr.id])).rows[0];
+  if (row.rate_status !== 'actual' || row.override_kind !== 'amount' || Number(row.net_base) !== 90 || row.estimated !== 0.85) {
+    throw new Error(`the stated amount was not kept as an actual rate: ${JSON.stringify(row)}`);
+  }
+  log(`cost currency: ${ncr.reference} ${foreign} line estimated at 0.85, then stated as 90 ${org.site_ccy}`);
+}
+
+
+/**
+ * Legacy calibration records: a file of old calibrations is imported against gauges by asset number, each record is marked legacy and has no readings, the
+ * gauge shows its last and next due dates from the latest one, and the calibration dashboard leaves them out until the organisation chooses to count them
+ * (Settings → System preferences).
+ */
+async function legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const { rows: [d] } = await stack.admin.query(
+    `select (current_date - 60)::text as recent, (current_date - 200)::text as older, (current_date + 120)::text as next, (current_date - 60 + 180)::text as recent_next`);
+  const { rows: [gauge] } = await stack.admin.query(
+    `insert into public.gauges (organisation_id, asset_number, description) values ($1, 'JT-LEGACY-1', 'Imported caliper') returning id`, [org.id]);
+
+  step('owner imports old calibrations from a file as legacy records');
+  await page.goto(`${APP}/Settings/Integrations`);
+  await page.getByRole('link', { name: /Import a file/ }).click();
+  await page.getByRole('button', { name: /^Calibration records/ }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByText('How to read the file'));
+  const csv = [
+    'Id,Gauge,Calibrated on,Outcome,Next due on,Certificate number,Technician',
+    `OLD-1,JT-LEGACY-1,${d.recent},pass,${d.next},CERT-9,A. Hand`,
+    `OLD-2,JT-LEGACY-1,${d.older},adjusted,${d.recent_next},,`,
+  ].join('\n');
+  await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'calibrations.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await see(page.getByRole('table', { name: 'First rows' }));
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByRole('listitem', { name: 'Gauge', exact: true }));
+  await shot(page, 'legacy-calibration-mapping');
+  await page.getByRole('button', { name: 'Import 2 rows' }).click();
+  const dialog = page.getByRole('dialog');
+  await see(dialog.getByLabel('Template name'));
+  await dialog.getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+  await see(page.getByText(/template Calibration records \(legacy\) from calibrations\.csv version 1/i).or(page.getByText(/calibrations\.csv/)).first());
+  const made = (await stack.admin.query(
+    `select is_legacy, imported_technician, outcome, certificate_number,
+            (select count(*)::int from public.calibration_readings r where r.calibration_id = c.id) as readings
+       from public.calibrations c where gauge_id = $1 order by calibrated_on desc`, [gauge.id])).rows;
+  log(`legacy calibrations: ${JSON.stringify(made)}`);
+  if (made.length !== 2 || !made.every((r) => r.is_legacy && r.readings === 0) || made[0].outcome !== 'pass' || made[0].imported_technician !== 'A. Hand') {
+    throw new Error(`the legacy import did not write what the file said: ${JSON.stringify(made)}`);
+  }
+
+  step('the gauge shows its dates and the records are marked legacy');
+  await page.goto(`${APP}/Calibration/Gauges/${gauge.id}`);
+  const history = page.getByRole('table', { name: 'Calibration history' });
+  await see(history);
+  await see(history.getByText('Legacy record').first());
+  await see(history.getByText('CERT-9'));
+  await shot(page, 'legacy-calibration-history');
+  const g = (await stack.admin.query(`select last_calibrated_on::text as last, next_due_on::text as next from public.gauges where id = $1`, [gauge.id])).rows[0];
+  if (g.last !== d.recent || g.next !== d.next) throw new Error(`the gauge did not follow its latest calibration: ${JSON.stringify(g)}`);
+  await history.getByRole('link', { name: /^CAL-/ }).first().click();
+  await see(page.getByText(/Imported from/));
+  await see(page.getByText(/has no readings/));
+
+  step('the dashboard leaves legacy calibrations out until they are counted');
+  await page.goto(`${APP}/Calibration`);
+  await see(page.getByText(/2 legacy calibrations imported from an old system in this period are not counted/));
+  await shot(page, 'legacy-calibration-dashboard-off');
+  await page.goto(`${APP}/Settings/System-Preferences`);
+  const toggle = page.getByRole('switch', { name: 'Include legacy calibrations in the dashboard' });
+  await see(toggle);
+  await page.locator('label', { has: toggle }).click();
+  await page.goto(`${APP}/Calibration`);
+  await see(page.getByText(/2 legacy calibrations imported from an old system are counted in these figures/));
+  await shot(page, 'legacy-calibration-dashboard-on');
+  const on = (await stack.admin.query(`select include_legacy_calibrations as on from public.organisation_settings where organisation_id = $1`, [org.id])).rows[0].on;
+  if (on !== true) throw new Error('the System preferences switch did not save');
+  // Put it back, so later steps see the default.
+  await stack.admin.query(`update public.organisation_settings set include_legacy_calibrations = false where organisation_id = $1`, [org.id]);
+  log('legacy calibrations: imported, marked, kept off the dashboard until counted');
+}
 async function networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
   const OFFICE = '203.0.113.10';
   const HOME = '198.51.100.200';

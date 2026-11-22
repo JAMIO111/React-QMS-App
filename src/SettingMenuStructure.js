@@ -2,6 +2,7 @@ import {
   BellIcon,
   CreditCardIcon,
   DatabaseIcon,
+  HandshakeIcon,
   MonitorCogIcon,
   PlugIcon,
   SettingsIcon,
@@ -36,6 +37,13 @@ const SettingMenuStructure = [
     path: "Security",
     icon: ShieldCheckIcon,
     permission: "security.read",
+    subMenu: [],
+  },
+  {
+    name: "External access",
+    path: "External-Access",
+    icon: HandshakeIcon,
+    permission: "external_access.read",
     subMenu: [],
   },
   {

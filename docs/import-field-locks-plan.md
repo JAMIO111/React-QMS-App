@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: LK1–LK4 built and tested (custom fields, part revisions and order lines are not covered); the browser journey passes with the lock steps. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1–LK4 built and tested, migration applied live 2026-11-22 (custom fields, part revisions and order lines are not covered); the browser journey passes with the lock steps. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 

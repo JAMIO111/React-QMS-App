@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: LK1–LK4 built and tested, migration applied live 2026-11-22; custom fields (§8e) built on top, migration `20260419100000` not yet applied live; part revisions and order lines are not covered. The browser journey passes with the lock steps (it does not cover custom fields). Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1–LK4 built and tested, migration applied live 2026-11-22; custom fields (§8e) built on top, migration `20260419100000` applied live 2026-11-22; part revisions and order lines are not covered. The browser journey passes with the lock steps (it does not cover custom fields). Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 

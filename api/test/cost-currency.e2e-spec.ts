@@ -57,6 +57,8 @@ const whileDown = async <T>(work: () => Promise<T>): Promise<T> => {
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-fx');
+  // The rate cache is global, not per organisation: another suite that ran first may have stored the pairs below, and then the source would never be asked.
+  await admin.query('delete from public.exchange_rates');
   const env = testEnv({ RATE_LIMIT_PER_MINUTE: '10000' });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).overrideProvider(ExchangeRateGateway).useValue(fake).compile();
   app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, rawBody: true }), env);

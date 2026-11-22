@@ -49,20 +49,22 @@ export const listWords = (items) => (items.length <= 1 ? items.join("") : `${ite
 
 // ---- this person's own saves -------------------------------------------------------------------------------------------------------------------
 
-const moved = new Map(); // record key → Map(version saved on → version the save produced)
+// Versions are remembered per resource (the path up to the record's id), not per id: a record's custom values (`/custom-values/<id>`) are a row of their
+// own with their own version, and a record and its custom values written in one transaction (a new record, an import) carry the very same version text.
+const moved = new Map(); // resource path → Map(version saved on → version the save produced)
 const queues = new Map(); // record key → the promise of the save running now
 
-/** The newest version this person's own saves have taken `version` to. */
-export const latestOwnVersion = (key, version) => {
-  const steps = moved.get(key);
+/** The newest version this person's own saves have taken `version` to (`resource` is `recordPath(path)`). */
+export const latestOwnVersion = (resource, version) => {
+  const steps = moved.get(resource);
   let v = version;
   for (let i = 0; steps && steps.has(v) && i < 100; i += 1) v = steps.get(v);
   return v;
 };
-const remember = (key, from, to) => {
-  if (!key || !VERSION.test(String(from ?? "")) || !VERSION.test(String(to ?? "")) || from === to) return;
-  if (!moved.has(key)) moved.set(key, new Map());
-  const steps = moved.get(key);
+const remember = (resource, from, to) => {
+  if (!resource || !VERSION.test(String(from ?? "")) || !VERSION.test(String(to ?? "")) || from === to) return;
+  if (!moved.has(resource)) moved.set(resource, new Map());
+  const steps = moved.get(resource);
   steps.set(from, to);
   if (steps.size > 50) steps.delete(steps.keys().next().value);
 };
@@ -135,26 +137,27 @@ export const isEditConflict = (error) => error?.status === 409 && error?.code ==
  */
 export async function versionedSave(send, path, options, whoAmI = async () => null) {
   const key = recordKey(path);
+  const resource = recordPath(path)?.toLowerCase() ?? null;
   const { rowVersion, ...fields } = options.body ?? {};
   if (!key || !VERSION.test(String(rowVersion ?? ""))) return send(path, options);
 
   return oneAtATime(key, async () => {
     const attempt = async (version, body) => {
       const answer = await send(path, { ...options, body: { ...body, rowVersion: version } });
-      remember(key, version, answer?.rowVersion);
+      remember(resource, version, answer?.rowVersion);
       return answer;
     };
-    const base = latestOwnVersion(key, rowVersion);
+    const base = latestOwnVersion(resource, rowVersion);
     try {
       return await attempt(base, fields);
     } catch (error) {
       if (!isEditConflict(error) || !error.details?.version) throw error;
-      return settleConflict({ send, path, options, fields, error, attempt, whoAmI, base, key });
+      return settleConflict({ send, path, options, fields, error, attempt, whoAmI, base, resource });
     }
   });
 }
 
-async function settleConflict({ send, path, options, fields, error, attempt, whoAmI, base, key }) {
+async function settleConflict({ send, path, options, fields, error, attempt, whoAmI, base, resource }) {
   const details = error.details;
   const me = await whoAmI().catch(() => null);
   const others = (details.people ?? []).filter((p) => p?.id && p.id !== me);
@@ -177,7 +180,7 @@ async function settleConflict({ send, path, options, fields, error, attempt, who
 
   const done = (answer, kept) => {
     // the screen's copy (its version plus this person's changes) now matches what was saved, unless they took the other person's values
-    if (kept !== "theirs") remember(key, base, answer?.rowVersion);
+    if (kept !== "theirs") remember(resource, base, answer?.rowVersion);
     if (others.length) announce({ people: others, fields: theirsOnly, kept, changedAt: details.changedAt ?? null });
     return answer;
   };

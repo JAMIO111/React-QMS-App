@@ -33,10 +33,18 @@ describe("versionedSave", () => {
     const send = vi.fn(async () => ({ id: ID, rowVersion: "20" }));
     await versionedSave(send, `/ncrs/${ID}`, { method: "PATCH", body: { title: "A", rowVersion: "10" } }, me);
     expect(send).toHaveBeenCalledWith(`/ncrs/${ID}`, { method: "PATCH", body: { title: "A", rowVersion: "10" } });
-    expect(latestOwnVersion(ID, "10")).toBe("20");
+    expect(latestOwnVersion(recordPath(`/ncrs/${ID}`), "10")).toBe("20");
     // a second save from a screen that has not refetched yet goes on the newer version, not against itself
     await versionedSave(send, `/ncrs/${ID}`, { method: "PATCH", body: { title: "B", rowVersion: "10" } }, me);
     expect(send.mock.calls[1][1].body.rowVersion).toBe("20");
+  });
+
+  it("keeps a record's versions apart from its custom values', which can carry the very same version text", async () => {
+    // a record and its custom values written in one transaction (a new record, an import) have one and the same version
+    const send = vi.fn(async (path) => ({ id: ID, rowVersion: path.startsWith("/custom-values") ? "20" : "30" }));
+    await versionedSave(send, `/custom-values/${ID}`, { method: "PUT", body: { values: { note: "x" }, rowVersion: "10" } }, me);
+    await versionedSave(send, `/machines/${ID}`, { method: "PATCH", body: { name: "A", rowVersion: "10" } }, me);
+    expect(send.mock.calls[1][1].body.rowVersion).toBe("10");
   });
 
   it("runs saves of one record one at a time", async () => {

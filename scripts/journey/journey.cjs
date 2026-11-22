@@ -1059,13 +1059,27 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   const site = (await stack.admin.query(`select code from public.sites where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0].code;
   const { erp } = stack;
   erp.machines = [
-    { id: '1', code: 'ERP-M1', name: 'Erp lathe', plant: site },
-    { id: '2', code: 'ERP-M2', name: 'Erp mill', plant: site },
-    { id: '3', code: 'ERP-M3', name: 'Erp grinder', plant: site },
-    { id: '4', code: 'ERP-M4', name: '', plant: site }, // no name: rejected until the ERP is fixed
+    { id: '1', code: 'ERP-M1', name: 'Erp lathe', plant: site, serial: 'SN-1001' },
+    { id: '2', code: 'ERP-M2', name: 'Erp mill', plant: site, serial: 'SN-1002' },
+    { id: '3', code: 'ERP-M3', name: 'Erp grinder', plant: site, serial: 'SN-1003' },
+    { id: '4', code: 'ERP-M4', name: '', plant: site, serial: 'SN-1004' }, // no name: rejected until the ERP is fixed
   ];
   const machines = async () => (await stack.admin.query(`select code, name from public.machines where organisation_id = $1 and code like 'ERP-%' order by code`, [org.id])).rows;
   const latestRun = async () => (await stack.admin.query(`select id, kind, status, jsonb_build_object('total', records_total, 'created', created, 'updated', updated, 'unchanged', unchanged, 'rejected', rejected, 'failed', failed) as counts from public.integration_sync_runs where organisation_id = $1 and entity_type = 'machine' and connection_id = (select id from public.integration_connections where organisation_id = $1 and name = 'Plant ERP') order by requested_at desc limit 1`, [org.id])).rows[0];
+
+  step('owner adds two custom fields to machines: a serial number the ERP will send and a note only people write');
+  await page.goto(`${APP}/Settings/Data-Management?tab=custom-fields`);
+  await page.getByRole('combobox', { name: 'Kind of record' }).click();
+  await page.getByRole('option', { name: /^Machines/ }).click();
+  for (const label of ['Serial number', 'Operator note']) {
+    await page.getByRole('tabpanel', { name: 'Custom fields' }).getByRole('button', { name: 'Add field' }).click();
+    const fieldDialog = page.getByRole('dialog', { name: 'Add a field to machines' });
+    await fieldDialog.getByLabel('Label').fill(label);
+    await fieldDialog.getByRole('button', { name: 'Add field' }).click();
+    // A new field waits for the server, which makes its key; the pop-up closes when it is saved.
+    await fieldDialog.waitFor({ state: 'hidden' });
+    await see(page.getByRole('list', { name: 'Custom fields on machines' }).getByText(label));
+  }
 
   step('owner connects the plant ERP through its REST API');
   await page.goto(`${APP}/Settings/Integrations`);
@@ -1110,7 +1124,10 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await page.waitForURL(/\/map\?/);
   const code = page.getByRole('listitem', { name: 'Code', exact: true });
   await see(code);
-  await see(page.getByText(/4 fields in the first 2 records/));
+  await see(page.getByText(/5 fields in the first 2 records/));
+  const serialRow = page.getByRole('listitem', { name: 'Serial number', exact: true });
+  await serialRow.getByRole('combobox', { name: 'API field for Serial number' }).click();
+  await page.getByRole('option', { name: /^serial/ }).click();
   const siteRow = page.getByRole('listitem', { name: 'Site', exact: true });
   await siteRow.getByRole('combobox', { name: 'API field for Site' }).click();
   await page.getByRole('option', { name: /^plant/ }).click();
@@ -1131,6 +1148,9 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   log(`first import: ${JSON.stringify(run.counts)} machines ${JSON.stringify(made)}`);
   if (made.length !== 3 || run.counts.created !== 3 || run.counts.rejected !== 1) throw new Error(`the first import did not write the three good records and reject the fourth: ${JSON.stringify({ made, counts: run.counts })}`);
   if (!erp.requests.some((r) => r.query.page === '2')) throw new Error('the import did not read the second page');
+  const customValue = async (code) =>
+    (await stack.admin.query(`select v.values from public.custom_field_values v join public.machines m on m.id = v.record_id where m.organisation_id = $1 and m.code = $2`, [org.id, code])).rows[0]?.values ?? {};
+  if ((await customValue('ERP-M1')).serial_number !== 'SN-1001') throw new Error(`the import did not write the custom field: ${JSON.stringify(await customValue('ERP-M1'))}`);
 
   step('the same import again writes nothing');
   const connId = (await stack.admin.query(`select id from public.integration_connections where organisation_id = $1 and name = 'Plant ERP'`, [org.id])).rows[0].id;
@@ -1145,7 +1165,7 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
 
   step('the rejected record is fixed in the ERP and imported; a new bad one is ignored with a reason');
   erp.machines[3].name = 'Erp drill';
-  erp.machines.push({ id: '5', code: '', name: 'No code', plant: site });
+  erp.machines.push({ id: '5', code: '', name: 'No code', plant: site, serial: 'SN-1005' });
   await page.goto(`${APP}/Settings/Integrations/${connId}/map?entity=machine`);
   await see(page.getByText('Version 1, unchanged'));
   await page.getByRole('button', { name: 'Import', exact: true }).click();
@@ -1180,7 +1200,7 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await page.getByRole('option', { name: /Machines from Plant ERP/ }).click();
   await sched.getByRole('button', { name: 'Daily' }).click();
   await see(sched.getByText('These fields are locked in Fortress while this schedule is on'));
-  await see(sched.getByText(/people cannot edit Code, Name/));
+  await see(sched.getByText(/people cannot edit Code, Name.*Serial number/));
   await shot(page, '86-schedule-locks-fields');
   const openMachine = async (code) => {
     await page.goto(`${APP}/Machines`);
@@ -1196,6 +1216,22 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await edit.getByRole('button', { name: 'Managed by Plant ERP' }).first().hover();
   await see(page.getByRole('tooltip').getByText(/Managed by Plant ERP\. It updates this field on a schedule/));
   await shot(page, '87-machine-locked-field');
+  // The custom field the template maps locks too; the one it does not map stays editable.
+  const details = edit.getByRole('region', { name: 'More details' });
+  const serialBox = details.getByRole('textbox', { name: /^Serial number/ });
+  await see(serialBox);
+  await see(details.getByRole('button', { name: 'Managed by Plant ERP' }));
+  if (!(await serialBox.isDisabled())) throw new Error('the serial number custom field can be edited while the schedule owns it');
+  if (await details.getByRole('textbox', { name: 'Operator note' }).isDisabled()) throw new Error('the operator note, which the template does not map, is locked');
+  await shot(page, '88-custom-field-locked');
+  await details.getByRole('textbox', { name: 'Operator note' }).fill('Checked on the night shift');
+  await details.getByRole('textbox', { name: 'Operator note' }).blur();
+  let note = null;
+  for (let i = 0; i < 40 && note !== 'Checked on the night shift'; i += 1) {
+    note = (await customValue('ERP-M1')).operator_note;
+    if (note !== 'Checked on the night shift') await page.waitForTimeout(250);
+  }
+  if (note !== 'Checked on the night shift') throw new Error('the unlocked custom field was not saved');
   await edit.getByRole('textbox', { name: /^Description/ }).fill('Edited in Fortress');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   let desc = null;
@@ -1221,6 +1257,28 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   }
   log(`direct edit of a locked field: ${refused ? `${refused.code} ${refused.message}` : 'allowed'}`);
   if (!refused || refused.code !== 'QM033') throw new Error(`the database did not refuse a direct change to a locked field: ${refused?.message}`);
+  // The same for a custom field: people write custom values through app.set_custom_values, which asks the same rule.
+  const machineId = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'ERP-M1'`, [org.id])).rows[0].id;
+  const asPerson = async (sql, params) => {
+    const c = await stack.admin.connect();
+    try {
+      await c.query('begin');
+      await c.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: person, role: 'authenticated' })]);
+      await c.query('set local role authenticated');
+      await c.query(sql, params);
+      return null;
+    } catch (e) {
+      return e;
+    } finally {
+      await c.query('rollback').catch(() => {});
+      c.release();
+    }
+  };
+  const customRefused = await asPerson(`select app.set_custom_values('machine', $1, '{"serial_number": "Hacked"}'::jsonb)`, [machineId]);
+  log(`direct edit of a locked custom field: ${customRefused ? `${customRefused.code} ${customRefused.message}` : 'allowed'}`);
+  if (!customRefused || customRefused.code !== 'QM033') throw new Error(`the database did not refuse a direct change to a locked custom field: ${customRefused?.message}`);
+  const sameValue = await asPerson(`select app.set_custom_values('machine', $1, '{"serial_number": "SN-1001"}'::jsonb)`, [machineId]);
+  if (sameValue) throw new Error(`a locked custom field sent back unchanged was refused: ${sameValue.message}`);
 
   step('with the schedule back to by hand, the same field can be edited');
   await page.goto(`${APP}/Settings/Integrations/${connId}`);
@@ -1230,6 +1288,7 @@ async function importFromApi({ page, stack, APP, orgName, see, shot, step, log }
   await see(edit.getByRole('textbox', { name: 'Name' }));
   if (await edit.getByRole('textbox', { name: 'Name' }).isDisabled()) throw new Error('the name is still locked after the schedule was switched off');
   if (await edit.getByRole('button', { name: /Managed by/ }).count()) throw new Error('the lock mark is still shown after the schedule was switched off');
+  if (await edit.getByRole('region', { name: 'More details' }).getByRole('textbox', { name: /^Serial number/ }).isDisabled()) throw new Error('the serial number is still locked after the schedule was switched off');
   await page.keyboard.press('Escape');
 
   step('owner revokes the credential; the connection can no longer be tested');

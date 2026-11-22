@@ -1,7 +1,7 @@
 # Importing NC cost lines through the connectors — plan
 
-Status: **plan only, nothing built.** Decisions CI-D1, D2 and D4–D8 (§4) accepted by the owner 2026-11-22. **CI-D3 is reopened** by §7: the owner wants to carry the source's
-status over when importing NCs, so many NCs will arrive closed or cancelled. Written 2026-11-22.
+Status: **plan only, nothing built.** Decisions CI-D1, D2 and D4–D8 (§4) and CI-D9 to CI-D13 (§7) accepted by the owner 2026-11-22, all as recommended; **CI-D10 replaces CI-D3**: the owner wants to carry the
+source's status over when importing NCs, so many NCs will arrive closed or cancelled. Written 2026-11-22.
 
 ## 1. What was asked
 

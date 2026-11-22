@@ -1,6 +1,7 @@
 # Importing NC cost lines through the connectors — plan
 
-Status: **plan only, nothing built.** Decisions CI-D1 to CI-D8 (§4) are proposed and wait for the owner. Written 2026-11-22.
+Status: **plan only, nothing built.** Decisions CI-D1, D2 and D4–D8 (§4) accepted by the owner 2026-11-22. **CI-D3 is reopened** by §7: the owner wants to carry the source's
+status over when importing NCs, so many NCs will arrive closed or cancelled. Written 2026-11-22.
 
 ## 1. What was asked
 
@@ -125,7 +126,7 @@ A line already in the site currency ignores it.
 |---|---|---|
 | CI-D1 | Add-only, or also update lines whose amount changed in the source | **Add-only.** A posted cost is not edited; corrections are new lines. Updating can follow if a source really edits lines |
 | CI-D2 | Link by the source's NC id (earlier NC import, same connection) and by Fortress reference | **Both**, as every other link (D10) |
-| CI-D3 | Costs on a closed or cancelled NC | **Reject the row** with the reason; nobody's closed NC changes silently |
+| CI-D3 | Costs on a closed or cancelled NC | **Reopened, see §7.** Rejected for NCs made in Fortress; for NCs an import brought in, an import setting (off by default) lets cost lines be added to them |
 | CI-D4 | Negative amounts | **Reject**, pointing to the recovery and charge types |
 | CI-D5 | Offer the source's booked value in the site currency | **Yes, optional**; becomes Actual. Off unless mapped |
 | CI-D6 | Fetch the needed rates before applying | **Yes** (§3.3): otherwise a big import lands mostly "waiting" |
@@ -151,3 +152,48 @@ A line already in the site currency ignores it.
 Updating existing cost lines from a source; importing cost lines for anything but NCs (8D actions, SCARs, calibrations and production orders have no costs); importing
 exchange rates from the source system; a bulk "state the rate" for many lines (one-by-one stays on the NC); a rate cache for dates older than the rate source holds
 (those lines stay "waiting" and can be stated by hand).
+
+## 7. Carrying the source's status over when importing NCs (raised 2026-11-22)
+
+**Why it matters for costs.** Today an imported NC is always a draft (`app.import_nonconformance` inserts `stage = 'draft'`), and the table's rules refuse any other stage on a
+signed-in person's insert (`nonconformance_rules`: "a new non-conformance starts as draft or open"); the import writes as the requesting person, so those rules apply to it.
+If NCs came in closed or cancelled, **every cost line for them would be refused** by `app.assert_ncr_editable` (closed and cancelled NCs are frozen), which is what CI-D3
+as first written would also do. So yes: with status carried over, costs must be allowed onto closed and cancelled NCs, **but only the ones an import brought in**.
+
+**Proposed rule for costs (replaces CI-D3).** A new import setting on the cost template, **"Add costs to closed or cancelled NCs this connection imported"**, off by
+default. When on, the row is accepted only if the NC has a row in the import map for the same organisation (so it is an imported, historical record), is not deleted,
+and the person has `ncr.update` at its site. The check lives in the database: `app.import_ncr_cost` sets a transaction-local flag that `app.assert_ncr_editable` honours
+only together with that map check, so no other route can use it. NCs raised in Fortress stay frozen once closed. The line is audited with the import as the actor.
+A cancelled NC with costs is unusual, so the preview counts the lines going onto closed and onto cancelled NCs separately.
+
+**What carrying the status over takes on the NC side** (a separate slice before or beside the cost import; found by reading `nonconformance_rules`, the stage-gate trigger
+and the opening rules):
+
+1. **Stage field.** The NC catalogue gains **Stage** (the eight stages: draft, open, contained, investigating, dispositioned, awaiting closure, closed, cancelled; the mapping
+   page's `map` step translates the source's words). Empty keeps today's behaviour (draft). Closed also takes **Closed on** (a date, from the source; empty = the import day)
+   and cancelled takes a **reason** (required by the table; default "Cancelled in <connection name>").
+2. **The insert rule.** The import sets a transaction-local flag (set only by `app.import_nonconformance`, like `app.ncr_source_change`) that lets the rules trigger accept those
+   stages on insert and stamp `closed_at` from the source. The cumulative stage gates (containment resolved, dispositions approved and covering the quantity) are a
+   BEFORE UPDATE trigger and are not involved in an insert, so a historical closed NC with no containment or disposition records is possible, as the grandfathered NCs
+   already are. From then on Fortress treats it normally: a reopened NC needs the gates again to close.
+3. **The opening rules still apply** to every stage past draft: a **category**, and the party for a customer or supplier source (and the other opening fields). A source
+   that lacks them has its row rejected with the reason. Proposed option: **"Category when the source has none"** (a combo of the organisation's categories) on the import
+   settings, so old data does not stall; off by default.
+4. **No flood.** An NC created open or closed raises `ncr.created` / `ncr.stage_changed` / `ncr.closed` events, which feed notifications and workflow rules ("NC raised",
+   "stage changed"). Thousands of historical records must not tell everyone or start rules. Precedent: a legacy calibration raises no event. The historical insert should
+   write the audit trail as now but **raise no event and no notice** (to be confirmed against the event and notification code when this slice is built).
+5. **Later changes in the source** (an NC closed in the source after the import) are **not** carried: NCs stay add-only and are managed in Fortress after arrival
+   (no matching, no updates). A one-off historical load is what this supports. Keeping status in step later is a different, larger decision (field ownership, the gates).
+
+**Decisions to confirm**
+
+| | Decision | Recommendation |
+|---|---|---|
+| CI-D9 | NC import takes a Stage (and closed date, cancelled reason) from the source | **Yes**, all eight stages allowed, empty = draft |
+| CI-D10 | Costs on closed or cancelled NCs | **Only NCs an import brought in**, behind an import setting, off by default (replaces CI-D3) |
+| CI-D11 | Rows without a category past draft | **Reject by default**; optional default category on the import settings |
+| CI-D12 | Historical stage inserts raise no events or notices | **Yes** |
+| CI-D13 | Source status changes after the import | **Not carried**; NCs are add-only |
+
+Slice order becomes: **IN-NC** (stage carry-over: migration, catalogue, importer, tests), then IC1–IC4 as in §5, with the cost importer's closed-NC setting added to IC1.
+

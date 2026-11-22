@@ -19,7 +19,8 @@
 -- The shared functions are rewritten from their live definitions by a checked text patch: the migration refuses to finish unless the old text is found exactly once.
 CREATE FUNCTION pg_temp.patch(p_fn regprocedure, p_old text, p_new text) RETURNS void
 LANGUAGE plpgsql AS $$
-DECLARE v_def text := pg_get_functiondef(p_fn); v_n integer;
+-- Line endings are normalised first: a function applied through the SQL editor from a Windows machine is stored with \r\n.
+DECLARE v_def text := replace(pg_get_functiondef(p_fn), E'\r', ''); v_n integer;
 BEGIN
   v_n := (length(v_def) - length(replace(v_def, p_old, ''))) / length(p_old);
   IF v_n <> 1 THEN RAISE EXCEPTION 'Expected to find % exactly once in %, found % times', p_old, p_fn, v_n; END IF;

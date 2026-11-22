@@ -1,6 +1,6 @@
 # Importing NC cost lines through the connectors — plan
 
-Status: **plan only, nothing built.** Decisions CI-D1, D2 and D4–D8 (§4) and CI-D9 to CI-D13 (§7) accepted by the owner 2026-11-22, all as recommended; **CI-D10 replaces CI-D3**: the owner wants to carry the
+Status: **IN-NC and IC1 (the database) built; IC2 to IC4 not yet.** Decisions CI-D1, D2 and D4–D8 (§4) and CI-D9 to CI-D13 (§7) accepted by the owner 2026-11-22, all as recommended; **CI-D10 replaces CI-D3**: the owner wants to carry the
 source's status over when importing NCs, so many NCs will arrive closed or cancelled. Written 2026-11-22.
 
 ## 1. What was asked
@@ -199,3 +199,15 @@ and the opening rules):
 
 Slice order becomes: **IN-NC** (stage carry-over: migration, catalogue, importer, tests), then IC1–IC4 as in §5, with the cost importer's closed-NC setting added to IC1.
 
+
+## 8. IC1 built (2026-11-22)
+
+Migration `20260421100000_ncr_cost_import.sql` (not yet applied live; apply it as one script, like the NC stage one; it strips `\r` before matching, so Windows line endings in live definitions are fine). SQL test `supabase/tests/ncr_cost_import.test.sql` (four deliberate breaks caught: the map check, the integration-source check, the permission check, the negative-amount check).
+What it holds, and the decisions it settled:
+- **`app.import_ncr_cost(org, id, data, connection, on_closed)`** (add only; catalogue keys `nonconformance` (link), `costType`, `description`, `incurredOn`, `currency`, `unitCost`, `quantity`, `vatTreatment`, `vatRate` (percent), `bookedValue`). It checks `ncr.update` at the NC's site itself, because the table's insert rule is not applied inside a definer function. Values are written through the table's own triggers, so amount, VAT and both rates are worked out exactly as for a typed line. A VAT treatment with no rate takes the organisation's; the percent is stored as a fraction rounded to six places.
+- **Closed and cancelled NCs (CI-D10):** the template setting is **`costsOnClosed`** (kept on the template version only for this kind; off unless chosen). `app.ncr_cost_import_may_edit(ncr)` is honoured by `app.assert_ncr_editable` only when a transaction-local switch is on AND the source is `integration` AND the NC has a row in the import map AND it is not deleted. A hand-made closed NC stays frozen whatever the setting says; a deleted one is never accepted.
+- **Booked value (CI-D5):** applied through `app.override_cost_rate(…, 'amount', …)` so the line is Actual and the published rate is kept as the estimate; ignored when the line is already in the site currency or costs nothing; it also settles a line that had no published rate.
+- **Link to the NC (CI-D2):** reference kind `nonconformance`, matched by the source's id (the import map, as for every kind) or by the Fortress reference ignoring case (`app.integration_find_by_code`); the list of allowed values includes NCs (reference, title, stage as the hint) for people who may read NCs.
+- **`app.integration_cost_run_summary(run)`** for the preview and the run page: lines, per currency how many have a published rate for their date into the site currency (so will not wait), how many go onto closed and onto cancelled NCs, how many carry a booked value, and how many written lines are still waiting for a rate.
+- Shared functions patched (checked text patches): entity types, write permission (`ncr.update`), add-only mode, template and connection settings, no disappearing records, stage matching, reference values and lookup.
+- **Not done in IC1 (IC2):** the API catalogue entry and `columns.ts`, the `nonconformance` ref kind in the API, importer registration, the template settings schema carrying `costsOnClosed`, pre-warming and settling exchange rates in the engine, the preview's currency summary endpoint.

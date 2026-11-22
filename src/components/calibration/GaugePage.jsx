@@ -48,6 +48,8 @@ import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 import { withVersion } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
+import { lockKey } from "../../lib/importLocks";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
@@ -191,6 +193,7 @@ const GaugePage = () => {
   const valid = form.assetNumber.trim() && form.description.trim() && numbersOk;
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
   const selectedType = (types ?? []).find((t) => t.id === form.gaugeTypeId);
+  const { lock } = useImportLocks("gauge", isNew ? null : gauge?.id);
 
   const save = () => {
     if (!valid) return;
@@ -233,12 +236,13 @@ const GaugePage = () => {
             then?.(v);
           },
           disabled: !canEdit,
+          ...lock(lockKey(name)),
         })
       }
     />
   );
   const text = (name, label, props = {}) => (
-    <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder={`Enter ${label.toLowerCase()}`} {...props} />
+    <TextInput label={label} value={form[name] ?? ""} onChange={set(name)} disabled={!canEdit} placeholder={`Enter ${label.toLowerCase()}`} {...lock(lockKey(name))} {...props} />
   );
   const numberInput = (name, label, props = {}) =>
     text(name, label, { inputMode: "decimal", error: isNum(form[name]) ? undefined : "Enter a number", placeholder: "—", ...props });
@@ -415,7 +419,7 @@ const GaugePage = () => {
                 ))}
                 {text("statusReason", "Status reason", { maxLength: 500, icon: AlignCenterIcon, placeholder: "Why (e.g. damaged anvil)" })}
                 <div className="lg:col-span-2">
-                  <RHFTextArea label="Notes" icon={AlignCenterIcon} value={form.notes} onChange={set("notes")} disabled={!canEdit} max={5000} rows={3} placeholder="Anything else about this gauge" />
+                  <RHFTextArea label="Notes" icon={AlignCenterIcon} value={form.notes} onChange={set("notes")} disabled={!canEdit} max={5000} rows={3} placeholder="Anything else about this gauge" {...lock("notes")} />
                 </div>
               </div>
               {isNew && (

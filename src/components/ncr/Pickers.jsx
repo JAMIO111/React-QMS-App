@@ -4,13 +4,15 @@ import RHFComboBox from "../ui/RHFComboBox";
 import { useParts, usePart, useParties } from "../../hooks/useMasterData";
 import { useNcrs } from "../../hooks/useNcr";
 import { useMachines } from "../../hooks/useProcessControl";
+import LockedMark from "../ui/LockedMark";
 
-export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxLength, className = "", required, hint }) => {
+export const TextAreaField = ({ label, value, onChange, disabled, rows = 3, maxLength, className = "", required, hint, lockedBy }) => {
   const id = useId();
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
       <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
+        {lockedBy && <LockedMark by={lockedBy} />}
       </label>
       <textarea
         id={id}

@@ -18,6 +18,8 @@ import AddressFields from "./AddressFields";
 import CompanyContactFields from "./CompanyContactFields";
 import { ADDRESS_DEFAULT_HIDDEN, addressColumns, companyContactColumns, currencyColumn } from "./addressColumns";
 import { addressBody, companyContactBody, EMPTY_ADDRESS, EMPTY_COMPANY_CONTACT } from "../../lib/address";
+import { useImportLocks } from "../../hooks/useImportLocks";
+import LockedMark from "../ui/LockedMark";
 
 /** The custom-field kind of record for each register. */
 const ENTITY_TYPES = { customers: "customer", suppliers: "supplier" };
@@ -36,6 +38,7 @@ const PartyForm = ({ kind, party, onDone }) => {
   const [form, setForm] = useState(party ? { ...emptyForm, ...Object.fromEntries(Object.entries(party).map(([k, v]) => [k, v ?? ""])) } : emptyForm);
   const [customValues, setCustomValues] = useState({});
   const [opened] = useState(party);
+  const { lock } = useImportLocks(ENTITY_TYPES[kind], party?.id);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const pick = (k) => (v) => setForm((f) => ({ ...f, [k]: v ?? null }));
   const label = LABELS[kind].one;
@@ -73,26 +76,30 @@ const PartyForm = ({ kind, party, onDone }) => {
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Code" value={form.code} onChange={set("code")} required maxLength={20} pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,19}" hint="Short reference, e.g. ACME" />
-        <Field label="Name" value={form.name} onChange={set("name")} required maxLength={200} />
-        <Field label="Display name" value={form.displayName} onChange={set("displayName")} maxLength={100} hint="Shown in lists (optional)" />
-        <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} />
-        <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} />
-        <CompanyContactFields form={form} set={set} />
-        <AddressFields form={form} set={set} pick={pick} />
+        <Field label="Code" value={form.code} onChange={set("code")} required maxLength={20} pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,19}" hint="Short reference, e.g. ACME" {...lock("code")} />
+        <Field label="Name" value={form.name} onChange={set("name")} required maxLength={200} {...lock("name")} />
+        <Field label="Display name" value={form.displayName} onChange={set("displayName")} maxLength={100} hint="Shown in lists (optional)" {...lock("displayName")} />
+        <Field label="Company number" value={form.companyNumber} onChange={set("companyNumber")} maxLength={40} {...lock("companyNumber")} />
+        <Field label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} maxLength={40} {...lock("vatNumber")} />
+        <CompanyContactFields form={form} set={set} lock={lock} />
+        <AddressFields form={form} set={set} pick={pick} lock={lock} />
       </div>
       <label className="flex flex-col gap-1 text-sm font-medium text-primary-text">
-        Notes
+        <span>
+          Notes
+          {lock("notes").lockedBy && <LockedMark by={lock("notes").lockedBy} />}
+        </span>
         <textarea
           value={form.notes}
           onChange={set("notes")}
+          disabled={!!lock("notes").lockedBy}
           maxLength={2000}
           rows={3}
           className="rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary"
         />
       </label>
       {party && (
-        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")}>
+        <Switch className="text-sm text-primary-text" checked={form.active} onChange={set("active")} {...lock("active")}>
           Active (inactive {label}s are hidden from pickers)
         </Switch>
       )}

@@ -15,6 +15,7 @@ import { changeRecord, patchFields } from "../../lib/guessRequest";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
+import { useImportLocks } from "../../hooks/useImportLocks";
 
 /**
  * The employee's sign-in account: who they are linked to, and (for people with a Controller seat only) link or unlink. The database enforces
@@ -112,6 +113,7 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
     setForm((f) => ({ ...f, departmentId, siteId: departmentId ? (allDepartments.find((d) => d.id === departmentId)?.siteId ?? f.siteId) : f.siteId }));
 
   const [opened] = useState(employee);
+  const { lock } = useImportLocks("employee", employee?.id);
   const submit = (e) => {
     e.preventDefault();
     const body = {
@@ -147,11 +149,11 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
       <form onSubmit={submit} className="flex flex-col gap-4" aria-label={creating ? "New employee" : "Edit employee"}>
         <fieldset disabled={readOnly} className="contents">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="First name" value={form.firstName} onChange={set("firstName")} required maxLength={100} />
-          <Field label="Surname" value={form.surname} onChange={set("surname")} required maxLength={100} />
-          <Field label="Job title" value={form.jobTitle} onChange={set("jobTitle")} maxLength={100} />
-          <Field label="Employee number" value={form.employeeNumber} onChange={set("employeeNumber")} maxLength={40} hint="Unique in the organisation, e.g. E-0042" />
-          <Field label="Work email" type="email" value={form.email} onChange={set("email")} maxLength={200} className="sm:col-span-2" />
+          <Field label="First name" value={form.firstName} onChange={set("firstName")} required maxLength={100} {...lock("firstName")} />
+          <Field label="Surname" value={form.surname} onChange={set("surname")} required maxLength={100} {...lock("surname")} />
+          <Field label="Job title" value={form.jobTitle} onChange={set("jobTitle")} maxLength={100} {...lock("jobTitle")} />
+          <Field label="Employee number" value={form.employeeNumber} onChange={set("employeeNumber")} maxLength={40} hint="Unique in the organisation, e.g. E-0042" {...lock("employeeNumber")} />
+          <Field label="Work email" type="email" value={form.email} onChange={set("email")} maxLength={200} className="sm:col-span-2" {...lock("email")} />
           <RHFComboBox
             label="Site"
             icon={HouseIcon}
@@ -159,14 +161,15 @@ const EmployeeDialog = ({ employee, onClose, readOnly = false }) => {
             options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))}
             value={form.siteId}
             onChange={chooseSite}
+            {...lock("site")}
           />
-          <RHFComboBox label="Department" icon={FactoryIcon} placeholder="No department" options={departmentOptions} value={form.departmentId} onChange={chooseDepartment} />
+          <RHFComboBox label="Department" icon={FactoryIcon} placeholder="No department" options={departmentOptions} value={form.departmentId} onChange={chooseDepartment} {...lock("department")} />
         </div>
         </fieldset>
         {creating && <CustomFieldInputs entityType="employee" values={customValues} onChange={setCustomValues} />}
         {!creating && <SignInLink employee={employee} readOnly={readOnly} />}
         {!creating && (
-          <Switch className="text-sm text-primary-text" disabled={readOnly} checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}>
+          <Switch className="text-sm text-primary-text" disabled={readOnly} checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} {...lock("active")}>
             Active (inactive people are kept, and stay on past records, but are not offered for new ones)
           </Switch>
         )}

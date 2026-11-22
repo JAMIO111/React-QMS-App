@@ -117,6 +117,31 @@ describe("PartDetailPage", () => {
     expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["draft", "released", "superseded"]);
   });
 
+  it("disables the fields a scheduled import owns, with a tooltip saying which connection manages them", async () => {
+    routeApi({
+      "GET /parts/p1": detail,
+      "GET /customers": page([]),
+      "GET /import-locks": { data: [{ field: "name", connection: { id: "k1", name: "ERP" } }, { field: "active", connection: { id: "k1", name: "ERP" } }] },
+    });
+    renderAt("/Parts/p1");
+    const name = await screen.findByRole("textbox", { name: /^Name/ });
+    expect(await screen.findAllByRole("button", { name: "Managed by ERP" })).toHaveLength(2);
+    expect(name).toBeDisabled();
+    expect(screen.getByLabelText("Part number")).toBeEnabled();
+    expect(screen.getByLabelText("Description")).toBeEnabled();
+    expect(screen.getByRole("switch", { name: /Active/ })).toBeDisabled();
+    expect(apiFetch).toHaveBeenCalledWith("/import-locks?entityType=part&recordId=p1", expect.anything());
+    await userEvent.hover(screen.getAllByRole("button", { name: "Managed by ERP" })[0]);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/Managed by ERP.*updates this field on a schedule/);
+  });
+
+  it("locks nothing when no import manages the part", async () => {
+    routeApi({ "GET /parts/p1": detail, "GET /customers": page([]), "GET /import-locks": { data: [] } });
+    renderAt("/Parts/p1");
+    expect(await screen.findByLabelText("Name")).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Managed by/ })).toBeNull();
+  });
+
   it("releases a draft after confirming, explaining what is superseded", async () => {
     const posted = [];
     routeApi({

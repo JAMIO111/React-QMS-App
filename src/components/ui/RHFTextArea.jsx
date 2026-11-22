@@ -1,5 +1,6 @@
 import { forwardRef, useId } from "react";
 import { CircleAlertIcon, XIcon } from "@/components/icons";
+import LockedMark from "./LockedMark";
 
 const RHFTextAreaInput = forwardRef(
   (
@@ -8,6 +9,7 @@ const RHFTextAreaInput = forwardRef(
       onChange,
       placeholder = "Enter text...",
       label,
+      lockedBy,
       icon: Icon,
       rows = 5,
       max = 1000,
@@ -30,6 +32,7 @@ const RHFTextAreaInput = forwardRef(
             className="block mb-1 text-sm font-medium text-secondary-text"
             data-required={required || undefined}>
             {label}
+            {lockedBy && <LockedMark by={lockedBy} />}
           </label>
         )}
         {/* Same frame as TextInput: border, darker on hover, brand border + soft ring when focused. */}

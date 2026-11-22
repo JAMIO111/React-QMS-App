@@ -8,6 +8,7 @@ import { useTablePreferences } from "../../hooks/useTablePreferences";
 import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
 import { useColumnSizingInfo } from "../../hooks/useColumnSizingInfo";
 import { describeApiError } from "../../lib/api-client";
+import LockedMark from "../ui/LockedMark";
 
 /** Search box whose value is passed on after typing pauses. */
 export const SearchBox = ({ label, onSearch, delay = 300 }) => {
@@ -120,12 +121,13 @@ const selectClass =
   "h-9.5 rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text hover:border-border-dark-color focus:outline-none focus:border-brand-primary disabled:opacity-60";
 
 /** Labelled native select. options: [{ value, label }]; an empty value means "none". */
-export const SelectField = ({ label, value, onChange, options, placeholder = "— None —", required = false, disabled = false, hint, className = "" }) => {
+export const SelectField = ({ label, value, onChange, options, placeholder = "— None —", required = false, disabled = false, hint, className = "", lockedBy }) => {
   const id = useId();
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
       <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
+        {lockedBy && <LockedMark by={lockedBy} />}
       </label>
       <select
         id={id}

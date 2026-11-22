@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { format, isValid, parseISO } from "date-fns";
 import RHFDatePicker from "./RHFDatePicker";
 import { CalendarIcon, CircleAlertIcon, XIcon } from "@/components/icons";
+import LockedMark from "./LockedMark";
 
 /** Accepts a Date, an ISO date ("2026-11-03") or a timestamp string; ISO dates are read as local days. */
 const toDate = (value) => {
@@ -39,6 +40,7 @@ const RHFDatePickerPopout = ({
   name,
   ref,
   label = "Date",
+  lockedBy,
   placeholder = "Select a Date",
   hint,
   error,
@@ -151,6 +153,7 @@ const RHFDatePickerPopout = ({
     <div ref={wrapperRef} className={`relative flex h-fit w-full min-w-0 flex-col gap-1 ${className}`}>
       <label htmlFor={id} onClick={(e) => e.preventDefault()} className="text-sm font-medium text-secondary-text" data-required={required || undefined}>
         {label}
+        {lockedBy && <LockedMark by={lockedBy} />}
       </label>
       <div className="relative">
         <button

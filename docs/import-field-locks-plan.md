@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: LK1 (database) and LK2 (API) built and tested; LK3–LK4 not started. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1 (database), LK2 (API) and LK3 (forms) built and tested; LK4 not started. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 
@@ -95,6 +95,10 @@ Migration `20260418100000_import_field_locks.sql`, test `supabase/tests/import_f
 ## 8b. LK2 as built
 
 `GET /import-locks?entityType&recordId` (`api/src/integrations/import-locks.*`, any member; `{ data: [{ field, connection: { id, name } }] }`, 400 for a kind that is never locked) and `QM033` → `409 field_managed_by_import` with `details { fields, connection }` (`common/database-errors.ts`). Test `api/test/import-locks.e2e-spec.ts` (8 cases: no lock while manual, listed once scheduled, refused with details, unmapped and unchanged values save, unmanaged record free, other organisation told nothing, unlocks at once) and a sweep query in `tenancy-sweep.e2e-spec.ts`.
+
+## 8c. LK3 as built
+
+`ui/Tooltip.jsx` (hover and keyboard focus, Escape closes, `data-popover` portal), `ui/LockedMark.jsx` (a lock button beside the label that carries the tooltip), `lib/importLocks.js` (`lockMessage`, `lockKey`: a form's own name → the catalogue key, e.g. `siteId` → `site`), `hooks/useImportLocks.js` (`lock("name")` → `{ lockedBy, disabled: true }` or `{}`). `lockedBy` is accepted by `Field`, `TextInput`, `RHFComboBox` (so `ComboField` and the pickers), `RHFDatePickerPopout`, `RHFTextArea`, `TextAreaField`, `Switch` and `SelectField`; `AddressFields` and `CompanyContactFields` take a `lock` function. Wired into: customers and suppliers dialog, the supplier quality dialog, part details, machines, employees, gauge types (Settings), the gauge page and the production order dialog. An accessible name of a locked field reads "Name Managed by ERP" (the lock's label is inside the field's label). Tests `ui/LockedFields.test.jsx` and two in `master-data/MasterData.test.jsx`. Row actions and registers rely on the database refusal and show its message.
 
 ## 9. Slices
 

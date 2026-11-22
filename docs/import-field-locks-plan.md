@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: planned, nothing built. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1 (database) built and tested; LK2–LK4 not started. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 
@@ -25,7 +25,7 @@ A field of a record is **locked** when all of these hold, worked out live, never
 
 1. the record has a row in `integration_external_records` for connection C and kind K;
 2. C is `active` (not draft, ready, paused or retired);
-3. `integration_import_settings` for (C, K) has `schedule <> 'manual'` and `write_mode` is `add_update` or `update_only`;
+3. `integration_import_settings` for (C, K) has `schedule <> 'manual'` and the schedule's template version writes with `add_update` or `update_only` (a template always records its write mode, and a run takes it over the connection's, so the connection's own setting does not matter);
 4. the schedule's template (`template_id`, its **current** version) maps that field and its ownership is source wins (absent).
 
 Consequences, all deliberate:
@@ -87,6 +87,10 @@ Migration `2026…_import_field_locks.sql` (SQL test `supabase/tests/import_fiel
 
 Purchase order lines (agreed date), part revisions, bulk or register inline edits getting the disabled state up front, a per-record "unlock once"
 override, a notice when a person edits a field that is about to be locked.
+
+## 8a. LK1 as built
+
+Migration `20260418100000_import_field_locks.sql`, test `supabase/tests/import_field_locks.test.sql` (eight deliberate breaks caught; the ninth, removing the `is_member` check, is redundant because `has_permission_somewhere` repeats it), drift tests added to `api/test/integration-catalogue-drift.e2e-spec.ts`. The import's marker is `app.source = 'integration'` (set by `app.system_import_record`), error code `QM033` (unused before). Lookup index `integration_external_records_entity_internal_idx`. `app.integration_field_columns` and `app.integration_lock_table` are not callable by people.
 
 ## 9. Slices
 

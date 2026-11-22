@@ -10,7 +10,7 @@ export const lockKey = (name) => name.replace(/(Id|Code)$/, "");
 
 /** The kinds of record the database guards (the same eight tables as `app.integration_lock_table`). */
 export const LOCKABLE_KINDS = ["supplier", "customer", "part", "machine", "employee", "gauge_type", "gauge", "production_order"];
-/** Catalogue fields that fill another table (a part's revision) or a custom value: the guard does not cover them, so they are never locked. */
+/** Catalogue fields that fill another table (a part's revision): the guard does not cover them, so they are never locked. Custom fields (`cf_<key>`) are covered by `app.set_custom_values`. */
 const NOT_GUARDED = { part: ["revision"] };
 
 /**
@@ -21,6 +21,6 @@ export const fieldsOwnedBySource = (entityType, version) => {
   if (!LOCKABLE_KINDS.includes(entityType) || !["add_update", "update_only"].includes(version?.settings?.writeMode)) return [];
   const skip = NOT_GUARDED[entityType] ?? [];
   return (version.fields ?? [])
-    .filter((f) => f.target && !String(f.target).startsWith("cf_") && !skip.includes(f.target) && !["qms_wins", "manual_review"].includes(f.ownership))
+    .filter((f) => f.target && !skip.includes(f.target) && !["qms_wins", "manual_review"].includes(f.ownership))
     .map((f) => f.target);
 };

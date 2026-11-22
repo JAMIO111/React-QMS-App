@@ -109,17 +109,17 @@ describe("fields a schedule locks", () => {
     id: "t1", name: "Plant machines", entityType: "machine", currentVersion: 2, canManage: true,
     current: { version: 2, keyField: "Id", fields, settings: { writeMode, matchExisting: false }, current: true },
   });
-  const entities = { data: [{ entityType: "machine", label: "Machines", fields: [{ key: "code", label: "Code" }, { key: "name", label: "Name" }, { key: "description", label: "Description" }] }] };
+  const entities = { data: [{ entityType: "machine", label: "Machines", fields: [{ key: "code", label: "Code" }, { key: "name", label: "Name" }, { key: "description", label: "Description" }, { key: "cf_serial_number", label: "Serial number", custom: true }] }] };
 
   it("lists the fields people cannot edit while the schedule is on, leaving out the ones Fortress or a reviewer owns", async () => {
     routeApi(pageRoutes({
       "GET /integrations/connections/c1/settings": { data: [scheduled] },
-      "GET /integrations/templates/t1": version([{ target: "code" }, { target: "name" }, { target: "description", ownership: "qms_wins" }, { target: "workCentre", ownership: "manual_review" }]),
+      "GET /integrations/templates/t1": version([{ target: "code" }, { target: "name" }, { target: "description", ownership: "qms_wins" }, { target: "workCentre", ownership: "manual_review" }, { target: "cf_serial_number" }]),
       "GET /integrations/entities": entities,
     }));
     renderAt("/Settings/Integrations/c1");
     const row = await screen.findByRole("listitem", { name: "Machines schedule" });
-    const note = await within(row).findByText(/people cannot edit Code, Name/);
+    const note = await within(row).findByText(/people cannot edit Code, Name, Serial number/);
     expect(note).toHaveTextContent("To keep a field editable, set it to “Fortress wins”");
     expect(within(row).getByText("These fields are locked in Fortress while this schedule is on")).toBeInTheDocument();
   });

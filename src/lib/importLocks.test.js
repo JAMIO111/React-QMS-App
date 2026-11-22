@@ -12,8 +12,8 @@ describe("fieldsOwnedBySource", () => {
     expect(fieldsOwnedBySource("nonconformance", version([{ target: "title" }]))).toEqual([]);
     expect(fieldsOwnedBySource("machine", undefined)).toEqual([]);
   });
-  it("leaves out custom fields and a part's revision, which the guard does not cover", () => {
-    expect(fieldsOwnedBySource("part", version([{ target: "partNumber" }, { target: "revision" }, { target: "cf_colour" }]))).toEqual(["partNumber"]);
+  it("leaves out a part's revision, which the guard does not cover, but counts custom fields, which set_custom_values guards", () => {
+    expect(fieldsOwnedBySource("part", version([{ target: "partNumber" }, { target: "revision" }, { target: "cf_colour" }, { target: "cf_grade", ownership: "qms_wins" }]))).toEqual(["partNumber", "cf_colour"]);
   });
   it("counts update-only as updating", () => {
     expect(fieldsOwnedBySource("supplier", version([{ target: "email" }], "update_only"))).toEqual(["email"]);

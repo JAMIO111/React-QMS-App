@@ -31,6 +31,8 @@ beforeAll(async () => {
   app = configureApp(nest, env);
   await app.init();
 
+  // A custom field on machines, so the template can map it like a column.
+  await api().post('/api/v1/custom-fields').set(await as(ids.ownerA)).send({ entityType: 'machine', fieldType: 'text', label: 'Serial number' }).expect(201);
   machineId = (await admin.query(`insert into public.machines (organisation_id, code, name) values ($1, 'CNC-1', 'Lathe') returning id`, [ids.orgA])).rows[0].id;
   handMachineId = (await admin.query(`insert into public.machines (organisation_id, code, name) values ($1, 'HAND-1', 'By hand') returning id`, [ids.orgA])).rows[0].id;
   const provider = (await admin.query(`select id from public.integration_providers where key = 'rest_api'`)).rows[0].id;
@@ -45,7 +47,12 @@ beforeAll(async () => {
   await admin.query(
     `insert into public.integration_template_versions (organisation_id, template_id, version, key_field, fields, settings)
      values ($1, $2, 1, 'Id', $3::jsonb, '{"writeMode": "add_update"}'::jsonb)`,
-    [ids.orgA, template, JSON.stringify([{ target: 'code', source: 'Code' }, { target: 'name', source: 'Name' }, { target: 'description', source: 'Desc', ownership: 'qms_wins' }])],
+    [ids.orgA, template, JSON.stringify([
+      { target: 'code', source: 'Code' },
+      { target: 'name', source: 'Name' },
+      { target: 'description', source: 'Desc', ownership: 'qms_wins' },
+      { target: 'cf_serial_number', source: 'Serial' },
+    ])],
   );
   await admin.query(`insert into public.integration_import_settings (organisation_id, connection_id, entity_type, write_mode, schedule, template_id) values ($1, $2, 'machine', 'add_update', 'manual', $3)`, [
     ids.orgA,
@@ -81,6 +88,7 @@ describe('import field locks', () => {
     await setSchedule('daily');
     const res = await locks();
     expect(res.body.data).toEqual([
+      { field: 'cf_serial_number', connection: { id: connectionId, name: 'ERP' } },
       { field: 'code', connection: { id: connectionId, name: 'ERP' } },
       { field: 'name', connection: { id: connectionId, name: 'ERP' } },
     ]);
@@ -100,6 +108,23 @@ describe('import field locks', () => {
     await api().patch(`/api/v1/machines/${machineId}`).set(await as(ids.ownerA)).send({ description: 'Mine', name: 'Lathe (edited)' }).expect(200);
     const after = await admin.query(`select description from public.machines where id = $1`, [machineId]);
     expect(after.rows[0].description).toBe('Mine');
+  });
+
+  it('refuses a change to a locked custom field and lets the others through', async () => {
+    const put = async (values: Record<string, unknown>, id = machineId) => api().put(`/api/v1/custom-values/${id}`).set(await as(ids.ownerA)).send({ entityType: 'machine', values });
+    const res = await put({ serial_number: 'SN-2' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('field_managed_by_import');
+    expect(res.body.error.details).toEqual({ fields: ['cf_serial_number'], connection: 'ERP' });
+    expect(res.body.error.message).toContain('Serial number');
+    const after = await admin.query(`select "values" from public.custom_field_values where record_id = $1`, [machineId]);
+    expect(after.rows.length).toBe(0);
+    // the same record's other custom field is free once it exists; an unchanged (empty) save of the locked one does not count as a change
+    await api().post('/api/v1/custom-fields').set(await as(ids.ownerA)).send({ entityType: 'machine', fieldType: 'text', label: 'Cell' }).expect(201);
+    await put({ cell: 'C3' }).then((r) => expect(r.status).toBe(200));
+    await put({ cell: 'C3', serial_number: null }).then((r) => expect(r.status).toBe(200));
+    // a record the import does not manage is free
+    await put({ serial_number: 'By hand' }, handMachineId).then((r) => expect(r.status).toBe(200));
   });
 
   it('says nothing about a record no import manages', async () => {
@@ -123,5 +148,6 @@ describe('import field locks', () => {
     await setSchedule('manual');
     expect((await locks()).body).toEqual({ data: [] });
     await api().patch(`/api/v1/machines/${machineId}`).set(await as(ids.ownerA)).send({ name: 'Renamed by hand' }).expect(200);
+    await api().put(`/api/v1/custom-values/${machineId}`).set(await as(ids.ownerA)).send({ entityType: 'machine', values: { serial_number: 'SN-3' } }).expect(200);
   });
 });

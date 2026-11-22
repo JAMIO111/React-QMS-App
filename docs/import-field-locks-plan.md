@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: LK1–LK4 built and tested, migration applied live 2026-11-22 (custom fields, part revisions and order lines are not covered); the browser journey passes with the lock steps. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1–LK4 built and tested, migration applied live 2026-11-22; custom fields (§8e) built on top, migration `20260419100000` not yet applied live; part revisions and order lines are not covered. The browser journey passes with the lock steps (it does not cover custom fields). Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 
@@ -79,7 +79,7 @@ Migration `2026…_import_field_locks.sql` (SQL test `supabase/tests/import_fiel
 
 - Mapping page ownership choice: words that say what each means for people ("Source wins: while a schedule is on, this field cannot be edited in
   Fortress"). Schedule card: "While this schedule is on, N fields on the records it manages cannot be edited in Fortress", with the list.
-- Custom fields (`cf_<key>`) lock the same way in the More details card (the guard on `set_custom_values`), if the first slices go cleanly.
+- Custom fields (`cf_<key>`) lock the same way in the More details card (the guard on `set_custom_values`): built after LK4, see §8e.
 - Journey step: schedule on, open a managed record, the field is disabled with its tooltip and a direct API edit is refused; schedule off, it edits.
 - CLAUDE.md entry, exit notes in this file.
 
@@ -103,6 +103,10 @@ Migration `20260418100000_import_field_locks.sql`, test `supabase/tests/import_f
 ## 8d. LK4 as built
 
 Ownership words on the mapping page now say what each choice means for people (source wins locks the field while a schedule is on; Fortress wins and review stay editable). The connection's Schedule card (`KeepHealthy.jsx`) lists, from the schedule's template, the fields people cannot edit (`fieldsOwnedBySource` in `lib/importLocks.js`: source-wins fields of an updating template for the eight guarded kinds, leaving out custom fields and a part's revision). The journey (`importFromApi` in `scripts/journey/journey.cjs`) saves the API template as "Add new and update existing", switches a daily schedule on, sees the note, opens a machine whose name is locked (disabled, lock with tooltip), edits an unmapped field, has the database refuse a direct change (`QM033`), switches the schedule off and sees the field free. **Custom field locks were left out**: they need the same guard on `app.set_custom_values` and a lock in the More details card, so they are a separate small slice if wanted.
+
+## 8e. Custom field locks as built
+
+Migration `20260419100000_custom_field_locks.sql`, test `supabase/tests/custom_field_locks.test.sql` (two deliberate breaks caught: the check in `app.set_custom_values` removed, and retired fields locked), `import-locks.e2e-spec.ts` extended. The rule is the same one, so there is still one definition: `app.integration_locked_internal` now returns a mapped `cf_<key>` too (when the organisation has an **active** custom field of that key on that kind of record) with no column, and the columns' guard trigger judges only the rows that have one. The check for people is in **`app.set_custom_values`**, the one door people write custom values through: for the signed-in person (not the import, not system SQL) it refuses a locked field whose value would change, after the value is checked and tidied like any save (so a form that sends the locked field back unchanged still saves), with `QM033`, the label in the message and `{fields: ["cf_<key>"], connection}` in the detail. The import goes through `app.write_custom_values`, which is not touched. `GET /import-locks` needed no change: it lists `cf_<key>` with the columns. UI: `CustomFieldsCard` asks `useImportLocks` (only when editable, on one of the eight lockable kinds) and disables a locked control with the lock mark beside its label; `fieldsOwnedBySource` now counts custom fields, and the Schedule card names them by their label (the entities catalogue carries it). Edge to know about: an import never clears a custom value (empty values are skipped), so a locked custom field the source leaves empty stays as it is; the ways out are the same as for any field (Fortress wins, schedule off). Not covered: the browser journey (it would need a custom field mapped through the wizard), part revisions and order lines.
 
 ## 9. Slices
 

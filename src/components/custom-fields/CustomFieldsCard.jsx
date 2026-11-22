@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useToast } from "../../contexts/ToastProvider";
 import { useCustomFieldPeople, useCustomFields, useSetCustomValues } from "../../hooks/useCustomFields";
+import { useImportLocks } from "../../hooks/useImportLocks";
 import { describeApiError } from "../../lib/api-client";
 import { formatCustomValue, groupBySection, isMissing, requiredLabel } from "../../lib/customFields";
+import { LOCKABLE_KINDS } from "../../lib/importLocks";
 import ComboField from "../ui/ComboField";
+import LockedMark from "../ui/LockedMark";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import Switch from "../ui/Switch";
 
@@ -11,7 +14,7 @@ const inputClass =
   "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text outline-none hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20 disabled:opacity-60";
 
 /** A text box that saves when left (or Enter, for one line) if its text changed. */
-const TextEditor = ({ id, field, value, onSave, multiline, inputMode, required, describedBy }) => {
+const TextEditor = ({ id, field, value, onSave, multiline, inputMode, required, describedBy, disabled }) => {
   const [text, setText] = useState(value == null ? "" : String(value));
   useEffect(() => setText(value == null ? "" : String(value)), [value]);
   const commit = () => {
@@ -26,6 +29,7 @@ const TextEditor = ({ id, field, value, onSave, multiline, inputMode, required, 
     className: inputClass,
     "aria-required": required || undefined,
     "aria-describedby": describedBy,
+    disabled,
   };
   return multiline ? (
     <textarea rows={3} maxLength={5000} {...props} />
@@ -45,8 +49,12 @@ const TextEditor = ({ id, field, value, onSave, multiline, inputMode, required, 
   );
 };
 
-/** One field: its control by type when it can be changed, else its value as words. */
-const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
+/**
+ * One field: its control by type when it can be changed, else its value as words. `lock` (from useImportLocks) says which custom fields a scheduled
+ * import owns right now (`cf_<key>`): those are disabled with the lock and its tooltip, and the database refuses a change anyway.
+ */
+const FieldRow = ({ field, value, editable, people, stages, onSave, lock }) => {
+  const { lockedBy, disabled } = lock?.(`cf_${field.key}`) ?? {};
   const id = `cf-${field.id}`;
   const rule = requiredLabel(field.requiredAt, stages);
   const required = field.requiredAt === "save";
@@ -58,6 +66,7 @@ const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
       {field.label}
       {field.fieldType === "number" && field.unit ? ` (${field.unit})` : ""}
       {!field.active && <span className="ml-1 text-xs font-normal">(retired)</span>}
+      {lockedBy && <LockedMark by={lockedBy} />}
     </span>
   );
 
@@ -76,7 +85,7 @@ const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
   switch (field.fieldType) {
     case "boolean":
       control = (
-        <Switch checked={value === true} onChange={(e) => onSave(e.target.checked)} aria-label={field.label} aria-describedby={helpId}>
+        <Switch checked={value === true} onChange={(e) => onSave(e.target.checked)} disabled={disabled} aria-label={field.label} aria-describedby={helpId}>
           <span className="text-sm text-primary-text">{value === true ? "Yes" : "No"}</span>
         </Switch>
       );
@@ -91,16 +100,17 @@ const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
           valueFormat="iso"
           clearable={!required}
           onChange={(v) => onSave(v || null)}
+          {...(lockedBy ? { lockedBy, disabled: true } : {})}
         />
       );
     case "choice": {
       const options = field.options.filter((o) => o.active || o.key === value).map((o) => ({ value: o.key, label: o.label, hint: o.active ? undefined : "Switched off" }));
-      return <ComboField label={field.label} required={required} hint={help || undefined} value={value ?? null} onChange={(v) => onSave(v)} options={options} placeholder="Choose…" />;
+      return <ComboField label={field.label} required={required} hint={help || undefined} value={value ?? null} onChange={(v) => onSave(v)} options={options} placeholder="Choose…" {...(lockedBy ? { lockedBy, disabled: true } : {})} />;
     }
     case "person": {
       const options = (people.list ?? []).map((p) => ({ value: p.id, label: p.name }));
       if (value && !options.some((o) => o.value === value)) options.push({ value, label: people.byId[value] ?? "Someone who has left", hint: "No longer a member" });
-      return <ComboField label={field.label} required={required} hint={help || undefined} value={value ?? null} onChange={(v) => onSave(v)} options={options} placeholder="Choose a person…" />;
+      return <ComboField label={field.label} required={required} hint={help || undefined} value={value ?? null} onChange={(v) => onSave(v)} options={options} placeholder="Choose a person…" {...(lockedBy ? { lockedBy, disabled: true } : {})} />;
     }
     case "multi_choice": {
       const chosen = Array.isArray(value) ? value : [];
@@ -114,8 +124,9 @@ const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
                 key={o.key}
                 type="button"
                 aria-pressed={on}
+                disabled={disabled}
                 onClick={() => onSave(on ? chosen.filter((k) => k !== o.key) : [...chosen, o.key])}
-                className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors ${on ? "border-brand-primary bg-brand-primary/15 text-primary-text" : "border-border-color text-secondary-text hover:border-border-dark-color"}`}>
+                className={`${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"} rounded-full border px-2.5 py-1 text-xs transition-colors ${on ? "border-brand-primary bg-brand-primary/15 text-primary-text" : "border-border-color text-secondary-text hover:border-border-dark-color"}`}>
                 {o.label}
               </button>
             );
@@ -135,6 +146,7 @@ const FieldRow = ({ field, value, editable, people, stages, onSave }) => {
           inputMode={field.fieldType === "number" ? "decimal" : undefined}
           required={required}
           describedBy={helpId}
+          disabled={disabled}
         />
       );
   }
@@ -170,6 +182,7 @@ const CustomFieldsCard = ({ entityType, record, editable = false, title = "More 
   const { data: peopleList } = useCustomFieldPeople({ enabled: needsPeople });
   const people = { list: peopleList ?? [], byId: Object.fromEntries((peopleList ?? []).map((p) => [p.id, p.name])) };
   const mutation = useSetCustomValues(entityType, record?.id);
+  const { lock } = useImportLocks(editable && LOCKABLE_KINDS.includes(entityType) ? entityType : null, record?.id);
   const { showToast } = useToast();
 
   if (!record?.id || fields.length === 0) return null;
@@ -192,7 +205,7 @@ const CustomFieldsCard = ({ entityType, record, editable = false, title = "More 
           <div className="grid gap-4 sm:grid-cols-2">
             {g.fields.map((f) => (
               <div key={f.id} className={f.fieldType === "long_text" || f.fieldType === "multi_choice" ? "sm:col-span-2" : ""}>
-                <FieldRow field={f} value={values[f.key]} editable={editable} people={{ ...people, ...people.byId }} stages={stages} onSave={(v) => save(f, v)} />
+                <FieldRow field={f} value={values[f.key]} editable={editable} people={{ ...people, ...people.byId }} stages={stages} onSave={(v) => save(f, v)} lock={lock} />
               </div>
             ))}
           </div>

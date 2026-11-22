@@ -24,6 +24,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
 import { KEY_GUESS, SaveTemplateDialog, TemplateSettingsCard } from "./CsvImportWizard";
+import { CostCurrencyNotice } from "./CostImportParts";
 import MappingStep from "./MappingStep";
 import { Failed, useAsk, Waiting } from "./database/agentAsk";
 import ProviderLogo from "./ProviderLogo";
@@ -288,6 +289,7 @@ const ApiMappingPage = () => {
                     rows={form.rows}
                     onRows={(rows) => setForm({ ...form, rows })}
                     readOnly={!canRun}
+                    notice={entityType === "ncr_cost" ? <CostCurrencyNotice /> : null}
                     advanced={advanced}
                     problems={problems}
                     source={isFolder ? "file" : isAgentApi ? "api" : isDb ? "database" : "api"}

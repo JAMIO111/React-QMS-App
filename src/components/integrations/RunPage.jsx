@@ -14,6 +14,7 @@ import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
 import StatTile from "../ui/StatTile";
 import { MissingCard } from "./KeepHealthy";
+import CostRunCard from "./CostImportParts";
 
 import { ErrorNotice, TextAreaField } from "../master-data/shared";
 import { RunStatusPill } from "./ImportsCard";
@@ -219,6 +220,7 @@ const RunPage = () => {
         </MenuCard>
       )}
 
+      {run.entityType === "ncr_cost" && <CostRunCard run={run} preview={preview} />}
       {run.missing?.held > 0 || run.missing?.listed > 0 ? <MissingCard runId={run.id} /> : null}
       <RowsCard run={run} />
       {cancelling && (

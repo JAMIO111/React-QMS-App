@@ -1,7 +1,7 @@
 import { useState } from "react";
 import ReferenceValuesDialog, { ReferenceCheckLine } from "./ReferenceValues";
 import { ArrowRightIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CircleAlertIcon, CircleCheckIcon, MinusIcon } from "@/components/icons";
-import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, OWNERSHIP_HINTS, TRANSFORM_OPTIONS, ownershipOptions, rowHasSource } from "../../lib/integrations";
+import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, OWNERSHIP_HINTS, TRANSFORM_OPTIONS, matchHint, ownershipOptions, rowHasSource } from "../../lib/integrations";
 import SlidingToggle from "../ui/SlidingToggle";
 import FormulaEditor from "./FormulaEditor";
 import StepEditor from "./StepEditor";
@@ -132,7 +132,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly, words }) => (
           value={row.match}
           onChange={(v) => set({ match: v ?? "code" })}
           options={MATCH_OPTIONS}
-          hint={row.match === "source" ? words.matchSource : "The code as it is in Fortress"}
+          hint={matchHint(field.ref.kind, row.match, words.matchSource)}
           required
           disabled={readOnly}
         />
@@ -246,7 +246,7 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, references, sam
  * Reusable mapping editor: one row per Fortress field — field → column of the source = what the chosen record becomes. A row opens to show how the
  * value is cleaned. Required fields with no source are shown in red and counted in the banner. The caller keeps `rows` and `keyField`.
  */
-const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [], updates = false, source = "file" }) => {
+const MappingStep = ({ fields, columns, sample = [], preview = null, previewing = false, keyField, onKeyField, rows, onRows, readOnly = false, advanced = false, problems = [], updates = false, source = "file", notice = null }) => {
   const words = SOURCE_WORDS[source] ?? SOURCE_WORDS.file;
   const [at, setAt] = useState(0);
   const colOptions = columns.map((c) => ({ value: c, label: c }));
@@ -257,6 +257,7 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
   const missing = fields.filter((f, i) => f.required && !rowHasSource(rows[i]));
   return (
     <div className="flex flex-col gap-3">
+      {notice}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ComboField
           label={words.keyLabel}

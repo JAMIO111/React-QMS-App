@@ -192,6 +192,7 @@ export const ENTITY_LABELS = {
   gauge: "Gauges",
   calibration: "Calibration records (legacy)",
   nonconformance: "Non-conformances",
+  ncr_cost: "NC cost lines",
   production_order: "Production orders",
   purchase_order: "Purchase orders",
   goods_receipt: "Goods receipts",
@@ -402,6 +403,7 @@ export const recordPath = (entityType, id) =>
     gauge: `/Calibration/Gauges/${id}`,
     calibration: "/Calibration/Gauges",
     nonconformance: `/Non-Conformance/Register/${id}`,
+    ncr_cost: "/Non-Conformance/Register",
     production_order: `/Production/Orders/${id}`,
     purchase_order: "/Supplier-Quality/Purchase-Orders",
     goods_receipt: "/Supplier-Quality/Goods-Receipts",
@@ -433,6 +435,25 @@ export const OWNERSHIP_HINTS = {
 };
 /** The ownership choices for a field (`reviewable` false removes Review). */
 export const ownershipOptions = (field) => OWNERSHIP_OPTIONS.filter((o) => o.value !== "manual_review" || field?.reviewable !== false);
+
+/** Cost imports (cost-import-plan §10): what a run's currency summary says, in words. */
+export const costSummaryWords = (c) => {
+  if (!c) return null;
+  const waiting = (c.currencies ?? []).reduce((n, x) => n + (x.waiting ?? 0), 0);
+  const parts = [];
+  if (c.lines > 0) parts.push(waiting === 0 ? "every line has an exchange rate for its date" : waiting === 1 ? "1 line has no published rate yet" : `${waiting} lines have no published rate yet`);
+  return { waiting, sentence: parts.join("; ") };
+};
+
+/** The words next to the "Match by" choice, by what the link is to. */
+export const matchHint = (kind, match, sourceWords) => {
+  if (kind === "nonconformance") {
+    return match === "source"
+      ? "The id the non-conformance had in your source, from importing the non-conformances through this connection first"
+      : "The Fortress reference, such as SNC-26-0011";
+  }
+  return match === "source" ? sourceWords : "The code as it is in Fortress";
+};
 
 export const MATCH_OPTIONS = [
   { value: "code", label: "Fortress code" },
@@ -471,6 +492,7 @@ export const ENTITY_DESCRIPTIONS = {
   gauge: "Individual gauges. Import their old calibrations as legacy records so they do not show as uncalibrated.",
   calibration: "A gauge's past calibrations, as the old system concluded them (no readings). Each is marked legacy in Fortress and is only ever added.",
   nonconformance: "Historical non-conformances, with the stage your system gives them (a draft when it gives none).",
+  ncr_cost: "Cost lines for non-conformances already in Fortress, one row per line. Each is converted on its own date into the site's currency and the organisation's, and is only ever added.",
   production_order: "Works orders.",
   purchase_order: "Order lines placed with suppliers, one row per line.",
   goods_receipt: "Deliveries and returns, one row per transaction. Old deliveries are never sent for inspection.",

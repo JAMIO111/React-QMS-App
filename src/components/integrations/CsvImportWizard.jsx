@@ -34,6 +34,7 @@ import {
 } from "../../lib/integrations";
 import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
+import { CostCurrencyNotice } from "./CostImportParts";
 import { CheckIcon } from "@/components/icons";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -318,6 +319,7 @@ export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly 
     goods_receipt: "Deliveries are always added: one already imported is never changed by a later file.",
     po_receipt_total: "Totals are always added and updated: a higher total records a delivery of the increase.",
     nonconformance: "Non-conformances are always added as new records, never matched or updated. With no stage they arrive as drafts.",
+    ncr_cost: "Cost lines are always added: a line already imported is never changed by a later file. A correction is a new line; a credit is a supplier recovery or customer charge.",
   };
   return (
     <MenuCard title="What importing may do" subtitle={fixed ? why[entityType] : "Saved with the template."}>
@@ -327,6 +329,17 @@ export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly 
           <Switch checked={!!settings.matchExisting} onChange={(e) => onChange({ ...settings, matchExisting: e.target.checked })} disabled={readOnly || fixed}>Match records made by hand, by code</Switch>
         </div>
       </div>
+      {entityType === "ncr_cost" && (
+        <div className="mt-3 flex flex-col gap-1">
+          <Switch checked={!!settings.costsOnClosed} onChange={(e) => onChange({ ...settings, costsOnClosed: e.target.checked })} disabled={readOnly}>
+            Allow costs on closed or cancelled non-conformances
+          </Switch>
+          <p className="text-xs text-secondary-text">
+            Off, a line for a closed or cancelled non-conformance is rejected. On, it is accepted when an import brought that non-conformance in (for example a history load);
+            one made by hand in Fortress stays closed to new costs, and a deleted one never takes any.
+          </p>
+        </div>
+      )}
     </MenuCard>
   );
 };
@@ -538,6 +551,7 @@ const CsvImportWizard = () => {
                 rows={form.rows}
                 onRows={(rows) => setForm({ ...form, rows })}
                 readOnly={!canRun}
+                notice={entityType === "ncr_cost" ? <CostCurrencyNotice /> : null}
                 advanced={advanced}
                 problems={problems}
                 updates={!ADD_ONLY_KINDS.includes(entityType) && !ADD_UPDATE_KINDS.includes(entityType) && (form.settings?.writeMode ?? "add_only") !== "add_only"}

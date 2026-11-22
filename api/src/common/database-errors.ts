@@ -5,6 +5,7 @@ interface PgError {
   code?: string;
   constraint?: string;
   message?: string;
+  detail?: string;
 }
 
 function pgErrorOf(error: unknown): PgError | undefined {
@@ -143,6 +144,15 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'sso_rule', pg.message ?? 'That single sign-on change is not allowed');
     case 'QM032': // external portal rules: parties, invitations, access (messages are written for users)
       return new ApiError(409, 'portal_rule', pg.message ?? 'That change is not allowed for this portal access');
+    case 'QM033': { // import field locks: a person's change to a field a scheduled import owns (the database puts {fields, connection} in the detail)
+      let details: unknown;
+      try {
+        details = pg.detail ? JSON.parse(pg.detail) : undefined;
+      } catch {
+        details = undefined;
+      }
+      return new ApiError(409, 'field_managed_by_import', pg.message ?? 'That field is managed by an import and cannot be changed here', details);
+    }
     case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)
       return new ApiError(409, 'edit_conflict', 'Someone else changed this since you opened it');
     case 'QM010': // notification type the caller cannot choose

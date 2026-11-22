@@ -1,6 +1,6 @@
 # Import field locks — plan
 
-Status: LK1 (database) built and tested; LK2–LK4 not started. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
+Status: LK1 (database) and LK2 (API) built and tested; LK3–LK4 not started. Decision LK-D1 agreed 2026-11-22: **a field is locked only while a schedule is on.**
 
 ## 1. What the owner asked for
 
@@ -91,6 +91,10 @@ override, a notice when a person edits a field that is about to be locked.
 ## 8a. LK1 as built
 
 Migration `20260418100000_import_field_locks.sql`, test `supabase/tests/import_field_locks.test.sql` (eight deliberate breaks caught; the ninth, removing the `is_member` check, is redundant because `has_permission_somewhere` repeats it), drift tests added to `api/test/integration-catalogue-drift.e2e-spec.ts`. The import's marker is `app.source = 'integration'` (set by `app.system_import_record`), error code `QM033` (unused before). Lookup index `integration_external_records_entity_internal_idx`. `app.integration_field_columns` and `app.integration_lock_table` are not callable by people.
+
+## 8b. LK2 as built
+
+`GET /import-locks?entityType&recordId` (`api/src/integrations/import-locks.*`, any member; `{ data: [{ field, connection: { id, name } }] }`, 400 for a kind that is never locked) and `QM033` → `409 field_managed_by_import` with `details { fields, connection }` (`common/database-errors.ts`). Test `api/test/import-locks.e2e-spec.ts` (8 cases: no lock while manual, listed once scheduled, refused with details, unmapped and unchanged values save, unmanaged record free, other organisation told nothing, unlocks at once) and a sweep query in `tenancy-sweep.e2e-spec.ts`.
 
 ## 9. Slices
 

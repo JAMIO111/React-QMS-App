@@ -132,6 +132,8 @@ import { IntegrationFormulasController, IntegrationReferencesController, Integra
 import { IntegrationTemplatesService } from './integrations/integration-templates.service';
 import { IntegrationMonitorController } from './integrations/integration-monitor.controller';
 import { IntegrationMonitorService } from './integrations/integration-monitor.service';
+import { ImportLocksController } from './integrations/import-locks.controller';
+import { ImportLocksService } from './integrations/import-locks.service';
 import { IntegrationConflictsController } from './integrations/integration-conflicts.controller';
 import { IntegrationConflictsService } from './integrations/integration-conflicts.service';
 import { IntegrationFileStore, SupabaseIntegrationFileStore } from './integrations/core/file-store';
@@ -317,6 +319,7 @@ export class AppModule implements NestModule {
         IntegrationFilesController,
         IntegrationTemplatesController,
         IntegrationConflictsController,
+        ImportLocksController,
         IntegrationMonitorController,
         IntegrationFormulasController,
         IntegrationReferencesController,
@@ -433,6 +436,7 @@ export class AppModule implements NestModule {
         IntegrationFilesService,
         IntegrationTemplatesService,
         IntegrationConflictsService,
+        ImportLocksService,
         IntegrationMonitorService,
         { provide: IntegrationFileStore, useClass: SupabaseIntegrationFileStore },
         SyncEngine,

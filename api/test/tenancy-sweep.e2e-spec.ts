@@ -1647,6 +1647,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
       '/api/v1/traceability/search': '?q=WO',
       '/api/v1/saved-filters': '?scope=ncr_register',
+      '/api/v1/import-locks': `?entityType=part&recordId=${b.part}`,
       '/api/v1/custom-values': `?entityType=part&ids=${b.part}`,
       '/api/v1/goods-receipt-lines/lookup': `?supplierId=${b.supplier}`,
       '/api/v1/workflow-test-events': '?trigger=ncr.created',

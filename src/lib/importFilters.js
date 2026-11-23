@@ -121,3 +121,16 @@ export const filterColumns = (filter) => [...new Set((filter?.rules ?? []).map((
 
 /** The same filter, with a rule replaced, added or removed (kept free of the on-screen draft's empty rules by cleanFilter when saved). */
 export const withRule = (filter, i, change) => ({ ...filter, rules: filter.rules.map((r, j) => (j === i ? { ...r, ...change } : r)) });
+
+/** The share of records a filter leaves out, as a whole percent (0 when nothing was read). */
+export const leftOutShare = (filtered, total) => (total > 0 ? Math.round((filtered / total) * 100) : 0);
+
+/**
+ * What to tell someone whose filter keeps almost nothing (a warning, never a block): `none` when it keeps no record at all, `little` when it keeps under
+ * a tenth of 10 or more records, else null. Used by the filter step's preview and the run page, so both say the same.
+ */
+export const keepsLittle = (kept, total) => {
+  if (!(total > 0)) return null;
+  if (kept <= 0) return "none";
+  return total >= 10 && kept / total < 0.1 ? "little" : null;
+};

@@ -212,6 +212,27 @@ describe("import health", () => {
     expect(within(row).getByText(/2 rows to look at · 3 no longer in the source/)).toBeInTheDocument();
   });
 
+  it("flags a scheduled import whose filter left out every record, or nearly every record, that it read", async () => {
+    const row = (entityType, over) => ({ connectionId: "c1", connectionName: "Sage 200", connectionStatus: "active", providerKind: "api", entityType, schedule: "daily", onMissing: "nothing", template: null,
+      lastScheduledAt: null, scheduleProblem: null, lastSuccessAt: "2026-11-10T04:01:00Z", failedInARow: 0, rowsNeedingAction: 0, missingWaiting: 0, missingHeld: 0, conflictsOpen: 0, state: "attention", ...over });
+    const run = (recordsTotal, filtered) => ({ id: "r1", kind: "full", trigger: "schedule", status: "succeeded", requestedAt: "2026-11-10T04:00:00Z", finishedAt: "2026-11-10T04:01:00Z", errorSummary: null, nextAttemptAt: null, recordsTotal, filtered });
+    routeApi({
+      "GET /integrations/connections": { data: [] },
+      "GET /integrations/runs": { data: [], page: 1, pageSize: 8, total: 0 },
+      "GET /integrations/allowed-hosts": { hosts: [], canManage: true },
+      "GET /integrations/providers": { data: providers },
+      "GET /integrations/conflicts": { data: [], page: 1, pageSize: 1, total: 0, openCount: 0 },
+      "GET /integrations/health": {
+        data: [row("machine", { lastRun: run(40, 40), filterLeftOut: "all" }), row("part", { lastRun: run(50, 47), filterLeftOut: "most" }), row("supplier", { lastRun: run(50, 5), filterLeftOut: null, state: "ok" })],
+        counts: { ok: 1, attention: 2, failing: 0 },
+      },
+    });
+    renderAt("/Settings/Integrations");
+    expect(within(await screen.findByRole("listitem", { name: "Sage 200: Machines" })).getByText(/the filter left out every record read \(40\)/)).toBeInTheDocument();
+    expect(within(screen.getByRole("listitem", { name: "Sage 200: Parts" })).getByText(/the filter left out 94% of the records read/)).toBeInTheDocument();
+    expect(within(screen.getByRole("listitem", { name: "Sage 200: Suppliers" })).queryByText(/the filter left out/)).toBeNull();
+  });
+
   it("lists the connections, each with its provider's logo, above import health", async () => {
     const api = { id: "c1", provider: { key: "rest_api", name: "REST API", kind: "api" }, name: "Sage 200", externalSystem: "sage-200", status: "active" };
     const file = { id: "c2", provider: { key: "csv", name: "CSV / Excel file", kind: "file" }, name: "Supplier file", externalSystem: "files", status: "active" };

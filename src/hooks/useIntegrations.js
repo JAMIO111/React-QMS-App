@@ -74,12 +74,13 @@ export const useIntegrationRun = (runId) => {
 };
 
 /** The rows a run staged or worked on, filtered by status, a page at a time. */
-export const useIntegrationRunRows = (runId, status, page = 1) => {
+export const useIntegrationRunRows = (runId, status, page = 1, filtered = false) => {
   const { organisationId } = useOrganisation();
   const params = new URLSearchParams({ page: String(page), pageSize: "50" });
-  if (status) params.set("status", status);
+  if (filtered) params.set("filtered", "true");
+  else if (status) params.set("status", status);
   return useQuery({
-    queryKey: key(organisationId, "run-rows", runId, status ?? "all", page),
+    queryKey: key(organisationId, "run-rows", runId, filtered ? "filtered" : status ?? "all", page),
     queryFn: () => apiFetch(`${BASE}/runs/${runId}/rows?${params}`, { organisationId }),
     enabled: !!organisationId && !!runId,
     retry: false,

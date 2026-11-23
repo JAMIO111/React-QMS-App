@@ -160,6 +160,38 @@ describe('record filters', () => {
     // the filtered records are in the inbox marked as filtered, with the source's own identifier kept apart
     const marked = (await admin.query(`select filtered, source_external_id from public.integration_inbox where run_id = $1 and status = 'skipped' order by source_external_id`, [real.id])).rows;
     expect(marked).toEqual([{ filtered: true, source_external_id: 'F2' }, { filtered: true, source_external_id: 'F4' }, { filtered: true, source_external_id: 'F5' }]);
+    // the run page asks for them directly: only the filtered rows, each saying why, paged, with a true total
+    const listed = (await api().get(`${base}/runs/${real.id}/rows?filtered=true`).set(await owner()).expect(200)).body;
+    expect(listed.total).toBe(3);
+    expect(listed.data.every((r: { filtered: boolean; status: string }) => r.filtered && r.status === 'skipped')).toBe(true);
+    for (const r of listed.data as { errors: { message: string }[] }[]) expect(r.errors[0].message).toMatch(/^Filtered out: does not meet Status is "Active"/);
+    const paged = (await api().get(`${base}/runs/${real.id}/rows?filtered=true&pageSize=2&page=2`).set(await owner()).expect(200)).body;
+    expect(paged).toMatchObject({ total: 3, page: 2 });
+    expect(paged.data).toHaveLength(1);
+    // kept rows are marked as not filtered
+    const applied = (await api().get(`${base}/runs/${real.id}/rows?status=applied`).set(await owner()).expect(200)).body;
+    expect(applied.data.every((r: { filtered: boolean }) => r.filtered === false)).toBe(true);
+    // somebody who cannot read integrations sees none of it
+    await api().get(`${base}/runs/${real.id}/rows?filtered=true`).set(await inspector()).expect(403);
+    await api().get(`${base}/runs/${real.id}/rows?filtered=true`).set(await other()).expect(404);
+  });
+
+  it('flags in the health card an import whose filter left out everything, or nearly everything, that was read', async () => {
+    // the run just made by the previous test keeps F1 only (4 of 5 left out): not yet a flag (fewer than 10 records)
+    const health = async () => (await api().get(`${base}/health`).set(await owner()).expect(200)).body.data.find((h: { connectionId: string; entityType: string }) => h.connectionId === connId && h.entityType === 'machine');
+    const before = await health();
+    expect(before.lastRun).toMatchObject({ recordsTotal: 5 });
+    expect(before.filterLeftOut).toBeNull();
+    // a read that leaves out every record it read is flagged, whatever its size
+    await admin.query(`update public.integration_sync_runs set filtered = records_total, requested_at = now() + interval '1 day' where id = (select id from public.integration_sync_runs where connection_id = $1 and kind <> 'preview' order by requested_at desc limit 1)`, [connId]);
+    const all = await health();
+    expect(all.filterLeftOut).toBe('all');
+    expect(all.state).not.toBe('ok');
+    // 9 of 10 is "most"
+    await admin.query(`update public.integration_sync_runs set records_total = 10, filtered = 9 where id = (select id from public.integration_sync_runs where connection_id = $1 and kind <> 'preview' order by requested_at desc limit 1)`, [connId]);
+    expect((await health()).filterLeftOut).toBe('most');
+    await admin.query(`update public.integration_sync_runs set filtered = 8 where id = (select id from public.integration_sync_runs where connection_id = $1 and kind <> 'preview' order by requested_at desc limit 1)`, [connId]);
+    expect((await health()).filterLeftOut).toBeNull();
   });
 
   it('never calls a record the filter leaves out "no longer in the source"', async () => {

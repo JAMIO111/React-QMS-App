@@ -6,6 +6,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { ENTITY_LABELS, ROW_STATUS, RUN_KINDS, WRITE_MODE_LABELS, agentJobRunning, drainMessage, isLive, missingSummary, apiMappingPath, wizardPath } from "../../lib/integrations";
+import { keepsLittle, leftOutShare } from "../../lib/importFilters";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
@@ -49,11 +50,17 @@ const FILTERS = ["all", "failed", "rejected", "skipped", "applied", "unchanged",
 const RowsCard = ({ run }) => {
   const [filter, setFilter] = useState(run.counts.failed > 0 ? "failed" : "all");
   const [page, setPage] = useState(1);
-  const rows = useIntegrationRunRows(run.id, filter === "all" ? null : filter, page);
+  // "Filtered out" is the records the template's record filter left out (they are also skipped): their own list, with the reason each was left out.
+  const filteredOut = filter === "filtered";
+  const rows = useIntegrationRunRows(run.id, filter === "all" || filteredOut ? null : filter, page, filteredOut);
   const data = rows.data?.data ?? [];
   const total = rows.data?.total ?? 0;
-  const counts = { all: Object.values(run.rowsNow).reduce((a, b) => a + b, 0), ...run.rowsNow };
-  const options = FILTERS.filter((f) => f === "all" || counts[f] > 0).map((f) => ({ value: f, label: f === "all" ? "All" : ROW_STATUS[f], count: counts[f] }));
+  const counts = { all: Object.values(run.rowsNow).reduce((a, b) => a + b, 0), ...run.rowsNow, filtered: run.counts.filtered ?? 0 };
+  // Skipped rows the filter left out are not counted twice: "Skipped" is the rest.
+  counts.skipped = Math.max(0, (run.rowsNow.skipped ?? 0) - counts.filtered);
+  const options = [...FILTERS.slice(0, 4), "filtered", ...FILTERS.slice(4)]
+    .filter((f) => f === "all" || counts[f] > 0)
+    .map((f) => ({ value: f, label: f === "all" ? "All" : f === "filtered" ? "Filtered out" : ROW_STATUS[f], count: counts[f] }));
   return (
     <MenuCard title="Rows" subtitle="Every record the import read, and what happened to it.">
       <SlidingToggle ariaLabel="Show rows" options={options} value={filter} onChange={(v) => { setFilter(v); setPage(1); }} />
@@ -68,7 +75,8 @@ const RowsCard = ({ run }) => {
                 <span className="text-xs text-secondary-text">{ROW_STATUS[r.status]}{r.action ? ` (${r.status === "previewed" ? "would " : ""}${r.action})` : ""}</span>
               </div>
               {r.errors.map((e, i) => (
-                <p key={i} className="text-xs text-error-color">{e.field ? `${e.field}: ` : ""}{e.message}</p>
+                // A skipped row's reason (a filter, or the import settings) is information, not a fault.
+                <p key={i} className={`text-xs ${r.status === "skipped" ? "text-secondary-text" : "text-error-color"}`}>{e.field ? `${e.field}: ` : ""}{e.message}</p>
               ))}
               {r.payload ? (
                 <details className="text-xs">
@@ -113,6 +121,14 @@ const RunPage = () => {
   const run = query.data;
   const canRun = can("integrations.run");
   const preview = run.kind === "preview";
+  // A filter that keeps almost nothing is warned about, never blocked (F-D8).
+  const kept = (run.counts.total ?? 0) - (run.counts.filtered ?? 0);
+  const keeps = (run.counts.filtered ?? 0) > 0 ? keepsLittle(kept, run.counts.total) : null;
+  const filterWarning = keeps === "none"
+    ? { title: "The filter left out every record", text: `All ${run.counts.total} records read were left out, so nothing was imported.` }
+    : keeps === "little"
+      ? { title: "The filter left out almost every record", text: `Only ${kept} of ${run.counts.total} records were kept (${leftOutShare(kept, run.counts.total)}%). Check that this is what you meant.` }
+      : null;
   const live = isLive(run);
   const act = (action, body) =>
     mutation.mutate(
@@ -146,7 +162,8 @@ const RunPage = () => {
           <StatTile label={preview ? "Would be created" : "Created"} value={run.counts.created} />
           <StatTile label={preview ? "Would be updated" : "Updated"} value={run.counts.updated} />
           <StatTile label="Unchanged" value={run.counts.unchanged} note="Nothing written" />
-          {run.counts.skipped > 0 && <StatTile label="Skipped" value={run.counts.skipped} note="Left alone by the settings" />}
+          {run.counts.filtered > 0 && <StatTile label="Filtered out" value={run.counts.filtered} note={`${leftOutShare(run.counts.filtered, run.counts.total)}% left out by the filter`} />}
+          {run.counts.skipped - (run.counts.filtered ?? 0) > 0 && <StatTile label="Skipped" value={run.counts.skipped - (run.counts.filtered ?? 0)} note="Left alone by the settings" />}
           <StatTile label="Rejected" value={run.counts.rejected} note="Problems in the source" />
           {!preview && <StatTile label="Failed" value={run.counts.failed} note="Can be retried" />}
           {run.counts.parked > 0 && <StatTile label="To review" value={run.counts.parked} note="Values held back" />}
@@ -161,6 +178,11 @@ const RunPage = () => {
             title={run.counts.parked === 1 ? "1 value is waiting for review" : `${run.counts.parked} values are waiting for review`}
             action={<CTAButton to={`/Settings/Integrations/Review?run=${run.id}`} type="secondary" size="md">Review values</CTAButton>}>
             Fields set to Review were not changed where the source sent a different value. Accept a value to write it, or keep Fortress's.
+          </Callout>
+        )}
+        {filterWarning && (
+          <Callout tone="warning" className="mt-3" title={filterWarning.title}>
+            {filterWarning.text} The filter is part of the template{run.template ? ` (${run.template.name}, version ${run.template.version})` : ""}: change it in the mapping and save a new version.
           </Callout>
         )}
         {preview && <Callout tone="info" className="mt-3">A preview writes nothing. It shows what a real import would do now.</Callout>}

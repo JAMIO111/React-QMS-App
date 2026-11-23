@@ -10,6 +10,7 @@ import {
   MAX_FILTER_RULES,
   cleanFilter,
   filterColumns,
+  keepsLittle,
   filterWords,
   newFilter,
   newRule,
@@ -132,8 +133,13 @@ export const FilterResult = ({ preview, previewing, filter, total }) => {
           Their rows would be rejected, not skipped{preview.errors.first ? `: ${preview.errors.first}` : "."}
         </Callout>
       )}
-      {preview.problems.length === 0 && preview.scanned > 0 && preview.kept === 0 && (
+      {preview.problems.length === 0 && keepsLittle(preview.kept, preview.scanned) === "none" && (
         <Callout tone="warning" title="This filter keeps nothing">An import would read no records. Check the rules below.</Callout>
+      )}
+      {preview.problems.length === 0 && keepsLittle(preview.kept, preview.scanned) === "little" && (
+        <Callout tone="warning" title="This filter keeps almost nothing">
+          Only {preview.kept} of {preview.scanned} records ({share}%) would be read. If that is not what you expect, check the rules below. You can still go on.
+        </Callout>
       )}
       {preview.rules.length > 1 && (
         <ul className="flex flex-col gap-1 text-sm text-secondary-text" aria-label="Records each rule matches">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanFilter, filterWords, newFilter, ruleComplete, withRule } from "./importFilters";
+import { cleanFilter, filterWords, keepsLittle, leftOutShare, newFilter, ruleComplete, withRule } from "./importFilters";
 import { templateChanged, templateSettings } from "./importTemplates";
 
 describe("record filters", () => {
@@ -56,5 +56,17 @@ describe("record filters", () => {
     expect(templateChanged(version, { keyField: "id", fields: [], settings: templateSettings("supplier", draft) })).toBe(false);
     const done = { ...draft, filters: { mode: "keep", match: "all", rules: [{ column: "A", test: "equals", value: "1" }] } };
     expect(templateChanged(version, { keyField: "id", fields: [], settings: templateSettings("supplier", done) })).toBe(true);
+  });
+
+  it("works out when a filter keeps too little to be what was meant", () => {
+    expect(keepsLittle(0, 25)).toBe("none");
+    expect(keepsLittle(0, 1)).toBe("none");
+    expect(keepsLittle(4, 100)).toBe("little");
+    expect(keepsLittle(1, 10)).toBeNull(); // exactly a tenth is fine
+    expect(keepsLittle(0, 0)).toBeNull(); // nothing read, nothing to say
+    expect(keepsLittle(1, 9)).toBeNull(); // too few records to call it
+    expect(keepsLittle(60, 100)).toBeNull();
+    expect(leftOutShare(96, 100)).toBe(96);
+    expect(leftOutShare(0, 0)).toBe(0);
   });
 });

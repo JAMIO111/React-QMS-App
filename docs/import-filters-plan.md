@@ -19,7 +19,7 @@ A way, before the mapping, to filter out certain records from an import. A new s
 ## 3. Slices
 - **F1 (built):** `core/filters.ts` (rules, formula, validation, words; unit tests), migration `20260423100000_import_filters.sql`, the engine, the template API, `POST /integrations/templates/filter-preview`, run counts `filtered`.
 - **F2 (built):** the wizard step and the card on the API / agent mapping page: rule builder with column combos (the file's real headings and examples), live "N of M kept", counts per rule, a few records of each kind.
-- **F3:** run page "Filtered out" tile and list; the warning when a filter keeps under about 10% of rows; a scheduled import whose filter suddenly removes everything is flagged in the health card.
+- **F3 (built):** run page "Filtered out" tile and list; the warning when a filter keeps under about 10% of rows; a scheduled import whose filter suddenly removes everything is flagged in the health card.
 - **F4:** exit check: browser journey step, live checks, exit report.
 
 ## 4. What F1 built

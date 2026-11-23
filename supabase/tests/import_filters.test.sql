@@ -105,6 +105,14 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT errors -> 0 ->> 'message' FROM public.integration_inbox WHERE run_id = run AND source_external_id = 'B'), 'Filtered out: does not meet Status is "Active"', 'each says why');
   PERFORM pg_temp.assert_eq((SELECT filtered FROM public.integration_sync_runs WHERE id = run), 3, 'the run counts them');
   PERFORM pg_temp.assert_eq((SELECT source_external_id FROM public.integration_inbox WHERE run_id = run AND NOT filtered AND external_id = 'A'), NULL, 'only a filtered record keeps the source''s own identifier apart');
+  -- the run page lists the records a filter left out, with a count, without reading the whole run (as a person who may read integrations)
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(app.integration_run_filtered_count(run), 3, 'the filtered records of the run are counted');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM app.integration_run_filtered_rows(run, 50, 0)), 3, 'and listed');
+  PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM app.integration_run_filtered_rows(run, 2, 2)), 1, 'a page at a time');
+  PERFORM pg_temp.assert_eq((SELECT bool_and(filtered AND status = 'skipped') FROM app.integration_run_filtered_rows(run, 50, 0)), true, 'only filtered, skipped rows');
+  PERFORM pg_temp.assert_eq((SELECT errors -> 0 ->> 'message' FROM app.integration_run_filtered_rows(run, 50, 0) WHERE source_external_id = 'B'), 'Filtered out: does not meet Status is "Active"', 'each says why');
+  PERFORM pg_temp.logout();
   PERFORM app.system_finish_integration_run(org, run, owner);
 
   -- ---- a filtered record is never "no longer in the source" ----
@@ -124,6 +132,15 @@ BEGIN
   run := pg_temp.full_read(org, rest, ARRAY['S5','S6','S7','S8','S9','S10'], ARRAY[]::text[], true);
   PERFORM pg_temp.assert_true((SELECT missing ? 'skipped' FROM public.integration_sync_runs WHERE id = run), 'the check stops, as for a row with no identifier');
   PERFORM pg_temp.assert_eq((SELECT count(*)::int FROM public.integration_missing_records WHERE detected_run_id = run), 0, 'and nothing is listed from it');
+
+  -- health: the last import's records read and filtered out
+  UPDATE public.integration_sync_runs SET records_total = 10, filtered = 10, requested_at = now() + interval '1 hour' WHERE id = run;
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq((SELECT (h -> 'lastRun' ->> 'recordsTotal')::int FROM jsonb_array_elements(app.integration_health(org)) h WHERE h ->> 'connectionId' = rest::text AND h ->> 'entityType' = 'supplier'), 10, 'the health row says how many records the last import read');
+  PERFORM pg_temp.assert_eq((SELECT (h -> 'lastRun' ->> 'filtered')::int FROM jsonb_array_elements(app.integration_health(org)) h WHERE h ->> 'connectionId' = rest::text AND h ->> 'entityType' = 'supplier'), 10, 'and how many the filter left out');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.assert_eq(has_function_privilege('anon', 'app.integration_run_filtered_rows(uuid, integer, integer)', 'EXECUTE'), false, 'the list of filtered rows is not for anyone signed out');
+  PERFORM pg_temp.assert_eq(has_function_privilege('anon', 'app.integration_run_filtered_count(uuid)', 'EXECUTE'), false, 'nor is its count');
 
   -- the new function is not for people
   PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.integration_filter_problem(jsonb)', 'EXECUTE'), false, 'people cannot call the filter check');

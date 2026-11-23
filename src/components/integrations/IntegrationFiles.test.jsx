@@ -471,6 +471,60 @@ describe("file import wizard", () => {
     expect(await screen.findByText("Full import · Suppliers", { exact: false })).toBeInTheDocument();
   });
 
+  it("a run says how many records the filter left out, lists them with the reason, and warns when almost nothing was kept", async () => {
+    const counts = { total: 100, rejected: 0, unchanged: 0, created: 2, updated: 0, failed: 0, superseded: 0, skipped: 98, filtered: 96 };
+    routeApi({
+      ...base([template()]),
+      "GET /integrations/runs/r9": run({ kind: "full", counts, rowsNow: { applied: 2, skipped: 98 } }),
+      "GET /integrations/runs/r9/rows": (path) =>
+        path.includes("filtered=true")
+          ? { data: [{ id: "i1", runId: "r9", externalId: "row-2", sourceRow: 2, status: "skipped", filtered: true, action: null, internalId: null, errors: [{ field: null, message: 'Filtered out: does not meet Status is "Active"' }], attempts: 0, payload: { Status: "Closed" }, purgedAt: null, createdAt: "2026-11-09T10:00:00Z", appliedAt: null }], page: 1, pageSize: 50, total: 96 }
+          : { data: [], page: 1, pageSize: 50, total: 98 },
+    });
+    renderAt("/Settings/Integrations/c1/runs/r9");
+    // a tile and a choice in the rows bar
+    expect((await screen.findAllByText("Filtered out")).length).toBe(2);
+    expect(screen.getByText("96% left out by the filter")).toBeInTheDocument();
+    // "Skipped" holds only what the import settings left alone (98 skipped, 96 of them filtered)
+    expect(screen.getByText("Left alone by the settings")).toBeInTheDocument();
+    expect(screen.getByText("The filter left out almost every record")).toBeInTheDocument();
+    expect(screen.getByText(/Only 4 of 100 records were kept \(4%\)/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Filtered out/ }));
+    await waitFor(() => expect(calls.some((c) => c.path.includes("/runs/r9/rows") && c.path.includes("filtered=true"))).toBe(true));
+    const list = await screen.findByRole("list", { name: "Rows" });
+    expect(within(list).getByText('Filtered out: does not meet Status is "Active"')).toBeInTheDocument();
+  });
+
+  it("a run whose filter left out every record says so", async () => {
+    routeApi({ ...base([template()]), "GET /integrations/runs/r9": run({ kind: "full", counts: { total: 7, rejected: 0, unchanged: 0, created: 0, updated: 0, failed: 0, superseded: 0, skipped: 7, filtered: 7 }, rowsNow: { skipped: 7 } }), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 7 } });
+    renderAt("/Settings/Integrations/c1/runs/r9");
+    expect(await screen.findByText("The filter left out every record")).toBeInTheDocument();
+    expect(screen.getByText(/All 7 records read were left out, so nothing was imported/)).toBeInTheDocument();
+  });
+
+  it("a run whose filter keeps a fair share has no warning", async () => {
+    routeApi({ ...base([template()]), "GET /integrations/runs/r9": run({ kind: "full", counts: { total: 100, rejected: 0, unchanged: 0, created: 60, updated: 0, failed: 0, superseded: 0, skipped: 40, filtered: 40 }, rowsNow: { applied: 60, skipped: 40 } }), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 100 } });
+    renderAt("/Settings/Integrations/c1/runs/r9");
+    expect(await screen.findByText("40% left out by the filter")).toBeInTheDocument();
+    expect(screen.queryByText(/The filter left out/)).toBeNull();
+  });
+
+  it("step 3: warns, without blocking, when the filter keeps under a tenth of the records", async () => {
+    routeApi({
+      ...base(),
+      "POST /integrations/templates/filter-preview": (_p, { body }) => ({ ...filterAnswer("", { body }), scanned: 100, kept: 4, leftOut: 96 }),
+      ...runRoutes,
+    });
+    renderAt(filterStep);
+    await userEvent.click(await screen.findByRole("button", { name: "Add a filter" }));
+    const rule = screen.getByRole("listitem", { name: "Rule 1" });
+    await choose("Column", "Country", rule);
+    await userEvent.type(within(rule).getByRole("textbox", { name: "Value for rule 1" }), "GB");
+    expect(await screen.findByText("This filter keeps almost nothing", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText(/Only 4 of 100 records \(4%\) would be read/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+  });
+
   it("the old mapping address opens step 4 of the wizard", async () => {
     routeApi(base([template()]));
     renderAt("/Settings/Integrations/c1/mapping?entity=supplier&file=f1");

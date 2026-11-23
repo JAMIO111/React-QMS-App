@@ -168,14 +168,27 @@ export const cleanSteps = (steps) =>
   });
 
 /** Kinds an import only ever adds: non-conformances and goods receipts (never matched, never updated). */
-export const ADD_ONLY_KINDS = ["nonconformance", "goods_receipt", "calibration"];
+export const ADD_ONLY_KINDS = ["nonconformance", "goods_receipt", "calibration", "ncr_cost"];
 
 /** Kinds an import always adds and updates: received totals (a changed total records a delivery of the increase). */
 export const ADD_UPDATE_KINDS = ["po_receipt_total"];
 
 /** Settings a template keeps for an import (NCs and goods receipts are always add only, received totals always add and update; none are matched). */
-export const templateSettings = (entityType, s) =>
-  ADD_UPDATE_KINDS.includes(entityType) ? { writeMode: "add_update", matchExisting: false } : ADD_ONLY_KINDS.includes(entityType) ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
+export const templateSettings = (entityType, s) => {
+  const base = ADD_UPDATE_KINDS.includes(entityType) ? { writeMode: "add_update", matchExisting: false } : ADD_ONLY_KINDS.includes(entityType) ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
+  // Only a cost template keeps whether the import may add costs to closed or cancelled NCs it brought in, and what to do with a line that has no date.
+  return entityType === "ncr_cost" ? { ...base, costsOnClosed: !!s?.costsOnClosed, missingDate: s?.missingDate === "nc_detected" ? "nc_detected" : "reject" } : base;
+};
+
+/** What a cost line with no date does: refused (the default), or given the date its non-conformance was detected. */
+export const MISSING_DATE_OPTIONS = [
+  { value: "reject", label: "Refuse the line", hint: "It is rejected, so the date can be added to the file" },
+  { value: "nc_detected", label: "Use the date the non-conformance was detected", hint: "The exchange rate is the one for that day" },
+];
+
+/** The catalogue's fields as a template's settings see them: a cost line with no date may take the detected date, so its date need not be mapped. */
+export const fieldsForSettings = (entityType, fields, settings) =>
+  entityType === "ncr_cost" && settings?.missingDate === "nc_detected" ? fields.map((f) => (f.key === "incurredOn" ? { ...f, required: false } : f)) : fields;
 
 const norm = (v) =>
   JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).filter(([, y]) => y !== undefined && y !== null && y !== "").sort(([a], [b]) => a.localeCompare(b))) : x));

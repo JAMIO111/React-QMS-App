@@ -1,3 +1,4 @@
+import { COST_TYPES } from '../../ncr/ncr-records.schemas';
 import { NCR_SOURCE_LABELS, NCR_SOURCES } from '../../ncr/ncr.schemas';
 import { EntityType } from './entity-importer';
 
@@ -33,7 +34,7 @@ export interface CatalogueField {
 }
 
 /** What a reference can point at. The importable kinds can also be matched by the source's own id (the map of an earlier import). */
-export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type' | 'gauge';
+export type RefKind = 'site' | 'department' | 'unit' | 'category' | 'supplier' | 'customer' | 'part' | 'machine' | 'employee' | 'gauge_type' | 'gauge' | 'nonconformance';
 export const REF_KIND_WORDS: Record<RefKind, string> = {
   site: 'site',
   department: 'department',
@@ -46,8 +47,9 @@ export const REF_KIND_WORDS: Record<RefKind, string> = {
   employee: 'employee',
   gauge_type: 'gauge type',
   gauge: 'gauge',
+  nonconformance: 'non-conformance',
 };
-const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge'];
+const SOURCE_KINDS: RefKind[] = ['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance'];
 
 export interface EntityCatalogue {
   entityType: EntityType;
@@ -63,6 +65,9 @@ const SUPPLIER_TYPES = ['manufacturer', 'distributor', 'subcontractor', 'service
 const words = (v: string) => v.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const options = (values: readonly string[], label: (v: string) => string = words) => values.map((v) => ({ value: v, label: label(v) }));
 const INTERVAL_UNITS = ['days', 'weeks', 'months', 'years'];
+const NC_IMPORT_STAGES = ['draft', 'open', 'contained', 'investigating', 'dispositioned', 'awaiting_closure', 'closed', 'cancelled'];
+/** How a cost type reads on a screen (the same words as the cost form). */
+const COST_TYPE_LABELS: Record<string, string> = { tools_equipment: 'Tools and equipment', waste_disposal: 'Waste disposal' };
 const PRODUCTION_STATUSES = ['planned', 'released', 'in_progress', 'completed', 'closed', 'cancelled'];
 
 /** A link to another Fortress record, given in the file by its code (matched ignoring case when the record is imported). */
@@ -218,6 +223,16 @@ export const CATALOGUE: EntityCatalogue[] = [
     fields: [
       { key: 'title', label: 'Title', type: 'text', required: true, maxLength: 200 },
       { key: 'source', label: 'Source', type: 'enum', required: true, options: options(NCR_SOURCES, (v) => NCR_SOURCE_LABELS[v as (typeof NCR_SOURCES)[number]]), description: 'Where it came from or was found' },
+      {
+        key: 'stage',
+        label: 'Stage',
+        type: 'enum',
+        options: options(NC_IMPORT_STAGES),
+        description:
+          'Where the non-conformance stands in your system; translate your statuses to these. Empty arrives as a draft. Any stage past draft needs what opening needs (severity, quantity affected, a part or a description, a category, and the customer or supplier for those sources; use "when empty" for what your system lacks), and anything past open needs the right to approve dispositions, because it skips containment and disposition. A cancelled one needs none of the opening fields. Imported stages are history: nobody is told and no workflow starts. Later changes in your system are not carried; the non-conformance is managed in Fortress once it is in',
+      },
+      { key: 'closedOn', label: 'Closed on', type: 'date', description: 'Only used when the stage is Closed: when it was closed in your system. Empty means today; it cannot be in the future or before the detected date you give (map Detected on too, or the record reads as detected today)' },
+      { key: 'stageReason', label: 'Reason cancelled', type: 'text', maxLength: 1000, description: 'Only used when the stage is Cancelled; empty gives "Cancelled in <the connection>"' },
       ref('category', 'Category', 'category', 'category code', { description: 'A category code such as PRODUCT or PROCESS; it must already exist' }),
       { key: 'severity', label: 'Severity', type: 'enum', options: options(['critical', 'major', 'minor']) },
       { key: 'description', label: 'Description', type: 'text', maxLength: 5000 },
@@ -239,7 +254,28 @@ export const CATALOGUE: EntityCatalogue[] = [
       { key: 'purchaseOrder', label: 'Purchase order', type: 'text', maxLength: 60 },
       { key: 'customerReference', label: 'Customer reference', type: 'text', maxLength: 60 },
       { key: 'lotNumber', label: 'Lot number', type: 'text', maxLength: 60 },
-      { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 60, description: 'Imported non-conformances arrive as drafts with a Fortress reference; opening, moving and closing them stay a person\'s steps' },
+      { key: 'serialNumber', label: 'Serial number', type: 'text', maxLength: 60, description: 'Imported non-conformances get a Fortress reference' },
+    ],
+  },
+  {
+    entityType: 'ncr_cost',
+    label: 'NC cost lines',
+    keyHint: 'The id of the cost line in your system (each line is imported once)',
+    fields: [
+      ref('nonconformance', 'Non-conformance', 'nonconformance', 'non-conformance reference, such as SNC-26-0011', {
+        required: true,
+        description:
+          'The non-conformance this cost belongs to: the id your source gave it when the non-conformances were imported here (import them first, through this connection), or its Fortress reference. A closed or cancelled non-conformance takes new costs only when your template says so and an import brought it in',
+      }),
+      { key: 'costType', label: 'Cost type', type: 'enum', required: true, options: options(COST_TYPES, (v) => COST_TYPE_LABELS[v] ?? words(v)), description: 'Translate your cost codes to these. Supplier recovery and customer charge are credits: they reduce the cost of the non-conformance' },
+      { key: 'description', label: 'Description', type: 'text', maxLength: 500 },
+      { key: 'incurredOn', label: 'Incurred on', type: 'date', required: true, description: 'The date decides the exchange rate, so by default a line without one is refused. The template can instead give such a line the date its non-conformance was detected. A future date uses today\'s rate' },
+      { key: 'currency', label: 'Currency', type: 'currency', required: true, description: 'Three letters, such as EUR. Each line is converted on its own date into the currency of the non-conformance\'s site and into the organisation\'s currency; nothing is converted in the file' },
+      { key: 'unitCost', label: 'Unit cost', type: 'number', required: true, min: 0, description: 'Not below 0: import a credit as a supplier recovery or a customer charge. If your source has only a total, put it here and leave Quantity empty' },
+      { key: 'quantity', label: 'Quantity', type: 'number', description: 'More than 0, decimals allowed (hours, kg…); empty means 1' },
+      { key: 'vatTreatment', label: 'VAT', type: 'enum', options: options(['none', 'inclusive', 'exclusive'], (v) => ({ none: 'No VAT', inclusive: 'Amount includes VAT', exclusive: 'VAT on top' })[v] ?? words(v)), description: 'Empty means no VAT' },
+      { key: 'vatRate', label: 'VAT rate (%)', type: 'number', min: 0, description: 'A percentage such as 20. Empty with a VAT choice uses the organisation\'s rate' },
+      { key: 'bookedValue', label: 'Value in the site currency', type: 'number', min: 0, description: 'What your source booked for the whole line in the site\'s currency. When given, it is kept instead of a published rate and the line shows as Actual; ignored when the line is already in the site currency' },
     ],
   },
   {
@@ -324,3 +360,12 @@ export const CATALOGUE: EntityCatalogue[] = [
 ];
 
 export const catalogueFor = (entity: string): EntityCatalogue | undefined => CATALOGUE.find((c) => c.entityType === entity);
+
+/**
+ * The catalogue as a template's own settings see it: a cost template that gives a line with no date the date its non-conformance was detected (`missingDate`
+ * `nc_detected`) does not need the date mapped at all, and an empty date is not an error. Every other catalogue, and every other setting, is returned as it is.
+ */
+export function catalogueForSettings(catalogue: EntityCatalogue, settings: { missingDate?: string } | null | undefined): EntityCatalogue {
+  if (catalogue.entityType !== 'ncr_cost' || settings?.missingDate !== 'nc_detected') return catalogue;
+  return { ...catalogue, fields: catalogue.fields.map((f) => (f.key === 'incurredOn' ? { ...f, required: false } : f)) };
+}

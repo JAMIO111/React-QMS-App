@@ -227,10 +227,10 @@ const SETTINGS_SELECT = sql.raw(`select s.*, t.name as template_name, t.current_
   from public.integration_import_settings s
   left join public.integration_templates t on t.id = s.template_id
   left join public.profiles p on p.id = s.schedule_set_by`);
-const EVENT_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt', 'po_receipt_total', 'calibration']);
+const EVENT_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt', 'po_receipt_total', 'calibration', 'ncr_cost']);
 const HAS_ACTIVE = new Set<EntityType>(['supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type']);
-/** Kinds of record an import only ever adds: non-conformances (managed in Fortress once in) and goods receipts (a delivery is never changed afterwards). */
-export const ADD_ONLY_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt', 'calibration']);
+/** Kinds of record an import only ever adds: non-conformances (managed in Fortress once in), goods receipts (a delivery is never changed afterwards), legacy calibrations and cost lines (a posted cost is not edited). */
+export const ADD_ONLY_KINDS = new Set<EntityType>(['nonconformance', 'goods_receipt', 'calibration', 'ncr_cost']);
 /** Received totals are always "add and update": a changed total is what records a delivery of the increase. */
 export const ADD_UPDATE_KINDS = new Set<EntityType>(['po_receipt_total']);
 function toSettings(t: EntityType, r: Row | undefined): z.infer<typeof ImportSettings> {

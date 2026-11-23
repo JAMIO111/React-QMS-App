@@ -2,10 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { apiErrorFromDatabase } from '../../common/database-errors';
+import { ExchangeRateService } from '../../currency/exchange-rate.service';
 import { DatabaseService } from '../../database/database.service';
 import { ConnectorError, RunErrorKind } from './connector.interface';
 import { ConnectorRegistry } from './connector.registry';
-import { CATALOGUE } from './catalogue';
+import { CATALOGUE, catalogueForSettings } from './catalogue';
 import { CatalogueService } from './catalogue.service';
 import { EntityImporterRegistry, ImportContext, StagedRow } from './entity-importer';
 import { applyMapping, MappingSpec } from './mapping';
@@ -68,6 +69,7 @@ export class SyncEngine {
     private readonly connectors: ConnectorRegistry,
     private readonly importers: EntityImporterRegistry,
     private readonly catalogues: CatalogueService,
+    private readonly rates: ExchangeRateService,
   ) {}
 
   /** The kinds of record a provider can preview: an adapter that fetches, and a catalogue (to map to) or an importer. Nothing is written by a preview. */
@@ -80,6 +82,29 @@ export class SyncEngine {
   /** The kinds of record a provider can really import: an adapter that fetches and an importer that writes them. */
   importable(providerKey: string): string[] {
     return this.connectors.get(providerKey)?.fetchRecords ? this.importers.types() : [];
+  }
+
+  /**
+   * Fetches the exchange rates a cost import's staged lines need and the cache does not hold, a round at a time within the budget, and stores them. Best effort:
+   * a source that cannot be reached leaves the lines to be filled later (they import as "waiting for a rate"); it never stops the run.
+   */
+  private async warmRates(call: <T>(work: (client: PoolClient) => Promise<T>) => Promise<T>, organisationId: string, runId: string, owner: string, correlationId: string | undefined, budgetMs: number): Promise<void> {
+    const stopAt = Date.now() + budgetMs;
+    try {
+      for (let round = 0; round < 20 && Date.now() < stopAt; round += 1) {
+        const needed = (await call((c) => c.query('select app.system_integration_cost_rates_needed($1::uuid, $2::uuid, $3::uuid, 200) as r', [organisationId, runId, owner]))).rows[0].r as Array<{ requestedOn: string; base: string; quotes: string[] }>;
+        if (!needed.length) return;
+        const stored = await this.rates.ensurePairs(
+          needed.flatMap((n) => n.quotes.map((quote) => ({ requestedOn: n.requestedOn, base: n.base, quote }))),
+          correlationId ?? '',
+          Math.max(stopAt - Date.now(), 1_000),
+        );
+        // Nothing stored means the source is not answering: asking again would only repeat the question.
+        if (stored.stored === 0) return;
+      }
+    } catch (error) {
+      this.log.warn(`Exchange rates could not be fetched before the import: ${(error as Error).message}`);
+    }
   }
 
   async drain(organisationId: string, runId: string, options: DrainOptions): Promise<DrainResult> {
@@ -105,7 +130,11 @@ export class SyncEngine {
     try {
       const importer = this.importers.get(lease.entityType);
       if (!importer && lease.kind !== 'preview') return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
-      const catalogue = await this.catalogues.get(lease.entityType, organisationId);
+      const fullCatalogue = await this.catalogues.get(lease.entityType, organisationId);
+      // A cost import whose template gives a line with no date the date its non-conformance was detected does not need the date in the file.
+      const catalogue = fullCatalogue && lease.entityType === 'ncr_cost'
+        ? catalogueForSettings(fullCatalogue, (await call((c) => c.query('select app.system_integration_run_settings($1::uuid, $2::uuid, $3::uuid) as s', [organisationId, runId, owner]))).rows[0].s as { missingDate?: string })
+        : fullCatalogue;
       if (lease.mapping && !catalogue) return await runError('mapping', `There are no fields to map ${lease.entityType.replace('_', ' ')} records to yet`, false);
       if (!lease.mapping && !importer) return await runError('mapping', 'Map the source to Fortress fields before importing', false);
       const file = lease.file
@@ -127,6 +156,7 @@ export class SyncEngine {
           }
         : undefined;
       let fetchDone = lease.fetchDone;
+      let warmed = false;
       let cursor = lease.cursor;
       const ctx: ImportContext = { organisationId, connectionId: lease.connectionId, runId, externalSystem: lease.externalSystem, initiatingUser: user, owner };
 
@@ -178,11 +208,18 @@ export class SyncEngine {
           continue;
         }
 
+        // Cost lines are converted on their own dates when they are written; fetching the rates they need first means most land with theirs (and a preview's summary is true).
+        if (lease.entityType === 'ncr_cost' && !warmed) {
+          warmed = true;
+          await this.warmRates(call, organisationId, runId, owner, options.correlationId, Math.min(25_000, Math.max((deadline - Date.now()) * 0.6, 3_000)));
+        }
         const rows = lease.kind === 'preview'
           ? []
           : ((await call((c) => c.query('select app.system_integration_rows_to_apply($1::uuid, $2::uuid, $3::uuid, $4::int) as r', [organisationId, runId, owner, batchSize]))).rows[0].r as StagedRow[]);
         if (rows.length === 0) {
           await call((c) => c.query('select app.system_finish_integration_run($1::uuid, $2::uuid, $3::uuid)', [organisationId, runId, owner]));
+          // What could not be fetched before is tried once more; the worker's exchange-rates step finishes the rest. Never fails the run.
+          if (lease.entityType === 'ncr_cost' && lease.kind !== 'preview') await this.rates.settle(organisationId, options.correlationId ?? '', 5_000);
           return { state: 'finished' };
         }
         await call(async (c) => {

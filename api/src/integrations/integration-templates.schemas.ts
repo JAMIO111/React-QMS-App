@@ -9,7 +9,16 @@ export const SourceSettingsBody = z
     delimiter: z.enum(['auto', ',', ';', 'tab', '|']).optional(),
   })
   .strict();
-export const TemplateSettingsBody = z.object({ writeMode: z.enum(['add_only', 'add_update', 'update_only']).optional(), matchExisting: z.boolean().optional() }).strict();
+export const TemplateSettingsBody = z
+  .object({
+    writeMode: z.enum(['add_only', 'add_update', 'update_only']).optional(),
+    matchExisting: z.boolean().optional(),
+    /** Cost lines only (IC1): may the import add costs to closed or cancelled non-conformances an import brought in. Off unless chosen. */
+    costsOnClosed: z.boolean().optional(),
+    /** Cost lines only: what to do with a line that has no date: refuse it (the default) or give it the date its non-conformance was detected. */
+    missingDate: z.enum(['reject', 'nc_detected']).optional(),
+  })
+  .strict();
 
 const Iso = z.string().datetime({ offset: true });
 const Person = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
@@ -53,7 +62,7 @@ export const TemplateVersion = z.object({
   fields: z.array(z.record(z.string(), z.unknown())),
   sourceSettings: z.record(z.string(), z.unknown()),
   expectedColumns: z.array(z.string()),
-  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean() }),
+  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), costsOnClosed: z.boolean().optional(), missingDate: z.enum(['reject', 'nc_detected']).optional() }),
   reason: z.string().nullable(),
   current: z.boolean(),
   createdBy: Person,
@@ -82,7 +91,7 @@ export type TemplateDetail = z.infer<typeof TemplateDetail>;
 export const TemplateVersionList = z.object({ data: z.array(TemplateVersion.omit({ fields: true, sourceSettings: true, expectedColumns: true }).extend({ fieldCount: z.number().int() })) });
 
 /** Preview an unsaved template against an uploaded file (T3: the screen and the import always agree because both run here). */
-export const REF_KINDS = ['site', 'department', 'unit', 'category', 'supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge'] as const;
+export const REF_KINDS = ['site', 'department', 'unit', 'category', 'supplier', 'customer', 'part', 'machine', 'employee', 'gauge_type', 'gauge', 'nonconformance'] as const;
 
 /** The values a link field can take: the codes that exist in Fortress, with their names. */
 export const ReferenceValuesQuery = z
@@ -111,6 +120,8 @@ export const PreviewTemplateBody = z
     fields: z.array(FieldMappingBody).max(100),
     /** Source row numbers to show (as the file numbers them); the first 20 rows when left out. */
     rows: z.array(z.number().int().min(1)).max(20).optional(),
+    /** The template's import settings, so the preview treats a cost line's date as the template does (optional with `missingDate: nc_detected`). */
+    settings: TemplateSettingsBody.optional(),
   })
   .strict()
   .refine((b) => !!b.fileId !== !!b.connectionId, 'Give a file or a connection to preview against');

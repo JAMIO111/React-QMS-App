@@ -157,6 +157,44 @@ describe('real imports from a file', () => {
     expect(again.counts).toMatchObject({ created: 0, unchanged: 1, rejected: 1 });
   });
 
+  it('takes the stage the source gives (statuses translated, history raises no event, the opening rules still apply)', async () => {
+    const cat = (await admin.query(`select code from public.ncr_classifications where organisation_id = $1 and kind = 'category' and active order by created_at limit 1`, [ids.orgA])).rows[0].code;
+    const fileId = await upload('nc-stages.csv', [
+      'NC,Title,Status,Closed,Cat,Sev,Qty,Why',
+      `H-1,Old closed one,Done,2026-02-01,${cat},Minor,3,`,
+      `H-2,Still open one,Live,,${cat},Major,4,`,
+      'H-3,Withdrawn one,Void,,,,,Raised twice',
+      'H-4,Closed with no category,Done,2026-02-02,,Minor,3,',
+    ].join('\n'));
+    await api().put(`${base}/connections/${connId}/mapping`).set(await owner()).send({
+      entityType: 'nonconformance', keyField: 'NC', fileId, reason: 'With the stage',
+      fields: [
+        { target: 'title', source: 'Title' }, { target: 'description', source: 'Title' }, { target: 'source', transform: 'constant', value: 'internal' },
+        { target: 'stage', source: 'Status', transform: 'map', values: { Done: 'closed', Live: 'open', Void: 'cancelled' } },
+        { target: 'closedOn', source: 'Closed' }, { target: 'stageReason', source: 'Why' }, { target: 'category', source: 'Cat' },
+        { target: 'severity', source: 'Sev', transform: 'map', values: { Minor: 'minor', Major: 'major' } }, { target: 'quantityAffected', source: 'Qty' },
+      ],
+    }).expect(200);
+    const real = await run('nonconformance', 'full', fileId);
+    expect(real).toMatchObject({ status: 'partial', counts: { created: 3, failed: 1 } });
+    const failed = (await admin.query(`select errors from public.integration_inbox where run_id = $1 and status = 'failed'`, [real.id])).rows;
+    expect(JSON.stringify(failed[0].errors)).toMatch(/category/i);
+    const rows = (await admin.query(
+      `select n.title, n.stage, n.stage_reason, n.closed_at::date::text as closed_on, (n.closed_by is null) as no_closer,
+              (select count(*)::int from public.outbox_events e where e.entity_id = n.id) as events
+         from public.nonconformances n where n.organisation_id = $1 and n.title in ('Old closed one', 'Still open one', 'Withdrawn one', 'Closed with no category') order by n.title`,
+      [ids.orgA],
+    )).rows;
+    expect(rows).toEqual([
+      { title: 'Old closed one', stage: 'closed', stage_reason: null, closed_on: '2026-02-01', no_closer: true, events: 0 },
+      { title: 'Still open one', stage: 'open', stage_reason: null, closed_on: null, no_closer: true, events: 0 },
+      { title: 'Withdrawn one', stage: 'cancelled', stage_reason: 'Raised twice', closed_on: null, no_closer: true, events: 0 },
+    ]);
+    // a later import of the same file writes nothing, and the stage a person gives a record in Fortress is theirs
+    const again = await run('nonconformance', 'full', fileId);
+    expect(again.counts).toMatchObject({ created: 0, unchanged: 3 });
+  });
+
   it('shows nothing of it to another organisation', async () => {
     await api().get(`${base}/connections/${connId}/settings`).set(await other()).expect(404);
     await api().put(`${base}/connections/${connId}/settings`).set(await other()).send({ entityType: 'machine', writeMode: 'add_update' }).expect(404);

@@ -16,7 +16,7 @@ import { useOrganisationDetails, usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { DB_ENGINES, ENTITY_LABELS, describeRecordSource, mappingToRows, rowHasSource, rowsInUse, rowsToFields } from "../../lib/integrations";
-import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, connectionTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, connectionTemplate, fieldsForSettings, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -24,6 +24,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
 import { KEY_GUESS, SaveTemplateDialog, TemplateSettingsCard } from "./CsvImportWizard";
+import { CostCurrencyNotice } from "./CostImportParts";
 import MappingStep from "./MappingStep";
 import { Failed, useAsk, Waiting } from "./database/agentAsk";
 import ProviderLogo from "./ProviderLogo";
@@ -125,10 +126,11 @@ const ApiMappingPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formKey]);
 
-  const fields = catalogue?.fields ?? [];
+  // A cost line with no date may take its non-conformance's detected date, so its date need not be mapped.
+  const fields = fieldsForSettings(entityType, catalogue?.fields ?? [], form?.settings);
   const body = form ? rowsToFields(rowsInUse(form.rows), fields) : null;
   // The preview reads the API again on the server, so it waits a little longer than the file wizard's after each change.
-  const preview = useTemplatePreview(form && sample.data && headers.length ? { entityType, connectionId: id, keyField: form.keyField ?? "", fields: body } : null, { delay: 800 });
+  const preview = useTemplatePreview(form && sample.data && headers.length ? { entityType, connectionId: id, keyField: form.keyField ?? "", fields: body, ...(entityType === "ncr_cost" ? { settings: templateSettings(entityType, form.settings) } : {}) } : null, { delay: 800 });
 
   useBreadcrumbNames(conn ? [{ path: `/Settings/Integrations/${id}`, label: conn.name }, { path: `/Settings/Integrations/${id}/map`, label: "Map fields" }] : []);
   if (connection.isLoading || entities.isLoading) return <LoadingScreen />;
@@ -288,6 +290,7 @@ const ApiMappingPage = () => {
                     rows={form.rows}
                     onRows={(rows) => setForm({ ...form, rows })}
                     readOnly={!canRun}
+                    notice={entityType === "ncr_cost" ? <CostCurrencyNotice /> : null}
                     advanced={advanced}
                     problems={problems}
                     source={isFolder ? "file" : isAgentApi ? "api" : isDb ? "database" : "api"}

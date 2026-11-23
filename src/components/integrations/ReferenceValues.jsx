@@ -112,7 +112,11 @@ const ReferenceValuesDialog = ({ field, check, onClose }) => {
                     <span className="block truncate text-xs text-secondary-text">{[d.name, d.hint].filter(Boolean).join(" · ")}</span>
                   </span>
                   {d.duplicate && <span className="rounded-full bg-warning-color/15 px-2 py-0.5 text-xs text-warning-color" title="More than one department has this code, so it cannot be used on its own">used twice</span>}
-                  {d.active === false && <span className="rounded-full bg-border-color px-2 py-0.5 text-xs text-secondary-text">inactive</span>}
+                  {d.active === false && (
+                    <span className="rounded-full bg-border-color px-2 py-0.5 text-xs text-secondary-text" title={kind === "nonconformance" ? "Cost lines are accepted on it only when the template allows costs on closed or cancelled non-conformances" : undefined}>
+                      {kind === "nonconformance" ? "closed or cancelled" : "inactive"}
+                    </span>
+                  )}
                   <CopyButton text={d.code} label={`Copy ${d.code}`} />
                 </li>
               ))}

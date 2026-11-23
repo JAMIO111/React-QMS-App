@@ -10,7 +10,7 @@ import { CatalogueService } from './core/catalogue.service';
 import { checkFormula, runFormula } from './core/formula';
 import { applyMapping, cell, fieldColumns, mappingProblems, rawValue } from './core/mapping';
 import { referenceProblem } from './core/references';
-import { REF_KIND_WORDS } from './core/catalogue';
+import { catalogueForSettings, REF_KIND_WORDS } from './core/catalogue';
 import {
   CheckFormulaBody,
   CreateTemplateBody,
@@ -70,7 +70,11 @@ const toVersion = (r: Row): TemplateVersion => {
     fields: (r.fields as Record<string, unknown>[]) ?? [],
     sourceSettings: (r.source_settings as Record<string, unknown>) ?? {},
     expectedColumns: (r.expected_columns as string[]) ?? [],
-    settings: { writeMode: (s.writeMode as string) ?? 'add_only', matchExisting: !!s.matchExisting },
+    settings: {
+      writeMode: (s.writeMode as string) ?? 'add_only',
+      matchExisting: !!s.matchExisting,
+      ...('costsOnClosed' in s ? { costsOnClosed: !!s.costsOnClosed, missingDate: s.missingDate === 'nc_detected' ? ('nc_detected' as const) : ('reject' as const) } : {}),
+    },
     reason: (r.reason as string) ?? null,
     current: Number(r.version) === Number(r.current_version),
     createdBy: person(r.created_by, r.created_by_name),
@@ -96,8 +100,10 @@ export class IntegrationTemplatesService {
   ) {}
 
   private async check(ctx: RequestContext, entityType: string, b: TemplateBody): Promise<string> {
-    const catalogue = await this.catalogues.get(entityType as never, orgOf(ctx));
-    if (!catalogue) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
+    const full = await this.catalogues.get(entityType as never, orgOf(ctx));
+    if (!full) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
+    // A cost template that gives a line with no date the date its non-conformance was detected does not need the date mapped.
+    const catalogue = catalogueForSettings(full, b.settings);
     const columns = b.expectedColumns?.length ? b.expectedColumns : undefined;
     const problems = mappingProblems(catalogue, { keyField: b.keyField, fields: b.fields }, columns);
     if (problems.length) throw new ApiError(409, 'integration_rule', problems[0], { problems });
@@ -222,8 +228,10 @@ export class IntegrationTemplatesService {
   }
 
   async preview(ctx: RequestContext, b: PreviewTemplateBody): Promise<TemplatePreview> {
-    const catalogue = await this.catalogues.get(b.entityType, orgOf(ctx));
-    if (!catalogue) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
+    const full = await this.catalogues.get(b.entityType, orgOf(ctx));
+    if (!full) throw new ApiError(409, 'integration_rule', 'There are no Fortress fields to map this kind of record to yet');
+    // The preview treats a cost line's date as the template does: optional when a line with no date takes the date its non-conformance was detected.
+    const catalogue = catalogueForSettings(full, b.settings);
     let connectionId: string | null = b.connectionId ?? null;
     const { headers, rows } = b.connectionId
       ? await this.sampleOf(ctx, b.connectionId, b.entityType, b.rows)

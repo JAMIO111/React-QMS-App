@@ -189,7 +189,7 @@ const CommandPalette = () => {
         aria-label="Command palette"
         onKeyDown={onKeyDown}
         className="flex max-h-[75vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border-color bg-secondary-bg shadow-2xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150">
-        <div className="flex items-center gap-3 border-b border-border-color px-4">
+        <div className="shrink-0 flex items-center gap-3 border-b border-border-color px-4">
           <SearchIcon className="h-5 w-5 shrink-0 text-icon-color" />
           <input
             ref={input}
@@ -213,7 +213,7 @@ const CommandPalette = () => {
           )}
         </div>
 
-        <div className="no-scrollbar overflow-x-auto border-b border-border-color px-4 py-2.5">
+        <div className="shrink-0 no-scrollbar overflow-x-auto border-b border-border-color px-4 py-2.5">
           <SlidingToggle
             ariaLabel="Show"
             options={chips}
@@ -309,7 +309,7 @@ const CommandPalette = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-4 border-t border-border-color px-4 py-2 text-xs text-secondary-text">
+        <div className="shrink-0 flex items-center gap-4 border-t border-border-color px-4 py-2 text-xs text-secondary-text">
           <span>
             <kbd className="rounded border border-border-color px-1">↑</kbd> <kbd className="rounded border border-border-color px-1">↓</kbd> navigate
           </span>

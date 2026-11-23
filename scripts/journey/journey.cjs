@@ -2203,7 +2203,8 @@ async function commandPalette({ page, stack, APP, orgName, see, shot, step, log,
   await see(palette);
   const box = palette.getByRole('combobox', { name: /search pages, actions and records/i });
   if ((await box.inputValue()) !== '') throw new Error('the palette must start empty');
-  await see(palette.getByRole('region', { name: 'Pages' }));
+  // Screens opened earlier in the journey lead as Recently opened; the quick actions are always there.
+  await see(palette.getByRole('region', { name: 'Quick actions' }));
   await shot(page, 'palette-empty');
   await page.keyboard.press('Escape');
   if ((await palette.count()) !== 0) throw new Error('Esc must close the palette');

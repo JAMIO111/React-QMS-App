@@ -304,7 +304,70 @@ Additional product-owner confirmations (smaller): the product names *Fortress Cl
 
 ---
 
-## 11. Limits of this audit
+## 11. Data residency: one organisation across several countries
+
+Added after the audit as a design note. **Nothing here is built, and none of it is legal advice.** It answers: *an organisation with sites in the USA, UK and India must keep its data at rest in each country; how would that work, and how would a combined dashboard be shown?*
+
+### 11.1 What is true today
+
+An organisation can already have several sites (own time zone, currency, site-scoped roles; the NC dashboard has a site picker). But the whole product is **one Supabase project (London)**, so all sites' data rests in one place. Residency per site is not possible without more than one stack.
+
+### 11.2 The rule to confirm with the customer
+
+The working assumption is **data at rest**: stored data must stay in-country; showing or processing it for a viewer in another country is acceptable. This must be confirmed in writing with each customer, together with: whether user names and emails count; whether summary figures may rest elsewhere; whether in-transit viewing from another country is accepted. Many such requirements are contractual rather than legal, so the customer's own wording governs.
+
+### 11.3 Design: a regional stack per country (a "cell")
+
+```
+ US stack            UK stack            India stack
+ (API, DB, files,    (API, DB, files,    (API, DB, files,
+  backups, logs)      backups, logs)      backups, logs)
+   own org row         own org row         own org row
+        \                  |                  /
+         \—— small global layer: no quality data ——/
+             group, which region holds which organisation,
+             and (only if agreed) a minimal user directory
+```
+
+- Each country is an ordinary Fortress organisation in its own region's database. NC numbers, files and every record stay in that region. Check availability of Supabase regions (US, London, Mumbai) and of Vercel function regions for the API of each cell.
+- A **group** record in the global layer links the organisations of one customer and tells the browser which regional API to call.
+- Billing and licence for the group are checked centrally; each region caches the answer.
+
+### 11.4 Combined dashboards under the data-at-rest rule
+
+| Option | Stores anything outside the region? | Notes |
+|---|---|---|
+| **Read-time merge** (a group service or the browser asks each region for summary figures and combines them) | **No** | Always current; depends on every region being reachable. **Recommended default.** |
+| Merge in the browser | **No** | Simplest; the user's token must be accepted by every region; CORS per region. |
+| Daily snapshots into a global database | Yes (summary numbers) | Fast and resilient, but only with the customer's agreement. |
+
+Rules for any group view: **summary figures only** (counts, sums, rates as numerator and denominator, never averages of averages); no record titles or lists (several current dashboards list suppliers, items or titles, which must be omitted from the group view); costs converted to one reporting currency using the existing exchange rates (rate source is public data); drill-through opens the regional application and shows record data only to people entitled to it there.
+
+### 11.5 Places data comes to rest (checklist for a residency customer)
+
+1. **Database, files and backups/point-in-time recovery**: in-region.
+2. **Email**: notification emails carry record text and are kept by the provider and in mailboxes. Reuse the existing restricted body ("You have a new notification in Fortress", link only), which today applies when network rules are enforced, as a per-organisation option.
+3. **Logs**: API and platform logs must contain no record content (logger redaction exists; **not verified end to end**).
+4. **Global directory**: user emails and the organisation-to-region map would rest outside the region. Ask whether that is acceptable; if not, keep it to a minimum or resolve the region by the user's company domain.
+5. **Stripe**: holds billing contacts only; confirm acceptable.
+6. **Browser**: data is held in memory only; the service worker caches no API answers (checked in `public/sw.js`).
+7. **Outbox, job queue, audit events**: tables in each region's database, so in-region by construction.
+
+### 11.6 What the current code lacks for this
+
+1. A global layer (there is none; billing, organisations and the operator panel read the one database).
+2. Identity across regions: each regional database needs its own `auth.users` rows (the 599 foreign keys). Customer SSO makes this painless (same company identity, an account per region); without SSO people would need three logins, or a single token issuer that every region trusts (the claim contract in §7.1) with an account row created on first visit.
+3. A migration runner for several databases and a version-skew rule (migrations are applied through the SQL editor today).
+4. A frontend that looks up the regional API (`VITE_API_URL` is one value today).
+5. Sharing of master data (parts, suppliers, categories) if the customer wants common definitions; drawings may be export-controlled.
+
+### 11.7 Recommendation
+
+Do not build it now. Adopt three cheap rules: the organisation is the unit of data residency; no joins across organisations; no new hard-coded single API address. If a customer commits, build in order: (1) regional stacks, SSO and the migration runner with plant dashboards only; (2) a read-time group dashboard; (3) master-data sync only if required. This also bears on **R14** (one identity wire protocol for every cell) and favours the GoTrue spike in §7.1.
+
+---
+
+## 12. Limits of this audit
 
 - Static analysis only. No on-premises stack was built or run; GoTrue, Docker, nginx, a local filesystem adapter, SMTP and a licence adapter are all untried.
 - Counts (functions, policies, FKs) come from grepping the migration files. They count *definitions across history*, not the live objects (a function replaced many times is counted each time), so they overstate the live inventory but are the right size for effort estimates.

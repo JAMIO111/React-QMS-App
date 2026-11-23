@@ -1,6 +1,6 @@
 # Importing NC cost lines through the connectors — plan
 
-Status: **IN-NC, IC1 (the database), IC2 (the API) and IC3 (the screens) built; IC4 (exit) not yet.** Decisions CI-D1, D2 and D4–D8 (§4) and CI-D9 to CI-D13 (§7) accepted by the owner 2026-11-22, all as recommended; **CI-D10 replaces CI-D3**: the owner wants to carry the
+Status: **IN-NC, IC1 (the database), IC2 (the API) and IC3 (the screens) and IC4 (the exit check, `docs/cost-import-exit-report.md`) built: the cost import is complete.** Decisions CI-D1, D2 and D4–D8 (§4) and CI-D9 to CI-D13 (§7) accepted by the owner 2026-11-22, all as recommended; **CI-D10 replaces CI-D3**: the owner wants to carry the
 source's status over when importing NCs, so many NCs will arrive closed or cancelled. Written 2026-11-22.
 
 ## 1. What was asked
@@ -230,3 +230,7 @@ Screens only, no migration. The migration of IC1 is applied live (2026-11-22, ch
 - **Currencies:** the mapping step has a notice for cost lines (`CostCurrencyNotice`): nothing is converted in the file, each line is converted on its own incurred date, a currency with no published rate still imports and fills in later. The per-currency figures themselves come from the run, not the mapping step (the template preview has no rates to read), so they are on the **run page** (`CostRunCard`, from `run.costs`, for a preview and a finished import): a table of currencies with lines, lines with a rate and lines waiting; "N lines will wait for a rate"; after an import "N imported lines are still waiting"; closed and cancelled counts with the template rule; the number carrying the source's booked value.
 - **Allowed values:** the dialog lists non-conformances (reference, title, stage) and marks closed or cancelled ones "closed or cancelled" instead of "inactive" (`ReferenceValues.jsx`).
 - Tests `src/components/integrations/CostImport.test.jsx` (17), `npm test` 1,993 passing, lint 0 errors, build passes. **Not browser-checked yet** (IC4: the journey step).
+
+## 11. IC4 built (2026-11-23)
+
+Journey step `costImport()` (`scripts/journey/journey.cjs`), live checks and the exit report `docs/cost-import-exit-report.md`. The whole journey passes. Not built: updating a posted line from the source, the currency figures in the mapping step.

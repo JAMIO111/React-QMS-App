@@ -236,6 +236,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
   await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
+  await costImport({ page, stack, APP, orgName, see, shot, step, log });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -2221,6 +2222,138 @@ async function legacyCalibrations({ page, stack, APP, orgName, see, shot, step, 
   // Put it back, so later steps see the default.
   await stack.admin.query(`update public.organisation_settings set include_legacy_calibrations = false where organisation_id = $1`, [org.id]);
   log('legacy calibrations: imported, marked, kept off the dashboard until counted');
+}
+/**
+ * Importing NC cost lines (docs/cost-import-plan.md IC4): non-conformances brought in with their stage (open, closed, cancelled), then a file of cost lines in
+ * several currencies linked to them by the id the source gave them. Each line is converted on its own date from the published rates (the journey seeds the
+ * cache the API's rate source would fill); one currency has no published rate, so its line waits and is filled in by the worker once the rate arrives;
+ * the source's booked value makes a line Actual; a negative cost is rejected; costs on a closed NC are accepted only because the template says so.
+ */
+async function costImport({ page, stack, APP, orgName, see, shot, step, log }) {
+  const { rows: [org] } = await stack.admin.query(
+    `select o.id, s.code as site, s.currency as site_ccy, coalesce(os.base_currency, 'GBP') as org_ccy
+       from public.organisations o join public.sites s on s.organisation_id = o.id
+       left join public.organisation_settings os on os.organisation_id = o.id
+      where o.name = $1 order by s.created_at limit 1`, [orgName]);
+  const { rows: [d] } = await stack.admin.query(
+    `select (current_date - 40)::text as detected_old, (current_date - 25)::text as closed_on, (current_date - 5)::text as detected,
+            (current_date - 12)::text as day_a, (current_date - 9)::text as day_b`);
+  const base = org.site_ccy;
+  const published = ['EUR', 'USD', 'JPY'].filter((c) => c !== org.site_ccy && c !== org.org_ccy).slice(0, 2);
+  const unpublished = ['CHF', 'SEK'].find((c) => c !== org.site_ccy && c !== org.org_ccy);
+  const quotes = [...new Set([org.site_ccy, org.org_ccy])];
+  const seedRate = async (day, ccy) => {
+    for (const quote of quotes) {
+      await stack.admin.query(
+        `insert into public.exchange_rates (requested_on, base, quote, rate, rate_date, supported) values ($1::date, $2, $3, 0.8, $1::date, true)
+           on conflict (requested_on, base, quote) do update set rate = 0.8, rate_date = excluded.rate_date, supported = true, fetched_at = now()`,
+        [day, ccy, quote]);
+    }
+  };
+  for (const day of [d.day_a, d.day_b]) for (const ccy of published) await seedRate(day, ccy);
+
+  const waitFor = async (what, sql, args, done) => {
+    for (let i = 0; i < 60; i++) {
+      const { rows } = await stack.admin.query(sql, args);
+      if (done(rows)) return rows;
+      await page.waitForTimeout(500);
+    }
+    throw new Error(`timed out waiting for ${what}`);
+  };
+  const openWizard = async (tile, name, csv) => {
+    await page.goto(`${APP}/Settings/Integrations`);
+    await page.getByRole('link', { name: /Import a file/ }).click();
+    await page.getByRole('button', { name: tile }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await see(page.getByText('How to read the file'));
+    await page.locator('[data-testid="file-input"]').setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    await see(page.getByRole('table', { name: 'First rows' }));
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+  };
+
+  step('owner brings non-conformances in with the stage the old system gave them');
+  const ncs = [
+    'Id,Title,Source,Stage,Severity,Category,Description,Quantity affected,Detected on,Closed on,Site',
+    `NC-OPEN,Burr on bore,internal,open,minor,PRODUCT,Burrs on the bore,3,${d.detected},,${org.site}`,
+    `NC-DONE,Wrong finish,internal,closed,major,PRODUCT,Finish out of drawing,5,${d.detected_old},${d.closed_on},${org.site}`,
+    `NC-VOID,Raised in error,internal,cancelled,,,,,,,${org.site}`,
+  ].join('\n');
+  await openWizard(/^Non-conformances/, 'old-ncs.csv', ncs);
+  await see(page.getByRole('listitem', { name: 'Stage', exact: true }));
+  await page.getByRole('button', { name: 'Import 3 rows' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+  const made = await waitFor('the imported non-conformances',
+    `select title, stage, closed_at::date::text as closed_on from public.nonconformances where organisation_id = $1 and title in ('Burr on bore','Wrong finish','Raised in error') order by title`,
+    [org.id], (rows) => rows.length === 3);
+  const stages = Object.fromEntries(made.map((r) => [r.title, r.stage]));
+  if (stages['Burr on bore'] !== 'open' || stages['Wrong finish'] !== 'closed' || stages['Raised in error'] !== 'cancelled') {
+    throw new Error(`the non-conformances did not arrive with their stages: ${JSON.stringify(made)}`);
+  }
+  log(`cost import: non-conformances arrived ${JSON.stringify(stages)}`);
+
+  step('owner previews a file of cost lines in several currencies');
+  const costs = [
+    'Id,Non-conformance,Cost type,Description,Incurred on,Currency,Unit cost,Quantity,Value in the site currency',
+    `COST-1,NC-DONE,scrap,Scrapped bars,${d.day_a},${published[0]},100,2,`,
+    `COST-2,NC-OPEN,rework,Reworked housings,${d.day_b},${published[1]},50,1,30`,
+    `COST-3,NC-DONE,transport,Courier to customer,${d.day_a},${unpublished},70,1,`,
+    `COST-4,NC-VOID,admin,Paperwork,${d.day_b},${base},25,1,`,
+    `COST-5,NC-OPEN,other,A credit typed as a cost,${d.day_a},${published[0]},-5,1,`,
+  ].join('\n');
+  await openWizard(/^NC cost lines/, 'old-costs.csv', costs);
+  await see(page.getByText('Currencies and exchange rates'));
+  const link = page.getByRole('listitem', { name: 'Non-conformance', exact: true });
+  await link.getByRole('button', { name: 'Show settings for Non-conformance' }).click();
+  await link.getByRole('combobox', { name: /^Match by/ }).click();
+  await page.getByRole('option', { name: 'Id from an earlier import' }).click();
+  await see(link.getByText(/importing the non-conformances through this connection first/));
+  await page.locator('label', { has: page.getByRole('switch', { name: /Allow costs on closed or cancelled non-conformances/ }) }).click();
+  await shot(page, 'cost-import-mapping');
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Save and / }).click();
+  await page.waitForURL(/\/runs\//);
+  await see(page.getByRole('table', { name: /Cost lines by currency/ }));
+  await see(page.getByText('1 line will wait for a rate'));
+  await see(page.getByText(/2 lines on closed non-conformances and 1 line on cancelled ones/));
+  await see(page.getByText(/1 line carries the value your source booked/));
+  await shot(page, 'cost-import-preview');
+  const cnt = async () => (await stack.admin.query(`select count(*)::int as n from public.ncr_costs where organisation_id = $1 and description in ('Scrapped bars','Reworked housings','Courier to customer','Paperwork')`, [org.id])).rows[0].n;
+  if ((await cnt()) !== 0) throw new Error('the preview wrote cost lines');
+
+  step('owner imports them: converted on their own dates, one waiting for a rate, one actual, the credit rejected');
+  await page.getByRole('button', { name: 'Import these records' }).click();
+  await page.waitForURL(/\/runs\//);
+  await see(page.getByText('1 imported line is still waiting for a rate'));
+  await shot(page, 'cost-import-run');
+  const lines = Object.fromEntries((await stack.admin.query(
+    `select description, rate_status, override_kind, net_base::text as net_base, base_currency from public.ncr_costs where organisation_id = $1
+        and description in ('Scrapped bars','Reworked housings','Courier to customer','Paperwork','A credit typed as a cost')`, [org.id])).rows.map((r) => [r.description, r]));
+  if (Object.keys(lines).length !== 4 || lines['A credit typed as a cost']) throw new Error(`the wrong lines were written: ${JSON.stringify(lines)}`);
+  if (lines['Scrapped bars'].rate_status !== 'estimated' || Number(lines['Scrapped bars'].net_base) !== 160) throw new Error(`COST-1 was not converted on its date: ${JSON.stringify(lines['Scrapped bars'])}`);
+  if (lines['Reworked housings'].rate_status !== 'actual' || lines['Reworked housings'].override_kind !== 'amount' || Number(lines['Reworked housings'].net_base) !== 30) throw new Error(`COST-2 did not keep the booked value: ${JSON.stringify(lines['Reworked housings'])}`);
+  if (lines['Courier to customer'].rate_status !== 'needed' || lines['Courier to customer'].net_base !== null) throw new Error(`COST-3 should wait for a rate: ${JSON.stringify(lines['Courier to customer'])}`);
+  if (lines.Paperwork.rate_status !== 'base') throw new Error(`COST-4 is in the site currency: ${JSON.stringify(lines.Paperwork)}`);
+
+  step('the closed non-conformance shows its costs and the line waiting for a rate');
+  const done = (await stack.admin.query(`select id, reference from public.nonconformances where organisation_id = $1 and title = 'Wrong finish'`, [org.id])).rows[0];
+  await page.goto(`${APP}/Non-Conformance/Register/${done.id}`);
+  await see(page.getByRole('heading', { level: 1, name: done.reference }));
+  const summary = page.getByRole('region', { name: 'Cost summary' });
+  await see(summary.getByText(/1 line is waiting for an exchange rate/));
+  await see(page.getByRole('table', { name: 'Costs' }).getByText('Scrapped bars'));
+  await shot(page, 'cost-import-nc-waiting');
+
+  step('the rate arrives: the worker fills the waiting line in');
+  await seedRate(d.day_a, unpublished);
+  await stack.tick();
+  const filled = (await stack.admin.query(`select rate_status, net_base::text as net_base from public.ncr_costs where organisation_id = $1 and description = 'Courier to customer'`, [org.id])).rows[0];
+  if (filled.rate_status !== 'estimated' || Number(filled.net_base) !== 56) throw new Error(`the waiting line was not filled when its rate arrived: ${JSON.stringify(filled)}`);
+  await page.reload();
+  await see(page.getByRole('region', { name: 'Cost summary' }).getByText('Estimated', { exact: true }));
+  if (await page.getByText(/waiting for an exchange rate/).count()) throw new Error('the waiting notice is still shown after the rate arrived');
+  await shot(page, 'cost-import-nc-filled');
+  log(`cost import: ${Object.keys(lines).length} lines in ${[...published, unpublished, base].join(', ')}; COST-3 waited for ${unpublished} and was filled by the worker`);
 }
 async function networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
   const OFFICE = '203.0.113.10';

@@ -12,6 +12,7 @@ import {
 import ConnectionForm from "../integrations/ConnectionForm";
 import DatabaseConnectionDialog from "../integrations/database/DatabaseConnectionDialog";
 import { HealthCard } from "../integrations/KeepHealthy";
+import PowerBiCard from "../integrations/PowerBiCard";
 import { useAgents } from "../../hooks/useAgents";
 import { agentsPath } from "../../lib/agents";
 import Field from "../ui/Field";
@@ -336,6 +337,8 @@ const IntegrationsHome = () => {
       <AdvancedImports />
 
       <AllowedHosts />
+
+      <PowerBiCard />
 
       {recent.length > 0 && (
         <MenuCard

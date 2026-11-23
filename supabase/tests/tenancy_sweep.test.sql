@@ -529,6 +529,9 @@ BEGIN
   INSERT INTO public.integration_agent_jobs (organisation_id, agent_id, kind)
     SELECT a, id, 'ping' FROM public.integration_agents WHERE organisation_id = a;
   INSERT INTO sweep VALUES ('agent', (SELECT id FROM public.integration_agents WHERE organisation_id = a));
+  -- Reporting keys (RP1): seeded directly; people write through functions, the API login reads by hash.
+  INSERT INTO public.reporting_keys (organisation_id, user_id, name, key_prefix, key_hash, expires_at)
+    VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'Sweep key', 'abcd1234', encode(sha256(convert_to('sweep-report-key', 'UTF8')), 'hex'), now() + interval '30 days');
   INSERT INTO public.integration_agent_releases (version, platform, url, sha256, size_bytes, manifest, signature, key_id)
     SELECT '9.9.' || (SELECT count(*) FROM public.integration_agent_releases), 'win-x64', 'https://releases.example.com/agent.zip', repeat('a', 64), 1,
            '{}', repeat('A', 86) || '==', repeat('b', 16);

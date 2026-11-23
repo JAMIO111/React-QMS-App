@@ -84,6 +84,9 @@ import { StripeGateway, StripeSdkGateway } from './billing/stripe.gateway';
 import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
+import { ReportKeyAuth } from './reporting/report-key-auth';
+import { ReportingController } from './reporting/reporting.controller';
+import { ReportingService } from './reporting/reporting.service';
 import { CustomFieldsController, CustomValuesController } from './custom-fields/custom-fields.controller';
 import { CompetenceController } from './competence/competence.controller';
 import { DocumentsController } from './documents/documents.controller';
@@ -292,6 +295,7 @@ export class AppModule implements NestModule {
         StripeWebhookController,
         NotificationsController,
         SavedFiltersController,
+        ReportingController,
         CustomFieldsController,
         CustomValuesController,
         SupplierQualityController,
@@ -406,6 +410,8 @@ export class AppModule implements NestModule {
         CostCurrencyService,
         NotificationsService,
         SavedFiltersService,
+        ReportingService,
+        ReportKeyAuth,
         CustomFieldsService,
         SupplierQualityService,
         CompetenceService,

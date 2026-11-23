@@ -528,6 +528,7 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/integrations/agents/{id}': undefined,
     'PATCH /api/v1/integrations/agents/{id}': { name: 'Hijacked' },
     'POST /api/v1/integrations/agents/{id}/revoke': { reason: 'Hijacked' },
+    'POST /api/v1/reporting/keys/{id}/revoke': { reason: 'Hijacked' },
     'POST /api/v1/integrations/agents/{id}/wake': undefined,
     'POST /api/v1/integrations/agents/{id}/ping': {},
     'POST /api/v1/integrations/agents/{id}/rotate-keys': {},
@@ -1056,6 +1057,7 @@ const hasSample = (op: Op) =>
     'GET /api/v1/integrations/agents/{id}',
     'PATCH /api/v1/integrations/agents/{id}',
     'POST /api/v1/integrations/agents/{id}/revoke',
+    'POST /api/v1/reporting/keys/{id}/revoke',
     'POST /api/v1/integrations/agents/{id}/wake',
     'POST /api/v1/integrations/agents/{id}/ping',
     'POST /api/v1/integrations/agents/{id}/rotate-keys',
@@ -1144,6 +1146,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/external-access/comments/') || path.startsWith('/api/v1/portal/comments/')) return a.portalComment;
   if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
+  if (path.startsWith('/api/v1/reporting/keys/')) return a.reportingKey;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
   if (path.startsWith('/api/v1/integrations/agent-updates/')) return a.agentUpdate;
   if (path.startsWith('/api/v1/integrations/agent-registrations/')) return a.agentRegistration;
@@ -1404,6 +1407,7 @@ beforeAll(async () => {
     a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;
     // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
     a.agent = (await admin.query(`insert into public.integration_agents (organisation_id, name) values ($1, 'Sweep agent') returning id`, [ids.orgA])).rows[0].id;
+    a.reportingKey = (await admin.query(`insert into public.reporting_keys (organisation_id, user_id, name, key_prefix, key_hash, expires_at) values ($1, $2, 'Sweep key', 'abcd1234', repeat('c', 64), now() + interval '30 days') returning id`, [ids.orgA, ids.ownerA])).rows[0].id;
     a.agentJob = (await admin.query(`insert into public.integration_agent_jobs (organisation_id, agent_id, kind) values ($1, $2, 'ping') returning id`, [ids.orgA, a.agent])).rows[0].id;
     // AG6b: a release (global) and a waiting update of A's agent to it.
     const sweepRelease = (await admin.query(`insert into public.integration_agent_releases (version, platform, url, sha256, size_bytes, manifest, signature, key_id)
@@ -1619,7 +1623,8 @@ describe('tenancy sweep over every API route', () => {
   it('never includes another organisation’s identifiers in list responses', async () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
-    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview'];
+    // The reporting datasets take a dataset key in the path; their isolation (a key reads only its own organisation) is tested in reporting.e2e-spec.ts.
+    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview', '/api/v1/reporting/v1/{dataset}'];
     // The portal's own routes (external people only) answer an organisation owner 404 by design; external-portal.e2e-spec.ts covers them.
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path) && !o.path.startsWith('/api/v1/portal/'));
     const leaks: string[] = [];

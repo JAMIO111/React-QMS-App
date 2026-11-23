@@ -134,7 +134,8 @@ export class OrganisationGuard implements CanActivate {
       }
     }
     // The organisation's maximum session age (docs/security-plan.md S11): sign in again after N hours, counted from the sign-in in the token.
-    if (max_session_hours != null && sessionTooOld(ctx.user.claims as Record<string, unknown>, Number(max_session_hours))) {
+    // (A reporting key has no sign-in time to count from; its own expiry limits it.)
+    if (!req.reportKey && max_session_hours != null && sessionTooOld(ctx.user.claims as Record<string, unknown>, Number(max_session_hours))) {
       throw new ApiError(401, 'reauthentication_required', `This organisation asks you to sign in again every ${hoursWords(Number(max_session_hours))}. Please sign in again.`, {
         maxSessionHours: Number(max_session_hours),
       });

@@ -84,6 +84,7 @@ import { StripeGateway, StripeSdkGateway } from './billing/stripe.gateway';
 import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
+import { SearchController, SearchService } from './search/search.service';
 import { ReportKeyAuth } from './reporting/report-key-auth';
 import { ReportingController } from './reporting/reporting.controller';
 import { ReportingService } from './reporting/reporting.service';
@@ -295,6 +296,7 @@ export class AppModule implements NestModule {
         StripeWebhookController,
         NotificationsController,
         SavedFiltersController,
+        SearchController,
         ReportingController,
         CustomFieldsController,
         CustomValuesController,
@@ -410,6 +412,7 @@ export class AppModule implements NestModule {
         CostCurrencyService,
         NotificationsService,
         SavedFiltersService,
+        SearchService,
         ReportingService,
         ReportKeyAuth,
         CustomFieldsService,

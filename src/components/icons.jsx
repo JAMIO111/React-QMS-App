@@ -138,6 +138,8 @@ import {
   Target as LucideTarget,
   Sparkles as LucideSparkles,
   Clock as LucideClock,
+  Command as LucideCommand,
+  CornerDownLeft as LucideCornerDownLeft,
   Thermometer as LucideThermometer,
   Droplets as LucideDroplets,
   FlaskConical as LucideFlaskConical,
@@ -316,6 +318,8 @@ export const PresentationIcon = withDefaults(LucidePresentation);
 export const TargetIcon = withDefaults(LucideTarget);
 export const SparklesIcon = withDefaults(LucideSparkles);
 export const ClockIcon = withDefaults(LucideClock);
+export const CommandIcon = withDefaults(LucideCommand);
+export const CornerDownLeftIcon = withDefaults(LucideCornerDownLeft);
 export const ThermometerIcon = withDefaults(LucideThermometer);
 export const DropletsIcon = withDefaults(LucideDroplets);
 export const FlaskConicalIcon = withDefaults(LucideFlaskConical);

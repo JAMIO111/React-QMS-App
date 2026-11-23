@@ -3,6 +3,7 @@ import "./App.css";
 import Navbar from "./components/Navbar";
 import Header from "./components/Header";
 import { SearchProvider } from "./contexts/SearchProvider.jsx";
+import { CommandPaletteProvider } from "./contexts/CommandPaletteProvider.jsx";
 import { NotificationProvider } from "./contexts/NotificationProvider";
 import NotificationPane from "./components/NotificationPane";
 import NoOrganisation from "./components/NoOrganisation";
@@ -133,30 +134,32 @@ function App() {
 
   return (
     <SearchProvider>
-      <NotificationProvider>
-        <ThemeColourSync />
-        <NotificationPane />
-        <div className="relative flex w-screen h-dvh overflow-clip bg-primary-bg">
-          <div className="hidden md:block">
-            <Navbar />
-          </div>
-          <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
-            <Header />
-            <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
-              {ssoHere ? (
-                <SsoRequired organisations={[{ id: organisation.id, name: organisation.name, providerId: ssoRequired.providerId, breakGlass: ssoRequired.breakGlass }]} />
-              ) : networkBlocked ? (
-                <NetworkBlocked address={network.address ?? blockedBy?.address ?? null} onRetry={retry} retrying={retrying} />
-              ) : (
-                <>
-                  {!gated && <SubscriptionBanner />}
-                  {gated && !settingsRoute ? <SubscriptionNeeded /> : <Outlet />}
-                </>
-              )}
+      <CommandPaletteProvider>
+        <NotificationProvider>
+          <ThemeColourSync />
+          <NotificationPane />
+          <div className="relative flex w-screen h-dvh overflow-clip bg-primary-bg">
+            <div className="hidden md:block">
+              <Navbar />
             </div>
-          </main>
-        </div>
-      </NotificationProvider>
+            <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
+              <Header />
+              <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
+                {ssoHere ? (
+                  <SsoRequired organisations={[{ id: organisation.id, name: organisation.name, providerId: ssoRequired.providerId, breakGlass: ssoRequired.breakGlass }]} />
+                ) : networkBlocked ? (
+                  <NetworkBlocked address={network.address ?? blockedBy?.address ?? null} onRetry={retry} retrying={retrying} />
+                ) : (
+                  <>
+                    {!gated && <SubscriptionBanner />}
+                    {gated && !settingsRoute ? <SubscriptionNeeded /> : <Outlet />}
+                  </>
+                )}
+              </div>
+            </main>
+          </div>
+        </NotificationProvider>
+      </CommandPaletteProvider>
     </SearchProvider>
   );
 }

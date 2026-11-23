@@ -234,6 +234,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner });
   await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
   await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
   await costImport({ page, stack, APP, orgName, see, shot, step, log });
@@ -2178,6 +2179,53 @@ async function editConflicts({ browser, page, stack, APP, orgName, see, shot, st
   if (row.description !== 'Operator skipped the chamfer tool' || row.title !== 'Chamfer missing on op 20' || row.severity !== 'major') throw new Error(`the owner's choice was not saved: ${JSON.stringify(row)}`);
   log(`edit conflicts: ${ncr.reference} kept both changes, then the owner's description`);
   await ctx.close();
+}
+
+/** The header palette (docs/command-palette-plan.md): the closed bar filters the register, Ctrl+K opens the palette over it, finds a record, opens it, remembers it. */
+async function commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Zebra stripe on bracket', siteId: org.site, categoryId: product.id });
+
+  step('the closed bar filters the register on screen');
+  await page.goto(`${APP}/Non-Conformance/Register`);
+  const bar = page.locator('#Global\\ Search\\ Bar');
+  await see(bar);
+  await bar.fill('Zebra stripe');
+  await see(page.getByRole('row').filter({ hasText: ncr.reference }));
+  if ((await page.getByRole('dialog', { name: 'Command palette' }).count()) !== 0) throw new Error('typing in the bar must not open the palette');
+
+  step('Ctrl+K opens the palette empty; Esc brings the bar back with its filter');
+  await page.keyboard.press('Control+k');
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await see(palette);
+  const box = palette.getByRole('combobox', { name: /search pages, actions and records/i });
+  if ((await box.inputValue()) !== '') throw new Error('the palette must start empty');
+  await see(palette.getByRole('region', { name: 'Pages' }));
+  await shot(page, 'palette-empty');
+  await page.keyboard.press('Escape');
+  if ((await palette.count()) !== 0) throw new Error('Esc must close the palette');
+  if ((await bar.inputValue()) !== 'Zebra stripe') throw new Error("the bar's filter must be left alone");
+
+  step('the palette finds the record, opens it and remembers it');
+  await page.getByRole('button', { name: 'Open the command palette' }).click();
+  await box.fill('zebra stripe');
+  const found = page.getByRole('region', { name: 'Non-conformances' });
+  await see(found.getByRole('option', { name: new RegExp(ncr.reference) }));
+  await shot(page, 'palette-record');
+  await found.getByRole('option', { name: new RegExp(ncr.reference) }).click();
+  await see(page.getByRole('heading', { level: 1, name: ncr.reference }));
+  if ((await palette.count()) !== 0) throw new Error('choosing a result must close the palette');
+
+  step('the next time it opens, the record is in Recently opened, and a page is found by typing and Enter');
+  await page.keyboard.press('Control+k');
+  await see(palette.getByRole('region', { name: 'Recently opened' }).getByRole('option', { name: new RegExp(ncr.reference) }));
+  await box.fill('audit sched');
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/\/Audits\/Schedule/);
+  log('palette: filtered the register, found a record, opened it, remembered it, jumped to a page');
 }
 
 async function costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner }) {

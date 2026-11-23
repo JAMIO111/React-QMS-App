@@ -10,6 +10,7 @@ const apiFetch = vi.fn();
 const confirm = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
+vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "", setSearchTerm: vi.fn() }) }));
 vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => confirm }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
@@ -108,26 +109,44 @@ beforeEach(() => {
   permissions = ["documentation.read", "documentation.manage", "documentation.issue"];
 });
 
+const paged = (data) => ({ data, page: 1, pageSize: 25, total: data.length });
+
 describe("Quality alerts register", () => {
-  it("lists alerts with reference and revision, severity and status as words, and filters through the URL", async () => {
-    apiFetch.mockResolvedValue({ data: [summary(), summary({ id: "a2", reference: "QA-002", revisionLetter: "A", title: "Gauge out of calibration", severity: "critical", status: "draft", inForce: false, effectiveDate: null, expiryDate: null })] });
+  it("lists alerts with reference and revision, severity and status as words, and filters through the drawer and the URL", async () => {
+    apiFetch.mockResolvedValue(paged([summary(), summary({ id: "a2", reference: "QA-002", revisionLetter: "A", title: "Gauge out of calibration", severity: "critical", status: "draft", inForce: false, effectiveDate: null, expiryDate: null })]));
     const where = renderAt("/Documentation/Quality-Alerts");
-    const table = await screen.findByRole("table", { name: "Quality alerts" });
+    const table = await screen.findByRole("region", { name: "Quality alerts" });
     expect(within(table).getByRole("link", { name: "QA-001 rev B" })).toHaveAttribute("href", "/Documentation/Quality-Alerts/a1");
     expect(within(table).getByText("Critical")).toBeInTheDocument();
     expect(within(table).getByText("Draft")).toBeInTheDocument();
     expect(within(table).getByText("5 Nov 2026")).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Severity"), "critical");
-    expect(where()).toContain("severity=critical");
+    expect(screen.getByText(/2 quality alerts \(newest revisions\)/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const pane = screen.getByRole("dialog", { name: "Filter quality alerts" });
+    await userEvent.click(within(pane).getByLabelText("Critical"));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(where()).toContain("severity=critical"));
     expect(apiFetch.mock.calls.at(-1)[0]).toContain("severity=critical");
+    expect(await screen.findByLabelText("Active filters")).toHaveTextContent("Severity: Critical");
     expect(screen.getByRole("button", { name: /New quality alert/ })).toBeInTheDocument();
+  });
+
+  it("sorts on the server when a column header is clicked, and the columns can be chosen", async () => {
+    apiFetch.mockResolvedValue(paged([summary()]));
+    renderAt("/Documentation/Quality-Alerts");
+    await screen.findByRole("region", { name: "Quality alerts" });
+    expect(apiFetch.mock.calls.at(-1)[0]).toMatch(/sort=reference&order=desc&page=1&pageSize=25/);
+    await userEvent.click(within(screen.getByRole("columnheader", { name: /Severity/ })).getByRole("button"));
+    await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toMatch(/sort=severity&order=asc/));
+    expect(screen.getByRole("button", { name: /columns/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Issued by/ })).toBeNull(); // hidden until chosen
   });
 
   it("offers no New button without documentation.manage", async () => {
     permissions = ["documentation.read"];
-    apiFetch.mockResolvedValue({ data: [] });
+    apiFetch.mockResolvedValue(paged([]));
     renderAt("/Documentation/Quality-Alerts");
-    expect(await screen.findByText("No quality alerts match.")).toBeInTheDocument();
+    await screen.findByRole("region", { name: "Quality alerts" });
     expect(screen.queryByRole("button", { name: /New quality alert/ })).toBeNull();
   });
 });
@@ -427,21 +446,24 @@ describe("My alerts", () => {
 
 describe("Register for managers", () => {
   it("shows acknowledgement progress and filters to overdue", async () => {
-    apiFetch.mockResolvedValue({ data: [summary()] });
+    apiFetch.mockResolvedValue(paged([summary()]));
     renderAt("/Documentation/Quality-Alerts");
-    const table = await screen.findByRole("table", { name: "Quality alerts" });
+    const table = await screen.findByRole("region", { name: "Quality alerts" });
     expect(within(table).getByText(/3 of 5/)).toBeInTheDocument();
     expect(within(table).getByText(/2 overdue/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
     await userEvent.click(screen.getByRole("checkbox", { name: /overdue acknowledgements/ }));
-    expect(apiFetch.mock.calls.at(-1)[0]).toContain("overdue=true");
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Filter quality alerts" })).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(apiFetch.mock.calls.at(-1)[0]).toContain("overdue=true"));
   });
 
   it("readers see no progress column or overdue filter", async () => {
     permissions = ["documentation.read"];
-    apiFetch.mockResolvedValue({ data: [summary({ progress: null })] });
+    apiFetch.mockResolvedValue(paged([summary({ progress: null })]));
     renderAt("/Documentation/Quality-Alerts");
-    const table = await screen.findByRole("table", { name: "Quality alerts" });
+    const table = await screen.findByRole("region", { name: "Quality alerts" });
     expect(within(table).queryByText("Acknowledged")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
     expect(screen.queryByRole("checkbox", { name: /overdue/ })).toBeNull();
   });
 });

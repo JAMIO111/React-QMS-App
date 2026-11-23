@@ -65,6 +65,20 @@ const toAttachment = (r: Row): z.infer<typeof Attachment> => ({
   deleteReason: (r.delete_reason as string) ?? null,
 });
 
+/** The register's sort fields; `reference` sorts by alert number then revision (the tie-break), so it needs no lead column. */
+const SORT_SQL: Record<string, string | null> = {
+  reference: null,
+  title: 'lower(a.title)',
+  category: 'a.category',
+  severity: "case a.severity when 'critical' then 4 when 'high' then 3 when 'medium' then 2 else 1 end",
+  status: 'a.status',
+  effectiveDate: 'a.effective_date',
+  expiryDate: 'a.expiry_date',
+  acknowledgeBy: 'a.acknowledge_by',
+  issuedAt: 'a.issued_at',
+  updatedAt: 'a.updated_at',
+};
+
 const COLUMNS: Record<string, string> = {
   title: 'title', category: 'category', severity: 'severity', description: 'description',
   effectiveDate: 'effective_date', expiryDate: 'expiry_date', acknowledgeBy: 'acknowledge_by', revisionReason: 'revision_reason',
@@ -80,28 +94,41 @@ const DATE_COLUMNS = new Set(['effectiveDate', 'expiryDate', 'acknowledgeBy']);
 export class DocumentationService {
   constructor(private readonly database: DatabaseService) {}
 
-  list(ctx: RequestContext, q: ListQuery): Promise<{ data: AlertSummary[] }> {
+  list(ctx: RequestContext, q: ListQuery): Promise<{ data: AlertSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       await this.expire(db, ctx);
       const manager = await this.isManager(db, ctx);
       const where: SQL[] = [sql`a.organisation_id = ${orgOf(ctx)}::uuid`, sql`a.deleted_at is null`];
-      // The newest revision of each alert number, unless a lifecycle state was asked for.
-      if (!q.status || q.status === 'all') {
+      // The newest revision of each alert number, unless lifecycle states were asked for.
+      const statuses = (q.status ?? 'all').split(',').filter((x) => x !== 'all');
+      if (statuses.length === 0) {
         where.push(sql`a.revision = (select max(l.revision) from public.quality_alerts l where l.organisation_id = a.organisation_id and l.alert_number = a.alert_number and l.deleted_at is null)`);
       } else {
-        where.push(sql`a.status = ${q.status}`);
+        where.push(sql`a.status = any(string_to_array(${statuses.join(',')}, ','))`);
       }
       if (q.overdue === 'true' && manager) {
         where.push(sql`a.status = 'active' and a.acknowledge_by < current_date and exists (select 1 from public.quality_alert_recipients r where r.alert_id = a.id and r.acknowledged_at is null)`);
       }
-      if (q.category) where.push(sql`a.category = ${q.category}`);
-      if (q.severity) where.push(sql`a.severity = ${q.severity}`);
+      if (q.category) where.push(sql`a.category = any(string_to_array(${q.category}, ','))`);
+      if (q.severity) where.push(sql`a.severity = any(string_to_array(${q.severity}, ','))`);
+      if (q.from) where.push(sql`a.effective_date >= ${q.from}::date`);
+      if (q.to) where.push(sql`a.effective_date <= ${q.to}::date`);
+      if (q.expiresFrom) where.push(sql`a.expiry_date >= ${q.expiresFrom}::date`);
+      if (q.expiresTo) where.push(sql`a.expiry_date <= ${q.expiresTo}::date`);
       if (q.q) {
         const like = `%${q.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
         where.push(sql`(a.title ilike ${like} or a.reference ilike ${like})`);
       }
-      const rows = await db.execute<Row>(sql`${SELECT} where ${sql.join(where, sql` and `)} order by a.alert_number desc, a.revision desc limit ${q.limit}`);
-      return { data: rows.rows.map((r) => toSummary(r, manager)) };
+      const clause = sql.join(where, sql` and `);
+      const pageSize = q.pageSize ?? q.limit;
+      const dir = q.order === 'asc' ? 'asc' : 'desc';
+      const lead = SORT_SQL[q.sort];
+      // Ties (and the reference sort itself) go by alert number then revision, in the direction asked for the reference.
+      const tie = q.sort === 'reference' ? dir : 'desc';
+      const order = sql.raw(`${lead ? `${lead} ${dir} nulls last, ` : ''}a.alert_number ${tie}, a.revision ${tie}`);
+      const rows = await db.execute<Row>(sql`${SELECT} where ${clause} order by ${order} limit ${pageSize} offset ${(q.page - 1) * pageSize}`);
+      const count = await db.execute<{ n: number }>(sql`select count(*)::int as n from public.quality_alerts a where ${clause}`);
+      return { data: rows.rows.map((r) => toSummary(r, manager)), page: q.page, pageSize, total: Number(count.rows[0].n) };
     });
   }
 

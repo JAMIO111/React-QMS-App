@@ -66,6 +66,10 @@ export const useAuditScheduleFilters = () => useUrlFilters(AUDIT_SCHEDULE_FILTER
 export const CAPA_FILTER_KEYS = ["search", "stage", "source", "severity", "owner", "overdue", "from", "to"];
 export const useCapaFilters = () => useUrlFilters(CAPA_FILTER_KEYS);
 
+/** Quality alert register filters. Empty status = the newest revision of each alert; named states list every revision in them. */
+export const QUALITY_ALERT_FILTER_KEYS = ["search", "status", "category", "severity", "overdue", "from", "to", "expiresFrom", "expiresTo"];
+export const useQualityAlertFilters = () => useUrlFilters(QUALITY_ALERT_FILTER_KEYS);
+
 /** Supplier register filters. Empty `active` = active suppliers only; `inactive` or `all` otherwise. Classifications are ids (comma list). */
 export const SUPPLIER_FILTER_KEYS = ["search", "status", "type", "classification", "risk", "active"];
 export const useSupplierFilters = () => useUrlFilters(SUPPLIER_FILTER_KEYS);

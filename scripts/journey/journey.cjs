@@ -237,6 +237,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
   await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
   await costImport({ page, stack, APP, orgName, see, shot, step, log });
+  await recordFilters({ page, stack, APP, orgName, see, shot, step, log });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -1051,6 +1052,75 @@ async function importWithTemplate({ page, stack, APP, orgName, see, shot, step, 
   await see(page.getByRole('button', { name: 'Version 1' }));
   await see(page.getByText('CONCAT([Name], " in ", [Area])'));
   await shot(page, '62-template-manager');
+}
+
+/**
+ * Record filters for imports (docs/import-filters-plan.md, F4): a file of four machines is imported through the wizard with a filter on Status. The filter
+ * step says how many records it keeps (and warns when it would keep nothing), the mapping step shows the filter in words, the import writes only the kept
+ * machines, and the run page says how many were filtered out and lists them with the reason. The filter is saved with the template.
+ */
+async function recordFilters({ page, stack, APP, orgName, see, shot, step, log }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const site = (await stack.admin.query(`select code from public.sites where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0].code;
+
+  step('owner imports only the active machines of a file: a filter on Status');
+  await page.goto(`${APP}/Settings/Integrations`);
+  await page.getByRole('link', { name: /Import a file/ }).click();
+  await page.getByRole('button', { name: /^Machines/ }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByText('How to read the file'));
+  const csv = ['Code,Name,Site,Status', `FL-1,front lathe,${site},Active`, `FL-2,front mill,${site},Active`, `FL-3,old press,${site},Retired`, `FL-4,broken saw,${site},Scrapped`].join('\n');
+  await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'status-machines.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await see(page.getByRole('table', { name: 'First rows' }));
+  // Start a new mapping rather than the template an earlier import used (its fields name columns this file does not have).
+  const at = new URL(page.url());
+  at.searchParams.set('template', 'new');
+  at.searchParams.set('step', '3');
+  await page.goto(at.toString());
+
+  await see(page.getByText(/No filter: every record \(4\) is read/));
+  await page.getByRole('button', { name: 'Add a filter' }).click();
+  const rule = page.getByRole('listitem', { name: 'Rule 1' });
+  await rule.getByRole('combobox', { name: 'Column' }).click();
+  await page.getByRole('option', { name: /^Status/ }).click();
+  // A value no record has: the step warns that nothing would be read, and still lets the person carry on.
+  await rule.getByRole('textbox', { name: 'Value for rule 1' }).fill('Nothing');
+  await see(page.getByText('This filter keeps nothing'));
+  await rule.getByRole('textbox', { name: 'Value for rule 1' }).fill('Active');
+  await see(page.getByText('2 of 4 records kept').first());
+  await see(page.getByRole('table', { name: 'Some records that are skipped' }).getByText('Retired'));
+  await shot(page, '63-import-filter-step');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+
+  await see(page.getByText(/Read only the records where Status is "Active"/));
+  await see(page.getByRole('listitem', { name: 'Code', exact: true }));
+  await page.getByRole('button', { name: 'Import 4 rows' }).click();
+  const dialog = page.getByRole('dialog');
+  await see(dialog.getByLabel('Template name'));
+  await dialog.getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+
+  step('the run says how many records the filter left out, and lists them with the reason');
+  await see(page.getByText('50% left out by the filter'));
+  await page.getByRole('button', { name: /Filtered out/ }).click();
+  await see(page.getByRole('list', { name: 'Rows' }).getByText(/Filtered out: does not meet Status is "Active"/).first());
+  await shot(page, '64-import-filtered-run');
+  const made = (await stack.admin.query(`select code from public.machines where organisation_id = $1 and code like 'FL-%' order by code`, [org.id])).rows.map((r) => r.code);
+  log(`machines written by the filtered import: ${JSON.stringify(made)}`);
+  if (made.join(',') !== 'FL-1,FL-2') throw new Error(`the filter did not decide what was imported: ${JSON.stringify(made)}`);
+  const run = (await stack.admin.query(`select records_total, skipped, filtered, created from public.integration_sync_runs where organisation_id = $1 and entity_type = 'machine' order by requested_at desc limit 1`, [org.id])).rows[0];
+  if (Number(run.records_total) !== 4 || Number(run.filtered) !== 2 || Number(run.created) !== 2) throw new Error(`the run's counts are wrong: ${JSON.stringify(run)}`);
+
+  step('the filter is saved with the template');
+  const saved = (await stack.admin.query(
+    `select v.settings -> 'filters' as filters from public.integration_template_versions v join public.integration_templates t on t.id = v.template_id
+      where t.organisation_id = $1 and t.name = 'Machines from status-machines.csv' order by v.version desc limit 1`, [org.id])).rows[0];
+  // jsonb keeps its keys in its own order, so compare what the filter says rather than how it is written.
+  const f = saved?.filters;
+  const r0 = f?.rules?.[0];
+  if (!f || f.mode !== 'keep' || f.match !== 'all' || f.rules.length !== 1 || r0.column !== 'Status' || r0.test !== 'equals' || r0.value !== 'Active') {
+    throw new Error(`the template did not keep the filter: ${JSON.stringify(saved)}`);
+  }
 }
 
 /**

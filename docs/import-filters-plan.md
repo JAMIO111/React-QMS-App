@@ -1,6 +1,6 @@
 # Record filters for imports — plan
 
-Agreed with the owner 2026-11-23. Slices F1–F4; **F1 (engine, database, API) built**.
+Agreed with the owner 2026-11-23. Slices F1–F4, **all built** (exit report `docs/import-filters-exit-report.md`).
 
 ## 1. What was asked
 A way, before the mapping, to filter out certain records from an import. A new step where the user picks one or more filters.
@@ -20,7 +20,7 @@ A way, before the mapping, to filter out certain records from an import. A new s
 - **F1 (built):** `core/filters.ts` (rules, formula, validation, words; unit tests), migration `20260423100000_import_filters.sql`, the engine, the template API, `POST /integrations/templates/filter-preview`, run counts `filtered`.
 - **F2 (built):** the wizard step and the card on the API / agent mapping page: rule builder with column combos (the file's real headings and examples), live "N of M kept", counts per rule, a few records of each kind.
 - **F3 (built):** run page "Filtered out" tile and list; the warning when a filter keeps under about 10% of rows; a scheduled import whose filter suddenly removes everything is flagged in the health card.
-- **F4:** exit check: browser journey step, live checks, exit report.
+- **F4 (built):** exit check: browser journey step, live checks, exit report.
 
 ## 4. What F1 built
 - **Database** (migration `20260423100000_import_filters.sql`, **not yet applied live**): `integration_inbox.filtered` and `.source_external_id`; `integration_sync_runs.filtered` (a subset of `skipped`); `app.integration_filter_problem(jsonb)` (the shape: keys, mode, match, ≤ 20 rules, ≤ 100 values, ≤ 500 characters each, ≤ 2,000-character formula, rules xor formula); `app.integration_template_settings` is now a wrapper over `…_core` (the old function renamed) that validates and keeps `filters` and drops one with nothing to do; `app.system_stage_integration_records` takes `filtered` / `sourceExternalId` per record and counts filtered; `app.integration_detect_missing` treats filtered records as present. All by checked text patches (`pg_temp.patch`).

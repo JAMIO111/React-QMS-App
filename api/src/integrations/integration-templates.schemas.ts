@@ -15,6 +15,8 @@ export const TemplateSettingsBody = z
     matchExisting: z.boolean().optional(),
     /** Cost lines only (IC1): may the import add costs to closed or cancelled non-conformances an import brought in. Off unless chosen. */
     costsOnClosed: z.boolean().optional(),
+    /** Cost lines only: what to do with a line that has no date: refuse it (the default) or give it the date its non-conformance was detected. */
+    missingDate: z.enum(['reject', 'nc_detected']).optional(),
   })
   .strict();
 
@@ -60,7 +62,7 @@ export const TemplateVersion = z.object({
   fields: z.array(z.record(z.string(), z.unknown())),
   sourceSettings: z.record(z.string(), z.unknown()),
   expectedColumns: z.array(z.string()),
-  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), costsOnClosed: z.boolean().optional() }),
+  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), costsOnClosed: z.boolean().optional(), missingDate: z.enum(['reject', 'nc_detected']).optional() }),
   reason: z.string().nullable(),
   current: z.boolean(),
   createdBy: Person,
@@ -118,6 +120,8 @@ export const PreviewTemplateBody = z
     fields: z.array(FieldMappingBody).max(100),
     /** Source row numbers to show (as the file numbers them); the first 20 rows when left out. */
     rows: z.array(z.number().int().min(1)).max(20).optional(),
+    /** The template's import settings, so the preview treats a cost line's date as the template does (optional with `missingDate: nc_detected`). */
+    settings: TemplateSettingsBody.optional(),
   })
   .strict()
   .refine((b) => !!b.fileId !== !!b.connectionId, 'Give a file or a connection to preview against');

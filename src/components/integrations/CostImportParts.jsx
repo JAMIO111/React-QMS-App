@@ -70,6 +70,12 @@ const CostRunCard = ({ run, preview }) => {
             {" "}They are accepted only when the template allows costs on closed or cancelled non-conformances an import brought in; otherwise the rows are rejected.
           </Callout>
         )}
+        {costs.datedFromNc > 0 && (
+          <Callout tone="info" title="Lines dated from their non-conformance">
+            {lines(costs.datedFromNc)} had no date, so {preview ? "will take" : "took"} the date their non-conformance was detected, and the exchange rate for that day.
+            If a non-conformance was imported without a detected date, that date is the day it was imported.
+          </Callout>
+        )}
         {costs.booked > 0 && (
           <p className="text-sm text-secondary-text">
             {lines(costs.booked)} carr{costs.booked === 1 ? "ies" : "y"} the value your source booked in the site currency. Where a conversion is needed, that value is kept and the line shows as Actual.

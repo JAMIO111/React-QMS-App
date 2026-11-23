@@ -234,3 +234,17 @@ Screens only, no migration. The migration of IC1 is applied live (2026-11-22, ch
 ## 11. IC4 built (2026-11-23)
 
 Journey step `costImport()` (`scripts/journey/journey.cjs`), live checks and the exit report `docs/cost-import-exit-report.md`. The whole journey passes. Not built: updating a posted line from the source, the currency figures in the mapping step.
+
+## 12. A line with no date (raised and built 2026-11-23, decision CI-D14)
+
+**Asked:** a cost line whose date is empty, or whose file has no date column mapped, should optionally take the non-conformance's date.
+
+**Decision CI-D14 (two choices only).** A cost template has a setting **When a line has no date**:
+- **Refuse the line** (`reject`, the default and what always happened): the row is rejected, because the date decides the exchange rate.
+- **Use the date the non-conformance was detected** (`nc_detected`): the line is dated that day and takes that day's rate (a detected date in the future counts as today, as any future line does).
+
+The import day is deliberately **not** offered: it would date a historical cost today and convert it at today's rate, silently. A line that has its own date always keeps it.
+
+**What it touches.** Migration `20260422100000_ncr_cost_missing_date.sql` (**applied live: not yet**) replaces `app.import_ncr_cost` (a sixth argument), patches `app.system_import_record` and `app.integration_template_settings`, adds `app.system_integration_run_settings` (API login only: the sync engine reads the run's frozen settings through it) and replaces `app.integration_cost_run_summary` (now `datedFromNc`) and `app.system_integration_cost_rates_needed` (the rates for the detected day are fetched before the lines are written). API: `catalogueForSettings` (`core/catalogue.ts`) makes `incurredOn` optional when the setting is on, used when a template is saved, previewed and by the engine; `TemplateSettingsBody`, template versions, run settings and `CostRunSummary` carry `missingDate` / `datedFromNc`; the preview endpoint takes `settings`. UI: a combo on the template settings card, the mapping step treats the date as optional while it is on (`fieldsForSettings`), the run page says how many lines took the non-conformance's date (`CostRunCard`).
+
+**The catch, said in the UI:** a non-conformance imported without a "Detected on" date was given the import day as its detected date, so its costs would take that day too. Map "Detected on" when importing the non-conformances if the dates matter.

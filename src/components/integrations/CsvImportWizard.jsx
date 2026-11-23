@@ -32,7 +32,7 @@ import {
   rowsInUse,
   rowsToFields,
 } from "../../lib/integrations";
-import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, defaultTemplate, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, MISSING_DATE_OPTIONS, defaultTemplate, fieldsForSettings, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
 import { formatDateTime } from "../../lib/processControl";
 import { CostCurrencyNotice } from "./CostImportParts";
 import { CheckIcon } from "@/components/icons";
@@ -330,7 +330,16 @@ export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly 
         </div>
       </div>
       {entityType === "ncr_cost" && (
-        <div className="mt-3 flex flex-col gap-1">
+        <div className="mt-3 flex flex-col gap-3">
+          <ComboField
+            label="When a line has no date"
+            value={settings.missingDate ?? "reject"}
+            onChange={(v) => onChange({ ...settings, missingDate: v ?? "reject" })}
+            options={MISSING_DATE_OPTIONS}
+            hint="The date decides the exchange rate. This covers an empty date and a file with no date column mapped."
+            disabled={readOnly}
+          />
+          <div className="flex flex-col gap-1">
           <Switch checked={!!settings.costsOnClosed} onChange={(e) => onChange({ ...settings, costsOnClosed: e.target.checked })} disabled={readOnly}>
             Allow costs on closed or cancelled non-conformances
           </Switch>
@@ -338,6 +347,7 @@ export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly 
             Off, a line for a closed or cancelled non-conformance is rejected. On, it is accepted when an import brought that non-conformance in (for example a history load);
             one made by hand in Fortress stays closed to new costs, and a deleted one never takes any.
           </p>
+          </div>
         </div>
       )}
     </MenuCard>
@@ -403,9 +413,13 @@ const CsvImportWizard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formKey]);
 
-  const fields = catalogue?.fields ?? [];
+  // A cost line with no date may take the date its non-conformance was detected, in which case the date need not be mapped.
+  const fields = fieldsForSettings(entityType, catalogue?.fields ?? [], form?.settings);
   const body = form ? rowsToFields(rowsInUse(form.rows), fields) : null;
-  const preview = useTemplatePreview(form && parsedOk && step === 3 ? { entityType, fileId, keyField: form.keyField ?? "", fields: body } : null, { enabled: step === 3 });
+  const preview = useTemplatePreview(
+    form && parsedOk && step === 3 ? { entityType, fileId, keyField: form.keyField ?? "", fields: body, ...(entityType === "ncr_cost" ? { settings: templateSettings(entityType, form.settings) } : {}) } : null,
+    { enabled: step === 3 },
+  );
 
   useBreadcrumbNames([{ path: "/Settings/Integrations/csv", label: "CSV or Excel file" }]);
   if (connections.isLoading || entities.isLoading || (connId && connection.isLoading) || (fileId && file.isLoading)) return <LoadingScreen />;

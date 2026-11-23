@@ -19,3 +19,6 @@ Plan `docs/cost-import-plan.md`, decisions CI-D1 to CI-D13. Slices IN-NC, IC1 (d
 - The currency figures for a file are on the run page (preview and finished), not the mapping step: the template preview has no rates.
 - Not tried against the real Frankfurter service (the journey and tests use the rate cache / a fake source).
 - A cost file linked by the Fortress reference rather than the source id is covered by the API e2e test, not by the journey.
+
+## Addendum 2026-11-23: a line with no date
+A cost template can now choose what a line with no date does: refuse it (default) or take the date its non-conformance was detected (plan §12, CI-D14). Two choices only; the import day is not one. Migration `20260422100000_ncr_cost_missing_date.sql`, **not yet applied live**; pushing the API before it leaves the preview and import of a template with the setting unaware of it. Evidence: SQL test (two deliberate breaks caught: the date used, the rate pre-fetch), API e2e (`integration-cost-import`, 12 passing), frontend tests in `CostImport.test.jsx`. Not browser-checked.

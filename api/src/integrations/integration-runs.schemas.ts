@@ -85,7 +85,7 @@ export const Run = z.object({
   /** The import template and the version this run was pinned to (UI2a); null when it used a connection mapping. */
   template: z.object({ id: z.string().uuid(), name: z.string(), version: z.number().int() }).nullable(),
   /** The import settings this run used (frozen when it was asked for); null for runs from before IN4. */
-  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), onMissing: z.string(), schedule: z.string(), costsOnClosed: z.boolean().optional() }).nullable(),
+  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), onMissing: z.string(), schedule: z.string(), costsOnClosed: z.boolean().optional(), missingDate: z.enum(['reject', 'nc_detected']).optional() }).nullable(),
 });
 export const RunPage = z.object({ data: z.array(Run), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
@@ -96,6 +96,8 @@ export const CostRunSummary = z.object({
   onClosed: z.number().int(),
   onCancelled: z.number().int(),
   booked: z.number().int(),
+  /** Lines with no date of their own that take the date their non-conformance was detected (the template's choice). */
+  datedFromNc: z.number().int().optional(),
   /** Lines already written that are still waiting for a rate. */
   waitingNow: z.number().int(),
 });

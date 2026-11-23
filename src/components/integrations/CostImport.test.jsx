@@ -8,7 +8,7 @@ vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOri
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 
 import { ENTITY_DESCRIPTIONS, ENTITY_LABELS, costSummaryWords, mappingToRows, matchHint } from "../../lib/integrations";
-import { ADD_ONLY_KINDS, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { ADD_ONLY_KINDS, fieldsForSettings, templateChanged, templateSettings } from "../../lib/importTemplates";
 import CostRunCard, { CostCurrencyNotice } from "./CostImportParts";
 import MappingStep from "./MappingStep";
 import ReferenceValuesDialog from "./ReferenceValues";
@@ -38,14 +38,14 @@ describe("cost import words and settings", () => {
   });
 
   it("keeps the closed-NC choice on a cost template only", () => {
-    expect(templateSettings("ncr_cost", { writeMode: "add_update", matchExisting: true, costsOnClosed: true })).toEqual({ writeMode: "add_only", matchExisting: false, costsOnClosed: true });
-    expect(templateSettings("ncr_cost", undefined)).toEqual({ writeMode: "add_only", matchExisting: false, costsOnClosed: false });
+    expect(templateSettings("ncr_cost", { writeMode: "add_update", matchExisting: true, costsOnClosed: true })).toEqual({ writeMode: "add_only", matchExisting: false, costsOnClosed: true, missingDate: "reject" });
+    expect(templateSettings("ncr_cost", undefined)).toEqual({ writeMode: "add_only", matchExisting: false, costsOnClosed: false, missingDate: "reject" });
     expect(templateSettings("nonconformance", { costsOnClosed: true })).toEqual({ writeMode: "add_only", matchExisting: false });
     expect(templateSettings("supplier", { writeMode: "add_update", matchExisting: true })).toEqual({ writeMode: "add_update", matchExisting: true });
   });
 
   it("counts a changed closed-NC choice as a change to the template", () => {
-    const version = { keyField: "id", fields: [], settings: { writeMode: "add_only", matchExisting: false, costsOnClosed: false } };
+    const version = { keyField: "id", fields: [], settings: { writeMode: "add_only", matchExisting: false, costsOnClosed: false, missingDate: "reject" } };
     expect(templateChanged(version, { keyField: "id", fields: [], settings: templateSettings("ncr_cost", { costsOnClosed: false }) })).toBe(false);
     expect(templateChanged(version, { keyField: "id", fields: [], settings: templateSettings("ncr_cost", { costsOnClosed: true }) })).toBe(true);
   });
@@ -82,6 +82,40 @@ describe("the cost template settings card", () => {
   it("cannot be changed by someone who may only look", () => {
     render(<TemplateSettingsCard entityType="ncr_cost" settings={{ writeMode: "add_only", matchExisting: false, costsOnClosed: true }} onChange={() => {}} readOnly />);
     expect(screen.getByRole("switch", { name: /Allow costs on closed/ })).toBeDisabled();
+  });
+});
+
+describe("a cost line with no date", () => {
+  it("is refused unless the template says to use the date the non-conformance was detected", () => {
+    expect(templateSettings("ncr_cost", { missingDate: "nc_detected" }).missingDate).toBe("nc_detected");
+    expect(templateSettings("ncr_cost", { missingDate: "import_day" }).missingDate).toBe("reject");
+    expect(templateSettings("nonconformance", { missingDate: "nc_detected" })).not.toHaveProperty("missingDate");
+  });
+
+  it("makes the date optional in the mapping only when the NC date is used", () => {
+    const fields = [{ key: "amount", required: true }, { key: "incurredOn", required: true }];
+    expect(fieldsForSettings("ncr_cost", fields, { missingDate: "reject" })).toBe(fields);
+    expect(fieldsForSettings("ncr_cost", fields, { missingDate: "nc_detected" }).map((f) => f.required)).toEqual([true, false]);
+    expect(fieldsForSettings("supplier", fields, { missingDate: "nc_detected" })).toBe(fields);
+  });
+
+  it("offers exactly the two choices on the template", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<TemplateSettingsCard entityType="ncr_cost" settings={{ writeMode: "add_only", matchExisting: false, costsOnClosed: false, missingDate: "reject" }} onChange={onChange} />);
+    await user.click(screen.getByRole("combobox", { name: /When a line has no date/ }));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      expect.stringContaining("Refuse the line"),
+      expect.stringContaining("Use the date the non-conformance was detected"),
+    ]);
+    await user.click(screen.getByRole("option", { name: /Use the date the non-conformance was detected/ }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ missingDate: "nc_detected" }));
+  });
+
+  it("says on the run how many lines took the non-conformance's date", () => {
+    render(<CostRunCard run={{ costs: costs({ datedFromNc: 3 }) }} preview />);
+    expect(screen.getByText("Lines dated from their non-conformance")).toBeInTheDocument();
+    expect(screen.getByText(/3 lines had no date, so will take the date their non-conformance was detected/)).toBeInTheDocument();
   });
 });
 

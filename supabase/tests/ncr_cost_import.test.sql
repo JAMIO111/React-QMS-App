@@ -41,7 +41,7 @@ DO $$
 DECLARE
   ann uuid := '5c700000-0000-0000-0000-000000000a01'; viv uuid := '5c700000-0000-0000-0000-000000000a02'; zed uuid := '5c700000-0000-0000-0000-000000000a03'; bea uuid := '5c700000-0000-0000-0000-000000000b01';
   org uuid; other uuid; api uuid; cat uuid; site_a uuid; site_b uuid; res jsonb; c public.ncr_costs%ROWTYPE; r_noupdate uuid; r_viewer uuid;
-  ncr_a uuid; ncr_b uuid; ncr_hand_closed uuid; ncr_imp_open uuid; ncr_imp_closed uuid; ncr_imp_cancelled uuid; ncr_other uuid; ncr_deleted uuid;
+  ncr_a uuid; ncr_b uuid; ncr_hand_closed uuid; ncr_imp_open uuid; ncr_imp_closed uuid; ncr_imp_cancelled uuid; ncr_other uuid; ncr_deleted uuid; ncr_dated uuid;
   d date := current_date - 10; base jsonb; ncbase jsonb; events_before bigint; notes_before bigint; n_before integer; refs jsonb; sm jsonb; run uuid; owner uuid := gen_random_uuid();
 BEGIN
   PERFORM pg_temp.login(ann); org := app.create_organisation('Cost Import Alpha'); PERFORM pg_temp.logout();
@@ -95,12 +95,18 @@ BEGIN
   INSERT INTO public.nonconformances (organisation_id, reference, source, stage, title, severity, quantity_affected, description, category_id)
     SELECT other, 'hand-o', 'internal', 'open', 'Other organisation', 'major', 10, 'Scrap', pg_temp.cat(other) RETURNING id INTO ncr_other;
 
+  INSERT INTO public.nonconformances (organisation_id, reference, source, stage, title, site_id, severity, quantity_affected, description, category_id, detected_at)
+    VALUES (org, 'hand-d', 'internal', 'open', 'Detected a week ago', site_a, 'major', 10, 'Scrap', cat, d + 3) RETURNING id INTO ncr_dated;
+  PERFORM pg_temp.seed_rate(d + 3, 'USD', 'GBP', 0.7);
+
   base := jsonb_build_object('nonconformanceId', ncr_a, 'costType', 'scrap', 'incurredOn', d::text, 'currency', 'GBP', 'unitCost', 100);
 
   -- the kind exists, is add only, never matched and has no disappearing records
   PERFORM pg_temp.assert_eq('ncr_cost' = ANY (app.integration_entity_types()), true, 'cost lines are an importable kind');
   PERFORM pg_temp.assert_eq(app.integration_entity_tracks_missing('ncr_cost'), false, 'nothing "disappears" for them');
-  PERFORM pg_temp.assert_eq(app.integration_template_settings('ncr_cost', '{"writeMode": "add_update", "matchExisting": true}'::jsonb), '{"writeMode": "add_only", "matchExisting": false, "costsOnClosed": false}'::jsonb, 'a cost template is always add only, and costs on closed NCs are off unless chosen');
+  PERFORM pg_temp.assert_eq(app.integration_template_settings('ncr_cost', '{"writeMode": "add_update", "matchExisting": true}'::jsonb), '{"writeMode": "add_only", "matchExisting": false, "costsOnClosed": false, "missingDate": "reject"}'::jsonb, 'a cost template is always add only, costs on closed NCs are off and a line with no date is refused, unless chosen');
+  PERFORM pg_temp.assert_eq(app.integration_template_settings('ncr_cost', '{"missingDate": "nc_detected"}'::jsonb) ->> 'missingDate', 'nc_detected', 'a cost template can take the detected date for a line with no date');
+  PERFORM pg_temp.assert_eq(app.integration_template_settings('ncr_cost', '{"missingDate": "import_day"}'::jsonb) ->> 'missingDate', 'reject', 'and nothing else is a choice');
   PERFORM pg_temp.assert_eq((app.integration_template_settings('ncr_cost', '{"costsOnClosed": true}'::jsonb) ->> 'costsOnClosed')::boolean, true, 'and can be switched on');
   PERFORM pg_temp.assert_eq(app.integration_template_settings('machine', '{"costsOnClosed": true}'::jsonb) ? 'costsOnClosed', false, 'other kinds keep exactly what they kept');
   PERFORM pg_temp.login(ann);
@@ -182,6 +188,21 @@ BEGIN
   PERFORM pg_temp.assert_eq(res ->> 'errors' ILIKE '%supplier recovery%', true, 'with the advice to import a credit as a recovery or a charge');
   res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'X-2', (base - 'incurredOn'));
   PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'a line with no date is refused: the date decides the rate');
+  PERFORM pg_temp.assert_eq(res ->> 'errors' ILIKE '%detected%', true, 'and the reason names the other choice');
+  res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'X-2b', (base - 'incurredOn'), '{"missingDate": "reject"}');
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'saying reject changes nothing');
+
+  -- a line with no date takes the day its non-conformance was detected, and the rate for that day
+  res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'D-1', (base || jsonb_build_object('nonconformanceId', ncr_dated, 'currency', 'USD')) - 'incurredOn', '{"missingDate": "nc_detected"}');
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'applied', 'with the setting on the line is imported: ' || coalesce(res ->> 'errors', ''));
+  SELECT * INTO c FROM public.ncr_costs WHERE id = (res ->> 'internal')::uuid;
+  PERFORM pg_temp.assert_eq(c.incurred_on, d + 3, 'it is dated the day its non-conformance was detected');
+  PERFORM pg_temp.assert_eq(c.exchange_rate::text || '|' || c.rate_status, '0.7|estimated', 'and takes that day''s rate, not another');
+  res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'D-2', (base || jsonb_build_object('nonconformanceId', ncr_dated, 'incurredOn', d::text)), '{"missingDate": "nc_detected"}');
+  SELECT * INTO c FROM public.ncr_costs WHERE id = (res ->> 'internal')::uuid;
+  PERFORM pg_temp.assert_eq(c.incurred_on, d, 'a line that has its own date keeps it');
+  res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'D-3', (base - 'incurredOn'), '{"missingDate": "import_day"}');
+  PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'any other value is refused, so the import day is never used');
   res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'X-3', (base - 'costType'));
   PERFORM pg_temp.assert_eq(res ->> 'status', 'failed', 'a line with no cost type is refused');
   res := pg_temp.import_one(org, api, ann, 'ncr_cost', 'X-4', base || '{"costType": "snacks"}');
@@ -301,6 +322,26 @@ BEGIN
   PERFORM pg_temp.login(ann);
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($q$SELECT app.integration_cost_run_summary(%L)$q$, (SELECT id FROM public.integration_sync_runs WHERE organisation_id = org AND entity_type = 'nonconformance' LIMIT 1))), 5), 'QM022', 'and only for cost imports');
   PERFORM pg_temp.logout();
+
+  -- a preview of lines with no date says how many take the detected date, and fetches the rates for it
+  PERFORM pg_temp.login(ann); run := app.request_integration_run(api, 'ncr_cost', 'preview', NULL, NULL); PERFORM pg_temp.logout();
+  UPDATE public.integration_sync_runs SET settings = coalesce(settings, '{}'::jsonb) || '{"missingDate": "nc_detected"}' WHERE id = run;
+  owner := gen_random_uuid();
+  PERFORM app.system_lease_integration_run(org, run, owner, 30);
+  PERFORM app.system_stage_integration_records(org, run, owner, jsonb_build_array(
+    jsonb_build_object('externalId', 'M-1', 'payload', '{}'::jsonb, 'canonical', jsonb_build_object('nonconformanceId', ncr_dated, 'costType', 'scrap', 'currency', 'USD', 'unitCost', 1)),
+    jsonb_build_object('externalId', 'M-2', 'payload', '{}'::jsonb, 'canonical', jsonb_build_object('nonconformanceId', ncr_dated, 'costType', 'scrap', 'currency', 'CAD', 'unitCost', 1)),
+    jsonb_build_object('externalId', 'M-3', 'payload', '{}'::jsonb, 'canonical', jsonb_build_object('nonconformanceId', ncr_dated, 'costType', 'scrap', 'incurredOn', d::text, 'currency', 'USD', 'unitCost', 1))), NULL, true);
+  sm := app.system_integration_cost_rates_needed(org, run, owner);
+  PERFORM pg_temp.assert_eq(jsonb_array_length(sm), 1, 'one pair is missing: the Canadian dollar on the detected day');
+  PERFORM pg_temp.assert_eq(sm -> 0 ->> 'base' || '|' || (sm -> 0 ->> 'requestedOn'), 'CAD|' || (d + 3)::text, 'it is asked for on the day the non-conformance was detected');
+  PERFORM app.system_finish_integration_run(org, run, owner);
+  PERFORM pg_temp.login(ann);
+  sm := app.integration_cost_run_summary(run);
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.assert_eq((sm ->> 'lines')::int || '|' || (sm ->> 'datedFromNc')::int, '3|2', 'two of the three lines will take the detected date');
+  PERFORM pg_temp.assert_eq((SELECT (e ->> 'withRate')::int FROM jsonb_array_elements(sm -> 'currencies') e WHERE e ->> 'currency' = 'USD'), 2, 'the dollar lines have a rate for their day');
+  PERFORM pg_temp.assert_eq((SELECT (e ->> 'waiting')::int FROM jsonb_array_elements(sm -> 'currencies') e WHERE e ->> 'currency' = 'CAD'), 1, 'the Canadian one waits');
 END $$;
 
 ROLLBACK;

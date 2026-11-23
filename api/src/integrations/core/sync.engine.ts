@@ -6,7 +6,7 @@ import { ExchangeRateService } from '../../currency/exchange-rate.service';
 import { DatabaseService } from '../../database/database.service';
 import { ConnectorError, RunErrorKind } from './connector.interface';
 import { ConnectorRegistry } from './connector.registry';
-import { CATALOGUE } from './catalogue';
+import { CATALOGUE, catalogueForSettings } from './catalogue';
 import { CatalogueService } from './catalogue.service';
 import { EntityImporterRegistry, ImportContext, StagedRow } from './entity-importer';
 import { applyMapping, MappingSpec } from './mapping';
@@ -130,7 +130,11 @@ export class SyncEngine {
     try {
       const importer = this.importers.get(lease.entityType);
       if (!importer && lease.kind !== 'preview') return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
-      const catalogue = await this.catalogues.get(lease.entityType, organisationId);
+      const fullCatalogue = await this.catalogues.get(lease.entityType, organisationId);
+      // A cost import whose template gives a line with no date the date its non-conformance was detected does not need the date in the file.
+      const catalogue = fullCatalogue && lease.entityType === 'ncr_cost'
+        ? catalogueForSettings(fullCatalogue, (await call((c) => c.query('select app.system_integration_run_settings($1::uuid, $2::uuid, $3::uuid) as s', [organisationId, runId, owner]))).rows[0].s as { missingDate?: string })
+        : fullCatalogue;
       if (lease.mapping && !catalogue) return await runError('mapping', `There are no fields to map ${lease.entityType.replace('_', ' ')} records to yet`, false);
       if (!lease.mapping && !importer) return await runError('mapping', 'Map the source to Fortress fields before importing', false);
       const file = lease.file

@@ -269,7 +269,7 @@ export const CATALOGUE: EntityCatalogue[] = [
       }),
       { key: 'costType', label: 'Cost type', type: 'enum', required: true, options: options(COST_TYPES, (v) => COST_TYPE_LABELS[v] ?? words(v)), description: 'Translate your cost codes to these. Supplier recovery and customer charge are credits: they reduce the cost of the non-conformance' },
       { key: 'description', label: 'Description', type: 'text', maxLength: 500 },
-      { key: 'incurredOn', label: 'Incurred on', type: 'date', required: true, description: 'The date decides the exchange rate, so it is never filled in for you. A future date uses today\'s rate' },
+      { key: 'incurredOn', label: 'Incurred on', type: 'date', required: true, description: 'The date decides the exchange rate, so by default a line without one is refused. The template can instead give such a line the date its non-conformance was detected. A future date uses today\'s rate' },
       { key: 'currency', label: 'Currency', type: 'currency', required: true, description: 'Three letters, such as EUR. Each line is converted on its own date into the currency of the non-conformance\'s site and into the organisation\'s currency; nothing is converted in the file' },
       { key: 'unitCost', label: 'Unit cost', type: 'number', required: true, min: 0, description: 'Not below 0: import a credit as a supplier recovery or a customer charge. If your source has only a total, put it here and leave Quantity empty' },
       { key: 'quantity', label: 'Quantity', type: 'number', description: 'More than 0, decimals allowed (hours, kg…); empty means 1' },
@@ -360,3 +360,12 @@ export const CATALOGUE: EntityCatalogue[] = [
 ];
 
 export const catalogueFor = (entity: string): EntityCatalogue | undefined => CATALOGUE.find((c) => c.entityType === entity);
+
+/**
+ * The catalogue as a template's own settings see it: a cost template that gives a line with no date the date its non-conformance was detected (`missingDate`
+ * `nc_detected`) does not need the date mapped at all, and an empty date is not an error. Every other catalogue, and every other setting, is returned as it is.
+ */
+export function catalogueForSettings(catalogue: EntityCatalogue, settings: { missingDate?: string } | null | undefined): EntityCatalogue {
+  if (catalogue.entityType !== 'ncr_cost' || settings?.missingDate !== 'nc_detected') return catalogue;
+  return { ...catalogue, fields: catalogue.fields.map((f) => (f.key === 'incurredOn' ? { ...f, required: false } : f)) };
+}

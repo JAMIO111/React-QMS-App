@@ -265,11 +265,11 @@ describe('cost lines from a file', () => {
     const fileId = await upload('costs-5.csv', ['Line,NC,Type,Date,Cur,Amount,Qty', `L-14,N-CLOSED,Scrap,${THU},GBP,10,`, `L-15,N-CANC,Scrap,${THU},GBP,20,`].join('\n'));
     const body = { entityType: 'ncr_cost', keyField: 'Line', fields: costFields(), expectedColumns: ['Line', 'NC', 'Type', 'Date', 'Cur', 'Amount', 'Qty'] };
     const off = (await api().post(`${base}/templates`).set(await owner()).send({ ...body, name: 'Costs, as they come' }).expect(201)).body;
-    expect(off.current.settings).toEqual({ writeMode: 'add_only', matchExisting: false, costsOnClosed: false });
+    expect(off.current.settings).toEqual({ writeMode: 'add_only', matchExisting: false, costsOnClosed: false, missingDate: 'reject' });
     const refused = await run('ncr_cost', 'full', fileId, off.id);
     expect(refused.counts).toMatchObject({ created: 0, failed: 2 });
     const on = (await api().post(`${base}/templates`).set(await owner()).send({ ...body, name: 'Costs, history too', settings: { costsOnClosed: true } }).expect(201)).body;
-    expect(on.current.settings).toEqual({ writeMode: 'add_only', matchExisting: false, costsOnClosed: true });
+    expect(on.current.settings).toEqual({ writeMode: 'add_only', matchExisting: false, costsOnClosed: true, missingDate: 'reject' });
     const preview = await run('ncr_cost', 'preview', fileId, on.id);
     expect(preview.costs).toMatchObject({ lines: 2, onClosed: 1, onCancelled: 1 });
     const real = await run('ncr_cost', 'full', fileId, on.id);
@@ -292,6 +292,34 @@ describe('cost lines from a file', () => {
     const handRun = await run('ncr_cost', 'full', fileId2, byRef.id);
     expect(handRun.counts).toMatchObject({ created: 0, failed: 1 });
     expect((await admin.query(`select count(*)::int as n from public.ncr_costs where nonconformance_id = $1`, [hand])).rows[0].n).toBe(0);
+  });
+
+  it('a line with no date takes the day its non-conformance was detected, only when the template says so', async () => {
+    await admin.query(`update public.nonconformances set detected_at = '2026-09-28' where id = $1`, [ncId['N-OPEN']]);
+    const fileId = await upload('costs-nodate.csv', ['Line,NC,Type,Date,Cur,Amount,Qty', 'L-20,N-OPEN,Scrap,,GBP,10,', `L-21,N-OPEN,Scrap,${THU},GBP,20,`].join('\n'));
+    const noDate = costFields().filter((f) => f.target !== 'incurredOn');
+    const body = { entityType: 'ncr_cost', keyField: 'Line', expectedColumns: ['Line', 'NC', 'Type', 'Date', 'Cur', 'Amount', 'Qty'] };
+    // by default the date is required, so a mapping without it is not accepted
+    const refused = await api().post(`${base}/templates`).set(await owner()).send({ ...body, fields: noDate, name: 'Costs, no date column' }).expect(409);
+    expect(JSON.stringify(refused.body)).toMatch(/Incurred on/);
+    // and the preview says so too
+    await api().post(`${base}/templates/preview`).set(await owner()).send({ entityType: 'ncr_cost', fileId, keyField: 'Line', fields: noDate }).expect(200).then((r) => expect(JSON.stringify(r.body.problems)).toMatch(/Incurred on/));
+    // with the setting on, the date may be left out of the mapping, and an empty date is the same
+    const relaxed = await api().post(`${base}/templates/preview`).set(await owner()).send({ entityType: 'ncr_cost', fileId, keyField: 'Line', fields: noDate, settings: { missingDate: 'nc_detected' } }).expect(200);
+    expect(relaxed.body.problems).toEqual([]);
+    const tpl = (await api().post(`${base}/templates`).set(await owner()).send({ ...body, fields: noDate, name: 'Costs, NC date', settings: { missingDate: 'nc_detected' } }).expect(201)).body;
+    expect(tpl.current.settings.missingDate).toBe('nc_detected');
+    const preview = await run('ncr_cost', 'preview', fileId, tpl.id);
+    expect(preview.costs).toMatchObject({ lines: 2, datedFromNc: 2 });
+    const real = await run('ncr_cost', 'full', fileId, tpl.id);
+    expect(real).toMatchObject({ status: 'succeeded', counts: { created: 2 }, settings: { missingDate: 'nc_detected' } });
+    expect(String((await line('L-20')).incurred_on.toISOString?.() ?? (await line('L-20')).incurred_on).slice(0, 10)).toBe('2026-09-28');
+    // a date in the file is never replaced: with no Date column mapped every line takes the NC's, so map it to keep its own
+    const withDate = (await api().post(`${base}/templates`).set(await owner()).send({ ...body, fields: costFields(), name: 'Costs, own date first', settings: { missingDate: 'nc_detected' } }).expect(201)).body;
+    const fileId2 = await upload('costs-nodate-2.csv', ['Line,NC,Type,Date,Cur,Amount,Qty', 'L-22,N-OPEN,Scrap,,GBP,10,', `L-23,N-OPEN,Scrap,${THU},GBP,20,`].join('\n'));
+    await run('ncr_cost', 'full', fileId2, withDate.id);
+    expect(String((await line('L-22')).incurred_on.toISOString?.() ?? (await line('L-22')).incurred_on).slice(0, 10)).toBe('2026-09-28');
+    expect(String((await line('L-23')).incurred_on.toISOString?.() ?? (await line('L-23')).incurred_on).slice(0, 10)).toBe(THU);
   });
 
   it('shows nothing of it to another organisation', async () => {

@@ -14,6 +14,16 @@ import { applySubgroupSize, assemble, assembleDefects, assembleP, BASIS_TEXT, Ch
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const MAX_READINGS = 20000;
+/**
+ * Alerts only need the points just recorded and the few before them: every Western Electric rule looks back at most 8 points, and with a saved
+ * baseline the limits are fixed, so a point's signals depend on nothing else. Reading every stored reading on every save costs row-level security
+ * checks per row (about half a millisecond each, growing with the history), so a save reads the most recent inspections and widens only when it
+ * has to. The window is exact: it never changes which alerts are raised (see alertSignals).
+ */
+const ALERT_WINDOW_START = 24;
+const ALERT_WINDOW_GROWTH = 4;
+/** Plotted points, older than the new ones, that the window must hold (rules look back 7 points; a moving range, 1). */
+const ALERT_CONTEXT_POINTS = 10;
 
 const toBaseline = (r: Row): Baseline => ({
   id: r.id as string,
@@ -274,13 +284,20 @@ export class SpcService {
    * The signals of one characteristic's chart (saved baseline, else trial limits) on points from `since` on, with the chart
    * variant. Null when there is nothing charted. Shared by the dashboard overview and by alerts.
    */
-  private async groupSignals(db: Db, ctx: RequestContext, g: Row, groupRows: ReadingRow[], since: number): Promise<{ variant: AlertVariant; baseline: Baseline | null; signals: SpcOverview['recent'] } | null> {
+  private async groupSignals(
+    db: Db,
+    ctx: RequestContext,
+    g: Row,
+    groupRows: ReadingRow[],
+    since: number,
+    contextFrom?: number,
+  ): Promise<{ variant: AlertVariant; baseline: Baseline | null; signals: SpcOverview['recent']; context: number } | null> {
     const partId = g.part_id as string;
     const key = g.characteristic_key as string;
     const op = g.operation_code as string;
     if (isPRows(groupRows) || isCountRows(groupRows)) {
-      const found = await this.pOverview(db, ctx, g, groupRows, since);
-      return found ? { variant: found.variant, baseline: found.baseline, signals: found.signals } : null;
+      const found = await this.pOverview(db, ctx, g, groupRows, since, contextFrom);
+      return found ? { variant: found.variant, baseline: found.baseline, signals: found.signals, context: found.context } : null;
     }
     const data = assemble(groupRows);
     if (!data.chartType || !data.points.length) return null;
@@ -298,7 +315,8 @@ export class SpcService {
       const pt = data.points[i];
       if (new Date(pt.at).getTime() >= since) mine.push({ ...overviewRow(g, pt, data.unitCode), rule: 'range', text: `${data.chartType === 'imr' ? 'Moving range' : 'Range'} above its upper limit`, side: 'above' });
     }
-    return { variant: data.chartType, baseline: usable, signals: mine };
+    const context = contextFrom === undefined ? 0 : data.points.filter((pt) => new Date(pt.at).getTime() >= contextFrom && new Date(pt.at).getTime() < since).length;
+    return { variant: data.chartType, baseline: usable, signals: mine, context };
   }
 
   /**
@@ -316,22 +334,8 @@ export class SpcService {
       const alerts: Record<string, unknown>[] = [];
       for (const r of reqs.rows) {
         const g: Row = { part_id: partId, part_number: r.part_number, characteristic_key: r.characteristic_key, operation_code: r.operation_code, name: r.name };
-        const rows = await this.readings(db, ctx, { partId, characteristicKey: r.characteristic_key as string, operationCode: r.operation_code as string });
-        const found = await this.groupSignals(db, ctx, g, rows, since.getTime());
-        for (const sg of found?.signals ?? []) {
-          alerts.push({
-            characteristicKey: sg.characteristicKey,
-            characteristicName: sg.characteristicName,
-            operationCode: sg.operationCode,
-            variant: found!.variant,
-            rule: sg.rule,
-            side: sg.side ?? null,
-            pointAt: sg.at,
-            summary: `${sg.rule === 'range' ? '' : `${RULE_LABEL_SHORT[sg.rule]}: `}${sg.text}`.slice(0, 300),
-            inspectionId: sg.inspections[0]?.id ?? null,
-            inspectionReference: sg.inspections[0]?.reference ?? null,
-          });
-        }
+        const found = await this.alertSignals(db, ctx, g, since.getTime());
+        for (const sg of found?.signals ?? []) alerts.push(alertInput(found!.variant, sg));
       }
       let raised = 0;
       if (alerts.length) {
@@ -344,6 +348,49 @@ export class SpcService {
       await client.query('ROLLBACK TO SAVEPOINT spc_alerts').catch(() => undefined);
       return 0;
     }
+  }
+
+  /**
+   * The inspections that hold readings of one characteristic, newest first, each with the time of its newest reading (an upper bound: the readings
+   * of an inspection are never later than that). One cheap look per inspection instead of one per reading.
+   */
+  private async recentInspections(db: Db, ctx: RequestContext, f: { partId: string; characteristicKey: string; operationCode: string }): Promise<{ id: string; newest: number }[]> {
+    const r = await db.execute<Row>(sql`
+      select r.id, x.newest from public.inspection_records r
+      join public.resolved_inspection_requirements q on q.inspection_record_id = r.id and q.characteristic_key = ${f.characteristicKey} and q.operation_code = ${f.operationCode} and q.spc_eligible
+      cross join lateral (select m.measured_at as newest from public.inspection_measurements m where m.requirement_id = q.id order by m.measured_at desc limit 1) x
+      where r.organisation_id = ${orgOf(ctx)}::uuid and r.part_id = ${f.partId}::uuid
+      order by x.newest desc limit ${MAX_READINGS}`);
+    return r.rows.map((x) => ({ id: x.id as string, newest: new Date(iso(x.newest)!).getTime() }));
+  }
+
+  /**
+   * The signals of one characteristic on points from `since` on (see groupSignals), reading as little as is safe. With a saved baseline for a
+   * measured or pass/fail chart the limits are fixed and every rule looks back at most 8 points, so the newest inspections are enough, provided that:
+   * the window is whole inspections (subgroups stay whole); every reading at or after its oldest reading time T is in it (an inspection left out has
+   * its newest reading before T); and at least ALERT_CONTEXT_POINTS plotted points from T on come before the first new point. If any of that fails the
+   * window widens; with trial limits (no baseline: they depend on all the data) or a defect-count chart (whether it is C or U depends on every
+   * subgroup) the whole history is read, as before. `opts.start` is for tests.
+   */
+  async alertSignals(db: Db, ctx: RequestContext, g: Row, since: number, opts: { start?: number } = {}) {
+    const f = { partId: g.part_id as string, characteristicKey: g.characteristic_key as string, operationCode: g.operation_code as string };
+    // Without a saved baseline the limits are trial limits that depend on every reading: nothing to gain from a window, so do not try one.
+    const saved = await db.execute<Row>(sql`select 1 from public.spc_baselines where organisation_id = ${orgOf(ctx)}::uuid and part_id = ${f.partId}::uuid
+      and characteristic_key = ${f.characteristicKey} and operation_code = ${f.operationCode} and superseded_at is null limit 1`);
+    if (!saved.rows.length) return this.groupSignals(db, ctx, g, await this.readings(db, ctx, f), since);
+    const all = await this.recentInspections(db, ctx, f);
+    let k = Math.max(1, opts.start ?? ALERT_WINDOW_START);
+    while (k < all.length) {
+      const from = all[k - 1].newest;
+      const ids = all.filter((i) => i.newest >= from).map((i) => i.id);
+      if (ids.length >= all.length) break;
+      const rows = await this.readings(db, ctx, { ...f, inspectionIds: ids });
+      const found = await this.groupSignals(db, ctx, g, rows, since, from);
+      if (!found || !found.baseline || found.variant === 'c' || found.variant === 'u') break; // trial limits or a count chart need everything
+      if (found.context >= ALERT_CONTEXT_POINTS) return found;
+      k *= ALERT_WINDOW_GROWTH;
+    }
+    return this.groupSignals(db, ctx, g, await this.readings(db, ctx, f), since);
   }
 
   // ---- Alerts ------------------------------------------------------------------------------------
@@ -579,7 +626,8 @@ export class SpcService {
       .map((r) => r.id);
   }
 
-  private async pOverview(db: Db, ctx: RequestContext, g: Row, rows: ReadingRow[], since: number) {
+  private async pOverview(db: Db, ctx: RequestContext, g: Row, rows: ReadingRow[], since: number, contextFrom?: number) {
+    const inContext = (at: string) => contextFrom !== undefined && new Date(at).getTime() >= contextFrom && new Date(at).getTime() < since;
     if (isCountRows(rows)) {
       const cd = assembleDefects(rows, 'inspection');
       if (!cd.groups.length) return null;
@@ -589,7 +637,7 @@ export class SpcService {
       const csignals: SpcOverview['recent'] = cr.signals
         .filter((sg) => new Date(cr.points[sg.index].at).getTime() >= since)
         .map((sg) => ({ ...overviewRow(g, cr.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule], side: sg.side }));
-      return { variant: cr.kind as AlertVariant, baseline: cu, signals: csignals };
+      return { variant: cr.kind as AlertVariant, baseline: cu, signals: csignals, context: cr.points.filter((pt) => inContext(pt.at)).length };
     }
     const data = assembleP(rows, 'inspection');
     if (!data.groups.length) return null;
@@ -599,7 +647,7 @@ export class SpcService {
     const signals: SpcOverview['recent'] = res.signals
       .filter((sg) => new Date(res.points[sg.index].at).getTime() >= since)
       .map((sg) => ({ ...overviewRow(g, res.points[sg.index] as unknown as ChartPoint, null), rule: sg.rule, text: RULE_TEXT[sg.rule], side: sg.side }));
-    return { variant: 'p' as AlertVariant, baseline: usable, signals };
+    return { variant: 'p' as AlertVariant, baseline: usable, signals, context: res.points.filter((pt) => inContext(pt.at)).length };
   }
 
   private async countChart(
@@ -740,7 +788,7 @@ export class SpcService {
   private async readings(
     db: Db,
     ctx: RequestContext,
-    f: { partId: string; characteristicKey: string; operationCode: string; from?: string; to?: string; machineId?: string; lot?: string },
+    f: { partId: string; characteristicKey: string; operationCode: string; from?: string; to?: string; machineId?: string; lot?: string; inspectionIds?: string[] },
   ): Promise<ReadingRow[]> {
     const where: SQL[] = [
       sql`m.organisation_id = ${orgOf(ctx)}::uuid`,
@@ -754,6 +802,11 @@ export class SpcService {
     if (f.to) where.push(sql`m.measured_at <= ${f.to}::timestamptz`);
     if (f.machineId) where.push(sql`r.machine_id = ${f.machineId}::uuid`);
     if (f.lot) where.push(sql`r.lot = ${f.lot}`);
+    if (f.inspectionIds) {
+      // Both sides, so the requirement rows (one per inspection) are narrowed before the readings are reached through them.
+      const list = sql`string_to_array(${f.inspectionIds.join(',')}, ',')::uuid[]`;
+      where.push(sql`q.inspection_record_id = any (${list})`, sql`r.id = any (${list})`);
+    }
     const result = await db.execute<Row>(sql`
       select m.id, coalesce(m.value_numeric::text, '') as value, m.value_pass, m.value_count, m.measured_at, s.sample_number, s.subgroup_number, s.is_retest,
              r.id as inspection_id, r.reference, r.status, r.machine_id, r.lot, coalesce(po.order_number, nullif(btrim(r.work_order), '')) as order_number,
@@ -832,6 +885,20 @@ export interface SpcOverview {
     inspections: { id: string; reference: string }[];
   }[];
 }
+
+/** What is stored for one signal as an alert (the point's position in the series is deliberately not part of it: it depends on how much history was read). */
+export const alertInput = (variant: AlertVariant, sg: SpcOverview['recent'][number]) => ({
+  characteristicKey: sg.characteristicKey,
+  characteristicName: sg.characteristicName,
+  operationCode: sg.operationCode,
+  variant,
+  rule: sg.rule,
+  side: sg.side ?? null,
+  pointAt: sg.at,
+  summary: `${sg.rule === 'range' ? '' : `${RULE_LABEL_SHORT[sg.rule]}: `}${sg.text}`.slice(0, 300),
+  inspectionId: sg.inspections[0]?.id ?? null,
+  inspectionReference: sg.inspections[0]?.reference ?? null,
+});
 
 const overviewRow = (g: Row, pt: ChartPoint, _unit: string | null) => ({
   partId: g.part_id as string,

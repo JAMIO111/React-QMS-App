@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { ENTITY_TYPES } from './core/entity-importer';
+import { FILTER_AS, FILTER_MATCHES, FILTER_MODES, FILTER_TESTS, MAX_FILTER_FORMULA, MAX_FILTER_RULES, MAX_FILTER_TEXT, MAX_FILTER_VALUES } from './core/filters';
+import { DATE_FORMATS } from './core/mapping';
 import { FieldMappingBody } from './integration-files.schemas';
 
 export const SourceSettingsBody = z
@@ -9,6 +11,30 @@ export const SourceSettingsBody = z
     delimiter: z.enum(['auto', ',', ';', 'tab', '|']).optional(),
   })
   .strict();
+/** A rule of a record filter (docs/import-filters-plan.md): a column, a test and what to compare with. */
+export const FilterRuleBody = z
+  .object({
+    // an empty column is allowed here: a rule still being typed is dropped when the filter is tidied, never saved
+    column: z.string().max(200),
+    test: z.enum(FILTER_TESTS),
+    value: z.string().max(MAX_FILTER_TEXT).optional(),
+    values: z.array(z.string().max(MAX_FILTER_TEXT)).max(MAX_FILTER_VALUES).optional(),
+    valueTo: z.string().max(MAX_FILTER_TEXT).optional(),
+    as: z.enum(FILTER_AS).optional(),
+    decimal: z.enum(['.', ',']).optional(),
+    dateFormat: z.enum(DATE_FORMATS).optional(),
+  })
+  .strict();
+/** Which source records an import reads: keep those that match, or leave those out; rules (all / any) or one formula. Applied to the raw record before mapping. */
+export const FilterBody = z
+  .object({
+    mode: z.enum(FILTER_MODES),
+    match: z.enum(FILTER_MATCHES),
+    rules: z.array(FilterRuleBody).max(MAX_FILTER_RULES),
+    formula: z.string().max(MAX_FILTER_FORMULA).optional(),
+  })
+  .strict();
+
 export const TemplateSettingsBody = z
   .object({
     writeMode: z.enum(['add_only', 'add_update', 'update_only']).optional(),
@@ -17,6 +43,8 @@ export const TemplateSettingsBody = z
     costsOnClosed: z.boolean().optional(),
     /** Cost lines only: what to do with a line that has no date: refuse it (the default) or give it the date its non-conformance was detected. */
     missingDate: z.enum(['reject', 'nc_detected']).optional(),
+    /** Which source records are read at all (null or empty = every record). */
+    filters: FilterBody.nullable().optional(),
   })
   .strict();
 
@@ -62,7 +90,7 @@ export const TemplateVersion = z.object({
   fields: z.array(z.record(z.string(), z.unknown())),
   sourceSettings: z.record(z.string(), z.unknown()),
   expectedColumns: z.array(z.string()),
-  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), costsOnClosed: z.boolean().optional(), missingDate: z.enum(['reject', 'nc_detected']).optional() }),
+  settings: z.object({ writeMode: z.string(), matchExisting: z.boolean(), costsOnClosed: z.boolean().optional(), missingDate: z.enum(['reject', 'nc_detected']).optional(), filters: FilterBody.optional() }),
   reason: z.string().nullable(),
   current: z.boolean(),
   createdBy: Person,
@@ -167,7 +195,14 @@ export const TemplatePreview = z.object({
   }),
   /** What is wrong with the template itself (the same check as when it is saved). */
   problems: z.array(z.string()),
-  rows: z.array(z.object({ row: z.number().int(), externalId: z.string().nullable(), fields: z.array(PreviewField), errors: z.array(z.object({ field: z.string().nullable(), message: z.string() })) })),
+  rows: z.array(z.object({
+    row: z.number().int(),
+    externalId: z.string().nullable(),
+    fields: z.array(PreviewField),
+    errors: z.array(z.object({ field: z.string().nullable(), message: z.string() })),
+    /** Why the template's filter leaves this row out (it would not be imported), or null when it is read. */
+    filteredOut: z.string().nullable(),
+  })),
 });
 export type TemplatePreview = z.infer<typeof TemplatePreview>;
 
@@ -190,3 +225,37 @@ export const FormulaCheckResult = z.object({
   result: z.object({ value: z.string().nullable(), error: z.string().nullable() }).nullable(),
 });
 export const FunctionList = z.object({ data: z.array(z.object({ name: z.string(), usage: z.string(), description: z.string(), minArgs: z.number().int(), maxArgs: z.number().int() })) });
+
+
+/** What a record filter does to the source (F1): how many records it keeps, and how many each rule matches. Nothing is written. */
+export const PreviewFilterBody = z
+  .object({
+    entityType: z.enum(ENTITY_TYPES),
+    fileId: z.string().uuid().optional(),
+    connectionId: z.string().uuid().optional(),
+    filter: FilterBody,
+  })
+  .strict()
+  .refine((b) => !!b.fileId !== !!b.connectionId, 'Give a file or a connection to preview against');
+export type PreviewFilterBody = z.infer<typeof PreviewFilterBody>;
+
+const FilterSampleRow = z.object({ row: z.number().int(), values: z.record(z.string(), z.string()) });
+export const FilterPreview = z.object({
+  columns: z.array(z.string()),
+  /** Records looked at. For a file this is every row; for an API or a database it is the sample the source gives (`complete` is then false). */
+  scanned: z.number().int(),
+  complete: z.boolean(),
+  kept: z.number().int(),
+  leftOut: z.number().int(),
+  /** Per rule, how many records it matched (a formula filter has none). */
+  rules: z.array(z.object({ column: z.string(), words: z.string(), matched: z.number().int() })),
+  /** In words, what the filter does. */
+  words: z.string(),
+  /** What is wrong with the filter (the same check as when it is saved). */
+  problems: z.array(z.string()),
+  /** A formula that could not be worked out for some records (they would be rejected, not read). */
+  errors: z.object({ count: z.number().int(), first: z.string().nullable() }),
+  /** A few records of each kind (up to 5), with the columns the filter looks at first. */
+  samples: z.object({ kept: z.array(FilterSampleRow), leftOut: z.array(FilterSampleRow) }),
+});
+export type FilterPreview = z.infer<typeof FilterPreview>;

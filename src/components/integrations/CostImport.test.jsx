@@ -85,6 +85,16 @@ describe("the cost template settings card", () => {
   });
 });
 
+describe("a template's record filter", () => {
+  const filters = { mode: "keep", match: "all", rules: [{ column: "Status", test: "equals", value: "Active" }] };
+  it("is carried through when settings are rebuilt, for every kind, and is not invented", () => {
+    expect(templateSettings("machine", { writeMode: "add_update", matchExisting: true, filters })).toEqual({ writeMode: "add_update", matchExisting: true, filters });
+    expect(templateSettings("ncr_cost", { filters }).filters).toEqual(filters);
+    expect(templateSettings("machine", { writeMode: "add_update" })).not.toHaveProperty("filters");
+    expect(templateChanged({ keyField: "id", fields: [], settings: { writeMode: "add_only", matchExisting: false } }, { keyField: "id", fields: [], settings: templateSettings("part", { filters }) })).toBe(true);
+  });
+});
+
 describe("a cost line with no date", () => {
   it("is refused unless the template says to use the date the non-conformance was detected", () => {
     expect(templateSettings("ncr_cost", { missingDate: "nc_detected" }).missingDate).toBe("nc_detected");

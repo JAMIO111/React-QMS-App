@@ -52,6 +52,8 @@ const Counts = z.object({
   superseded: z.number().int(),
   /** Left alone by the import settings: already imported under "add new only", or not in Fortress under "update existing only". */
   skipped: z.number().int(),
+  /** Records a template's filter left out (they are also counted as skipped). */
+  filtered: z.number().int(),
   /** Values held for review (fields set to "Review" whose new value differs from Fortress's), IN5. */
   parked: z.number().int(),
 });

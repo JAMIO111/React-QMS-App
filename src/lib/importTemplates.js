@@ -177,7 +177,9 @@ export const ADD_UPDATE_KINDS = ["po_receipt_total"];
 export const templateSettings = (entityType, s) => {
   const base = ADD_UPDATE_KINDS.includes(entityType) ? { writeMode: "add_update", matchExisting: false } : ADD_ONLY_KINDS.includes(entityType) ? { writeMode: "add_only", matchExisting: false } : { writeMode: s?.writeMode ?? "add_only", matchExisting: !!s?.matchExisting };
   // Only a cost template keeps whether the import may add costs to closed or cancelled NCs it brought in, and what to do with a line that has no date.
-  return entityType === "ncr_cost" ? { ...base, costsOnClosed: !!s?.costsOnClosed, missingDate: s?.missingDate === "nc_detected" ? "nc_detected" : "reject" } : base;
+  const withCosts = entityType === "ncr_cost" ? { ...base, costsOnClosed: !!s?.costsOnClosed, missingDate: s?.missingDate === "nc_detected" ? "nc_detected" : "reject" } : base;
+  // A record filter (which source records are read) is kept as it is, so saving a new version of a template never drops it.
+  return s?.filters ? { ...withCosts, filters: s.filters } : withCosts;
 };
 
 /** What a cost line with no date does: refused (the default), or given the date its non-conformance was detected. */

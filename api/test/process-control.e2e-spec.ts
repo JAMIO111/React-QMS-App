@@ -192,4 +192,43 @@ describe('control plans', () => {
     const eff = await api().get('/api/v1/control-plans?status=effective').set(h).expect(200);
     expect(eff.body.data.map((p: { planCode: string }) => p.planCode)).toEqual(['CP-HCR-001']);
   });
+  it('pages, sorts and filters the register on the server and answers with the total', async () => {
+    const h = await as(ids.ownerA);
+    const plan = async (planCode: string, title: string) => (await api().post('/api/v1/control-plans').set(h).send({ planCode, title }).expect(201)).body;
+    const zed = await plan('CP-ZED', 'Zed turning');
+    await plan('CP-ABC', 'Abc grinding');
+    const get = async (query: string) => (await api().get(`/api/v1/control-plans?${query}`).set(h).expect(200)).body;
+    const codes = (b: { data: { planCode: string }[] }) => b.data.map((p) => p.planCode);
+
+    const all = await get('');
+    expect(all).toMatchObject({ page: 1, pageSize: 50 });
+    expect(codes(all)).toEqual(['CP-ABC', 'CP-HCR-001', 'CP-NEW', 'CP-ZED']);
+    expect(all.total).toBe(4);
+    expect(all.data[0]).toHaveProperty('createdAt');
+    expect(codes(await get('sort=planCode&order=desc'))).toEqual(['CP-ZED', 'CP-NEW', 'CP-HCR-001', 'CP-ABC']);
+    expect(codes(await get('sort=title&order=asc'))[0]).toBe('CP-ABC');
+    expect(codes(await get('sort=effectiveRevision&order=desc'))[0]).toBe('CP-HCR-001'); // the only one with an effective revision
+
+    const second = await get('pageSize=2&page=2');
+    expect(second).toMatchObject({ page: 2, pageSize: 2, total: 4 });
+    expect(codes(second)).toEqual(['CP-NEW', 'CP-ZED']);
+
+    // Several states at once mean any of them.
+    expect(codes(await get('status=effective,no_effective'))).toHaveLength(4);
+    expect(codes(await get('status=draft'))).toEqual(expect.arrayContaining(['CP-NEW', 'CP-ZED']));
+    expect(codes(await get('status=draft'))).not.toContain('CP-HCR-001');
+    expect(codes(await get('q=grinding'))).toEqual(['CP-ABC']);
+    expect(codes(await get('q=HCR'))).toEqual(['CP-HCR-001']); // the plan code, and the family code in its scope
+
+    // Inactive plans are left out unless asked for.
+    await api().patch(`/api/v1/control-plans/${zed.id}`).set(h).send({ active: false }).expect(200);
+    expect(codes(await get(''))).not.toContain('CP-ZED');
+    expect(codes(await get('active=inactive'))).toEqual(['CP-ZED']);
+    expect(codes(await get('active=all'))).toContain('CP-ZED');
+    expect(codes(await get('includeInactive=true'))).toContain('CP-ZED');
+
+    await api().get('/api/v1/control-plans?status=nonsense').set(h).expect(400);
+    await api().get('/api/v1/control-plans?sort=nonsense').set(h).expect(400);
+    await api().get('/api/v1/control-plans?partFamilyId=nope').set(h).expect(400);
+  });
 });

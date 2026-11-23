@@ -117,11 +117,24 @@ const toPlanSummary = (r: Row): ControlPlanSummary => ({
   parts: (r.parts as string[]) ?? [],
   effectiveRevision: (r.effective_revision as string) ?? null,
   openRevision: r.open_code ? { revisionCode: r.open_code as string, status: r.open_status as PlanRevision['status'] } : null,
+  createdAt: iso(r.created_at)!,
   updatedAt: iso(r.updated_at)!,
 });
 
+/** The register's sort fields (output column names are bare so ORDER BY can use them). */
+const PLAN_SORT_SQL: Record<string, string> = {
+  planCode: 'upper(p.plan_code)',
+  title: 'lower(p.title)',
+  effectiveRevision: 'effective_revision',
+  inProgress: 'o.status',
+  owner: 'lower(owner_name)',
+  active: 'p.active',
+  updatedAt: 'updated_at',
+  createdAt: 'p.created_at',
+};
+
 const PLAN_SELECT = `
-  select p.id, p.plan_code, p.title, p.description, p.owner_id, ${personName('po')} as owner_name, p.active,
+  select p.id, p.plan_code, p.title, p.description, p.owner_id, ${personName('po')} as owner_name, p.active, p.created_at,
          greatest(p.updated_at, (select max(r.updated_at) from public.control_plan_revisions r where r.control_plan_id = p.id)) as updated_at,
          (select array_agg(distinct f.code order by f.code) from public.control_plan_applicability a
             join public.part_families f on f.id = a.part_family_id where a.control_plan_id = p.id) as families,
@@ -343,22 +356,45 @@ export class ProcessControlService {
 
   // ---- control plans ---------------------------------------------------------------------------
 
-  listPlans(ctx: RequestContext, q: z.infer<typeof ControlPlanListQuery>): Promise<Page<ControlPlanSummary>> {
-    const cursor = decodeCursor(q.cursor);
+  listPlans(ctx: RequestContext, q: z.infer<typeof ControlPlanListQuery>): Promise<{ data: ControlPlanSummary[]; page: number; pageSize: number; total: number }> {
     return this.database.asUser(ctx, async (db) => {
       const where: SQL[] = [sql`p.organisation_id = ${orgOf(ctx)}::uuid`];
-      if (!q.includeInactive) where.push(sql`p.active`);
-      if (q.q) where.push(sql`(p.plan_code ilike ${likePattern(q.q)} or p.title ilike ${likePattern(q.q)})`);
-      if (q.partFamilyId) {
-        where.push(sql`exists (select 1 from public.control_plan_applicability a where a.control_plan_id = p.id and a.part_family_id = ${q.partFamilyId}::uuid)`);
+      const active = q.active ?? (q.includeInactive ? 'all' : 'active');
+      if (active === 'active') where.push(sql`p.active`);
+      if (active === 'inactive') where.push(sql`not p.active`);
+      if (q.q) {
+        const like = likePattern(q.q);
+        where.push(sql`(p.plan_code ilike ${like} or p.title ilike ${like} or p.description ilike ${like}
+          or exists (select 1 from public.control_plan_applicability a join public.part_families f on f.id = a.part_family_id where a.control_plan_id = p.id and f.code ilike ${like})
+          or exists (select 1 from public.control_plan_applicability a join public.parts pt on pt.id = a.part_id where a.control_plan_id = p.id and pt.part_number ilike ${like}))`);
       }
-      if (q.status === 'effective') where.push(sql`exists (select 1 from public.control_plan_revisions r where r.control_plan_id = p.id and r.status = 'effective')`);
-      if (q.status === 'no_effective') where.push(sql`not exists (select 1 from public.control_plan_revisions r where r.control_plan_id = p.id and r.status = 'effective')`);
-      if (q.status === 'pending_approval') where.push(sql`o.status = 'pending_approval'`);
-      if (cursor) where.push(sql`(upper(p.plan_code), p.id) > (${cursor.k}, ${cursor.id}::uuid)`);
-      const result = await db.execute<Row>(sql`${sql.raw(PLAN_SELECT)} where ${sql.join(where, sql` and `)}
-        order by upper(p.plan_code), p.id limit ${q.limit + 1}`);
-      return toPage(result.rows.map(toPlanSummary), q.limit, (r) => ({ k: r.planCode.toUpperCase(), id: r.id }));
+      if (q.partFamilyId) {
+        where.push(sql`exists (select 1 from public.control_plan_applicability a where a.control_plan_id = p.id and a.part_family_id = any(string_to_array(${q.partFamilyId}, ',')::uuid[]))`);
+      }
+      if (q.status) {
+        // Any of the chosen states.
+        const clauses: Record<string, SQL> = {
+          effective: sql`exists (select 1 from public.control_plan_revisions r where r.control_plan_id = p.id and r.status = 'effective')`,
+          no_effective: sql`not exists (select 1 from public.control_plan_revisions r where r.control_plan_id = p.id and r.status = 'effective')`,
+          pending_approval: sql`o.status = 'pending_approval'`,
+          draft: sql`o.status = 'draft'`,
+        };
+        where.push(sql`(${sql.join(q.status.split(',').map((k) => clauses[k]), sql` or `)})`);
+      }
+      if (q.owner === 'me') where.push(sql`p.owner_id = auth.uid()`);
+      const changed = sql.raw(`greatest(p.updated_at, (select max(r.updated_at) from public.control_plan_revisions r where r.control_plan_id = p.id))`);
+      if (q.from) where.push(sql`${changed}::date >= ${q.from}::date`);
+      if (q.to) where.push(sql`${changed}::date <= ${q.to}::date`);
+      const clause = sql.join(where, sql` and `);
+      const pageSize = q.pageSize ?? q.limit;
+      const dir = q.order === 'desc' ? 'desc' : 'asc';
+      const lead = PLAN_SORT_SQL[q.sort];
+      const order = sql.raw(`${lead} ${dir} nulls last, upper(p.plan_code), p.id`);
+      const result = await db.execute<Row>(sql`${sql.raw(PLAN_SELECT)} where ${clause} order by ${order} limit ${pageSize} offset ${(q.page - 1) * pageSize}`);
+      const count = await db.execute<{ n: number }>(sql`select count(*)::int as n from public.control_plans p
+        left join public.control_plan_revisions o on o.control_plan_id = p.id and o.status in ('draft', 'pending_approval')
+        where ${clause}`);
+      return { data: result.rows.map(toPlanSummary), page: q.page, pageSize, total: Number(count.rows[0].n) };
     });
   }
 

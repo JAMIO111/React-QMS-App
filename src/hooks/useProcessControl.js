@@ -4,7 +4,7 @@ import { apiFetch } from "../lib/api-client";
 import { settle } from "../lib/optimistic";
 import { requestGuessHandlers } from "../lib/guessRequest";
 import { useOrganisation } from "../contexts/OrganisationProvider";
-import { key, usePagedList } from "./useMasterData";
+import { key, queryString, usePagedList } from "./useMasterData";
 
 /**
  * Process control (docs/process-control-plan.md): machines and part families (master data), part
@@ -33,8 +33,20 @@ export const useSpecValues = (revisionId) => {
   return { ...query, data: query.data?.data };
 };
 
-export const useControlPlans = ({ q = "", includeInactive = false, partFamilyId, status } = {}) =>
-  usePagedList("control-plans", { q, includeInactive, partFamilyId, status });
+/**
+ * The control plan register: one page of plans, sorted and filtered on the server (`{ data, page, pageSize, total }`). Filters are the URL's:
+ * `status` (comma list), `partFamilyId` (comma list), `owner=me`, `active`, `from|to`, `q`, `sort`, `order`, `page`, `pageSize`.
+ */
+export const useControlPlans = (filters = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "control-plans", filters),
+    queryFn: () => apiFetch(`/control-plans${queryString(filters)}`, { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
 export const useControlPlan = (id) => useDetail(`/control-plans/${id}`, !!id);
 export const useControlPlanHistory = (id) => {
   const query = useDetail(`/control-plans/${id}/history`, !!id);

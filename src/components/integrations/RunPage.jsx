@@ -195,7 +195,7 @@ const RunPage = () => {
                   <CTAButton type="main" size="md" disabled={mutation.isPending} loading={mutation.isPending} onClick={importFile}>{mutation.isPending ? "Starting…" : "Import these records"}</CTAButton>
                 )}
                 <CTAButton
-                  to={run.file ? wizardPath(id, { entity: run.entityType, file: run.file.id, step: 3, template: run.template?.id }) : apiMappingPath(id, run.entityType, run.template?.id)}
+                  to={run.file ? wizardPath(id, { entity: run.entityType, file: run.file.id, step: 4, template: run.template?.id }) : apiMappingPath(id, run.entityType, run.template?.id)}
                   type="secondary"
                   size="md">
                   {run.template ? "Change the mapping" : "Map fields"}

@@ -7,7 +7,7 @@ const MappingPage = () => {
   const [params] = useSearchParams();
   const entity = params.get("entity");
   const file = params.get("file");
-  return <Navigate replace to={wizardPath(id, { entity, file, step: entity && file ? 3 : entity ? 2 : 1 })} />;
+  return <Navigate replace to={wizardPath(id, { entity, file, step: entity && file ? 4 : entity ? 2 : 1 })} />;
 };
 
 export default MappingPage;

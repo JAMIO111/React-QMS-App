@@ -215,7 +215,7 @@ describe("file import wizard", () => {
   });
   const run = (over = {}) => ({ id: "r9", connection: { id: "c1", name: "Supplier file" }, entityType: "supplier", kind: "preview", trigger: "user", status: "succeeded", requestedBy: null, requestedAt: "2026-11-09T10:00:00Z", startedAt: null, finishedAt: null, counts: { total: 3, rejected: 0, unchanged: 0, created: 3, updated: 0, failed: 0, superseded: 0, skipped: 0 }, attempts: 0, nextAttemptAt: null, errorSummary: null, cancelReason: null, cancelledBy: null, fetchDone: true, file: { id: "f1", name: "suppliers.csv" }, mappingVersion: null, template: { id: "t1", name: "Sage suppliers", version: 1 }, settings: null, cursorStart: null, cursorNext: null, errors: [], rowsNow: {}, drain: null, ...over });
   const runRoutes = { "POST /integrations/connections/c1/runs": { id: "r9" }, "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 } };
-  const step3 = "/Settings/Integrations/csv?connection=c1&entity=supplier&file=f1&step=3";
+  const step3 = "/Settings/Integrations/csv?connection=c1&entity=supplier&file=f1&step=4";
   const lastPreview = () => calls.filter((c) => c.k === "POST /integrations/templates/preview").at(-1)?.body;
 
   it("step 1: makes the organisation's file connection when none exists yet, then moves on", async () => {
@@ -255,7 +255,7 @@ describe("file import wizard", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
   });
 
-  it("step 3 with no template: suggests columns, shows the server's examples, flags a missing field, then saves a new template and imports with it", async () => {
+  it("step 4 with no template: suggests columns, shows the server's examples, flags a missing field, then saves a new template and imports with it", async () => {
     routeApi({ ...base(), "POST /integrations/templates": { id: "t2" }, ...runRoutes });
     renderAt(step3);
     const code = await screen.findByRole("listitem", { name: "Code" });
@@ -282,7 +282,7 @@ describe("file import wizard", () => {
     await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1", templateId: "t2" }));
   });
 
-  it("step 3 starts from the template used last; unchanged, a preview runs with it and nothing is saved", async () => {
+  it("step 4 starts from the template used last; unchanged, a preview runs with it and nothing is saved", async () => {
     routeApi({ ...base([template(), template({ id: "t0", name: "Old", lastUsedAt: null })]), ...runRoutes });
     renderAt(step3);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Start from" })).toHaveValue("Sage suppliers"));
@@ -293,7 +293,61 @@ describe("file import wizard", () => {
     expect(calls.some((c) => c.k.startsWith("POST /integrations/templates/t1"))).toBe(false);
   });
 
-  it("step 3: a change is saved as the template's next version with a reason, or as a new template; the server's problems are listed", async () => {
+  const filterStep = "/Settings/Integrations/csv?connection=c1&entity=supplier&file=f1&step=3";
+  const filterAnswer = (_path, { body }) => ({
+    columns: ["Account", "Supplier Name", "E-mail", "Country"], scanned: 3, complete: true, kept: 2, leftOut: 1,
+    rules: body.filter.rules.map((r) => ({ column: r.column, words: `${r.column} is "${r.value}"`, matched: 2 })),
+    words: "Keep records where Country is \"GB\"", problems: [], errors: { count: 0, first: null },
+    samples: { kept: [{ row: 2, values: { Country: "GB", Account: "S-1" } }], leftOut: [{ row: 4, values: { Country: "DE", Account: "S-3" } }] },
+  });
+
+  it("step 3: with no filter every record is read and Next goes to the mapping; nothing is asked of the server", async () => {
+    routeApi({ ...base(), ...runRoutes });
+    renderAt(filterStep);
+    expect(await screen.findByText(/No filter: every record \(3\) is read/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Filter records/ })).toHaveAttribute("aria-current", "step");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("listitem", { name: "Code" })).toBeInTheDocument();
+    expect(calls.some((c) => c.k === "POST /integrations/templates/filter-preview")).toBe(false);
+  });
+
+  it("step 3: a rule is built from the file's columns, the server says how many records it keeps, and the filter goes to the mapping preview and the saved template", async () => {
+    routeApi({ ...base(), "POST /integrations/templates/filter-preview": filterAnswer, "POST /integrations/templates": { id: "t2" }, ...runRoutes });
+    renderAt(filterStep);
+    await userEvent.click(await screen.findByRole("button", { name: "Add a filter" }));
+    const rule = screen.getByRole("listitem", { name: "Rule 1" });
+    await choose("Column", "Country", rule);
+    await userEvent.type(within(rule).getByRole("textbox", { name: "Value for rule 1" }), "GB");
+    await waitFor(() => expect(calls.filter((c) => c.k === "POST /integrations/templates/filter-preview").at(-1)?.body).toEqual({ entityType: "supplier", fileId: "f1", filter: { mode: "keep", match: "all", rules: [{ column: "Country", test: "equals", value: "GB" }] } }));
+    expect((await screen.findAllByText(/of 3 records kept/)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("table", { name: "Some records that are skipped" })).toHaveTextContent("DE");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/Read only the records where Country is "GB"/)).toBeInTheDocument();
+    await waitFor(() => expect(lastPreview().settings.filters.rules).toEqual([{ column: "Country", test: "equals", value: "GB" }]));
+    await userEvent.click(screen.getByRole("button", { name: "Import 3 rows" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save and import" }));
+    await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/templates").body.settings.filters).toEqual({ mode: "keep", match: "all", rules: [{ column: "Country", test: "equals", value: "GB" }] }));
+  });
+
+  it("step 3: a half-typed rule is not sent or saved, and a problem the server finds stops Next", async () => {
+    routeApi({
+      ...base(),
+      "POST /integrations/templates/filter-preview": () => ({ ...filterAnswer("", { body: { filter: { rules: [] } } }), problems: ["Rule 1: choose a column"] }),
+      ...runRoutes,
+    });
+    renderAt(filterStep);
+    await userEvent.click(await screen.findByRole("button", { name: "Add a filter" }));
+    await new Promise((r) => setTimeout(r, 600));
+    expect(calls.some((c) => c.k === "POST /integrations/templates/filter-preview")).toBe(false);
+    const rule = screen.getByRole("listitem", { name: "Rule 1" });
+    await choose("Column", "Country", rule);
+    await userEvent.type(within(rule).getByRole("textbox", { name: "Value for rule 1" }), "GB");
+    expect(await screen.findByText("Rule 1: choose a column", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+
+  it("step 4: a change is saved as the template's next version with a reason, or as a new template; the server's problems are listed", async () => {
     let fail = true;
     routeApi({
       ...base([template()]),
@@ -328,7 +382,7 @@ describe("file import wizard", () => {
     await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body.templateId).toBe("t3"));
   });
 
-  it("step 3: without managing rights changes can be tried, but importing needs them saved by someone who may", async () => {
+  it("step 4: without managing rights changes can be tried, but importing needs them saved by someone who may", async () => {
     permissions = ["integrations.read", "integrations.run"];
     routeApi({ ...base([template()]), ...runRoutes });
     renderAt(step3);
@@ -341,7 +395,7 @@ describe("file import wizard", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
   });
 
-  it("step 3: a row's steps are edited and the value after each comes from the server; Match by only for links matched by an earlier import", async () => {
+  it("step 4: a row's steps are edited and the value after each comes from the server; Match by only for links matched by an earlier import", async () => {
     const withRef = { data: [{ ...catalogue.data[0], fields: [...catalogue.data[0].fields, { key: "site", label: "Site", type: "text", required: false, maxLength: 100, options: null, description: null, ref: { kind: "site", source: false } }, { key: "machine", label: "Machine", type: "text", required: false, maxLength: 100, options: null, description: null, ref: { kind: "machine", source: true } }] }] };
     routeApi({ ...base([template()]), "GET /integrations/entities": withRef, "POST /integrations/templates/t1/versions": templateDetail({ currentVersion: 2 }), ...runRoutes });
     renderAt(step3);
@@ -375,7 +429,7 @@ describe("file import wizard", () => {
     expect(calls.some((c) => c.k === "POST /integrations/connections/c1/runs")).toBe(false);
   });
 
-  it("step 3: the formula editor is offered only with advanced imports; the server checks the formula and works out the example", async () => {
+  it("step 4: the formula editor is offered only with advanced imports; the server checks the formula and works out the example", async () => {
     routeApi({ ...base([template()]), "POST /integrations/formulas/check": { ok: true, error: null, columns: ["Account"], functions: ["CONCAT"], result: { value: "M-S-1", error: null } }, "GET /integrations/formulas/functions": { data: [{ name: "CONCAT", usage: "CONCAT(value, value, …)", description: "Joins the values", minArgs: 1, maxArgs: 50 }] } });
     const { unmount } = renderAt(step3);
     const code = await screen.findByRole("listitem", { name: "Code" });
@@ -398,7 +452,7 @@ describe("file import wizard", () => {
     await waitFor(() => expect(lastPreview().fields.find((f) => f.target === "code")).toEqual({ target: "code", formula: 'CONCAT("M-", [Account])' }), { timeout: 10000 });
   }, 30000);
 
-  it("step 3: the server's column check is shown above the fields and blocks an import that needs a missing column", async () => {
+  it("step 4: the server's column check is shown above the fields and blocks an import that needs a missing column", async () => {
     routeApi({ ...base([template()]), "GET /integrations/templates/t1": templateDetail({}, { keyField: "Account", fields: [{ target: "code", source: "Ref" }, { target: "name", source: "Supplier Name" }] }) });
     renderAt(step3);
     expect(await screen.findByText("Columns the mapping uses are not in this file")).toBeInTheDocument();
@@ -411,13 +465,13 @@ describe("file import wizard", () => {
     routeApi({ ...base([template()]), "GET /integrations/runs/r9": run(), "GET /integrations/runs/r9/rows": { data: [], page: 1, pageSize: 50, total: 0 }, "POST /integrations/connections/c1/runs": { id: "r10" }, "GET /integrations/runs/r10": run({ id: "r10", kind: "full" }), "GET /integrations/runs/r10/rows": { data: [], page: 1, pageSize: 50, total: 0 } });
     renderAt("/Settings/Integrations/c1/runs/r9");
     expect(await screen.findByText(/template Sage suppliers version 1/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Change the mapping" })).toHaveAttribute("href", "/Settings/Integrations/csv?connection=c1&entity=supplier&template=t1&file=f1&step=3");
+    expect(screen.getByRole("link", { name: "Change the mapping" })).toHaveAttribute("href", "/Settings/Integrations/csv?connection=c1&entity=supplier&template=t1&file=f1&step=4");
     await userEvent.click(screen.getByRole("button", { name: "Import these records" }));
     await waitFor(() => expect(calls.find((c) => c.k === "POST /integrations/connections/c1/runs").body).toEqual({ entityType: "supplier", kind: "full", fileId: "f1", templateId: "t1" }));
     expect(await screen.findByText("Full import · Suppliers", { exact: false })).toBeInTheDocument();
   });
 
-  it("the old mapping address opens step 3 of the wizard", async () => {
+  it("the old mapping address opens step 4 of the wizard", async () => {
     routeApi(base([template()]));
     renderAt("/Settings/Integrations/c1/mapping?entity=supplier&file=f1");
     expect(await screen.findByRole("listitem", { name: "Code" })).toBeInTheDocument();

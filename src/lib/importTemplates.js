@@ -2,6 +2,7 @@
  * Import templates (UI2c): the step-by-step transforms a field row can have, what each needs, and helpers for the template screens.
  * The server is the only place values are worked out (T3): nothing here reads or converts a value from a file.
  */
+import { cleanFilter } from "./importFilters";
 
 export const UNIT_OPTIONS = [
   { value: "mm", label: "Millimetres (mm)" },
@@ -179,7 +180,9 @@ export const templateSettings = (entityType, s) => {
   // Only a cost template keeps whether the import may add costs to closed or cancelled NCs it brought in, and what to do with a line that has no date.
   const withCosts = entityType === "ncr_cost" ? { ...base, costsOnClosed: !!s?.costsOnClosed, missingDate: s?.missingDate === "nc_detected" ? "nc_detected" : "reject" } : base;
   // A record filter (which source records are read) is kept as it is, so saving a new version of a template never drops it.
-  return s?.filters ? { ...withCosts, filters: s.filters } : withCosts;
+  // Only a filter that does something is kept (a half-typed rule is not), so it never makes a template look changed.
+  const filters = cleanFilter(s?.filters);
+  return filters ? { ...withCosts, filters } : withCosts;
 };
 
 /** What a cost line with no date does: refused (the default), or given the date its non-conformance was detected. */

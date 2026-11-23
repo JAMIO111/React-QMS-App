@@ -155,6 +155,26 @@ describe("mapping an API connection's fields", () => {
     );
   }, 10000);
 
+  it("has a Filter records card: a rule is checked against what the API sends, and the filter goes with the preview", async () => {
+    routeApi(base([], {
+      "POST /integrations/templates/filter-preview": (_p, { body }) => ({
+        columns: apiSample.columns, scanned: 2, complete: false, kept: 1, leftOut: 1, rules: body.filter.rules.map((r) => ({ column: r.column, words: `${r.column} is "${r.value}"`, matched: 1 })),
+        words: "", problems: [], errors: { count: 0, first: null }, samples: { kept: [], leftOut: [] },
+      }),
+    }));
+    renderAt(page);
+    await screen.findByRole("listitem", { name: "Code" });
+    expect(screen.getByText("Filter records")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add a filter" }));
+    const rule = screen.getByRole("listitem", { name: "Rule 1" });
+    await userEvent.click(within(rule).getByRole("combobox", { name: "Column" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^code/ }));
+    await userEvent.type(within(rule).getByRole("textbox", { name: "Value for rule 1" }), "CNC-1");
+    await waitFor(() => expect(calls.filter((c) => c.k === "POST /integrations/templates/filter-preview").at(-1)?.body).toEqual({ entityType: "machine", connectionId: "c1", filter: { mode: "keep", match: "all", rules: [{ column: "code", test: "equals", value: "CNC-1" }] } }), { timeout: 3000 });
+    expect(await screen.findByText(/Counted over the first 2 records the source sent, not all of them/)).toBeInTheDocument();
+    await waitFor(() => expect(lastPreview().settings.filters.rules).toEqual([{ column: "code", test: "equals", value: "CNC-1" }]), { timeout: 3000 });
+  }, 10000);
+
   it("starts from the template used last; unchanged, a preview runs with it and nothing is saved", async () => {
     routeApi(base([template()]));
     renderAt(page);

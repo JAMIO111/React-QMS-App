@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useToast } from "../../contexts/ToastProvider";
 import {
   useApiSampleQuery,
+  useFilterPreview,
   useImportTemplate,
   useImportTemplates,
   useIntegrationConnection,
@@ -17,6 +18,7 @@ import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { DB_ENGINES, ENTITY_LABELS, describeRecordSource, mappingToRows, rowHasSource, rowsInUse, rowsToFields } from "../../lib/integrations";
 import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, connectionTemplate, fieldsForSettings, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { cleanFilter } from "../../lib/importFilters";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
@@ -25,6 +27,7 @@ import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
 import { KEY_GUESS, SaveTemplateDialog, TemplateSettingsCard } from "./CsvImportWizard";
 import { CostCurrencyNotice } from "./CostImportParts";
+import FilterBuilder from "./FilterBuilder";
 import MappingStep from "./MappingStep";
 import { Failed, useAsk, Waiting } from "./database/agentAsk";
 import ProviderLogo from "./ProviderLogo";
@@ -130,7 +133,9 @@ const ApiMappingPage = () => {
   const fields = fieldsForSettings(entityType, catalogue?.fields ?? [], form?.settings);
   const body = form ? rowsToFields(rowsInUse(form.rows), fields) : null;
   // The preview reads the API again on the server, so it waits a little longer than the file wizard's after each change.
-  const preview = useTemplatePreview(form && sample.data && headers.length ? { entityType, connectionId: id, keyField: form.keyField ?? "", fields: body, ...(entityType === "ncr_cost" ? { settings: templateSettings(entityType, form.settings) } : {}) } : null, { delay: 800 });
+  const preview = useTemplatePreview(form && sample.data && headers.length ? { entityType, connectionId: id, keyField: form.keyField ?? "", fields: body, ...(entityType === "ncr_cost" || cleanFilter(form.settings?.filters) ? { settings: templateSettings(entityType, form.settings) } : {}) } : null, { delay: 800 });
+  // What the record filter does to the sample the source sends (worked out by the server).
+  const filterPreview = useFilterPreview({ entityType, connectionId: id, filter: form && sample.data && headers.length ? cleanFilter(form.settings?.filters) : undefined });
 
   useBreadcrumbNames(conn ? [{ path: `/Settings/Integrations/${id}`, label: conn.name }, { path: `/Settings/Integrations/${id}/map`, label: "Map fields" }] : []);
   if (connection.isLoading || entities.isLoading) return <LoadingScreen />;
@@ -273,6 +278,19 @@ const ApiMappingPage = () => {
             {sample.data && headers.length > 0 && catalogue && form && (
               <>
                 <TemplateSettingsCard entityType={entityType} settings={form.settings} onChange={(s) => setForm({ ...form, settings: s })} readOnly={!canRun} />
+                <MenuCard
+                  title="Filter records"
+                  subtitle="Choose which records are read at all, before anything is mapped. Saved with the template, so a scheduled import uses it too.">
+                  <FilterBuilder
+                    columns={headers}
+                    value={form.settings?.filters ?? null}
+                    onChange={(f) => setForm({ ...form, settings: { ...form.settings, filters: f ?? undefined } })}
+                    preview={filterPreview.data}
+                    previewing={filterPreview.isFetching}
+                    readOnly={!canRun}
+                    advanced={advanced}
+                  />
+                </MenuCard>
                 <MenuCard
                   title={`Map fields to ${catalogue.label.toLowerCase()}`}
                   subtitle={isDb && !isAgentApi

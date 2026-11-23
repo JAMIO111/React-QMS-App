@@ -1014,6 +1014,9 @@ async function importWithTemplate({ page, stack, APP, orgName, see, shot, step, 
   await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'machines.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await see(page.getByRole('table', { name: 'First rows' }));
   await page.getByRole('button', { name: 'Next' }).click();
+  // The filter step: no filter, so every record is read.
+  await see(page.getByText(/No filter: every record/));
+  await page.getByRole('button', { name: 'Next' }).click();
 
   const name = page.getByRole('listitem', { name: 'Name', exact: true });
   await see(name);
@@ -2176,6 +2179,8 @@ async function legacyCalibrations({ page, stack, APP, orgName, see, shot, step, 
   await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'calibrations.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await see(page.getByRole('table', { name: 'First rows' }));
   await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByText(/No filter: every record/));
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await see(page.getByRole('listitem', { name: 'Gauge', exact: true }));
   await shot(page, 'legacy-calibration-mapping');
   await page.getByRole('button', { name: 'Import 2 rows' }).click();
@@ -2268,6 +2273,8 @@ async function costImport({ page, stack, APP, orgName, see, shot, step, log }) {
     await see(page.getByText('How to read the file'));
     await page.locator('[data-testid="file-input"]').setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(csv) });
     await see(page.getByRole('table', { name: 'First rows' }));
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await see(page.getByText(/No filter: every record/));
     await page.getByRole('button', { name: 'Next', exact: true }).click();
   };
 

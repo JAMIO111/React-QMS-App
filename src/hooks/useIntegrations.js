@@ -349,6 +349,29 @@ export const useTemplatePreview = (body, { enabled = true, delay = 300 } = {}) =
   });
 };
 
+/**
+ * What a record filter does to the source (F2): how many records it keeps, how many each rule matches, and a few of each. The server reads the whole file
+ * (or the sample an API or database gives); nothing is written. Asked again a moment after the filter changes.
+ */
+export const useFilterPreview = ({ entityType, fileId, connectionId, filter }, { enabled = true, delay = 400 } = {}) => {
+  const { organisationId } = useOrganisation();
+  const body = filter && entityType && (fileId || connectionId) ? { entityType, ...(fileId ? { fileId } : { connectionId }), filter } : null;
+  const text = body ? JSON.stringify(body) : null;
+  const [debounced, setDebounced] = useState(text);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), delay);
+    return () => clearTimeout(t);
+  }, [text, delay]);
+  return useQuery({
+    queryKey: key(organisationId, "filter-preview", debounced),
+    queryFn: () => apiFetch(`${BASE}/templates/filter-preview`, { method: "POST", body: JSON.parse(debounced), organisationId }),
+    enabled: !!organisationId && enabled && !!debounced,
+    retry: false,
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
+  });
+};
+
 /** The values a link to another record can take (the codes that exist in Fortress, with their names), searched and paged. */
 export const useReferenceValues = (kind, { q = "", limit = 50, enabled = true } = {}) => {
   const { organisationId } = useOrganisation();

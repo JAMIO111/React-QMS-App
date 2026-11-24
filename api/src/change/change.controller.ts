@@ -6,8 +6,8 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AllQuery, Attachment, BoardBody, ChangeListQuery, CreateAttachmentBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody, CreateTypeBody, DeleteBody, DeletedQuery, LinksBody, ListItem, ReasonBody,
-  UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTypeBody,
+  AllQuery, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
+  CreateTypeBody, DeleteBody, DeletedQuery, LinksBody, LinkTaskBody, ListItem, ReasonBody, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
 } from './change.schemas';
 import { ChangeService } from './change.service';
 
@@ -97,6 +97,20 @@ export class ChangeController {
   @ApiOkResponse({ description: 'Active members who could be put on a change board, and whether each can sign (the approve right and a package that includes it)' })
   signers(@Ctx() ctx: RequestContext) {
     return this.service.signers(ctx);
+  }
+
+  @Get('changes/mine')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'What is waiting for the caller: sign-offs for them, open tasks given to them, and the changes they raised that are still going (declared before `changes/{id}`)' })
+  mine(@Ctx() ctx: RequestContext) {
+    return this.service.mine(ctx);
+  }
+
+  @Get('changes/mine/count')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The menu badge: `{ signoffs, tasks, overdue, total }`' })
+  mineCount(@Ctx() ctx: RequestContext) {
+    return this.service.mineCount(ctx);
   }
 
   @Get('changes')
@@ -204,6 +218,76 @@ export class ChangeController {
   @ApiOkResponse({ description: 'Records the customer\'s approval: not needed, required, requested, approved, rejected or waived (with a reason)' })
   setCustomerApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.setCustomerApproval(ctx, parse(Uuid, id), parse(CustomerApprovalBody, body));
+  }
+
+  @Post('changes/:id/tasks')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CreateTaskBody) })
+  @ApiCreatedResponse({ description: 'Adds a task to an approved change (what, who, by when, the impact area, and optionally the record it changes). Answers with the whole change; the stage follows the tasks.' })
+  addTask(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addTask(ctx, parse(Uuid, id), parse(CreateTaskBody, body));
+  }
+
+  @Patch('change-tasks/:id')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(UpdateTaskBody) })
+  @ApiOkResponse({ description: 'Changes an open task (wording, who, due date, impact area); answers with the whole change' })
+  updateTask(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.updateTask(ctx, parse(Uuid, id), parse(UpdateTaskBody, body));
+  }
+
+  @Put('change-tasks/:id/link')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(LinkTaskBody) })
+  @ApiOkResponse({ description: 'Points an open task at the record it changes (or null to take the link away)' })
+  linkTask(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.linkTask(ctx, parse(Uuid, id), parse(LinkTaskBody, body));
+  }
+
+  @Post('change-tasks/:id/complete')
+  @HttpCode(200)
+  @OrganisationScoped(READ)
+  @ApiBody({ schema: openApiSchema(CompleteTaskBody) })
+  @ApiOkResponse({ description: 'Finishes a task: a manager, or the person it was given to (the database decides). A task that changes a revision needs that revision in force.' })
+  completeTask(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.completeTask(ctx, parse(Uuid, id), parse(CompleteTaskBody, body));
+  }
+
+  @Post('change-tasks/:id/cancel')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Cancels an open task with a reason (never deleted)' })
+  cancelTask(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.cancelTask(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('change-tasks/:id/reopen')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Reopens a done task with a reason' })
+  reopenTask(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.reopenTask(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('change-tasks/:id/start-revision')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(StartRevisionBody) })
+  @ApiOkResponse({ description: 'Starts the next revision of a part, a control plan or a document as the caller and points the task at it; answers with the whole change and `started`' })
+  startRevision(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.startRevision(ctx, parse(Uuid, id), parse(StartRevisionBody, body));
+  }
+
+  @Post('changes/:id/reviews')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReviewBody) })
+  @ApiOkResponse({ description: 'The effectiveness check once every task is done: effective closes the change, not effective sends it back to implementing. A note is always needed.' })
+  review(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.review(ctx, parse(Uuid, id), parse(ReviewBody, body));
   }
 
   @Post('changes/:id/cancel')

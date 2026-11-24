@@ -157,3 +157,48 @@ export const CustomerApprovalBody = z
 export type CustomerApprovalBody = z.infer<typeof CustomerApprovalBody>;
 
 export { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../calibration/calibration.schemas';
+
+// ---- tasks and closing (CH3) ----------------------------------------------------------------------------
+export const TASK_LINK_KINDS = [
+  'part_revision', 'control_plan_revision', 'document_revision', 'gauge_type', 'training_session', 'supplier', 'inspection_requirement', 'quality_alert', 'risk',
+] as const;
+export const TASK_STATUSES = ['open', 'done', 'cancelled'] as const;
+
+export const TaskLink = z.object({ kind: z.enum(TASK_LINK_KINDS), id: z.string().uuid() }).strict();
+export const CreateTaskBody = z
+  .object({
+    description: z.string().trim().min(3).max(1000),
+    ownerId: z.string().uuid(),
+    dueOn: isoDay.nullable().optional(),
+    areaId: z.string().uuid().nullable().optional(),
+    link: TaskLink.nullable().optional(),
+  })
+  .strict();
+export type CreateTaskBody = z.infer<typeof CreateTaskBody>;
+export const UpdateTaskBody = z
+  .object({
+    description: z.string().trim().min(3).max(1000).optional(),
+    ownerId: z.string().uuid().optional(),
+    dueOn: isoDay.nullable().optional(),
+    areaId: z.string().uuid().nullable().optional(),
+  })
+  .strict()
+  .refine(nothingToChange, 'Nothing to change');
+export type UpdateTaskBody = z.infer<typeof UpdateTaskBody>;
+/** Point an open task at a record, or (null) take the link away. */
+export const LinkTaskBody = z.object({ link: TaskLink.nullable() }).strict();
+export type LinkTaskBody = z.infer<typeof LinkTaskBody>;
+export const CompleteTaskBody = z.object({ note: text(1000) }).strict();
+export type CompleteTaskBody = z.infer<typeof CompleteTaskBody>;
+
+/** Start the next revision of a part, a control plan or a document for a task: made as the caller (their own rights apply), then linked to the task. */
+export const StartRevisionBody = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('part'), partId: z.string().uuid(), revision: z.string().trim().min(1).max(10), drawingRef: text(100), changeSummary: text(2000) }).strict(),
+  z.object({ kind: z.literal('control_plan'), planId: z.string().uuid(), revisionCode: z.string().trim().min(1).max(10), changeReason: text(2000) }).strict(),
+  z.object({ kind: z.literal('document'), documentId: z.string().uuid() }).strict(),
+]);
+export type StartRevisionBody = z.infer<typeof StartRevisionBody>;
+
+/** The effectiveness check: effective closes the change, not effective sends it back to implementing. */
+export const ReviewBody = z.object({ effective: z.boolean(), note: z.string().trim().min(3).max(1000) }).strict();
+export type ReviewBody = z.infer<typeof ReviewBody>;

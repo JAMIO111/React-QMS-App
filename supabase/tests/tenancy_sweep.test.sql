@@ -292,6 +292,24 @@ BEGIN
      FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
   PERFORM app.set_change_customer_approval(k.id, 'not_needed'), app.send_change_to_board(k.id)
      FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  -- CH3: a second change approved by its signer (the owner, self-approval is on), a task on it, and the effectiveness check that closes it.
+  PERFORM app.create_change(a, jsonb_build_object('title', 'Sweep closed change', 'typeId', (SELECT id FROM public.change_types WHERE organisation_id = a AND key = 'process'),
+      'description', 'Sweep what', 'reason', 'Sweep why',
+      'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
+  PERFORM app.submit_change(k.id) FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.set_change_impact(i.change_id, i.area_id, 'not_affected', NULL) FROM public.change_impacts i JOIN public.change_requests k ON k.id = i.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.set_change_board(k.id, jsonb_build_array(jsonb_build_object('functionId', (SELECT id FROM public.change_functions WHERE organisation_id = a AND key = 'quality'), 'signerId', '50000000-0000-0000-0000-0000000000a1')))
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.set_change_customer_approval(k.id, 'not_needed'), app.send_change_to_board(k.id)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.decide_change_signoff(s.id, true, NULL) FROM public.change_signoffs s JOIN public.change_requests k ON k.id = s.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.add_change_task(k.id, jsonb_build_object('description', 'Sweep task', 'ownerId', '50000000-0000-0000-0000-0000000000a1'))
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.complete_change_task(t.id, NULL) FROM public.change_tasks t JOIN public.change_requests k ON k.id = t.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.record_change_review(k.id, true, 'Sweep effectiveness note') FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

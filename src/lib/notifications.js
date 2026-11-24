@@ -33,6 +33,7 @@ export function notificationLink(n) {
       return d.document_id ? `/Documentation/Documents/${d.document_id}` : "/Documentation/Change-Requests";
     case "change_signoffs":
     case "change_requests":
+    case "change_tasks":
       return d.change_id ? `/Change/${d.change_id}` : "/Change";
     case "document_signoffs":
     case "document_recipients":

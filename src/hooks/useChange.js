@@ -63,6 +63,30 @@ export const useChange = (id) => {
   });
 };
 
+/** What is waiting for the caller: sign-offs, open tasks, and the changes they raised that are still going. */
+export const useMyChanges = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "mine"),
+    queryFn: () => apiFetch("/changes/mine", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+/** The menu badge (sign-offs waiting plus open tasks), polled every five minutes like the other badges. */
+export const useMyChangeCount = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "mine-count"),
+    queryFn: () => apiFetch("/changes/mine/count", { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+};
+
 /** The files on a change, removed ones included (the page folds them away). */
 export const useChangeAttachments = (id) => {
   const { organisationId } = useOrganisation();
@@ -142,6 +166,22 @@ export const useChangeMutation = () => {
           return send(`/changes/${id}/cut-in`, "PUT");
         case "setCustomerApproval":
           return send(`/changes/${id}/customer-approval`, "PUT");
+        case "addTask":
+          return send(`/changes/${id}/tasks`);
+        case "updateTask":
+          return send(`/change-tasks/${id}`, "PATCH");
+        case "linkTask":
+          return send(`/change-tasks/${id}/link`, "PUT");
+        case "completeTask":
+          return send(`/change-tasks/${id}/complete`);
+        case "cancelTask":
+          return send(`/change-tasks/${id}/cancel`);
+        case "reopenTask":
+          return send(`/change-tasks/${id}/reopen`);
+        case "startRevision":
+          return send(`/change-tasks/${id}/start-revision`);
+        case "review":
+          return send(`/changes/${id}/reviews`);
         case "createType":
           return send("/change-types");
         case "updateType":

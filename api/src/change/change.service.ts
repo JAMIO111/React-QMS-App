@@ -6,8 +6,8 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
-  AllQuery, Attachment, BoardBody, ChangeListQuery, CreateAttachmentBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody, CreateTypeBody, DeletedQuery, LinkItem, ListItem, UpdateAreaBody,
-  UpdateChangeBody, UpdateFunctionBody, UpdateTypeBody,
+  AllQuery, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
+  CreateTypeBody, DeletedQuery, LinkItem, LinkTaskBody, ListItem, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
 } from './change.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -60,7 +60,7 @@ const CHANGE_SELECT = sql`
          (select count(*)::int from public.change_links l where l.change_id = c.id) as link_count,
          (select count(*)::int from public.change_attachments a where a.change_id = c.id and a.deleted_at is null) as file_count,
          exists (select 1 from public.change_signoffs w where w.change_id = c.id and w.signer_user_id = auth.uid() and w.status = 'pending') as waiting_for_me,
-         ${sql.raw(personName('pap'))} as approved_by_name,
+         ${sql.raw(personName('pap'))} as approved_by_name, ${sql.raw(personName('pcl'))} as closed_by_name,
          (select string_agg(coalesce(p.part_number, pf.code, m.code, s.code, cu.code, po.order_number, l.operation_code), ' ')
             from public.change_links l
             left join public.parts p on p.id = l.part_id left join public.part_families pf on pf.id = l.part_family_id left join public.machines m on m.id = l.machine_id
@@ -70,7 +70,8 @@ const CHANGE_SELECT = sql`
     join public.change_types t on t.id = c.type_id
     left join public.profiles pr on pr.id = c.raised_by
     left join public.profiles pc on pc.id = c.cancelled_by
-    left join public.profiles pap on pap.id = c.approved_by`;
+    left join public.profiles pap on pap.id = c.approved_by
+    left join public.profiles pcl on pcl.id = c.closed_by`;
 
 const SORT: Record<ChangeListQuery['sort'], string> = {
   reference: 'c.reference',
@@ -125,6 +126,71 @@ const toAttachment = (r: Row): z.infer<typeof Attachment> => ({
   deletedAt: iso(r.deleted_at),
   deleteReason: (r.delete_reason as string) ?? null,
 });
+
+/**
+ * A change's tasks with the record each one changes, read under the caller's own rules: a record they may not read has no label. `link_state` comes from the
+ * database (app.change_task_link_state), so the screen, the completion rule and the closing rule agree.
+ */
+const TASK_SELECT = sql`
+  select t.*, ${sql.raw(personName('po'))} as owner_name, ${sql.raw(personName('pd'))} as done_by_name, a.label as area_label,
+         app.change_task_link_state(t.id) as link_state, (t.status = 'open' and t.due_on is not null and t.due_on < current_date) as overdue,
+         pr.status as pr_status, pr.revision as pr_revision, pr.version as pr_version, pr.part_id as pr_part_id, ppt.part_number as pr_part_number,
+         cr.status as cr_status, cr.revision_code as cr_code, cr.control_plan_id as cr_plan_id, cpl.plan_code as cr_plan_code,
+         dr.status as dr_status, dr.letter as dr_letter, dr.document_id as dr_document_id, dd.number as dr_number, dd.title as dr_title,
+         gt.code as gt_code, gt.name as gt_name, gt.active as gt_active,
+         ts.reference as ts_reference, ts.title as ts_title, ts.status as ts_status,
+         su.code as su_code, su.name as su_name, su.approval_status as su_status,
+         ir.name as ir_name, ir.status as ir_status,
+         qa.reference as qa_reference, qa.title as qa_title, qa.status as qa_status,
+         rk.reference as rk_reference, rk.title as rk_title, rk.status as rk_status
+    from public.change_tasks t
+    left join public.profiles po on po.id = t.owner_user_id
+    left join public.profiles pd on pd.id = t.done_by
+    left join public.change_areas a on a.id = t.area_id
+    left join public.part_revisions pr on pr.id = t.part_revision_id
+    left join public.parts ppt on ppt.id = pr.part_id
+    left join public.control_plan_revisions cr on cr.id = t.control_plan_revision_id
+    left join public.control_plans cpl on cpl.id = cr.control_plan_id
+    left join public.document_revisions dr on dr.id = t.document_revision_id
+    left join public.documents dd on dd.id = dr.document_id
+    left join public.gauge_types gt on gt.id = t.gauge_type_id
+    left join public.competence_training_sessions ts on ts.id = t.training_session_id
+    left join public.suppliers su on su.id = t.supplier_id
+    left join public.supplier_inspection_requirements ir on ir.id = t.inspection_requirement_id
+    left join public.quality_alerts qa on qa.id = t.quality_alert_id
+    left join public.risks rk on rk.id = t.risk_id`;
+
+/** The record a task changes: what it is called, where it stands now (raw status and the worked-out state) and where to open it. */
+const toTaskLink = (r: Row) => {
+  const kind = r.link_kind as string | null;
+  if (!kind) return null;
+  const base = { kind, state: (r.link_state as string) ?? 'none' };
+  switch (kind) {
+    case 'part_revision': {
+      const v = Number(r.pr_version ?? 1);
+      return { ...base, id: r.part_revision_id as string, readable: r.pr_status != null, label: r.pr_status == null ? null : `${r.pr_part_number} · rev ${r.pr_revision}${v > 1 ? ` v${v}` : ''}`,
+               status: (r.pr_status as string) ?? null, parentId: (r.pr_part_id as string) ?? null };
+    }
+    case 'control_plan_revision':
+      return { ...base, id: r.control_plan_revision_id as string, readable: r.cr_status != null, label: r.cr_status == null ? null : `${r.cr_plan_code} · rev ${r.cr_code}`,
+               status: (r.cr_status as string) ?? null, parentId: (r.cr_plan_id as string) ?? null };
+    case 'document_revision':
+      return { ...base, id: r.document_revision_id as string, readable: r.dr_status != null, label: r.dr_status == null ? null : `${r.dr_number}${r.dr_letter ? ` rev ${r.dr_letter}` : ' (draft)'} · ${r.dr_title}`,
+               status: (r.dr_status as string) ?? null, parentId: (r.dr_document_id as string) ?? null };
+    case 'gauge_type':
+      return { ...base, id: r.gauge_type_id as string, readable: r.gt_code != null, label: r.gt_code == null ? null : `${r.gt_code} · ${r.gt_name}`, status: r.gt_code == null ? null : r.gt_active ? 'active' : 'inactive', parentId: null };
+    case 'training_session':
+      return { ...base, id: r.training_session_id as string, readable: r.ts_reference != null, label: r.ts_reference == null ? null : `${r.ts_reference} · ${r.ts_title}`, status: (r.ts_status as string) ?? null, parentId: null };
+    case 'supplier':
+      return { ...base, id: r.supplier_id as string, readable: r.su_code != null, label: r.su_code == null ? null : `${r.su_code} · ${r.su_name}`, status: (r.su_status as string) ?? null, parentId: null };
+    case 'inspection_requirement':
+      return { ...base, id: r.inspection_requirement_id as string, readable: r.ir_name != null, label: (r.ir_name as string) ?? null, status: (r.ir_status as string) ?? null, parentId: null };
+    case 'quality_alert':
+      return { ...base, id: r.quality_alert_id as string, readable: r.qa_reference != null, label: r.qa_reference == null ? null : `${r.qa_reference} · ${r.qa_title}`, status: (r.qa_status as string) ?? null, parentId: null };
+    default:
+      return { ...base, id: r.risk_id as string, readable: r.rk_reference != null, label: r.rk_reference == null ? null : `${r.rk_reference} · ${r.rk_title}`, status: (r.rk_status as string) ?? null, parentId: null };
+  }
+};
 
 const TYPE_COLUMNS: Record<string, string> = { label: 'label', description: 'description', sequence: 'sequence', active: 'active', needsCustomerApproval: 'needs_customer_approval' };
 const FUNCTION_COLUMNS: Record<string, string> = { label: 'label', description: 'description', sequence: 'sequence', active: 'active' };
@@ -336,6 +402,40 @@ export class ChangeService {
         canDecide: mine && x.status === 'pending' && stage === 'approval' && Number(x.round) === Number(r.review_round) && Boolean(can.approve) && (r.raised_by !== can.me || Boolean(can.self_ok)),
       };
     });
+    const stageOpenForTasks = ['approved', 'implementing', 'verifying'].includes(stage);
+    const finishedStage = ['closed', 'rejected', 'cancelled'].includes(stage);
+    const tasks = (await db.execute<Row>(sql`${TASK_SELECT} where t.change_id = ${id}::uuid and t.organisation_id = ${org}::uuid order by t.created_at, t.id`)).rows.map((t) => {
+      const open = t.status === 'open';
+      const mineTask = t.owner_user_id === can.me;
+      return {
+        id: t.id as string,
+        description: t.description as string,
+        status: t.status as 'open' | 'done' | 'cancelled',
+        owner: person(t.owner_user_id, t.owner_name),
+        dueOn: t.due_on ? (iso(t.due_on) as string).slice(0, 10) : null,
+        overdue: !!t.overdue,
+        area: t.area_id ? { id: t.area_id as string, label: (t.area_label as string) ?? '' } : null,
+        resultNote: (t.result_note as string) ?? null,
+        doneAt: t.done_at ? (iso(t.done_at) as string) : null,
+        doneBy: (t.done_by_name as string) ?? null,
+        cancelReason: (t.cancel_reason as string) ?? null,
+        reopenReason: (t.reopen_reason as string) ?? null,
+        createdAt: iso(t.created_at) as string,
+        link: toTaskLink(t),
+        isMine: mineTask,
+        /** A manager, or the person it was given to, can finish an open task (the database also checks the record it changes is in force). */
+        canComplete: open && stageOpenForTasks && (Boolean(can.manage) || mineTask),
+        canEdit: open && stageOpenForTasks && Boolean(can.manage),
+        canCancel: open && stageOpenForTasks && Boolean(can.manage),
+        canReopen: t.status === 'done' && stageOpenForTasks && Boolean(can.manage),
+      };
+    });
+    const reviews = (
+      await db.execute<Row>(sql`
+        select v.*, ${sql.raw(personName('pv'))} as by_name
+          from public.change_reviews v left join public.profiles pv on pv.id = v.reviewed_by
+         where v.change_id = ${id}::uuid and v.organisation_id = ${org}::uuid order by v.reviewed_at desc, v.id`)
+    ).rows.map((v) => ({ id: v.id as string, result: v.result as 'effective' | 'not_effective', note: v.note as string, reviewedAt: iso(v.reviewed_at) as string, reviewedBy: (v.by_name as string) ?? null }));
     const labelOf = async (table: string, column: string, rid: unknown) =>
       rid ? ((await db.execute<Row>(sql`select ${sql.raw(column)} as label from ${sql.raw(`public.${table}`)} where id = ${rid as string}::uuid`)).rows[0]?.label as string | undefined) ?? null : null;
     const cutIn = {
@@ -347,10 +447,10 @@ export class ChangeService {
       stockAction: (r.stock_action as string) ?? null,
       stockNote: (r.stock_note as string) ?? null,
     };
-    const target = stage === 'draft' ? 'submit' : stage === 'assessment' ? 'board' : null;
+    const target = stage === 'draft' ? 'submit' : stage === 'assessment' ? 'board' : stage === 'verifying' ? 'close' : null;
     const problems = target ? (await db.execute<{ p: string[] }>(sql`select app.change_problems(${id}::uuid, ${target}) as p`)).rows[0].p : [];
     const manage = Boolean(can.manage);
-    const finished = ['closed', 'rejected', 'cancelled'].includes(stage);
+    const finished = finishedStage;
     const day = (v: unknown) => (v ? (iso(v) as string).slice(0, 10) : null);
     return {
       ...toSummary(r),
@@ -360,6 +460,10 @@ export class ChangeService {
       /** The record it was raised from, or null (a label is null when the caller may not read it). */
       origin,
       attachments,
+      closedAt: r.closed_at ? (iso(r.closed_at) as string) : null,
+      closedBy: (r.closed_by_name as string) ?? null,
+      tasks,
+      reviews,
       cancelReason: (r.cancel_reason as string) ?? null,
       cancelledAt: r.cancelled_at ? (iso(r.cancelled_at) as string) : null,
       cancelledBy: (r.cancelled_by_name as string) ?? null,
@@ -397,6 +501,10 @@ export class ChangeService {
       /** The cut-in point and the customer's approval can be recorded until the change is finished. */
       canSetCutIn: !finished && (manage || (Boolean(can.approve) && Boolean(can.in_round))),
       canSetCustomerApproval: manage && !finished,
+      /** Tasks can be added once the board has approved the change, until it is closed. */
+      canAddTask: manage && stageOpenForTasks,
+      /** The effectiveness check: when every task is done (the change is verifying). */
+      canReview: manage && stage === 'verifying',
     };
   }
 
@@ -474,6 +582,134 @@ export class ChangeService {
       await db.execute(statement);
       return this.change(db, ctx, id);
     });
+  }
+
+  // ---- tasks, the effectiveness check, My changes (CH3) --------------------------------------------------
+
+  /** Runs a command on a task, then answers with the whole change it belongs to. */
+  private taskCommand(ctx: RequestContext, taskId: string, run: (db: Db) => Promise<unknown>) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = (await db.execute<Row>(sql`select change_id from public.change_tasks where id = ${taskId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`)).rows[0];
+      if (!found) throw ApiError.notFound('change_task_not_found', 'Task not found');
+      await run(db);
+      return this.change(db, ctx, found.change_id as string);
+    });
+  }
+
+  addTask(ctx: RequestContext, id: string, body: CreateTaskBody) {
+    return this.command(ctx, id, sql`select app.add_change_task(${id}::uuid, ${json(body)}::jsonb)`);
+  }
+
+  updateTask(ctx: RequestContext, taskId: string, body: UpdateTaskBody) {
+    return this.taskCommand(ctx, taskId, (db) => db.execute(sql`select app.update_change_task(${taskId}::uuid, ${json(body)}::jsonb)`));
+  }
+
+  linkTask(ctx: RequestContext, taskId: string, body: LinkTaskBody) {
+    return this.taskCommand(ctx, taskId, (db) =>
+      db.execute(sql`select app.link_change_task(${taskId}::uuid, ${body.link?.kind ?? null}, ${body.link?.id ?? null}::uuid)`));
+  }
+
+  completeTask(ctx: RequestContext, taskId: string, body: CompleteTaskBody) {
+    return this.taskCommand(ctx, taskId, (db) => db.execute(sql`select app.complete_change_task(${taskId}::uuid, ${body.note ?? null})`));
+  }
+
+  cancelTask(ctx: RequestContext, taskId: string, reason: string) {
+    return this.taskCommand(ctx, taskId, (db) => db.execute(sql`select app.cancel_change_task(${taskId}::uuid, ${reason})`));
+  }
+
+  reopenTask(ctx: RequestContext, taskId: string, reason: string) {
+    return this.taskCommand(ctx, taskId, (db) => db.execute(sql`select app.reopen_change_task(${taskId}::uuid, ${reason})`));
+  }
+
+  /**
+   * Starts the next revision of a part, a control plan or a document and points the task at it, in one transaction: the revision is made as the caller,
+   * so what they may do to parts, plans and documents is decided by those modules' own rules; the answer is the whole change and what was started.
+   */
+  startRevision(ctx: RequestContext, taskId: string, body: StartRevisionBody) {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const found = (await db.execute<Row>(sql`select change_id, status, link_kind from public.change_tasks where id = ${taskId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+      if (!found) throw ApiError.notFound('change_task_not_found', 'Task not found');
+      if (found.status !== 'open') throw new ApiError(409, 'change_rule', 'Only an open task can start a revision');
+      let linkKind: string;
+      let revisionId: string;
+      if (body.kind === 'part') {
+        const part = (await db.execute<Row>(sql`select id from public.parts where id = ${body.partId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+        if (!part) throw ApiError.notFound('part_not_found', 'Part not found');
+        linkKind = 'part_revision';
+        revisionId = (
+          await db.execute<{ id: string }>(sql`insert into public.part_revisions (organisation_id, part_id, revision, drawing_ref, change_summary)
+            values (${org}::uuid, ${body.partId}::uuid, ${body.revision}, ${body.drawingRef ?? null}, ${body.changeSummary ?? null}) returning id`)
+        ).rows[0].id;
+      } else if (body.kind === 'control_plan') {
+        const plan = (await db.execute<Row>(sql`select id from public.control_plans where id = ${body.planId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+        if (!plan) throw ApiError.notFound('control_plan_not_found', 'Control plan not found');
+        linkKind = 'control_plan_revision';
+        revisionId = (
+          await db.execute<{ id: string }>(sql`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code, change_reason)
+            values (${org}::uuid, ${body.planId}::uuid, ${body.revisionCode}, ${body.changeReason ?? null}) returning id`)
+        ).rows[0].id;
+      } else {
+        const doc = (await db.execute<Row>(sql`select id from public.documents where id = ${body.documentId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+        if (!doc) throw ApiError.notFound('document_not_found', 'Document not found');
+        linkKind = 'document_revision';
+        revisionId = (await db.execute<{ id: string }>(sql`select app.start_document_revision(${body.documentId}::uuid) as id`)).rows[0].id;
+      }
+      await db.execute(sql`select app.link_change_task(${taskId}::uuid, ${linkKind}, ${revisionId}::uuid)`);
+      const change = await this.change(db, ctx, found.change_id as string);
+      return { ...change, started: { kind: linkKind, revisionId } };
+    });
+  }
+
+  /** The effectiveness check: effective closes the change, not effective sends it back to implementing. */
+  review(ctx: RequestContext, id: string, body: ReviewBody) {
+    return this.command(ctx, id, sql`select app.record_change_review(${id}::uuid, ${body.effective}, ${body.note})`);
+  }
+
+  /** What is waiting for the caller: sign-offs, open tasks, and the changes they raised that are still going. */
+  mine(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const signoffs = (
+        await db.execute<Row>(sql`
+          select s.id, s.round, f.label as function_label, c.id as change_id, c.reference, c.title, c.urgency
+            from public.change_signoffs s
+            join public.change_requests c on c.id = s.change_id join public.change_functions f on f.id = s.function_id
+           where s.organisation_id = ${org}::uuid and s.signer_user_id = auth.uid() and s.status = 'pending' and c.stage = 'approval' and s.round = c.review_round
+           order by c.urgency desc, s.created_at`)
+      ).rows.map((r) => ({ id: r.id as string, changeId: r.change_id as string, reference: r.reference as string, title: r.title as string, urgency: r.urgency as string, functionLabel: r.function_label as string }));
+      const tasks = (
+        await db.execute<Row>(sql`
+          select t.id, t.description, t.due_on, (t.due_on is not null and t.due_on < current_date) as overdue, c.id as change_id, c.reference, c.title, c.stage,
+                 app.change_task_link_state(t.id) as link_state, t.link_kind
+            from public.change_tasks t join public.change_requests c on c.id = t.change_id
+           where t.organisation_id = ${org}::uuid and t.owner_user_id = auth.uid() and t.status = 'open'
+           order by t.due_on nulls last, t.created_at`)
+      ).rows.map((r) => ({
+        id: r.id as string,
+        description: r.description as string,
+        dueOn: r.due_on ? (iso(r.due_on) as string).slice(0, 10) : null,
+        overdue: !!r.overdue,
+        changeId: r.change_id as string,
+        reference: r.reference as string,
+        title: r.title as string,
+        linkKind: (r.link_kind as string) ?? null,
+        linkState: (r.link_state as string) ?? 'none',
+      }));
+      const raised = (
+        await db.execute<Row>(sql`
+          select c.id, c.reference, c.title, c.stage, c.urgency from public.change_requests c
+           where c.organisation_id = ${org}::uuid and c.raised_by = auth.uid() and c.stage not in ('closed', 'rejected', 'cancelled')
+           order by c.updated_at desc limit 50`)
+      ).rows.map((r) => ({ id: r.id as string, reference: r.reference as string, title: r.title as string, stage: r.stage as string, urgency: r.urgency as string }));
+      return { signoffs, tasks, raised, counts: { signoffs: signoffs.length, tasks: tasks.length, overdue: tasks.filter((t) => t.overdue).length, total: signoffs.length + tasks.length } };
+    });
+  }
+
+  /** The menu badge: sign-offs waiting plus open tasks. */
+  async mineCount(ctx: RequestContext) {
+    const mine = await this.mine(ctx);
+    return mine.counts;
   }
 
   setLinks(ctx: RequestContext, id: string, links: LinkItem[]) {

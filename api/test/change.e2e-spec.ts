@@ -322,6 +322,101 @@ describe('assessment, the board and approval', () => {
   });
 });
 
+describe('tasks, the effectiveness check and closing', () => {
+  it('adds tasks to an approved change, and the stage follows them', async () => {
+    const h = await as(ids.ownerA);
+    const body = { description: 'Tell the line leaders', ownerId: ids.inspectorA, dueOn: '2099-01-01' };
+    await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(await as(ids.inspectorA)).send(body).expect(403);
+    await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(h).send({ ...body, description: 'ab' }).expect(400);
+    await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(h).send({ ...body, ownerId: ids.ownerB }).expect(409);
+    await api().post(`/api/v1/changes/${ctx.change}/tasks`).set(h).send(body).expect(409);
+    const added = await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(h).send(body).expect(201);
+    expect(added.body.stage).toBe('implementing');
+    expect(added.body).toMatchObject({ canAddTask: true, canReview: false });
+    expect(added.body.tasks).toHaveLength(1);
+    expect(added.body.tasks[0]).toMatchObject({ description: 'Tell the line leaders', status: 'open', dueOn: '2099-01-01', overdue: false, link: null, canComplete: true, canEdit: true, isMine: false });
+    ctx.taskOne = added.body.tasks[0].id;
+  });
+
+  it('shows the person a task was given to their own work, and lets them finish it', async () => {
+    const mine = await api().get('/api/v1/changes/mine').set(await as(ids.inspectorA)).expect(200);
+    expect(mine.body.tasks.map((t: { id: string }) => t.id)).toContain(ctx.taskOne);
+    expect(mine.body.counts).toMatchObject({ tasks: 1, signoffs: 0, total: 1 });
+    expect((await api().get('/api/v1/changes/mine/count').set(await as(ids.inspectorA)).expect(200)).body).toMatchObject({ total: 1, overdue: 0 });
+    expect((await api().get('/api/v1/changes/mine').set(await as(ids.ownerA)).expect(200)).body.counts.tasks).toBe(0);
+    const theirs = await api().get(`/api/v1/changes/${ctx.flow}`).set(await as(ids.inspectorA)).expect(200);
+    expect(theirs.body.tasks[0]).toMatchObject({ isMine: true, canComplete: true, canEdit: false, canCancel: false });
+    await api().patch(`/api/v1/change-tasks/${ctx.taskOne}`).set(await as(ids.inspectorA)).send({ description: 'Changed by them' }).expect(403);
+    await api().post(`/api/v1/change-tasks/${ctx.taskOne}/cancel`).set(await as(ids.inspectorA)).send({ reason: 'Not mine to cancel' }).expect(403);
+  });
+
+  it('starts a revision for a task and waits for it to be in force before the task can be finished', async () => {
+    const h = await as(ids.ownerA);
+    const second = await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(h).send({ description: 'Release the new drawing revision', ownerId: ids.ownerA }).expect(201);
+    ctx.taskTwo = second.body.tasks.find((t: { description: string }) => t.description.startsWith('Release')).id;
+    const started = await api().post(`/api/v1/change-tasks/${ctx.taskTwo}/start-revision`).set(h).send({ kind: 'part', partId: ctx.part, revision: 'Q', changeSummary: 'From the change' }).expect(200);
+    expect(started.body.started.kind).toBe('part_revision');
+    const task = started.body.tasks.find((t: { id: string }) => t.id === ctx.taskTwo);
+    expect(task.link).toMatchObject({ kind: 'part_revision', status: 'draft', state: 'pending', readable: true });
+    expect(task.link.label).toMatch(/rev Q$/);
+    const unfinished = await api().post(`/api/v1/change-tasks/${ctx.taskTwo}/complete`).set(h).send({}).expect(409);
+    expect(unfinished.body.error.message).toMatch(/not in force yet/);
+    await api().post(`/api/v1/part-revisions/${started.body.started.revisionId}/release`).set(h).expect(200);
+    const read = await api().get(`/api/v1/changes/${ctx.flow}`).set(h).expect(200);
+    expect(read.body.tasks.find((t: { id: string }) => t.id === ctx.taskTwo).link).toMatchObject({ status: 'released', state: 'in_force' });
+    await api().post(`/api/v1/change-tasks/${ctx.taskTwo}/start-revision`).set(h).send({ kind: 'document', documentId: ctx.change }).expect(404);
+  });
+
+  it('works out verifying when every task is done, and checks effectiveness before closing', async () => {
+    const h = await as(ids.ownerA);
+    await api().post(`/api/v1/changes/${ctx.flow}/reviews`).set(h).send({ effective: true, note: 'Too early to say' }).expect(409);
+    await api().post(`/api/v1/change-tasks/${ctx.taskOne}/complete`).set(await as(ids.inspectorA)).send({ note: 'Told them all' }).expect(200);
+    const done = await api().post(`/api/v1/change-tasks/${ctx.taskTwo}/complete`).set(h).send({ note: 'Rev Q is out' }).expect(200);
+    expect(done.body).toMatchObject({ stage: 'verifying', canReview: true, problems: [] });
+    const reopened = await api().post(`/api/v1/change-tasks/${ctx.taskOne}/reopen`).set(h).send({ reason: 'One leader missed' }).expect(200);
+    expect(reopened.body.stage).toBe('implementing');
+    await api().post(`/api/v1/change-tasks/${ctx.taskOne}/complete`).set(await as(ids.inspectorA)).send({}).expect(200);
+    await api().post(`/api/v1/changes/${ctx.flow}/reviews`).set(await as(ids.inspectorA)).send({ effective: true, note: 'Looks fine' }).expect(403);
+    await api().post(`/api/v1/changes/${ctx.flow}/reviews`).set(h).send({ effective: true, note: 'x' }).expect(400);
+    const bad = await api().post(`/api/v1/changes/${ctx.flow}/reviews`).set(h).send({ effective: false, note: 'Scrap rate is still high' }).expect(200);
+    expect(bad.body.stage).toBe('implementing');
+    expect(bad.body.reviews[0]).toMatchObject({ result: 'not_effective', note: 'Scrap rate is still high' });
+    const third = await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(h).send({ description: 'Add a check to the control plan', ownerId: ids.ownerA }).expect(201);
+    const t3 = third.body.tasks.find((t: { description: string }) => t.description.startsWith('Add a check')).id;
+    const back = await api().post(`/api/v1/change-tasks/${t3}/complete`).set(h).send({}).expect(200);
+    expect(back.body.stage).toBe('verifying');
+    const closed = await api().post(`/api/v1/changes/${ctx.flow}/reviews`).set(h).send({ effective: true, note: 'Scrap rate back to normal' }).expect(200);
+    expect(closed.body).toMatchObject({ stage: 'closed', closedBy: expect.any(String), canAddTask: false, canReview: false, canCancel: false });
+    expect(closed.body.closedAt).toBeTruthy();
+    expect(closed.body.reviews.map((r: { result: string }) => r.result)).toEqual(['effective', 'not_effective']);
+    await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(h).send({ description: 'Too late now', ownerId: ids.ownerA }).expect(409);
+    await api().post(`/api/v1/change-tasks/${ctx.taskOne}/reopen`).set(h).send({ reason: 'After the close' }).expect(409);
+  });
+
+  it('cancels a task with a reason and takes a cancelled change’s tasks with it', async () => {
+    const h = await as(ids.ownerA);
+    const made = await api().post('/api/v1/changes').set(h).send({ title: 'Cancel with tasks', typeId: ctx.tooling, description: 'x', reason: 'y', links: [{ kind: 'part', id: ctx.part }] }).expect(201);
+    const id = made.body.id;
+    await api().post(`/api/v1/changes/${id}/submit`).set(h).expect(200);
+    const detail = (await api().get(`/api/v1/changes/${id}`).set(h).expect(200)).body;
+    for (const i of detail.impacts) await api().put(`/api/v1/changes/${id}/impacts`).set(h).send({ areaId: i.areaId, status: 'not_affected' }).expect(200);
+    await api().put(`/api/v1/changes/${id}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: QM }] }).expect(200);
+    const sent = await api().post(`/api/v1/changes/${id}/send-to-board`).set(h).expect(200);
+    await api().post(`/api/v1/change-signoffs/${sent.body.signoffs[0].id}/decide`).set(await as(QM)).send({ approve: true }).expect(200);
+    const one = await api().post(`/api/v1/changes/${id}/tasks`).set(h).send({ description: 'A task to cancel', ownerId: ids.ownerA }).expect(201);
+    const tid = one.body.tasks[0].id;
+    await api().post(`/api/v1/change-tasks/${tid}/cancel`).set(h).send({ reason: 'x' }).expect(400);
+    const none = await api().post(`/api/v1/change-tasks/${tid}/cancel`).set(h).send({ reason: 'No longer needed' }).expect(200);
+    expect(none.body).toMatchObject({ stage: 'approved' });
+    expect(none.body.tasks[0]).toMatchObject({ status: 'cancelled', cancelReason: 'No longer needed', canComplete: false, canReopen: false });
+    await api().post(`/api/v1/change-tasks/${tid}/reopen`).set(h).send({ reason: 'Bring it back' }).expect(409);
+    await api().post(`/api/v1/changes/${id}/tasks`).set(h).send({ description: 'Second task', ownerId: ids.ownerA }).expect(201);
+    const cancelled = await api().post(`/api/v1/changes/${id}/cancel`).set(h).send({ reason: 'Overtaken by another change' }).expect(200);
+    expect(cancelled.body.stage).toBe('cancelled');
+    expect(cancelled.body.tasks.map((t: { status: string }) => t.status)).toEqual(['cancelled', 'cancelled']);
+  });
+});
+
 describe('tenancy', () => {
   it('does not show another organisation’s changes or lists, and refuses its ids', async () => {
     const b = await as(ids.ownerB, ids.orgB);
@@ -332,6 +427,12 @@ describe('tenancy', () => {
     await api().post(`/api/v1/changes/${ctx.flow}/submit`).set(b).expect(404);
     await api().put(`/api/v1/changes/${ctx.flow}/cut-in`).set(b).send({ kind: 'none' }).expect(404);
     await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(b).send({ approve: true }).expect(404);
+    await api().post(`/api/v1/changes/${ctx.flow}/tasks`).set(b).send({ description: 'Not yours', ownerId: ids.ownerB }).expect(404);
+    await api().post(`/api/v1/changes/${ctx.flow}/reviews`).set(b).send({ effective: true, note: 'Not yours' }).expect(404);
+    await api().patch(`/api/v1/change-tasks/${ctx.taskOne}`).set(b).send({ description: 'Stolen task' }).expect(404);
+    await api().post(`/api/v1/change-tasks/${ctx.taskOne}/complete`).set(b).send({}).expect(404);
+    await api().post(`/api/v1/change-tasks/${ctx.taskOne}/start-revision`).set(b).send({ kind: 'document', documentId: ctx.change }).expect(404);
+    expect((await api().get('/api/v1/changes/mine').set(b).expect(200)).body.counts.total).toBe(0);
     await api().patch(`/api/v1/change-types/${ctx.process}`).set(b).send({ label: 'Stolen' }).expect(404);
     const bTypes = (await api().get('/api/v1/change-types').set(b).expect(200)).body.data;
     expect(bTypes.map((t: { id: string }) => t.id)).not.toContain(ctx.process);

@@ -102,12 +102,15 @@ export const linksBody = (links) => links.map((l) => (l.kind === "operation_code
 export const changePath = (id) => `/Change/${id}`;
 export const noticePath = (id) => `/Change/${id}/notice`;
 
-/** The steps a change moves through, for the stepper (later stages come with their slices). */
+/** The steps a change moves through, for the stepper. */
 export const STEPS = [
   { stage: "draft", label: "Draft" },
   { stage: "assessment", label: "Assessment" },
   { stage: "approval", label: "Board" },
   { stage: "approved", label: "Approved" },
+  { stage: "implementing", label: "Implementing" },
+  { stage: "verifying", label: "Checking" },
+  { stage: "closed", label: "Closed" },
 ];
 export const stepState = (current, stage) => {
   const order = STEPS.map((s) => s.stage);
@@ -182,3 +185,75 @@ export function formatDay(value) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
+
+// ---- tasks and closing (CH3) ----------------------------------------------------------------------------
+export const TASK_STATUS = {
+  open: { label: "Open", tone: "info" },
+  done: { label: "Done", tone: "success" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
+export const taskLabel = (status) => TASK_STATUS[status]?.label ?? status;
+export const taskPill = (status) => TONE_CLASS[TASK_STATUS[status]?.tone ?? "neutral"];
+
+/** Where the record a task changes stands, in words (worked out by the database: the screen never decides it). */
+export const LINK_STATE = {
+  in_force: { label: "In force", tone: "success" },
+  replaced: { label: "Replaced by a later one", tone: "success" },
+  pending: { label: "Not in force yet", tone: "warning" },
+  gone: { label: "No longer valid", tone: "error" },
+  none: { label: "", tone: "neutral" },
+};
+export const linkStateLabel = (state) => LINK_STATE[state]?.label ?? "";
+export const linkStatePill = (state) => TONE_CLASS[LINK_STATE[state]?.tone ?? "neutral"];
+
+export const TASK_LINK_KINDS = {
+  part_revision: "Part revision",
+  control_plan_revision: "Control plan revision",
+  document_revision: "Document revision",
+  gauge_type: "Gauge type",
+  training_session: "Training session",
+  supplier: "Supplier",
+  inspection_requirement: "Inspection requirement",
+  quality_alert: "Quality alert",
+  risk: "Risk",
+};
+export const taskLinkKindLabel = (kind) => TASK_LINK_KINDS[kind] ?? "Record";
+
+/** The page of the record a task changes, or null when the reader may not open it. */
+export const taskLinkPath = (link) => {
+  if (!link?.readable) return null;
+  switch (link.kind) {
+    case "part_revision":
+      return link.parentId ? `/Parts/${link.parentId}` : null;
+    case "control_plan_revision":
+      return link.parentId ? `/Process-Control/Plans/${link.parentId}/revisions/${link.id}` : null;
+    case "document_revision":
+      return link.parentId ? `/Documentation/Documents/${link.parentId}/revisions/${link.id}` : null;
+    case "supplier":
+      return `/Suppliers/${link.id}`;
+    case "risk":
+      return `/Risk/Register/${link.id}`;
+    case "quality_alert":
+      return `/Documentation/Quality-Alerts/${link.id}`;
+    case "training_session":
+      return `/Competence/Training/${link.id}`;
+    case "inspection_requirement":
+      return "/Supplier-Quality/Inspection-Requirements";
+    default:
+      return null;
+  }
+};
+
+/** What starting a revision for a task can make. */
+export const REVISION_KINDS = [
+  { value: "part", label: "Part revision", hint: "The next revision of a part's drawing and values" },
+  { value: "control_plan", label: "Control plan revision", hint: "The next revision of a control plan" },
+  { value: "document", label: "Document revision", hint: "The next revision of a controlled document" },
+];
+
+export const REVIEW_RESULT = {
+  effective: { label: "Effective", tone: "success" },
+  not_effective: { label: "Not effective", tone: "error" },
+};
+export const reviewLabel = (result) => REVIEW_RESULT[result]?.label ?? result;
+export const reviewPill = (result) => TONE_CLASS[REVIEW_RESULT[result]?.tone ?? "neutral"];

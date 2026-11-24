@@ -153,7 +153,12 @@ export const menuStructure = [
     icon: GitPullRequestArrowIcon,
     permission: "change.read",
     path: "/Change",
-    subMenu: [],
+    // badge: "my-changes" = sign-offs waiting for me + my open change tasks (see Navbar)
+    badge: "my-changes",
+    subMenu: [
+      { name: "Changes", path: "/Change" },
+      { name: "My changes", path: "/Change/Mine", badge: "my-changes" },
+    ],
   },
   {
     name: "Management review",

@@ -120,6 +120,14 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/change-signoffs/{id}/decide': { approve: true, comment: 'Hijacked' },
     'PUT /api/v1/changes/{id}/cut-in': { kind: 'none' },
     'PUT /api/v1/changes/{id}/customer-approval': { status: 'not_needed' },
+    'POST /api/v1/changes/{id}/tasks': { description: 'Hijacked task', ownerId: '00000000-0000-0000-0000-0000000000aa' },
+    'POST /api/v1/changes/{id}/reviews': { effective: true, note: 'Hijacked' },
+    'PATCH /api/v1/change-tasks/{id}': { description: 'Hijacked task' },
+    'PUT /api/v1/change-tasks/{id}/link': { link: null },
+    'POST /api/v1/change-tasks/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/change-tasks/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/change-tasks/{id}/reopen': { reason: 'Hijacked' },
+    'POST /api/v1/change-tasks/{id}/start-revision': { kind: 'document', documentId: '00000000-0000-0000-0000-0000000000aa' },
     'GET /api/v1/risks/{id}': undefined,
     'PATCH /api/v1/risks/{id}': { title: 'Hijacked' },
     'POST /api/v1/risks/{id}/assessments': { likelihood: 1, consequence: 1, rationale: 'Hijacked' },
@@ -662,6 +670,14 @@ const hasSample = (op: Op) =>
     'POST /api/v1/change-signoffs/{id}/decide',
     'PUT /api/v1/changes/{id}/cut-in',
     'PUT /api/v1/changes/{id}/customer-approval',
+    'POST /api/v1/changes/{id}/tasks',
+    'POST /api/v1/changes/{id}/reviews',
+    'PATCH /api/v1/change-tasks/{id}',
+    'PUT /api/v1/change-tasks/{id}/link',
+    'POST /api/v1/change-tasks/{id}/complete',
+    'POST /api/v1/change-tasks/{id}/cancel',
+    'POST /api/v1/change-tasks/{id}/reopen',
+    'POST /api/v1/change-tasks/{id}/start-revision',
     'GET /api/v1/risks/{id}',
     'PATCH /api/v1/risks/{id}',
     'POST /api/v1/risks/{id}/assessments',
@@ -1256,6 +1272,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/change-areas/')) return a.changeArea;
   if (path.startsWith('/api/v1/change-attachments/')) return a.changeAttachment;
   if (path.startsWith('/api/v1/change-signoffs/')) return a.changeSignoff;
+  if (path.startsWith('/api/v1/change-tasks/')) return a.changeTask;
   if (path.startsWith('/api/v1/changes/')) return a.change;
   if (path.startsWith('/api/v1/risk-categories/')) return a.riskCategory;
   if (path.startsWith('/api/v1/risks/')) return a.risk;
@@ -1509,6 +1526,14 @@ beforeAll(async () => {
     await q1(`select app.set_change_customer_approval($1::uuid, 'not_needed')`, [changeB]);
     await q1(`select app.send_change_to_board($1::uuid)`, [changeB]);
     a.changeSignoff = (await q1(`select id from public.change_signoffs where change_id = $1`, [changeB])).id;
+    const changeC = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha approved change', 'typeId', $2::text, 'description', 'x', 'reason', 'y', 'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', $3::text)))) as id`, [ids.orgA, a.changeType, a.part])).id;
+    await q1(`select app.submit_change($1::uuid)`, [changeC]);
+    await q1(`select app.set_change_impact(i.change_id, i.area_id, 'not_affected', null) from public.change_impacts i where i.change_id = $1::uuid`, [changeC]);
+    await q1(`select app.set_change_board($1::uuid, jsonb_build_array(jsonb_build_object('functionId', $2::text, 'signerId', $3::text)))`, [changeC, a.changeFunction, ids.ownerA]);
+    await q1(`select app.set_change_customer_approval($1::uuid, 'not_needed')`, [changeC]);
+    await q1(`select app.send_change_to_board($1::uuid)`, [changeC]);
+    await q1(`select app.decide_change_signoff(s.id, true, null) from public.change_signoffs s where s.change_id = $1::uuid`, [changeC]);
+    a.changeTask = (await q1(`select app.add_change_task($1::uuid, jsonb_build_object('description', 'Alpha task', 'ownerId', $2::text)) as id`, [changeC, ids.ownerA])).id;
     a.riskCategory = (await q1(`select id from public.risk_categories where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.risk = (await q1(`select app.create_risk($1::uuid, jsonb_build_object('title', 'Alpha risk', 'categoryId', $2::text)) as id`, [ids.orgA, a.riskCategory])).id;
     await q1(`select app.assess_risk($1::uuid, 4, 4, 'Alpha rationale'), app.set_risk_treatment($1::uuid, 'accept', null)`, [a.risk]);

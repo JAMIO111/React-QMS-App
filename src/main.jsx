@@ -128,6 +128,7 @@ const MyDocumentsPage = lazy(() => import("./components/documents/MyDocumentsPag
 const RiskRegisterPage = lazy(() => import("./components/risk/RiskRegisterPage.jsx"));
 const ChangeRegisterPage = lazy(() => import("./components/change/ChangeRegisterPage.jsx"));
 const ChangePage = lazy(() => import("./components/change/ChangePage.jsx"));
+const MyChangesPage = lazy(() => import("./components/change/MyChangesPage.jsx"));
 const ChangeNoticePage = lazy(() => import("./components/change/ChangeNoticePage.jsx"));
 const RiskPage = lazy(() => import("./components/risk/RiskPage.jsx"));
 const RiskDashboard = lazy(() => import("./components/risk/RiskDashboard.jsx"));
@@ -359,6 +360,7 @@ const router = createBrowserRouter([
           { path: "Management-Review/Objectives", element: <ObjectivesPage /> },
           { path: "Management-Review/Objectives/:id", element: <ObjectivePage /> },
           { path: "Change", element: <ChangeRegisterPage /> },
+          { path: "Change/Mine", element: <MyChangesPage /> },
           { path: "Change/:id", element: <ChangePage /> },
           { path: "Change/:id/notice", element: <ChangeNoticePage /> },
           { path: "Risk/Register", element: <RiskRegisterPage /> },

@@ -53,6 +53,7 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return '/Management-Review/My-Actions';
     case 'change_signoffs':
     case 'change_requests':
+    case 'change_tasks':
       return id(d.change_id) ? `/Change/${id(d.change_id)}` : '/Change';
     case 'risk_actions':
       return id(d.risk_id) ? `/Risk/Register/${id(d.risk_id)}` : '/Risk/My-Work';

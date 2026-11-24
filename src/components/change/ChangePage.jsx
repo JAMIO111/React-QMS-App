@@ -12,6 +12,7 @@ import { AttachmentDrop } from "../ui/FileDrop";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { BoardCard, CustomerCard, CutInCard, ImpactCard } from "./ChangeAssessment";
+import { ReviewCard, TasksCard } from "./ChangeTasks";
 import { CancelDialog, ChangeDialog, LinksDialog } from "./ChangeDialogs";
 
 const Fact = ({ label, children }) => (
@@ -114,7 +115,7 @@ const RecallDialog = ({ change, onClose }) => {
 
 /**
  * A change (`/Change/:id`): what is changing and why, where it came from, what it covers, the impact assessment, the board and its sign-offs, the
- * cut-in point, the customer's approval and the files. Tasks, carrying the change out and closing it come in the next slices.
+ * cut-in point, the customer's approval and the files; once approved, the tasks that carry it out (with the records they change) and the check that it worked.
  */
 const ChangePage = () => {
   const { id } = useParams();
@@ -169,7 +170,7 @@ const ChangePage = () => {
               Take back from the board
             </CTAButton>
           )}
-          {["approved"].includes(stage) && (
+          {["approved", "implementing", "verifying", "closed"].includes(stage) && (
             <CTAButton type="secondary" icon={FileTextIcon} to={noticePath(change.id)}>
               Change notice
             </CTAButton>
@@ -206,10 +207,13 @@ const ChangePage = () => {
           Waiting for {change.signoffs.filter((s) => s.round === change.reviewRound && s.status === "pending").length} sign-off(s).
         </Callout>
       )}
-      {stage === "approved" && (
+      {["approved", "implementing", "verifying", "closed"].includes(stage) && (
         <Callout tone="success" title="Approved">
           Approved {formatDay(change.approvedAt)}
-          {change.approvedBy ? ` by ${change.approvedBy}` : ""}. Tasks to carry it out, and closing it with a check that it worked, come in the next slices.
+          {change.approvedBy ? ` by ${change.approvedBy}` : ""}.
+          {stage === "approved" && " Add the tasks that carry it out."}
+          {stage === "implementing" && " The tasks are being carried out."}
+          {stage === "verifying" && " Every task is done: check the change worked, then close it."}
         </Callout>
       )}
       {["draft", "assessment"].includes(stage) && change.canManage && notReady && (
@@ -250,6 +254,8 @@ const ChangePage = () => {
         {change.links.length === 0 ? <p className="text-sm text-secondary-text">Nothing yet.</p> : <CoverList links={change.links} />}
       </MenuCard>
 
+      <TasksCard change={change} />
+      <ReviewCard change={change} />
       <ImpactCard change={change} />
       <BoardCard change={change} />
       <CutInCard change={change} />

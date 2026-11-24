@@ -113,7 +113,7 @@ Every command answers with the whole change.
 | CH2 | Impact assessment, required functions, signoffs and rounds, approval, cut-in point, customer approval record, ECN print page, notices to signers and the raiser. |
 | CH3 | Tasks with linked records and their live status, start-a-revision-from-a-task (part, control plan, document), the worked-out stage, closing with the effectiveness check, My changes and the badge. |
 | CH4 | Raise a change from an NC, 8D (a corrective or preventive action), audit finding, risk, accepted document change request, management review decision; the Changes card on every linked record; trace page cut-in. |
-| CH5 | The opt-in gate, dashboard, home page area, workflow triggers (`change.submitted`, `change.approved`, `change.closed`), reminders area (signoffs waiting, tasks overdue), management review input. |
+| CH5 | The opt-in gate, dashboard, home page area, workflow triggers (`change.submitted`, `change.approved`, `change.closed`), reminders area (signoffs waiting, tasks overdue), and a small **Changes** section in the management review (raised, closed and found not effective in the period, plus open changes past their cut-in point). |
 | CH6 | Portal: a customer sends a change request on one of their parts, a supplier notifies a process change; both land as draft changes. Asking a customer to approve, as closure confirmation. |
 | CHX | Exit check: live guardrails, advisors, browser journey step (NC → raise change → assess → board → approve → part revision and control plan revision started from tasks → released → closed with an effectiveness check), exit report. |
 

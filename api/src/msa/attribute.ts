@@ -14,8 +14,8 @@ import { MsaInputError, type MsaWarning } from './errors';
  *   within appraiser = samples where all of the appraiser's trials agree ÷ n
  *   vs standard      = samples where all trials equal the standard ÷ n
  *   between appraisers = samples where every appraiser's every trial agrees ÷ n       all vs standard = … equals the standard ÷ n
- * Kappa: Fleiss' kappa across an appraiser's trials (within), across every appraiser's trials (between), and Cohen's kappa of the
- * appraiser's pooled decisions against the standard. Kappa is not defined when every rating falls in one category (null, with a warning).
+ * Kappa: Fleiss' kappa across an appraiser's trials (within), across every appraiser's trials (between), and, as Minitab defines it, the mean over the
+ * appraiser's trials of Fleiss' kappa between that trial and the standard (the standard treated as a second rater). Kappa is not defined when every rating falls in one category (null, with a warning).
  * The verdict is the worst band of effectiveness, miss rate and false-alarm rate over the appraisers (kappa is given its own band).
  */
 export const ALGORITHM_VERSION = 'msa-1';
@@ -126,14 +126,12 @@ export function analyseAttribute(input: AttributeInput): AttributeResult {
     let goodRejected = 0;
     let badAccepted = 0;
     let badRejected = 0;
-    const pairs: [boolean, boolean][] = [];
     const accepts: number[] = [];
     byAppraiser.forEach((trials, s) => {
       if (trials.every((v) => v === trials[0])) withinMatched += 1;
       if (trials.every((v) => v === standard[s])) vsStdMatched += 1;
       accepts.push(trials.filter(Boolean).length);
       for (const v of trials) {
-        pairs.push([v, standard[s]]);
         if (standard[s] && v) goodAccepted += 1;
         else if (standard[s]) goodRejected += 1;
         else if (v) badAccepted += 1;
@@ -144,7 +142,12 @@ export function analyseAttribute(input: AttributeInput): AttributeResult {
     const missRate = badSamples > 0 ? badAccepted / (badSamples * r) : null;
     const falseAlarmRate = goodSamples > 0 ? goodRejected / (goodSamples * r) : null;
     const kappaWithin = r >= 2 ? fleissKappa(accepts, r) : null;
-    const kappaVsStandard = cohenKappa(pairs);
+    // Minitab: for each trial, Fleiss' kappa of (that trial, the standard) treated as two raters; the appraiser's kappa is the mean over trials.
+    const perTrial = Array.from({ length: r }, (_, t) =>
+      fleissKappa(byAppraiser.map((trials, s) => Number(trials[t]) + Number(standard[s])), 2),
+    );
+    const kappaValues = perTrial.filter((v): v is number => v !== null);
+    const kappaVsStandard = kappaValues.length < r ? null : kappaValues.reduce((t, v) => t + v, 0) / r;
     const bands = {
       effectiveness: effectivenessBand(effectiveness),
       missRate: missRate === null ? null : missRateBand(missRate),

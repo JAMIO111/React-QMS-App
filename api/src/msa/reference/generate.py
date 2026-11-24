@@ -103,18 +103,18 @@ def attribute_case(seed, n, k, r, error_rates):
         correct = good_acc + (bad_n - bad_acc)
         # Fleiss: subjects = samples, raters = trials
         table = np.array([[int((~x[s]).sum()), int(x[s].sum())] for s in range(n)])
-        # Cohen pooled: appraiser rating vs standard over n*r pairs
-        c = np.zeros((2, 2), dtype=int)
-        for s in range(n):
-            for t in range(r):
-                c[int(x[s, t]), int(standard[s])] += 1
+        # Minitab 'vs standard': per trial, Fleiss kappa of (trial, standard) as two raters, averaged over trials
+        per_trial = []
+        for t in range(r):
+            tb = np.array([[int((x[s, t] == 0)) + int(not standard[s]), int(x[s, t]) + int(standard[s])] for s in range(n)])
+            per_trial.append(float(fleiss_kappa(tb, method="fleiss")))
         res["appraisers"].append({
             "withinMatched": within_match, "vsStandardMatched": vs_std_match,
             "goodOpportunities": good_n, "goodRejected": good_n - good_acc, "badOpportunities": bad_n, "badAccepted": bad_acc,
             "effectiveness": correct / (n * r),
             "miss": (bad_acc / bad_n) if bad_n else None, "falseAlarm": ((good_n - good_acc) / good_n) if good_n else None,
             "kappaWithin": None if len(set(table.sum(0).tolist())) == 1 and (table.sum(0) == 0).any() else float(fleiss_kappa(table, method="fleiss")),
-            "kappaVsStandard": float(cohens_kappa(c).kappa),
+            "kappaVsStandard": float(np.mean(per_trial)),
         })
     allr = ratings.reshape(k, n, r).transpose(1, 0, 2).reshape(n, k * r)
     res["betweenMatched"] = int(sum(len(set(allr[s].tolist())) == 1 for s in range(n)))

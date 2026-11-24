@@ -196,13 +196,28 @@ incomplete beta function, no new dependency), `constants.ts` (d2, d3, D3, D4, A2
 - **A real fault found:** identical readings left a rounding residue of about 1e-14 instead of zero spread, which would have shown as an enormous
   Cg; identical readings are now treated as exactly no variation (Type 1 and R&R), with tests.
 
-**Not verified — read before relying on it in an audit**
-- The **attribute bands** (effectiveness 90 / 80%, miss rate 2 / 5%, false-alarm rate 5 / 10%, kappa 0.75 / 0.40) are the commonly printed AIAG
-  values and have **not** been checked against the manual's text. No published attribute worked example was available, so that study is verified
-  against statsmodels' kappa and independent counting only, not against the manual.
-- Minitab's "each appraiser vs standard" kappa is defined here as Cohen's kappa of the appraiser's pooled decisions against the standard; Minitab's
-  own definition was not checked, so the number may differ from theirs.
-- The Type 1 defaults (K = 20%, L = 6, Cg and Cgk of 1.33) follow the usual VDA 5 / Minitab convention but VDA 5 itself was not read.
+**Checked against public sources after MS1 (2026-11-24; secondary sources only: the AIAG manual and VDA 5 themselves were not available)**
+- **Minitab's "each appraiser vs standard" kappa** (Minitab support, *Methods and formulas for kappa statistics*, text read; the formulas on the page are
+  images and could not be transcribed): with a known standard, kappa is worked out **for each trial, treating the standard as another rater, and the
+  appraiser's kappa is the mean over the trials** (Fleiss by default). MS1 had pooled every decision into one Cohen's kappa, which gives a different
+  number. **Changed:** `kappaVsStandard` is now the mean over trials of Fleiss' kappa between that trial and the standard; the statsmodels reference values
+  were regenerated the same way and agree to 1e-9. Not taken from Minitab: its significance test and its "all appraisers vs standard" kappa (the page does
+  not define the latter); neither is reported.
+- **Type 1** (Minitab support, *Methods and formulas for Type 1 Gage Study*, prose read, formulas are images): K defaults to 20 (percent of the tolerance),
+  the study variation uses 6 standard deviations by default (5.15 selectable), bias = mean − reference, the t-test has n − 1 degrees of freedom against
+  H0 bias = 0, resolution should not exceed 5% of the tolerance. The **Cg and Cgk formulas themselves** were confirmed from Origin's text description of the
+  same algorithm (Cg = (K/100 · T) / SV, Cgk = (K/200 · T − |bias|) / (SV/2)), which matches `type1.ts` exactly; that is a cross-check, not Minitab's own
+  text. Minitab calls the multiplier k1, not L; "L = 6" is the usual VDA name.
+- **Attribute bands** (several secondary guides, none quoting the manual): effectiveness 90% or more acceptable and 80–90% marginal; miss rate 2% or less
+  acceptable and above 5% unacceptable; false-alarm rate 5% or less acceptable; kappa above 0.75 good and below 0.40 poor, with 0.40–0.75 conditional. These
+  agree with the bands in `criteria.ts`. Some automotive customers expect kappa of 0.90 or more for safety characteristics, which is why the bands are
+  recorded in every result (`aiag-msa-4`) and may later be configurable.
+
+**Still not verified — read before relying on it in an audit**
+- The attribute bands are **not checked against the AIAG manual's own table** (the exact marginal limit for the false-alarm rate, 10%, was not found
+  in any source read). If you have the manual's attribute-study page, send it and the bands can be confirmed or corrected.
+- The AIAG manual's text and **VDA 5** were not read; the Type 1 defaults rest on Minitab's documentation and Origin's description.
+- Minitab's own Cg / Cgk / t-statistic formulas were images the reader could not transcribe; they are confirmed only through the secondary description above.
 - Numerical limits: results are double precision, so a result is exact only to about 1e-9 relative; the ANOVA assumes a balanced design.
 
 **Decisions this slice made that the plan did not spell out:** the average-and-range method is offered only for 2–3 trials, 2–3 appraisers and 2–10

@@ -73,6 +73,7 @@ audited(relname) AS (VALUES
   ('risk_models'), ('risk_categories'), ('risks'), ('risk_assessments'), ('risk_actions'), ('risk_reviews'), ('risk_acceptances'), ('risk_links'), ('quality_objectives'), ('quality_objective_values'), ('management_reviews'), ('management_review_inputs'), ('management_review_attendees'), ('management_review_decisions'), ('management_review_actions'), ('reminder_digests'), ('reminder_overdue_notices'), ('workflow_rules'), ('workflow_rule_versions'), ('workflow_notices'), ('workflow_tasks'),
   ('measurement_import_profiles'), ('measurement_import_profile_versions'), ('measurement_feature_maps'), ('inspection_imports'), ('organisation_networks'), ('organisation_sso_domains'), ('organisation_sso_providers'), ('sso_break_glass_members'), ('sso_changes'), ('sso_account_moves'), ('sso_match_dismissals'), ('seat_requests'), ('network_policy_changes'), ('integration_agents'), ('integration_agent_registrations'), ('integration_agent_keys'), ('integration_agent_credentials'), ('integration_record_sources'), ('integration_agent_updates'), ('reporting_keys'),
   ('integration_alerts'), ('ncr_source_categories'),
+  ('msa_studies'), ('msa_study_appraisers'), ('msa_study_parts'), ('msa_study_measurements'), ('msa_study_results'),
   ('integration_connections'), ('integration_credentials'), ('integration_connection_events'), ('integration_external_records'), ('integration_sync_cursors'), ('integration_files'), ('integration_mappings'), ('integration_import_settings')
 )
 SELECT rule, object FROM (

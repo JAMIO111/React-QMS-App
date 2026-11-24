@@ -286,6 +286,16 @@ BEGIN
           app.add_management_review_action(m.id, jsonb_build_object('description', 'Sweep action', 'decisionId', app.add_management_review_decision(m.id, 'Sweep decision', 'other')))
      FROM public.management_reviews m WHERE m.organisation_id = a AND m.title = 'Sweep review';
   PERFORM pg_temp.logout();
+  -- Gauge R&R (MS2): a Type 1 study made, started and filled as owner A, then completed (the API login's job: the system function stands in for it).
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.start_msa_collection(app.create_msa_study(a, jsonb_build_object('studyType', 'type1', 'gaugeId', (SELECT id FROM public.gauges WHERE organisation_id = a AND asset_number = 'SW-G1'),
+    'characteristicName', 'Sweep bore', 'nominal', 25, 'lowerLimit', 24.9, 'upperLimit', 25.1, 'referenceValue', '25.000', 'trialCount', 3)));
+  PERFORM app.record_msa_measurements(m.id, '[{"appraiser":1,"part":1,"trial":1,"value":"25.001"},{"appraiser":1,"part":1,"trial":2,"value":"25.002"},{"appraiser":1,"part":1,"trial":3,"value":"24.999"}]'::jsonb)
+    FROM public.msa_studies m WHERE m.organisation_id = a;
+  PERFORM pg_temp.logout();
+  PERFORM app.system_complete_msa_study(a, m.id, '50000000-0000-0000-0000-0000000000a1', 'accepted', 'Sweep conclusion', NULL,
+    '{"algorithm":"msa-1","criteria":"aiag-msa-4","verdict":{"band":"acceptable"}}'::jsonb, encode(sha256(convert_to(app.msa_data_canonical(m.id), 'UTF8')), 'hex'))
+    FROM public.msa_studies m WHERE m.organisation_id = a;
   -- Reminders (WK2): an area switched off, a digest and an overdue notice (seeded directly; only the worker writes the last two).
   INSERT INTO public.reminder_preferences (organisation_id, user_id, area, enabled) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'gauges', false);
   INSERT INTO public.reminder_digests (organisation_id, user_id, day, overdue, due_soon, summary, items)

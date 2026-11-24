@@ -5,8 +5,8 @@ Measurement system analysis (MSA) answers "can this gauge, used by these people,
 **not in that slice**. This plan adds it **under the Calibration menu**, as complete vertical slices (brief §2, §14). Nothing here changes how
 calibration, inspection or SPC work today.
 
-Status: **planned, nothing built.** Decisions D1–D3 were agreed with the product owner on 2026-11-24; D4–D14 are proposals recorded here so they
-can be challenged before any code is written.
+Status: **MS1 (the statistics) is built and proved; MS2 onwards are not started.** All decisions D1–D14 were agreed with the product owner on
+2026-11-24 (D1–D3 chosen from options, D4–D14 accepted as proposed).
 
 ## 1. What the module is for
 
@@ -146,7 +146,7 @@ code that made it.
 
 | Slice | Content | Exit |
 |-------|---------|------|
-| **MS1** | The statistics library and its proofs (§7). No database, no screens. | Unit tests pass against the published datasets and the independent check; formulas and sources documented in the code. |
+| **MS1 — done** | The statistics library and its proofs (§7). No database, no screens. | Unit tests pass against the published datasets and the independent check; formulas and sources documented in the code. See §11. |
 | **MS2** | Migration and SQL tests: tables, rules, run-order generation, completion function, frozen triggers, RLS, audit, outbox event, guardrails and tenancy-sweep seeds. | `npm run db:check` green; mutants (a broken freeze, a wrong site check, a stale hash) are caught. |
 | **MS3** | API: routes above, paste parsing, completion, analysis, report; e2e (frozen result equals recompute, permissions, tenant isolation) and the API sweep. | `api:test` and `api:test:e2e` green. |
 | **MS4** | Screens: register, study page with run sheet and paste, live analysis and charts, report, gauge card, menu, hooks, `refreshOrganisation`, optimistic cell entry, tests. | Lint, tests and build green; browser check of the run sheet on a narrow screen. |
@@ -167,3 +167,46 @@ linking a study to a gauge **type** (v1 studies a specific gauge); measurement d
   and gauge, so coverage never claims more than the study covered.
 - **Randomisation expectations** — the run order is repeatable and recorded, but it is a record of the intended order; the appraiser-blind
   discipline on the shop floor is still the person's.
+
+## 11. MS1 outcome (2026-11-24)
+
+Built in `api/src/msa/` (pure functions, no database, nothing wired into the app yet): `distributions.ts` (F and t probabilities from the
+incomplete beta function, no new dependency), `constants.ts` (d2, d3, D3, D4, A2, d2*), `anova.ts` (crossed ANOVA, pooling, variance components),
+`range-method.ts`, `grr.ts` (`analyseCrossed`: variation table, ndc, charts, warnings, verdict), `type1.ts` (`analyseType1`),
+`attribute.ts` (`analyseAttribute`, Fleiss and Cohen kappa), `criteria.ts` (bands, the shared ndc rule, `aiag-msa-4`), `errors.ts`.
+`ALGORITHM_VERSION` is `msa-1`. 71 unit tests; the whole API unit suite (53 suites, 552 tests) and the API build pass.
+
+**What was checked, and against what**
+- **AIAG MSA 4th edition worked example** (10 parts × 3 appraisers × 3 trials, `reference/aiag-example.ts`): the average-and-range method gives the
+  published EV 0.20188, AV 0.22963, GRR 0.30575, PV 1.10456, TV 1.14610, 26.68% GRR and ndc 5 (to 1e-3: the manual rounds its intermediate
+  figures); the ANOVA gives the published sums of squares (3.1673, 88.3619, 0.3590, 2.7589; total 94.6471), interaction F 0.434 / p 0.974,
+  pooled-model F of 245.6 and 39.6, 27.86% study variation, 7.76% contribution and 4 categories. **The data were typed in from memory**; that they
+  reproduce every one of those published figures is also what verifies the transcription.
+- **The range constants** were worked out by numerical integration (scipy, ~1e-12) and match the printed SPC tables (d2, d3, D4, A2) and the printed
+  AIAG K1, K2 and K3 values.
+- **An independent implementation:** statsmodels' two-way ANOVA for three generated studies (sums of squares, degrees of freedom, interaction F
+  and p, and the part and appraiser F in both the pooled and full model); scipy for every F and t probability (relative error under 1e-9) and
+  the Type 1 t-test; statsmodels' Fleiss and Cohen kappa and plain counting code for the attribute study. The generator is
+  `reference/generate.py` (not a product dependency), its output `reference/reference.json`.
+- **A check that depends on nothing else:** 3,000 simulated studies with known variances; the part, appraiser, interaction and repeatability
+  estimates average to the true values within 6% (3% for repeatability).
+- **Deliberate mistakes:** 18 mutants of the formulas (wrong divisor, wrong constant, wrong band edge, wrong kappa expectation, swapped F degrees of
+  freedom, …) were applied one at a time; 16 were caught at once and the 2 that survived (the ndc rounding and multiplier) led to a shared,
+  boundary-tested helper, after which both are caught.
+- **A real fault found:** identical readings left a rounding residue of about 1e-14 instead of zero spread, which would have shown as an enormous
+  Cg; identical readings are now treated as exactly no variation (Type 1 and R&R), with tests.
+
+**Not verified — read before relying on it in an audit**
+- The **attribute bands** (effectiveness 90 / 80%, miss rate 2 / 5%, false-alarm rate 5 / 10%, kappa 0.75 / 0.40) are the commonly printed AIAG
+  values and have **not** been checked against the manual's text. No published attribute worked example was available, so that study is verified
+  against statsmodels' kappa and independent counting only, not against the manual.
+- Minitab's "each appraiser vs standard" kappa is defined here as Cohen's kappa of the appraiser's pooled decisions against the standard; Minitab's
+  own definition was not checked, so the number may differ from theirs.
+- The Type 1 defaults (K = 20%, L = 6, Cg and Cgk of 1.33) follow the usual VDA 5 / Minitab convention but VDA 5 itself was not read.
+- Numerical limits: results are double precision, so a result is exact only to about 1e-9 relative; the ANOVA assumes a balanced design.
+
+**Decisions this slice made that the plan did not spell out:** the average-and-range method is offered only for 2–3 trials, 2–3 appraisers and 2–10
+parts; the part × appraiser interaction is kept when its p-value is below the significance level (so a zero over zero ratio is pooled); an
+acceptable gauge R&R with fewer than 5 distinct categories is lowered to marginal; a study with no sample on one side of the accept / reject line
+cannot judge that side's rate (null, with a warning), and the attribute verdict is the worst band of effectiveness, miss rate and false-alarm
+rate over the appraisers.

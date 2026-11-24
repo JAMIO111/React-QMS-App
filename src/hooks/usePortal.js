@@ -413,6 +413,38 @@ export const usePortalComplaintMutation = (organisationId) => {
   });
 };
 
+/** A party's own change requests and the parts they may name (CH6a). */
+export const usePortalChangeRequests = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "change-requests"),
+    queryFn: () => apiFetch("/portal/change-requests", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+export const usePortalChangeParts = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "change-request-parts"),
+    queryFn: () => apiFetch("/portal/change-request-parts", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+};
+
+/** Sending a request waits for the server (it makes the draft change and its reference); the list is refreshed afterwards. */
+export const usePortalChangeRequestMutation = (organisationId) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch("/portal/change-requests", { method: "POST", body, organisationId }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};
+
 /** One SCAR as the supplier sees it, with what they may do next. */
 export const usePortalScar = (organisationId, scarId) => {
   const { user } = useAuth();

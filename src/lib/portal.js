@@ -135,8 +135,36 @@ export const COMPLAINT_STATUS = {
 /** What staff can switch for a customer: whether their people may raise complaints. */
 export const CUSTOMER_TILES = [
   { key: "complaints", label: "Allow them to raise complaints" },
+  { key: "changes", label: "Allow them to send change requests" },
   { key: "figures", label: "Show them their quality figures" },
 ];
+/** Beside the performance tiles a supplier has one switch of its own: whether its people may notify us of a process change. */
+export const SUPPLIER_OPTIONS = [{ key: "changes", label: "Allow them to notify process changes" }];
+
+// ---- Change requests (CH6a) ----
+export const CHANGE_REQUEST_STATUS = {
+  received: { label: "Received", tone: "bg-brand-primary/15 text-brand-primary" },
+  under_review: { label: "Under review", tone: "bg-warning-color/20 text-primary-text" },
+  accepted: { label: "Accepted", tone: "bg-success-color/15 text-success-color" },
+  done: { label: "Done", tone: "bg-success-color/15 text-success-color" },
+  declined: { label: "Declined", tone: "bg-error-color/15 text-error-color" },
+  cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text" },
+};
+/** The words for each kind of party: a customer asks for a change, a supplier tells us about one. */
+export const CHANGE_WORDS = {
+  customer: {
+    menu: "Change requests", heading: "Your change requests", button: "Ask for a change", dialog: "Ask for a change",
+    intro: "Ask for a change to a part we make for you. Their engineering and quality teams review every request before anything is decided.",
+    title: "What would you like changed", titleHint: "For example: Reduce the bend radius", description: "Describe the change", reason: "Why you want it", wanted: "The date you want it from", send: "Send request",
+    empty: "You have not sent any change requests yet.",
+  },
+  supplier: {
+    menu: "Process changes", heading: "Your process change notices", button: "Notify a change", dialog: "Notify a process change",
+    intro: "Tell us before you change how something we buy from you is made — a new furnace, a new site, a different material. We review each one before it takes effect.",
+    title: "What is changing", titleHint: "For example: Moving the casting to a new furnace", description: "Describe the change", reason: "Why you are making it", wanted: "The date it takes effect",
+    send: "Send notice", empty: "You have not notified any process changes yet.",
+  },
+};
 
 // ---- Closure confirmation (PT5b) ----
 export const CLOSURE_STATUS = {
@@ -169,6 +197,7 @@ export const portalMenu = (access) => {
     ...(supplier ? [{ key: "scars", name: "Corrective actions", icon: "scar", path: "/portal/scars", badge: "scars" }] : []),
     ...(customer ? [{ key: "capas", name: "8D reports", icon: "capa", path: "/portal/8ds", badge: "capas" }] : []),
     ...(customer ? [{ key: "complaints", name: "Complaints", icon: "complaint", path: "/portal/complaints" }] : []),
+    ...(customer || supplier ? [{ key: "changes", name: CHANGE_WORDS[customer ? "customer" : "supplier"].menu, icon: "change", path: "/portal/change-requests" }] : []),
     { key: "documents", name: "Documents and alerts", icon: "document", path: "/portal/documents", badge: "documents" },
     ...(customer ? [{ key: "certificates", name: "Certificates and reports", icon: "certificate", path: "/portal/certificates" }] : []),
     ...(access?.role === "admin" ? [{ key: "team", name: "Team", icon: "team", path: "/portal/team" }] : []),
@@ -183,6 +212,7 @@ export const portalPageTitle = (pathname) => {
   if (p.startsWith("/portal/scars")) return "Corrective actions";
   if (p.startsWith("/portal/8ds")) return "8D reports";
   if (p.startsWith("/portal/complaints")) return "Complaints";
+  if (p.startsWith("/portal/change-requests")) return "Change requests";
   if (p.startsWith("/portal/documents")) return "Documents and alerts";
   if (p.startsWith("/portal/certificates")) return "Certificates and reports";
   if (p.startsWith("/portal/team")) return "Team";

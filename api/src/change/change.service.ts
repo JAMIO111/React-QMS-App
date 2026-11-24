@@ -354,7 +354,16 @@ export class ChangeService {
       .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || KIND_ORDER.indexOf(a.kind as string) - KIND_ORDER.indexOf(b.kind as string))
       .map(toLink);
     let origin: { kind: string; id: string; parentId: string | null; reference: string | null; name: string | null; readable: boolean } | null = null;
-    if (r.origin_kind) {
+    if (r.origin_kind === 'portal_request') {
+      // Sent in through the portal: named by the database function (the person who sent it may not be a member the caller can read).
+      const found = (await db.execute<Row>(sql`select * from app.portal_change_origin(${r.origin_id as string}::uuid)`)).rows[0];
+      origin = {
+        kind: 'portal_request', id: r.origin_id as string, parentId: null,
+        reference: found ? (found.kind === 'customer_request' ? 'Customer request' : 'Supplier notice') : null,
+        name: found ? `${found.party_name as string} · ${found.person_name as string}` : null,
+        readable: !!found,
+      };
+    } else if (r.origin_kind) {
       const found = (await db.execute<Row>(originLabel(r.origin_kind as string, r.origin_id as string))).rows[0];
       origin = { kind: r.origin_kind as string, id: r.origin_id as string, parentId: (found?.pid as string) ?? null, reference: (found?.ref as string) ?? null, name: (found?.name as string) ?? null, readable: !!found };
     }

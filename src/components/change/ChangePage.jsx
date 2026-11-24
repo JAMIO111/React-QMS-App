@@ -141,7 +141,13 @@ const ChangePage = () => {
             {change.urgency === "expedited" && <span className="inline-flex rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">Expedited</span>}
           </div>
           <p className="text-lg text-primary-text">{change.title}</p>
-          {change.origin && (
+          {change.origin?.kind === "portal_request" && (
+            <p className="text-sm text-secondary-text">
+              Sent in through the portal:{" "}
+              <span className="font-medium text-primary-text">{change.origin.readable ? [change.origin.reference, change.origin.name].filter(Boolean).join(" · ") : "you cannot see who sent it"}</span>
+            </p>
+          )}
+          {change.origin && change.origin.kind !== "portal_request" && (
             <p className="text-sm text-secondary-text">
               Raised from {originLabel(change.origin.kind).toLowerCase()}{" "}
               {change.origin.readable ? (

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link, Navigate, useNavigate, useOutletContext } from "react-router-dom";
 import Callout from "../ui/Callout";
+import PortalChangeRequests from "./PortalChangeRequests";
 import PortalComplaints, { PortalEvidence } from "./PortalComplaints";
 import PortalPeople from "./PortalPeople";
 import PortalRegister from "./PortalRegister";
@@ -188,4 +189,16 @@ export function PortalTeamPage() {
   if (access.role !== "admin") return <Navigate to="/portal" replace />;
   if (access.mfaRequired) return <MfaNeeded access={access} />;
   return <Content><PortalPeople access={access} /></Content>;
+}
+
+/** Change requests (CH6a): customers ask for a change to a part, suppliers notify a process change. */
+export function PortalChangeRequestsPage() {
+  const { access } = useOutletContext();
+  if (access.partyKind !== "customer" && access.partyKind !== "supplier") return <Navigate to="/portal" replace />;
+  if (access.mfaRequired) return <MfaNeeded access={access} />;
+  return (
+    <Content>
+      <PortalChangeRequests access={access} />
+    </Content>
+  );
 }

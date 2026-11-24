@@ -106,7 +106,7 @@ export const ChangeListQuery = z.object({
   owner: z.enum(['me']).optional(),
   /** Only changes with a sign-off waiting for the caller. */
   signer: z.enum(['me']).optional(),
-  originKind: csv(ORIGIN_KINDS),
+  originKind: csv([...ORIGIN_KINDS, 'portal_request']),
   partId: z.string().uuid().optional(),
   partFamilyId: z.string().uuid().optional(),
   machineId: z.string().uuid().optional(),

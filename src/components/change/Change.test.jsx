@@ -117,6 +117,14 @@ describe("the change page", () => {
     expect(within(needed).queryByText("Say what is changing")).not.toBeInTheDocument();
   });
 
+  it("says a change came in through the portal and who sent it, without a link", async () => {
+    current = { ...detail, originKind: "portal_request", origin: { kind: "portal_request", id: "r1", parentId: null, reference: "Customer request", name: "Wayne Ltd · Pat Quality", readable: true } };
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    expect(await screen.findByText(/Sent in through the portal:/)).toBeInTheDocument();
+    expect(screen.getByText("Customer request · Wayne Ltd · Pat Quality")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Wayne Ltd/ })).toBeNull();
+  });
+
   it("offers editing and cancelling to a manager, and neither to a reader", async () => {
     renderAt("/Change/c1", <ChangePage />, "/Change/:id");
     expect(await screen.findByRole("button", { name: "Edit details" })).toBeInTheDocument();

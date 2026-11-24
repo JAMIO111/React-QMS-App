@@ -14,7 +14,7 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useExternalAccess, useExternalAccessMutation, useExternalPeople } from "../../hooks/usePortal";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
-import { CUSTOMER_TILES, PERFORMANCE_TILES, ROLE_LABEL, accessStatus, lastSeenWords, partyKindLabel, personLine, tileOn } from "../../lib/portal";
+import { CUSTOMER_TILES, PERFORMANCE_TILES, SUPPLIER_OPTIONS, ROLE_LABEL, accessStatus, lastSeenWords, partyKindLabel, personLine, tileOn } from "../../lib/portal";
 
 const Pill = ({ tone, children }) => {
   const cls = {
@@ -182,7 +182,7 @@ function TilesDialog({ party, rankingOn, onChange, onClose }) {
           : `Choose what ${party.name} can do in the portal.`}
       </p>
       <ul aria-label="Performance tiles" className="mt-3 flex flex-col divide-y divide-border-color rounded-xl border border-border-color">
-        {(party.kind === "supplier" ? PERFORMANCE_TILES : CUSTOMER_TILES).map((tile) => (
+        {(party.kind === "supplier" ? [...PERFORMANCE_TILES, ...SUPPLIER_OPTIONS] : CUSTOMER_TILES).map((tile) => (
           <li key={tile.key} className="flex items-center justify-between gap-3 px-4 py-2.5">
             <span className="text-sm text-primary-text">
               {tile.label}

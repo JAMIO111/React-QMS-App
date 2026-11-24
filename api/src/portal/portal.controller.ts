@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ChangeRequestBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -189,6 +189,28 @@ export class PortalController {
   @ApiOkResponse({ description: 'The parts we make for this customer, to pick from when raising a complaint' })
   complaintParts(@Ctx() ctx: RequestContext) {
     return this.service.complaintParts(ctx);
+  }
+
+  @Get('change-requests')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The party’s own change requests with a plain status (received, under review, accepted, done, declined, cancelled)' })
+  changeRequests(@Ctx() ctx: RequestContext) {
+    return this.service.listChangeRequests(ctx);
+  }
+
+  @Post('change-requests')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ChangeRequestBody) })
+  @ApiOkResponse({ description: 'A customer sends a change request, or a supplier notifies a process change; it becomes a draft change for staff to review. A retry with the same clientKey returns the same request' })
+  raiseChangeRequest(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.raiseChangeRequest(ctx, parse(ChangeRequestBody, body));
+  }
+
+  @Get('change-request-parts')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'The parts this party may name in a change request (a customer’s parts, or the parts a supplier supplies)' })
+  changeRequestParts(@Ctx() ctx: RequestContext) {
+    return this.service.changeParts(ctx);
   }
 
   @Get('scars')

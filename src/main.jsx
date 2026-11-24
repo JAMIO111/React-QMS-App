@@ -167,6 +167,7 @@ const PortalScarsPage = portalPage("PortalScarsPage");
 const PortalCapasPage = portalPage("PortalCapasPage");
 const PortalDocumentsPage = portalPage("PortalDocumentsPage");
 const PortalComplaintsPage = portalPage("PortalComplaintsPage");
+const PortalChangeRequestsPage = portalPage("PortalChangeRequestsPage");
 const PortalCertificatesPage = portalPage("PortalCertificatesPage");
 const PortalTeamPage = portalPage("PortalTeamPage");
 const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
@@ -253,6 +254,7 @@ const router = createBrowserRouter([
           { path: "scars", element: <PortalScarsPage /> },
           { path: "8ds", element: <PortalCapasPage /> },
           { path: "complaints", element: <PortalComplaintsPage /> },
+          { path: "change-requests", element: <PortalChangeRequestsPage /> },
           { path: "documents", element: <PortalDocumentsPage /> },
           { path: "certificates", element: <PortalCertificatesPage /> },
           { path: "team", element: <PortalTeamPage /> },

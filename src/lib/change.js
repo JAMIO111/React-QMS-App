@@ -47,6 +47,7 @@ export const ORIGIN_KINDS = {
   risk: "Risk",
   document_change_request: "Document change request",
   management_review_decision: "Management review decision",
+  portal_request: "Sent in through the portal",
 };
 export const originLabel = (kind) => ORIGIN_KINDS[kind] ?? "Record";
 

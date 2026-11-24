@@ -147,8 +147,8 @@ code that made it.
 | Slice | Content | Exit |
 |-------|---------|------|
 | **MS1 — done** | The statistics library and its proofs (§7). No database, no screens. | Unit tests pass against the published datasets and the independent check; formulas and sources documented in the code. See §11. |
-| **MS2** | Migration and SQL tests: tables, rules, run-order generation, completion function, frozen triggers, RLS, audit, outbox event, guardrails and tenancy-sweep seeds. | `npm run db:check` green; mutants (a broken freeze, a wrong site check, a stale hash) are caught. |
-| **MS3** | API: routes above, paste parsing, completion, analysis, report; e2e (frozen result equals recompute, permissions, tenant isolation) and the API sweep. | `api:test` and `api:test:e2e` green. |
+| **MS2 — done** | Migration and SQL tests: tables, rules, run-order generation, completion function, frozen triggers, RLS, audit, outbox event, guardrails and tenancy-sweep seeds. | `npm run db:check` green; mutants (a broken freeze, a wrong site check, a stale hash) are caught. |
+| **MS3 — done** | API: routes above, paste parsing, completion, analysis, report; e2e (frozen result equals recompute, permissions, tenant isolation) and the API sweep. | `api:test` and `api:test:e2e` green. |
 | **MS4** | Screens: register, study page with run sheet and paste, live analysis and charts, report, gauge card, menu, hooks, `refreshOrganisation`, optimistic cell entry, tests. | Lint, tests and build green; browser check of the run sheet on a narrow screen. |
 | **MS5** | Coverage page, control plan characteristic badge, validity, workflow trigger and notice, reminders area. | As above; `workflows.e2e` catalogue test updated. |
 | **MS6** | Live guardrails and advisors, journey step (design → run sheet → paste → complete → report → coverage), exit report, `CLAUDE.md`. | Exit report `docs/gauge-rr-exit-report.md`. |
@@ -225,3 +225,27 @@ parts; the part × appraiser interaction is kept when its p-value is below the s
 acceptable gauge R&R with fewer than 5 distinct categories is lowered to marginal; a study with no sample on one side of the accept / reject line
 cannot judge that side's rate (null, with a warning), and the attribute verdict is the worst band of effectiveness, miss rate and false-alarm
 rate over the appraisers.
+
+## 12. MS2 and MS3 outcome (2026-11-24)
+
+**MS2** (migration `20260428100000_gauge_rr.sql`, applied live by the owner 2026-11-24): as §4, with these choices the plan did not spell out. A reading is **one row per cell, made empty when
+collection starts** (so the run order exists before anything is entered, and "every cell filled" is a count of empty rows); a cell is overwritten, never cleared or deleted, and only an
+overwrite or first entry is audited (the empty placeholders are not). The data hash covers the design and options, every part's reference decision and every cell, in a fixed text
+(`app.msa_data_canonical`), so a result cannot be frozen for different options as well as different readings. Tests: `supabase/tests/gauge_rr.test.sql`; nine deliberate breaks (the hash check,
+empty cells, the person's right, the design lock, readings on a completed study, the frozen result, a viewer recording, the hash ignoring reference decisions, deleting a study) are all caught.
+
+**MS3** (`api/src/msa/msa.controller.ts`, `msa.service.ts`, `msa.schemas.ts`, `msa-data.ts`; error `QM034` → `409 msa_rule`):
+- `GET|POST /msa/studies` (page-based: `q`, `status` (all = everything but cancelled, `open`, or named), `type`, `gaugeId`, `partId`, `verdict`, `valid`, `sort`, `order`, `page`,
+  `pageSize`), `GET|PATCH /msa/studies/{id}` (**PATCH is the design change** while a draft, replacing the plan's separate `PUT …/design`; `@Versioned('msa_studies')`), `POST …/start|complete|cancel|repeat`,
+  `PUT …/measurements` (grid cells or pasted rows, `source` grid | paste), `POST …/measurements/parse` (pasted text or CSV into cells, nothing saved, problems with line numbers), `GET …/analysis`
+  (live while collecting, the frozen result once completed), `GET …/report` (study, frozen result, whether the stored readings still match its hash), `GET /gauges/{id}/msa`
+  (current study per characteristic, open, earlier). **Coverage (`GET /msa/coverage`) is MS5.**
+- A part and a characteristic key with no name, unit or limits bring them from the part's **released revision** (`part_revision_characteristics`); the key is stored in capitals.
+- **Completing works in two steps:** the API reads the study as the person, works the result out with `analyseStudy` and hashes the data (`dataHash`, built in TypeScript from the rows it read), then calls
+  `app.system_complete_msa_study` on the API login with the person's id. A reading changed in between makes the hash differ and the database refuses. The e2e test recomputes a frozen result from
+  its stored data in TypeScript and requires the result and the hash to equal what the database holds (and the TypeScript canonical text to equal `app.msa_data_canonical`).
+- A Type 1 study is analysed on the readings so far (two or more); a crossed or attribute study only when every cell is in.
+- Pasted sheets: a header row naming `appraiser`, `part`, `trial`, `value` (or `decision`; appraiser and part by name or number, trial optional and counted in order), or a bare column of readings
+  for a one-appraiser, one-part study. Decimal commas are read unless the sheet is comma separated; attribute decisions accept accept / reject / pass / fail / good / bad / ok / nok / yes / no / 1 / 0.
+- Tests: `msa-data.spec.ts` (canonical text, analysis, paste), `api/test/msa.e2e-spec.ts` (20 tests), the tenancy sweep (every `{id}` route answers 404 for another organisation).
+

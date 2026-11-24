@@ -124,6 +124,17 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/quality-objectives/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/quality-objectives/{id}/reactivate': {},
     'POST /api/v1/quality-objectives/{id}/values': { periodStart: '2026-01-01', value: 1, note: 'Hijacked' },
+    'GET /api/v1/msa/studies/{id}': undefined,
+    'PATCH /api/v1/msa/studies/{id}': { characteristicName: 'Hijacked' },
+    'POST /api/v1/msa/studies/{id}/start': undefined,
+    'PUT /api/v1/msa/studies/{id}/measurements': { cells: [{ appraiser: 1, part: 1, trial: 1, value: 1 }] },
+    'POST /api/v1/msa/studies/{id}/measurements/parse': { text: 'value\n1' },
+    'GET /api/v1/msa/studies/{id}/analysis': undefined,
+    'POST /api/v1/msa/studies/{id}/complete': { conclusion: 'accepted', note: 'Hijacked' },
+    'POST /api/v1/msa/studies/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/msa/studies/{id}/repeat': undefined,
+    'GET /api/v1/msa/studies/{id}/report': undefined,
+    'GET /api/v1/gauges/{id}/msa': undefined,
     'GET /api/v1/management-reviews/{id}': undefined,
     'PATCH /api/v1/management-reviews/{id}': { title: 'Hijacked' },
     'POST /api/v1/management-reviews/{id}/start': {},
@@ -636,6 +647,17 @@ const hasSample = (op: Op) =>
     'POST /api/v1/quality-objectives/{id}/retire',
     'POST /api/v1/quality-objectives/{id}/reactivate',
     'POST /api/v1/quality-objectives/{id}/values',
+    'GET /api/v1/msa/studies/{id}',
+    'PATCH /api/v1/msa/studies/{id}',
+    'POST /api/v1/msa/studies/{id}/start',
+    'PUT /api/v1/msa/studies/{id}/measurements',
+    'POST /api/v1/msa/studies/{id}/measurements/parse',
+    'GET /api/v1/msa/studies/{id}/analysis',
+    'POST /api/v1/msa/studies/{id}/complete',
+    'POST /api/v1/msa/studies/{id}/cancel',
+    'POST /api/v1/msa/studies/{id}/repeat',
+    'GET /api/v1/msa/studies/{id}/report',
+    'GET /api/v1/gauges/{id}/msa',
     'GET /api/v1/management-reviews/{id}',
     'PATCH /api/v1/management-reviews/{id}',
     'POST /api/v1/management-reviews/{id}/start',
@@ -1196,6 +1218,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/risk-actions/')) return a.riskAction;
   if (path.startsWith('/api/v1/risk-acceptances/')) return a.riskAcceptance;
   if (path.startsWith('/api/v1/quality-objectives/')) return a.qualityObjective;
+  if (path.startsWith('/api/v1/msa/studies/')) return a.msaStudy;
   if (path.startsWith('/api/v1/management-reviews/')) return a.managementReview;
   if (path.startsWith('/api/v1/management-review-inputs/')) return a.managementReviewInput;
   if (path.startsWith('/api/v1/management-review-decisions/')) return a.managementReviewDecision;
@@ -1435,6 +1458,7 @@ beforeAll(async () => {
     a.riskAction = (await q1(`select app.add_risk_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.risk])).id;
     a.riskAcceptance = (await q1(`select app.propose_risk_acceptance($1::uuid, 'Alpha acceptance rationale') as id`, [a.risk])).id;
     a.qualityObjective = (await q1(`select app.save_quality_objective($1::uuid, '{"title":"Alpha objective","target":95,"unit":"%"}'::jsonb) as id`, [ids.orgA])).id;
+    a.msaStudy = (await q1(`select app.create_msa_study($1::uuid, jsonb_build_object('studyType', 'type1', 'gaugeId', $2::text, 'characteristicName', 'Alpha bore', 'referenceValue', 25, 'trialCount', 5)) as id`, [ids.orgA, a.gauge])).id;
     a.managementReview = (await q1(`select app.plan_management_review($1::uuid, '{"title":"Alpha review","periodFrom":"2026-01-01","periodTo":"2026-06-30"}'::jsonb) as id`, [ids.orgA])).id;
     await q1(`select app.start_management_review($1::uuid)`, [a.managementReview]);
     a.managementReviewInput = (await q1(`select id from public.management_review_inputs where review_id = $1 and section = 'context'`, [a.managementReview])).id;

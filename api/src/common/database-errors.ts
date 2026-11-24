@@ -153,6 +153,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       }
       return new ApiError(409, 'field_managed_by_import', pg.message ?? 'That field is managed by an import and cannot be changed here', details);
     }
+    case 'QM034': // measurement system analysis rules: studies, design, readings, completion (messages are written for users)
+      return new ApiError(409, 'msa_rule', pg.message ?? 'That change is not allowed for this study');
     case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)
       return new ApiError(409, 'edit_conflict', 'Someone else changed this since you opened it');
     case 'QM010': // notification type the caller cannot choose

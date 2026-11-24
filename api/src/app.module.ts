@@ -95,6 +95,8 @@ import { DocumentsService } from './documents/documents.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
 import { QualityObjectivesController } from './management-review/quality-objectives.controller';
+import { MsaController } from './msa/msa.controller';
+import { MsaService } from './msa/msa.service';
 import { QualityObjectivesService } from './management-review/quality-objectives.service';
 import { ManagementReviewsController } from './management-review/management-reviews.controller';
 import { ManagementReviewsService } from './management-review/management-reviews.service';
@@ -308,6 +310,7 @@ export class AppModule implements NestModule {
         RiskController,
         RiskDashboardController,
         QualityObjectivesController,
+        MsaController,
         ManagementReviewsController,
         DocumentsDashboardController,
         SupplierQualificationController,
@@ -426,6 +429,7 @@ export class AppModule implements NestModule {
         RiskService,
         RiskDashboardService,
         QualityObjectivesService,
+        MsaService,
         ManagementReviewsService,
         ReviewInputsService,
         DocumentsDashboardService,

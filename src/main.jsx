@@ -58,6 +58,9 @@ const CalibrationDashboard = lazy(() => import("./components/calibration/Calibra
 const GaugeRegister = lazy(() => import("./components/calibration/GaugeRegister.jsx"));
 const GaugePage = lazy(() => import("./components/calibration/GaugePage.jsx"));
 const CalibrationRecordPage = lazy(() => import("./components/calibration/CalibrationRecordPage.jsx"));
+const MsaStudiesPage = lazy(() => import("./components/msa/MsaStudiesPage.jsx"));
+const MsaStudyPage = lazy(() => import("./components/msa/MsaStudyPage.jsx"));
+const MsaReportPage = lazy(() => import("./components/msa/MsaReportPage.jsx"));
 const SettingsNotifications = lazy(() => import("./components/Settings/SettingsNotifications.jsx"));
 const SettingsSubscription = lazy(() => import("./components/Settings/SettingsSubscription.jsx"));
 const RequireModule = lazy(() => import("./components/RequireModule.jsx"));
@@ -277,6 +280,9 @@ const router = createBrowserRouter([
             { path: "Calibration/Gauges", element: <GaugeRegister /> },
             { path: "Calibration/Gauges/:id", element: <GaugePage key="gauge" /> },
             { path: "Calibration/Gauges/:gaugeId/calibrations/:calibrationId", element: <CalibrationRecordPage /> },
+            { path: "Calibration/Gauge-RR", element: <MsaStudiesPage /> },
+            { path: "Calibration/Gauge-RR/:id", element: <MsaStudyPage key="msa" /> },
+            { path: "Calibration/Gauge-RR/:id/report", element: <MsaReportPage /> },
             ],
           },
           {

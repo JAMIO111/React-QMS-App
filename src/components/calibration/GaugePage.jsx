@@ -6,6 +6,7 @@ import {
   AlignCenterIcon,
   ArrowLeftIcon,
   CalendarClockIcon,
+  ChartNoAxesCombinedIcon,
   ClipboardCheckIcon,
   ClipboardListIcon,
   FactoryIcon,
@@ -42,6 +43,7 @@ import CharacteristicsEditor from "./CharacteristicsEditor";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import GaugeHistory from "./GaugeHistory";
+import GaugeStudies from "../msa/GaugeStudies";
 import PeoplePicker from "./PeoplePicker";
 import { DuePill, GaugeStatusPill, LegacyPill, OutcomePill } from "./Pills";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -179,7 +181,7 @@ const GaugePage = () => {
   const [dialog, setDialog] = useState(null); // "delete"
   const [customValues, setCustomValues] = useState({});
   const scrollRef = useRef(null);
-  const refs = { details: useRef(null), characteristics: useRef(null), calibrations: useRef(null), history: useRef(null) };
+  const refs = { details: useRef(null), characteristics: useRef(null), calibrations: useRef(null), studies: useRef(null), history: useRef(null) };
 
   const original = useMemo(() => (gauge ? toForm(gauge) : EMPTY), [gauge]);
   useEffect(() => reset(original), [original, reset]);
@@ -251,6 +253,7 @@ const GaugePage = () => {
     { key: "details", title: "Gauge details", subtitle: "Identification, location, calibration", icon: GaugeIcon },
     { key: "calibrations", title: "Calibrations", subtitle: "Records and certificates", icon: ClipboardCheckIcon, needsRecord: true },
     { key: "characteristics", title: "Characteristics", subtitle: "What is checked at calibration", icon: RulerIcon, needsRecord: true },
+    { key: "studies", title: "Measurement studies", subtitle: "Gauge R&R and agreement", icon: ChartNoAxesCombinedIcon, needsRecord: true },
     { key: "history", title: "History", subtitle: "Who changed what", icon: HistoryIcon, needsRecord: true },
   ];
   const goTo = (key) => {
@@ -459,6 +462,11 @@ const GaugePage = () => {
                   onShowInactive={setShowInactive}
                   emptyText="No characteristics. Add the checks made at calibration, or record pass/fail results without readings."
                 />
+              </Card>
+
+              <SectionHeading title="Measurement system studies" sectionRef={refs.studies} />
+              <Card>
+                <GaugeStudies gauge={gauge} />
               </Card>
 
               <SectionHeading title="History" sectionRef={refs.history} />

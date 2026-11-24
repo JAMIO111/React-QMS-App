@@ -71,6 +71,7 @@ export const menuStructure = [
     subMenu: [
       { name: "Dashboard", path: "/Calibration", end: true },
       { name: "Gauges", path: "/Calibration/Gauges" },
+      { name: "Gauge R&R", path: "/Calibration/Gauge-RR" },
     ],
   },
   {

@@ -77,3 +77,7 @@ export const useControlPlanFilters = () => useUrlFilters(CONTROL_PLAN_FILTER_KEY
 /** Supplier register filters. Empty `active` = active suppliers only; `inactive` or `all` otherwise. Classifications are ids (comma list). */
 export const SUPPLIER_FILTER_KEYS = ["search", "status", "type", "classification", "risk", "active"];
 export const useSupplierFilters = () => useUrlFilters(SUPPLIER_FILTER_KEYS);
+
+/** Measurement system study register filters. Empty `status` = every study but cancelled ones; `status`, `type`, `verdict` and `valid` are comma lists; `gauge` is a gauge id. */
+export const MSA_FILTER_KEYS = ["search", "status", "type", "verdict", "valid", "gauge"];
+export const useMsaFilters = () => useUrlFilters(MSA_FILTER_KEYS);

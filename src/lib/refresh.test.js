@@ -32,6 +32,7 @@ import { useDecideMissing, useIgnoreRows, useIntegrationMutation, useSetAllowedH
 import { useFeatureMapMutation, useImportMutation, useMatchFeature, useProfileMutation, useTryProfile } from "../hooks/useMeasurementImports";
 import { useSecurityMutation } from "../hooks/useSecurity";
 import { useExternalAccessMutation, useShareMutation } from "../hooks/usePortal";
+import { useMsaMutation, useRecordMeasurements } from "../hooks/useMsa";
 
 /** What other modules have on screen: each must be marked stale by an action in any module. */
 const watched = [
@@ -149,6 +150,8 @@ describe("every action refreshes every module's data", () => {
     ["invite a supplier's first contact", useExternalAccessMutation, { action: "invite", body: { partyId: "p1", email: "a@b.test", role: "admin" } }],
     ["share a record with a supplier", () => useShareMutation("ncr", "n1"), { action: "share", body: { partyId: "p1" } }],
     ["write to a supplier on a shared record", () => useShareMutation("ncr", "n1"), { action: "comment", id: "s1", shareId: "s1", body: { body: "Hello" } }],
+    ["plan or complete a measurement system study", useMsaMutation, { path: "/msa/studies", body: { studyType: "type1", gaugeId: "g1" } }],
+    ["enter a reading in a measurement system study", () => useRecordMeasurements("11111111-1111-1111-1111-111111111111"), { cells: [{ appraiser: 1, part: 1, trial: 1, value: "10.1" }] }],
     ["remember a feature match", useFeatureMapMutation, { action: "save", partId: "p1", body: { featureName: "OD", characteristicKey: "OD" } }],
   ];
 

@@ -189,4 +189,8 @@ export const studyDefaultsFor = (row) => ({
   part: row.part ? { id: row.part.id, partNumber: row.part.partNumber, name: row.part.name } : null,
   characteristicKey: row.characteristic.key,
   characteristicName: row.characteristic.name,
+  nominal: row.characteristic.nominal ?? null,
+  lowerLimit: row.characteristic.lowerLimit ?? null,
+  upperLimit: row.characteristic.upperLimit ?? null,
+  unitCode: row.characteristic.unitCode ?? null,
 });

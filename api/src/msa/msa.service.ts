@@ -226,16 +226,33 @@ export class MsaService {
 
   // ---- design ---------------------------------------------------------------------------------
 
-  /** A characteristic of the part's released revision brings its name, unit and limits, for the keys the person did not give. */
+  /**
+   * A characteristic of the part's released revision brings its name, unit and limits, for the keys the person did not give. A characteristic whose
+   * values are written on the control plan (not on the part) is found there instead: an effective revision of an active plan that covers the part.
+   * Either way the key must exist, so a typo is refused rather than stored.
+   */
   private async characteristicDefaults(db: Db, ctx: RequestContext, partId: string, key: string) {
-    const r = (
+    const org = orgOf(ctx);
+    const onPart = (
       await db.execute<Row>(sql`
         select c.description, c.unit_code, c.nominal::text as nominal, c.lower_limit::text as lower_limit, c.upper_limit::text as upper_limit
           from public.part_revision_characteristics c join public.part_revisions v on v.id = c.part_revision_id and v.organisation_id = c.organisation_id
-         where v.part_id = ${partId}::uuid and v.organisation_id = ${orgOf(ctx)}::uuid and v.status = 'released' and c.characteristic_key = ${key}`)
+         where v.part_id = ${partId}::uuid and v.organisation_id = ${org}::uuid and v.status = 'released' and c.characteristic_key = ${key}`)
     ).rows[0];
-    if (!r) throw new ApiError(HttpStatus.BAD_REQUEST, 'unknown_characteristic', `The part's released revision has no characteristic ${key}`);
-    return r;
+    if (onPart) return onPart;
+    const onPlan = (
+      await db.execute<Row>(sql`
+        select c.name as description, c.unit_code, c.nominal::text as nominal, c.lower_limit::text as lower_limit, c.upper_limit::text as upper_limit
+          from public.control_plan_characteristics c
+          join public.control_plan_revisions r on r.id = c.control_plan_revision_id and r.organisation_id = c.organisation_id and r.status = 'effective'
+          join public.control_plans cp on cp.id = r.control_plan_id and cp.organisation_id = r.organisation_id and cp.active
+          join public.control_plan_applicability a on a.control_plan_id = cp.id and a.organisation_id = cp.organisation_id
+          join public.parts p on p.id = ${partId}::uuid and p.organisation_id = a.organisation_id and (a.part_id = p.id or (a.part_id is null and a.part_family_id = p.part_family_id))
+         where c.organisation_id = ${org}::uuid and upper(c.characteristic_key) = ${key}
+         limit 1`)
+    ).rows[0];
+    if (!onPlan) throw new ApiError(HttpStatus.BAD_REQUEST, 'unknown_characteristic', `The part's released revision and its control plan have no characteristic ${key}`);
+    return onPlan;
   }
 
   private async withDefaults<T extends { partId?: string | null; characteristicKey?: string | null; characteristicName?: string; unitCode?: string | null; nominal?: unknown; lowerLimit?: unknown; upperLimit?: unknown }>(db: Db, ctx: RequestContext, body: T): Promise<T> {
@@ -425,7 +442,7 @@ export class MsaService {
       const rows = (
         await db.execute<Row>(sql`
           with chars as (
-            select c.characteristic_key, c.name as characteristic_name, c.char_number, c.criticality, c.data_type, o.operation_code,
+            select c.characteristic_key, c.name as characteristic_name, c.char_number, c.criticality, c.data_type, c.nominal, c.lower_limit, c.upper_limit, c.unit_code, o.operation_code,
                    cp.id as plan_id, cp.plan_code, cp.title as plan_title, r.id as revision_id, r.revision_code
               from public.control_plan_characteristics c
               join public.control_plan_revisions r on r.id = c.control_plan_revision_id and r.organisation_id = c.organisation_id and r.status = 'effective'
@@ -479,6 +496,10 @@ export class MsaService {
             charNumber: (r.char_number as string) ?? null,
             criticality: r.criticality as 'critical' | 'major',
             dataType: r.data_type as 'variable' | 'attribute',
+            nominal: (r.nominal as string) ?? null,
+            lowerLimit: (r.lower_limit as string) ?? null,
+            upperLimit: (r.upper_limit as string) ?? null,
+            unitCode: (r.unit_code as string) ?? null,
             operationCode: r.operation_code as string,
           },
           gauge: r.gauge_id ? { id: r.gauge_id as string, assetNumber: r.asset_number as string, description: r.gauge_description as string } : null,

@@ -121,7 +121,7 @@ describe('coverage', () => {
     ]);
     expect(body.counts).toMatchObject({ acceptable: 1, not_accepted: 1, expired: 1, no_study: 1, no_readings: 1, marginal: 0 });
     const g1 = body.rows.find((r: { gauge: { assetNumber: string } | null; characteristic: { key: string } }) => r.gauge?.assetNumber === 'COV-G1' && r.characteristic.key === 'OD');
-    expect(g1).toMatchObject({ plan: { code: 'CP-COV' }, characteristic: { criticality: 'critical', operationCode: 'OP-010' }, readings: 1, part: { partNumber: 'COV-100' }, study: { id: ctx.studyOk, verdict: 'acceptable' } });
+    expect(g1).toMatchObject({ plan: { code: 'CP-COV' }, characteristic: { criticality: 'critical', operationCode: 'OP-010', nominal: '25', lowerLimit: '24.95', upperLimit: '25.05', unitCode: 'mm' }, readings: 1, part: { partNumber: 'COV-100' }, study: { id: ctx.studyOk, verdict: 'acceptable' } });
   });
 
   it('leaves minor characteristics out and by default shows only what needs a look', async () => {
@@ -146,6 +146,34 @@ describe('coverage', () => {
     const b = (await api().get('/api/v1/msa/coverage?state=all').set(await as(ids.ownerB, ids.orgB)).expect(200)).body;
     expect(b.rows).toEqual([]);
     expect(b.counts.acceptable).toBe(0);
+  });
+
+  it('a study planned for a part and a characteristic written on its control plan takes the plan\'s limits, and still refuses a key that is nowhere', async () => {
+    const h = await as(ids.ownerA);
+    const made = (
+      await api().post('/api/v1/msa/studies').set(h).send({ studyType: 'grr_crossed', gaugeId: ctx.g3, partId: ctx.part, characteristicKey: 'bore', partCount: 3, appraiserCount: 2, trialCount: 2 }).expect(201)
+    ).body;
+    expect(made).toMatchObject({ characteristicKey: 'BORE', characteristicName: 'Bore', unitCode: 'mm', design: { nominal: 10, lowerLimit: 9.95, upperLimit: 10.05 } });
+    const nowhere = await api().post('/api/v1/msa/studies').set(h).send({ studyType: 'grr_crossed', gaugeId: ctx.g3, partId: ctx.part, characteristicKey: 'NOT_A_CHECK' }).expect(400);
+    expect(nowhere.body.error.code).toBe('unknown_characteristic');
+    await api().post(`/api/v1/msa/studies/${made.id}/cancel`).set(h).send({ reason: 'Only for the test' }).expect(200);
+  });
+
+  it('also finds a characteristic on a plan written for this one part, a part with no family', async () => {
+    const h = await as(ids.ownerA);
+    const part = (await api().post('/api/v1/parts').set(h).send({ partNumber: 'COV-SOLO', name: 'Solo part', initialRevision: { revision: 'A' } }).expect(201)).body;
+    const plan = (await api().post('/api/v1/control-plans').set(h).send({ planCode: 'CP-COV-SOLO', title: 'One part only' }).expect(201)).body;
+    await api().post(`/api/v1/control-plans/${plan.id}/applicability`).set(h).send({ partId: part.id }).expect(201);
+    const rev = plan.revisions[0].id;
+    const op = (await api().post(`/api/v1/control-plan-revisions/${rev}/operations`).set(h).send({ operationCode: 'OP-900', name: 'Grinding' }).expect(201)).body.operations[0].id;
+    await api().post(`/api/v1/control-plan-revisions/${rev}/characteristics`).set(h).send({ operationId: op, characteristicKey: 'SOLO_OD', name: 'Solo diameter', nominal: 30, lowerLimit: 29.9, upperLimit: 30.1, unitCode: 'mm', criticality: 'critical', sampling: [{ triggerType: 'first_off', sampleSize: 1 }] }).expect(201);
+    await api().patch(`/api/v1/control-plan-revisions/${rev}`).set(h).send({ changeReason: 'First' }).expect(200);
+    await api().post(`/api/v1/part-revisions/${part.revisions[0].id}/release`).set(h).expect(200);
+    await api().post(`/api/v1/control-plan-revisions/${rev}/transitions`).set(h).send({ action: 'submit' }).expect(200);
+    await api().post(`/api/v1/control-plan-revisions/${rev}/transitions`).set(h).send({ action: 'approve' }).expect(200);
+    const made = (await api().post('/api/v1/msa/studies').set(h).send({ studyType: 'grr_crossed', gaugeId: ctx.g3, partId: part.id, characteristicKey: 'solo_od' }).expect(201)).body;
+    expect(made).toMatchObject({ characteristicKey: 'SOLO_OD', characteristicName: 'Solo diameter', unitCode: 'mm', design: { nominal: 30, lowerLimit: 29.9, upperLimit: 30.1 } });
+    await api().post(`/api/v1/msa/studies/${made.id}/cancel`).set(h).send({ reason: 'Only for the test' }).expect(200);
   });
 
   it('a study of the same gauge for another characteristic does not cover this one', async () => {

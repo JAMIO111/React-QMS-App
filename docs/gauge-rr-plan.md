@@ -5,7 +5,7 @@ Measurement system analysis (MSA) answers "can this gauge, used by these people,
 **not in that slice**. This plan adds it **under the Calibration menu**, as complete vertical slices (brief §2, §14). Nothing here changes how
 calibration, inspection or SPC work today.
 
-Status: **MS1 (the statistics) is built and proved; MS2 onwards are not started.** All decisions D1–D14 were agreed with the product owner on
+Status: **all six slices are built (MS1–MS6); the exit report is `docs/gauge-rr-exit-report.md`.** All decisions D1–D14 were agreed with the product owner on
 2026-11-24 (D1–D3 chosen from options, D4–D14 accepted as proposed).
 
 ## 1. What the module is for
@@ -151,7 +151,7 @@ code that made it.
 | **MS3 — done** | API: routes above, paste parsing, completion, analysis, report; e2e (frozen result equals recompute, permissions, tenant isolation) and the API sweep. | `api:test` and `api:test:e2e` green. |
 | **MS4 — done** | Screens: register, study page with run sheet and paste, live analysis and charts, report, gauge card, menu, hooks, `refreshOrganisation`, optimistic cell entry, tests. | Lint, tests and build green; browser check of the run sheet on a narrow screen. |
 | **MS5 — done** | Coverage page, control plan characteristic badge, validity, workflow trigger and notice, reminders area. | As above; `workflows.e2e` catalogue test updated. |
-| **MS6** | Live guardrails and advisors, journey step (design → run sheet → paste → complete → report → coverage), exit report, `CLAUDE.md`. | Exit report `docs/gauge-rr-exit-report.md`. |
+| **MS6 — done** | Live guardrails and advisors, journey step (design → run sheet → paste → complete → report → coverage), exit report, `CLAUDE.md`. | Exit report `docs/gauge-rr-exit-report.md`. |
 
 ## 9. Not in this plan
 

@@ -180,7 +180,7 @@ const StudyDialog = ({ study, defaultGauge, defaults, onClose }) => {
   const [form, setForm] = useState(() => {
     if (study) return formFrom(study);
     const type = defaults?.studyType ?? "grr_crossed";
-    return { ...NEW(type), gaugeId: startGauge?.id ?? null, partId: defaults?.part?.id ?? null, characteristicKey: defaults?.characteristicKey ?? "", characteristicName: defaults?.characteristicName ?? "" };
+    return { ...NEW(type), gaugeId: startGauge?.id ?? null, partId: defaults?.part?.id ?? null, characteristicKey: defaults?.characteristicKey ?? "", characteristicName: defaults?.characteristicName ?? "", unitCode: defaults?.unitCode ?? "", nominal: text(defaults?.nominal), lowerLimit: text(defaults?.lowerLimit), upperLimit: text(defaults?.upperLimit) };
   });
   const [gaugeItem, setGaugeItem] = useState(startGauge ? gaugeOption(startGauge) : null);
   const [advanced, setAdvanced] = useState(false);

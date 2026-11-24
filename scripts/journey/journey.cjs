@@ -233,6 +233,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner });
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner });
   await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
@@ -2106,6 +2107,139 @@ async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, own
   await see(matches.getByText('DAT1 X'));
   await matches.scrollIntoViewIfNeeded();
   await shot(page, '96-cmm-feature-matches');
+}
+
+/**
+ * Gauge R&R (docs/gauge-rr-plan.md MS6): a critical characteristic is measured with a gauge nobody has studied, so coverage says "No study"; the owner plans a
+ * crossed study from that row (the gauge, part, characteristic and the plan's limits already in the form), starts collecting, pastes the twelve readings,
+ * completes it with a conclusion, reads the report with its data fingerprint, and coverage, the control plan page and the gauge page all say the gauge is covered.
+ */
+async function gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  step('set-up for Gauge R&R: a part whose critical diameter is measured with a micrometer that has no study');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
+  const part = await api('POST', '/parts', { partNumber: 'JRN-300', name: 'Journey shaft', initialRevision: { revision: 'A' } });
+  const gauge = await api('POST', '/gauges', { assetNumber: 'GRR-J1', description: 'Journey micrometer', siteId: org.site });
+  await stack.admin.query(`update public.gauges set resolution = 0.001, unit_code = 'mm' where id = $1`, [gauge.id]);
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-300', title: 'Journey shaft' });
+  await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });
+  const planRev = plan.revisions[0].id;
+  const op = (await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-30', name: 'Grinding' })).operations[0].id;
+  await api('POST', `/control-plan-revisions/${planRev}/characteristics`, {
+    operationId: op, characteristicKey: 'SHAFT_OD', charNumber: '1', name: 'Shaft outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm',
+    criticality: 'critical', sampling: [{ triggerType: 'first_off', sampleSize: 1 }],
+  });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const job = await api('POST', '/jobs', { machineId: machine.id, partId: part.id, operationCode: 'OP-30' });
+  const detail = await api('GET', `/inspections/${job.id}`);
+  const requirement = (detail.requirements ?? []).find((r) => r.characteristicKey === 'SHAFT_OD');
+  if (!requirement) throw new Error(`the job has no SHAFT_OD requirement: ${JSON.stringify(detail.requirements)}`);
+  await api('POST', `/inspections/${job.id}/samples`, { readings: [{ requirementId: requirement.id, valueNumeric: '25.001', gaugeId: gauge.id }] });
+
+  step('coverage says the micrometer has no study for the critical diameter');
+  await page.goto(`${APP}/Calibration/Gauge-RR?view=coverage`);
+  const table = page.getByRole('table', { name: 'Gauge R&R coverage' });
+  await see(table);
+  const row = table.getByRole('row').filter({ hasText: 'Shaft outer diameter' });
+  await see(row.getByText('No study'));
+  await see(row.getByRole('link', { name: 'GRR-J1' }));
+  await shot(page, '97-gauge-rr-coverage-no-study');
+
+  step('Plan a study from that row: the kind, gauge, characteristic and the plan\'s limits are already in the form');
+  await row.getByRole('button', { name: /Plan a study for Shaft outer diameter on GRR-J1/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Plan a measurement system study' });
+  await see(dialog);
+  await see(dialog.getByLabel(/^What is measured/));
+  const wanted = { 'What is measured': 'Shaft outer diameter', Gauge: 'GRR-J1 · Journey micrometer' };
+  for (const [label, value] of Object.entries(wanted)) {
+    const got = await dialog.getByLabel(new RegExp(`^${label}`)).first().inputValue();
+    if (got !== value) throw new Error(`${label} was ${JSON.stringify(got)}, not ${JSON.stringify(value)}: Plan a study did not carry the row over`);
+  }
+  for (const [label, value] of [['Lower limit', '24.95'], ['Upper limit', '25.05'], ['Nominal', '25'], ['Unit', 'mm']]) {
+    const got = await dialog.getByLabel(label, { exact: true }).inputValue();
+    if (got !== value) throw new Error(`${label} was ${JSON.stringify(got)}, not ${value}: the plan's limits did not carry over`);
+  }
+  await dialog.getByRole('spinbutton', { name: /^Parts/ }).fill('3');
+  await dialog.getByRole('spinbutton', { name: /^Appraisers/ }).fill('2');
+  await dialog.getByRole('spinbutton', { name: /^Trials/ }).fill('2');
+  await shot(page, '98-gauge-rr-plan-dialog');
+  await dialog.getByRole('button', { name: 'Plan the study' }).click();
+  await page.waitForURL(/\/Calibration\/Gauge-RR\/[0-9a-f-]{36}$/);
+  await see(page.getByText('Still a draft'));
+  const studyId = page.url().split('/').pop();
+  const drafted = (await stack.admin.query(`select status, study_type, characteristic_key, part_count, appraiser_count, trial_count, part_id is null as no_part from public.msa_studies where id = $1`, [studyId])).rows[0];
+  log(`gauge R&R study planned: ${JSON.stringify(drafted)}`);
+  if (drafted.status !== 'draft' || drafted.study_type !== 'grr_crossed' || drafted.characteristic_key !== 'SHAFT_OD' || drafted.part_count !== 3 || drafted.appraiser_count !== 2 || drafted.trial_count !== 2) {
+    throw new Error(`the study was not planned as asked: ${JSON.stringify(drafted)}`);
+  }
+
+  step('start collecting, paste the twelve readings and record them');
+  await page.getByRole('button', { name: 'Start collecting' }).click();
+  await page.getByRole('dialog', { name: 'Start collecting readings?' }).getByRole('button', { name: 'Start collecting' }).click();
+  await see(page.getByRole('button', { name: 'Paste readings' }));
+  await shot(page, '99-gauge-rr-run-sheet');
+  await page.getByRole('button', { name: 'Paste readings' }).click();
+  const paste = page.getByRole('dialog', { name: 'Paste readings' });
+  const sheet = [
+    'appraiser,part,trial,value',
+    '1,1,1,24.961', '1,1,2,24.962', '1,2,1,25.000', '1,2,2,25.001', '1,3,1,25.040', '1,3,2,25.039',
+    '2,1,1,24.962', '2,1,2,24.960', '2,2,1,25.001', '2,2,2,25.000', '2,3,1,25.041', '2,3,2,25.040',
+  ].join('\n');
+  await paste.getByLabel('Readings', { exact: true }).fill(sheet);
+  await paste.getByRole('button', { name: 'Check' }).click();
+  await see(paste.getByText('12 readings found and ready to record.'));
+  await paste.getByRole('button', { name: 'Record 12 readings' }).click();
+  await see(page.getByText(/12 of 12 readings entered/));
+  const stored = (await stack.admin.query(`select count(*)::int as n, count(value)::int as filled from public.msa_study_measurements where study_id = $1`, [studyId])).rows[0];
+  if (stored.n !== 12 || stored.filled !== 12) throw new Error(`the readings were not all stored: ${JSON.stringify(stored)}`);
+
+  step('complete the study with a conclusion; the result is frozen with its data fingerprint');
+  await page.getByRole('button', { name: 'Complete the study' }).click();
+  const complete = page.getByRole('dialog', { name: /^Complete MSA-/ });
+  await complete.getByRole('textbox', { name: /^Why/ }).fill('Acceptable for the 0.1 mm tolerance');
+  await complete.getByRole('button', { name: 'Complete the study' }).click();
+  await see(page.getByText('Completed', { exact: true }).first());
+  await see(page.getByRole('link', { name: 'Report' }));
+  const frozen = (await stack.admin.query(
+    `select s.status, s.conclusion, r.algorithm_version, r.verdict, length(r.data_hash) as hash_length
+       from public.msa_studies s join public.msa_study_results r on r.study_id = s.id where s.id = $1`, [studyId])).rows[0];
+  log(`gauge R&R result: ${JSON.stringify(frozen)}`);
+  if (frozen.status !== 'completed' || frozen.conclusion !== 'accepted' || frozen.algorithm_version !== 'msa-1' || frozen.hash_length !== 64) {
+    throw new Error(`the study was not completed and frozen as expected: ${JSON.stringify(frozen)}`);
+  }
+  if (frozen.verdict !== 'acceptable') throw new Error(`readings this close should be judged acceptable, not ${frozen.verdict}`);
+  await shot(page, '100-gauge-rr-completed');
+
+  step('the report says what the study was and that the stored readings still match the result');
+  await page.getByRole('link', { name: 'Report' }).click();
+  await page.waitForURL(/\/report$/);
+  await see(page.getByText(/MSA-\d{2}-\d{4}/).first());
+  await see(page.getByText(/fingerprint/i).first());
+  await shot(page, '101-gauge-rr-report');
+
+  step('coverage, the control plan and the gauge now show the gauge as covered');
+  await page.goto(`${APP}/Calibration/Gauge-RR?view=coverage&state=acceptable`);
+  const covered = page.getByRole('table', { name: 'Gauge R&R coverage' }).getByRole('row').filter({ hasText: 'Shaft outer diameter' });
+  await see(covered.getByText('Acceptable').first());
+  await see(covered.getByRole('link', { name: /^MSA-/ }));
+  await shot(page, '102-gauge-rr-coverage-acceptable');
+  await page.goto(`${APP}/Calibration/Gauge-RR?view=coverage`);
+  await see(page.getByRole('group', { name: 'Filter by state' }));
+  if (await page.getByRole('row').filter({ hasText: 'Shaft outer diameter' }).count() !== 0) throw new Error('a covered characteristic is still listed under "needs attention"');
+  await page.goto(`${APP}/Process-Control/Plans/${plan.id}/revisions/${planRev}`);
+  await see(page.getByRole('table', { name: 'Characteristics at OP-30' }));
+  await see(page.getByText('Gauge R&R', { exact: false }).first());
+  await see(page.getByText('Acceptable', { exact: true }).first());
+  await shot(page, '103-gauge-rr-plan-badge');
+  await page.goto(`${APP}/Calibration/Gauges/${gauge.id}`);
+  await see(page.getByRole('link', { name: /^MSA-\d{2}-\d{4}/ }).first());
+  await shot(page, '104-gauge-rr-gauge-card');
+  log('gauge R&R: planned from coverage, collected, completed, reported; coverage, plan and gauge agree');
 }
 
 /**

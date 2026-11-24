@@ -97,7 +97,7 @@ beforeEach(() => {
     available: true, reason: null, today: "2026-11-24", total: 2, truncated: false,
     counts: { not_accepted: 0, expired: 1, no_study: 1, not_judged: 0, marginal: 0, no_readings: 1, acceptable: 3 },
     rows: [
-      { plan: { id: "cp1", code: "CP-001", title: "Rods", revisionId: "cr1", revisionCode: "B" }, characteristic: { key: "OD", name: "Outer diameter", charNumber: "3", criticality: "critical", dataType: "variable", operationCode: "OP-020" }, gauge: { id: "g1", assetNumber: "CAL-001", description: "Micrometer" }, readings: 42, lastMeasuredAt: "2026-11-20T10:00:00Z", part: { id: "p1", partNumber: "HCR-100", name: "Rod" }, study: { id: "s9", reference: "MSA-26-0009", studyType: "grr_crossed", completedAt: "2025-10-01T10:00:00Z", validUntil: "2026-10-01", conclusion: "accepted", verdict: "acceptable" }, state: "expired" },
+      { plan: { id: "cp1", code: "CP-001", title: "Rods", revisionId: "cr1", revisionCode: "B" }, characteristic: { key: "OD", name: "Outer diameter", charNumber: "3", criticality: "critical", dataType: "variable", operationCode: "OP-020", nominal: "25", lowerLimit: "24.95", upperLimit: "25.05", unitCode: "mm" }, gauge: { id: "g1", assetNumber: "CAL-001", description: "Micrometer" }, readings: 42, lastMeasuredAt: "2026-11-20T10:00:00Z", part: { id: "p1", partNumber: "HCR-100", name: "Rod" }, study: { id: "s9", reference: "MSA-26-0009", studyType: "grr_crossed", completedAt: "2025-10-01T10:00:00Z", validUntil: "2026-10-01", conclusion: "accepted", verdict: "acceptable" }, state: "expired" },
       { plan: { id: "cp1", code: "CP-001", title: "Rods", revisionId: "cr1", revisionCode: "B" }, characteristic: { key: "BORE", name: "Bore", charNumber: null, criticality: "major", dataType: "variable", operationCode: "OP-030" }, gauge: { id: "g2", assetNumber: "CAL-002", description: "Bore gauge" }, readings: 7, lastMeasuredAt: "2026-11-21T10:00:00Z", part: null, study: null, state: "no_study" },
     ],
   };
@@ -385,6 +385,9 @@ describe("coverage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Plan a study for Outer diameter on CAL-001" }));
     const dialog = screen.getByRole("dialog", { name: "Plan a measurement system study" });
     expect(within(dialog).getByDisplayValue("Outer diameter")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Lower limit")).toHaveValue("24.95");
+    expect(within(dialog).getByLabelText("Upper limit")).toHaveValue("25.05");
+    expect(within(dialog).getByLabelText("Unit")).toHaveValue("mm");
     expect(within(dialog).getByRole("combobox", { name: /Gauge/ })).toHaveValue("CAL-001 · Micrometer");
   });
 

@@ -110,5 +110,7 @@ describe("coverage words", () => {
     expect(studyDefaultsFor(row("variable"))).toMatchObject({ studyType: "grr_crossed", characteristicKey: "OD", gauge: { id: "g1" }, part: { id: "p1" } });
     expect(studyDefaultsFor(row("attribute")).studyType).toBe("attribute");
     expect(studyDefaultsFor({ ...row("variable"), part: null }).part).toBeNull();
+    const withLimits = { ...row("variable"), characteristic: { key: "OD", name: "OD", dataType: "variable", nominal: "25", lowerLimit: "24.95", upperLimit: "25.05", unitCode: "mm" } };
+    expect(studyDefaultsFor(withLimits)).toMatchObject({ nominal: "25", lowerLimit: "24.95", upperLimit: "25.05", unitCode: "mm" });
   });
 });

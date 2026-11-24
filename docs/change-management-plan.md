@@ -1,6 +1,6 @@
 # Change management (ECR / ECN) — plan
 
-**Status:** planned 2026-11-24; decisions CH1–CH4 chosen by the user, the rest proposed (§2, "to confirm" marked) · **Nothing built yet** · **Branch:** `Dev`
+**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **Nothing built yet** · **Branch:** `Dev`
 **Menu name:** Change (`GitPullRequestArrow`) · **Slices:** CH1–CH6, CHX (exit check)
 
 Per `docs/design-brief.md` §3.5 (preserve approval and revision history), §6.5 (a change creates a new revision) and Phase 4's "consistent
@@ -36,7 +36,7 @@ project management or Gantt, an ERP change sync, automatic re-inspection or re-t
 |---|---|
 | CH1 | **Opt-in gate** (chosen). By default a change informs and never stops a release. An organisation can switch on **"a revision named by a change cannot be released until that change is approved"** (`organisation_settings.change_gate_enabled`, default off, `organisation.manage`). Releases not named by any change are never touched. Built last (CH5) because it patches shared lifecycle functions. |
 | CH2 | **Who can start one** (chosen): staff, **plus customers and suppliers through the portal**. A customer's change request on a part and a supplier's process-change notice (PCN) arrive as a **draft** change with the origin recorded, for staff to review, exactly as portal complaints arrive as draft NCs. Portal parts are CH6. |
-| CH3 | **Approval by a change board of functions** (chosen). The change names which **functions** must sign (Quality, Engineering, Production, Purchasing, Sales / customer, plus the organisation's own), each signs separately with a comment, and **the person who raised the change cannot sign it** (as document approvals). A rejection returns the change to assessment with the reason; a new round asks everyone again (as `document_revisions.review_round`). |
+| CH3 | **Approval by a change board of functions** (chosen). The change names which **functions** must sign (Quality, Engineering, Production, Purchasing, Sales / customer, plus the organisation's own), each signs separately with a comment, and **the person who raised the change cannot sign it unless the organisation allows it** (§5: `organisation_settings.change_allow_self_approval`, default **off**, a switch in Settings → System preferences). A rejection returns the change to assessment with the reason; a new round asks everyone again (as `document_revisions.review_round`). |
 | CH4 | **Effectivity is a cut-in point** (chosen): none, a date, a production order, a lot or a serial number, plus a note on existing stock (use up / rework / scrap / return). Recorded and shown, including on the trace page; **nothing is enforced on the shop floor**. |
 | CH5 | **One record, ECR then ECN**: `change_requests` with a stage, no separate notice table. Stages: `draft → assessment → approval → approved → implementing → verifying → closed`, or `rejected` (decided, final) / `cancelled` (reason). After approval the stage is **worked out** (implementing while a task is open, verifying when none is), never set by hand, as the 8D stage. *Proposed.* |
 | CH6 | **Tasks link to the real record that does the work** (kinds in §3) and **show its live status**; a task is closed by a person, and the change cannot close while a task is open. The database checks that a closed task's linked revision is in force. Tasks may also be plain (no record) for things the system does not hold (tell the customer, buy a new fixture). *Proposed.* |
@@ -44,8 +44,8 @@ project management or Gantt, an ERP change sync, automatic re-inspection or re-t
 | CH8 | **Impact assessment is a fixed list of areas** (Design / drawing, Process and control plan, Inspection requirements, Tooling and equipment, Gauges and measurement, Documents, Training, Supplier and purchasing, Customer, Risk assessment, Packaging and labelling, Stock and cost), each marked **affected / not affected / not yet assessed**, answered by someone with `change.manage`. A change cannot go to the board with any area not yet assessed. The organisation can switch areas off, not add to them in v1. *Proposed.* |
 | CH9 | **Change types** (seeded per organisation, on / off, key fixed): Product design, Process, Tooling or equipment, Material or supplier, Measurement or inspection, Documentation or QMS, Software or other. A type may carry **"needs customer approval"** by default; the change can override it. *Proposed.* |
 | CH10 | **Customer approval is recorded, not run here**: `customer_approval` none / required / requested / approved / rejected, with their reference, date and a file. A change that needs it cannot be marked implemented until it is approved or the person records why it is waived (reason). Asking the customer in the portal is CH6. *Proposed.* |
-| CH11 | **Expedited changes are not special in v1.** There is no "implement first, approve later" path; a change can be marked `expedited` only to show it first and word the notices. The risk of retrospective approval is worth a decision before it is built (§10 Q2). *Proposed.* |
-| CH12 | Permissions `change.read`, `change.raise`, `change.manage`, `change.approve` (§4). Tied to a package like every other permission (`features` rows for the Change module; `every_feature_priced.test.sql` fails otherwise). |
+| CH11 | **No emergency path** (chosen): there is no "implement first, approve afterwards" route. A change can be marked `expedited` only to show it first and word the notices. Revisit as its own decision, with its own rules, if a customer needs one. |
+| CH12 | **Permissions and packages** (chosen): `change.read`, `change.approve` and `change.manage` (§4). **Observer = view, Contributor = view + sign off (`change.approve`), Controller = everything** (`features` rows for the Change module; `every_feature_priced.test.sql` fails without them). A Contributor can sign for their function but cannot raise, assess, set tasks or close; those need a Controller seat. *Read as: "Controller can do all, Contributor can only approve"; if raising was meant for Contributors too, `change.raise` comes back as an operational permission, which is a small change.* |
 | CH13 | The existing **document change requests** stay where they are (a reader asking a document manager for a revision). An accepted one can be **attached to a change as its origin**; nothing is merged. *Proposed.* |
 
 ## 3. Data model (tenant tables: `organisation_id`, composite FKs, RLS, audit trigger, **no table writes: SECURITY DEFINER functions only**)
@@ -68,18 +68,17 @@ Errors `QM035` → `409 change_rule`; another organisation's id `P0002` → 404.
 
 ## 4. Permissions
 
-| Permission | Holds |
-|---|---|
-| `change.read` | everyone who can see the Change module (viewers included) |
-| `change.raise` | raise a change, comment, attach files (operational: inspectors, quality engineers and up) |
-| `change.manage` | assess impacts, set scope, edit while a draft, create and close tasks, cancel, record customer approval, close (owner, admin, quality manager, quality engineer) |
-| `change.approve` | sign for a function, set the cut-in point, issue the ECN, configure types, functions and areas (owner, admin, quality manager) |
+| Permission | Package level | Holds |
+|---|---|---|
+| `change.read` | view (Observer and up) | everyone who can see the Change module (viewers included) |
+| `change.approve` | operational (Contributor and up) | **sign for a function** on a change you are a named signer of; nothing else (owner, admin, quality manager, quality engineer by role) |
+| `change.manage` | full (Controller) | raise a change, comment, attach files, assess impacts, set scope, choose the board, edit while a draft, create and close tasks, set the cut-in point, record customer approval, cancel, close, configure types, functions and areas (owner, admin, quality manager, quality engineer by role) |
 
-A signer must hold `change.approve` **and** be a named signer of that function on this change.
+A signer must hold `change.approve` **and** be a named signer of that function on this change. The package check follows the existing rule (role AND package level, `app.member_may`), so a Contributor named as a signer is offered and accepted, and a Contributor is never offered a Raise button.
 
 ## 5. Rules held by the database
 
-- **Raiser cannot sign** their own change; a signer signs once per round; a rejection needs a comment and sends the change back to `assessment` (new round, fresh signoffs).
+- **Raiser cannot sign** their own change **unless `organisation_settings.change_allow_self_approval` is on** (default off; column-level UPDATE under `organisation.manage`, a switch in Settings → System preferences, `SettingsSystemPreferences.jsx`; the database checks it inside `app.decide_change_signoff`, so SQL cannot bypass it, and the audit trail still records who raised and who signed); a signer signs once per round; a rejection needs a comment and sends the change back to `assessment` (new round, fresh signoffs).
 - **Cannot go to the board** until every area is assessed, at least one function is required, every required function has a signer who holds `change.approve`, the scope has at least one link, and, if the type or the change needs customer approval, that is marked as needed.
 - **Cannot be approved** until every required function's latest signoff is approved. The last signoff approves the change in the same transaction; the cut-in point is set by `change.approve` at approval (or before).
 - **Origin, type, reference and raiser never change**; description and scope are editable only while `draft` or `assessment`; after approval only tasks, attachments, customer approval and the effectiveness result move.
@@ -125,14 +124,14 @@ Tasks reuse the action pattern (`risk_actions`, `capa_actions`); signoffs reuse 
 steps in `CLAUDE.md`); the register, filters, saved filters, optimistic mutations, edit conflicts, import-free CSV export and the print view are existing components.
 Customer approval is a record plus a file here; a PPAP submission package is a later use of the same field.
 
-## 10. Questions to confirm before CH1
+## 10. Questions answered (2026-11-24)
 
-| # | Question | Proposed |
+| # | Question | Answer |
 |---|---|---|
-| Q1 | May the same person raise and sign a change in a one-person organisation? Document approvals refuse it; the part revision correction allows it. | Refuse (CH3), because a change board is the point of the module; revisit if small teams object. |
-| Q2 | Is an **emergency change** (implement now, approve afterwards) needed in v1? | Not in v1 (CH11); it is a deliberate bypass and deserves its own rules. |
-| Q3 | Should a change be **subscription-gated** to a package (Controller only, or every package)? | Observer view, Contributor raise, Controller manage and approve, as the other modules (`every_feature_priced`). |
-| Q4 | Should closing a change **create a management review input**? | A small section ("Changes in the period: raised, closed, not effective") in CH5. |
+| Q1 | May the same person raise and sign a change? | **An organisation option, default off.** `organisation_settings.change_allow_self_approval`, a switch in Settings → System preferences (`organisation.manage`). Applies to the Change module only; document approvals and the others keep their own rules. |
+| Q2 | Emergency change (implement now, approve afterwards) in v1? | **No** (CH11). |
+| Q3 | Subscription packages? | **Controller can do everything; Contributor can only approve** (sign off for a function); Observer reads (CH12, §4). |
+| Q4 | Closing a change feeds the management review? | **Yes, a small section** (CH5): changes raised, closed and found not effective in the period, with the open ones past their cut-in point. |
 
 ## 11. Out of scope (stated so it is not assumed)
 

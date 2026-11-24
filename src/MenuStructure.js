@@ -1,4 +1,4 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
   ListTodoIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
@@ -147,6 +147,13 @@ export const menuStructure = [
       { name: "Heat map", path: "/Risk/Heat-map" },
       { name: "My risk work", path: "/Risk/My-Work", badge: "my-risk-work" },
     ],
+  },
+  {
+    name: "Change",
+    icon: GitPullRequestArrowIcon,
+    permission: "change.read",
+    path: "/Change",
+    subMenu: [],
   },
   {
     name: "Management review",

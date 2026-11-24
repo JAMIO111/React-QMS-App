@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -13,6 +13,7 @@ const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
 const SettingsCompetence = lazy(() => import("./SettingsCompetence"));
 const SettingsDocuments = lazy(() => import("./SettingsDocuments"));
 const SettingsRisk = lazy(() => import("./SettingsRisk"));
+const SettingsChange = lazy(() => import("./SettingsChange"));
 const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
@@ -93,6 +94,15 @@ const DATA_TABS = [
     manage: "risk.manage",
     description: "The matrix risks are scored on (likelihood × consequence, with a band for each cell) and the categories of risk.",
     Component: SettingsRisk,
+  },
+  {
+    value: "change",
+    icon: GitPullRequestArrowIcon,
+    label: "Change",
+    read: "change.read",
+    manage: "change.manage",
+    description: "The types of change (and which usually need the customer), the functions that will sign them off and the areas a change is assessed for.",
+    Component: SettingsChange,
   },
   {
     value: "custom-fields",

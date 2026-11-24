@@ -101,6 +101,17 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/competence/categories/{id}': { label: 'Hijacked' },
     'PATCH /api/v1/risk-categories/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/change-types/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/change-functions/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/change-areas/{id}': { active: false },
+    'GET /api/v1/changes/{id}': undefined,
+    'PATCH /api/v1/changes/{id}': { title: 'Hijacked' },
+    'PUT /api/v1/changes/{id}/links': { links: [] },
+    'POST /api/v1/changes/{id}/cancel': { reason: 'Hijacked' },
+    'GET /api/v1/changes/{id}/attachments': undefined,
+    'POST /api/v1/changes/{id}/attachments': { storagePath: 'x', fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/change-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/change-attachments/{id}/restore': undefined,
     'GET /api/v1/risks/{id}': undefined,
     'PATCH /api/v1/risks/{id}': { title: 'Hijacked' },
     'POST /api/v1/risks/{id}/assessments': { likelihood: 1, consequence: 1, rationale: 'Hijacked' },
@@ -624,6 +635,17 @@ const hasSample = (op: Op) =>
     'POST /api/v1/members/{id}/departments',
     'PATCH /api/v1/competence/categories/{id}',
     'PATCH /api/v1/risk-categories/{id}',
+    'PATCH /api/v1/change-types/{id}',
+    'PATCH /api/v1/change-functions/{id}',
+    'PATCH /api/v1/change-areas/{id}',
+    'GET /api/v1/changes/{id}',
+    'PATCH /api/v1/changes/{id}',
+    'PUT /api/v1/changes/{id}/links',
+    'POST /api/v1/changes/{id}/cancel',
+    'GET /api/v1/changes/{id}/attachments',
+    'POST /api/v1/changes/{id}/attachments',
+    'POST /api/v1/change-attachments/{id}/delete',
+    'POST /api/v1/change-attachments/{id}/restore',
     'GET /api/v1/risks/{id}',
     'PATCH /api/v1/risks/{id}',
     'POST /api/v1/risks/{id}/assessments',
@@ -1213,6 +1235,11 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/change-types/')) return a.changeType;
+  if (path.startsWith('/api/v1/change-functions/')) return a.changeFunction;
+  if (path.startsWith('/api/v1/change-areas/')) return a.changeArea;
+  if (path.startsWith('/api/v1/change-attachments/')) return a.changeAttachment;
+  if (path.startsWith('/api/v1/changes/')) return a.change;
   if (path.startsWith('/api/v1/risk-categories/')) return a.riskCategory;
   if (path.startsWith('/api/v1/risks/')) return a.risk;
   if (path.startsWith('/api/v1/risk-actions/')) return a.riskAction;
@@ -1452,6 +1479,11 @@ beforeAll(async () => {
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
     a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
+    a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
+    a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
+    a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;
+    a.change = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha change', 'typeId', $2::text)) as id`, [ids.orgA, a.changeType])).id;
+    a.changeAttachment = (await q1(`select app.add_change_attachment($2::uuid, $1::text || '/change/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.change])).id;
     a.riskCategory = (await q1(`select id from public.risk_categories where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.risk = (await q1(`select app.create_risk($1::uuid, jsonb_build_object('title', 'Alpha risk', 'categoryId', $2::text)) as id`, [ids.orgA, a.riskCategory])).id;
     await q1(`select app.assess_risk($1::uuid, 4, 4, 'Alpha rationale'), app.set_risk_treatment($1::uuid, 'accept', null)`, [a.risk]);

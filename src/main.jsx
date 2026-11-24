@@ -126,6 +126,8 @@ const QualityAlertsPage = lazy(() => import("./components/documentation/QualityA
 const DocumentsPage = lazy(() => import("./components/documents/DocumentsPage.jsx"));
 const MyDocumentsPage = lazy(() => import("./components/documents/MyDocumentsPage.jsx"));
 const RiskRegisterPage = lazy(() => import("./components/risk/RiskRegisterPage.jsx"));
+const ChangeRegisterPage = lazy(() => import("./components/change/ChangeRegisterPage.jsx"));
+const ChangePage = lazy(() => import("./components/change/ChangePage.jsx"));
 const RiskPage = lazy(() => import("./components/risk/RiskPage.jsx"));
 const RiskDashboard = lazy(() => import("./components/risk/RiskDashboard.jsx"));
 const RiskHeatMapPage = lazy(() => import("./components/risk/RiskHeatMapPage.jsx"));
@@ -355,6 +357,8 @@ const router = createBrowserRouter([
           { path: "Management-Review/Reviews/:id/report", element: <ReviewReportPage /> },
           { path: "Management-Review/Objectives", element: <ObjectivesPage /> },
           { path: "Management-Review/Objectives/:id", element: <ObjectivePage /> },
+          { path: "Change", element: <ChangeRegisterPage /> },
+          { path: "Change/:id", element: <ChangePage /> },
           { path: "Risk/Register", element: <RiskRegisterPage /> },
           { path: "Risk/Register/:id", element: <RiskPage /> },
           { path: "Competence", element: <CompetenceDashboard /> },

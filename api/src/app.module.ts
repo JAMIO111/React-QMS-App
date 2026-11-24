@@ -92,6 +92,8 @@ import { CustomFieldsController, CustomValuesController } from './custom-fields/
 import { CompetenceController } from './competence/competence.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
+import { ChangeController } from './change/change.controller';
+import { ChangeService } from './change/change.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
 import { QualityObjectivesController } from './management-review/quality-objectives.controller';
@@ -307,6 +309,7 @@ export class AppModule implements NestModule {
         CompetenceDashboardController,
         SupplierDashboardController,
         DocumentsController,
+        ChangeController,
         RiskController,
         RiskDashboardController,
         QualityObjectivesController,
@@ -426,6 +429,7 @@ export class AppModule implements NestModule {
         SupplierDashboardService,
         CompetenceTrainingService,
         DocumentsService,
+        ChangeService,
         RiskService,
         RiskDashboardService,
         QualityObjectivesService,

@@ -10,6 +10,7 @@ export const ORGANISATION_BUCKETS = [
   'audit-files',
   'calibration-files',
   'capa-files',
+  'change-files',
   'competence-files',
   'document-files',
   'inspection-files',

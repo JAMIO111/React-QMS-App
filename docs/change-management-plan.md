@@ -1,6 +1,6 @@
 # Change management (ECR / ECN) — plan
 
-**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **Nothing built yet** · **Branch:** `Dev`
+**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **CH1 built (§8a); CH2–CH6 not built** · **Branch:** `Dev`
 **Menu name:** Change (`GitPullRequestArrow`) · **Slices:** CH1–CH6, CHX (exit check)
 
 Per `docs/design-brief.md` §3.5 (preserve approval and revision history), §6.5 (a change creates a new revision) and Phase 4's "consistent
@@ -116,6 +116,19 @@ Every command answers with the whole change.
 | CH5 | The opt-in gate, dashboard, home page area, workflow triggers (`change.submitted`, `change.approved`, `change.closed`), reminders area (signoffs waiting, tasks overdue), and a small **Changes** section in the management review (raised, closed and found not effective in the period, plus open changes past their cut-in point). |
 | CH6 | Portal: a customer sends a change request on one of their parts, a supplier notifies a process change; both land as draft changes. Asking a customer to approve, as closure confirmation. |
 | CHX | Exit check: live guardrails, advisors, browser journey step (NC → raise change → assess → board → approve → part revision and control plan revision started from tasks → released → closed with an effectiveness check), exit report. |
+
+## 8a. CH1 as built (2026-11-24)
+
+Migration `20260430100000_change_management_core.sql` (SQL test `supabase/tests/change_management_core.test.sql`; **not yet applied live**).
+
+- **Module and packages:** module `change_management`; permissions `change.read` / `.approve` / `.manage`; features `view_changes` (view), `sign_changes` (operational), `manage_changes` (full) and entitlements Observer view / Contributor operational / Controller full. Owner, admin, quality manager and quality engineer hold all three by role; inspector and viewer read.
+- **Lists** (seeded per organisation by `app.seed_change_lists` and a trigger on new organisations; direct RLS updates by `change.manage`, key fixed, nothing deleted): `change_types` (seven; `needs_customer_approval`), `change_functions` (five: who signs, used from CH2), `change_areas` (twelve impact areas, used from CH2; fixed list, only switched off or on).
+- **`change_requests`** (`ECR-YY-NNNN` per organisation and year from `app.change_counters`, `app.pad_number`): stage column already allows the later stages, but in CH1 a change is `draft` or `cancelled`. Title, what, why, urgency and type change **only while a draft** (this relaxes §5's "type never changes": it can change in draft). Origin (`origin_kind` + `origin_id`: NC, 8D, audit finding, risk, document change request) is set at creation, checked as readable by the raiser, and never changes. The raiser column is `raised_by` and is deliberately not named `created_by`/`…_by`-style history, so the SSO account-move test does not classify it automatically; when CH2's signers arrive, the user-reference classification (`app.user_reference_columns()`) must be considered for any new user column. `app.change_rules` holds all of this even for SQL; nothing is deleted.
+- **`change_links`** (part, part family, machine, supplier, customer, production order, operation code; replaced as a whole by `app.set_change_links`, drafts only) and **`change_attachments`** (private `change-files` bucket at `<org>/change/<change id>/<uuid>-<name>`, `app.change_file_allowed`, replaced `app.storage_file_allowed`; removed with a reason, never deleted; not once closed, rejected or cancelled).
+- **Functions** (all `change.manage`): `app.create_change`, `update_change`, `set_change_links`, `cancel_change` (reason), `add_ / remove_ / restore_change_attachment`. Errors `QM035` → `409 change_rule`; another organisation's id `P0002` → 404.
+- **API** `api/src/change/`: `GET|POST /change-types`, `PATCH /change-types/{id}`, same for `/change-functions`, `GET /change-areas`, `PATCH /change-areas/{id}`; `GET|POST /changes` (page-based: `q` over reference, title, what, why, covered part numbers, raiser, type; `stage` default open | all | stages; `typeId`, `urgency`, `owner=me`, `originKind`, `partId|partFamilyId|machineId|supplierId|customerId`, `sort`, `order`), `GET|PATCH /changes/{id}` (`@Versioned('change_requests')`), `PUT …/links`, `POST …/cancel`, `GET|POST …/attachments`, `POST /change-attachments/{id}/delete|restore`. Tests `api/test/change.e2e-spec.ts`, tenancy sweep seeds and sample bodies.
+- **UI** `src/components/change/` (`ChangeRegisterPage` at `/Change` — a plain sorted table like the risk register, not yet `TableWrapper` with the column menu and filter drawer; `ChangePage` at `/Change/:id`; `ChangeDialogs`: raise / edit, covers, cancel), Settings → Data Management → **Change** (`Settings/SettingsChange.jsx`), menu item **Change** (`GitPullRequestArrow`, `change.read`), hooks `useChange.js`, helpers `lib/change.js`. Tests `Change.test.jsx`, `SettingsChange.test.jsx`.
+- **Not built in CH1:** raising a change from an NC / 8D / finding / risk (the API takes `origin`; no screen offers it yet, CH4), assessment, signers, board, tasks, cut-in point, customer approval, the gate, notices, the dashboard, My changes, the Changes card on other pages, the ECN page, the browser journey step, saved filters and the full register pattern.
 
 ## 9. Reuse, not rebuild
 

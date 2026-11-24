@@ -277,6 +277,11 @@ BEGIN
   -- RK3: a link to a part.
   PERFORM app.set_risk_links(k.id, jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1))))
      FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
+  -- Change management (CH1): a change with its scope, and a file (the lists are seeded per organisation); written by the functions as the owner.
+  PERFORM app.create_change(a, jsonb_build_object('title', 'Sweep change', 'typeId', (SELECT id FROM public.change_types WHERE organisation_id = a AND key = 'process'),
+      'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
+  PERFORM app.add_change_attachment(k.id, a || '/change/' || k.id || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

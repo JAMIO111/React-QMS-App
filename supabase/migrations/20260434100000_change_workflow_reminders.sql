@@ -10,19 +10,42 @@
 --    stated here: it counts as due seven days after it was asked for (the person is reminded from five days). Nothing is decided for the signer.
 -- app.workflow_triggers(), app.system_workflow_facts(), app.reminder_areas() and app.reminder_candidates() are shared, so they are changed by a checked text patch
 -- from their live definitions (the migration refuses to finish unless the anchor is found exactly once): nothing a later migration changed is lost.
-CREATE FUNCTION pg_temp.patch(p_fn regprocedure, p_old text, p_new text) RETURNS void
+CREATE OR REPLACE FUNCTION pg_temp.patch(p_fn regprocedure, p_old text, p_new text, p_marker text DEFAULT NULL) RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE v_def text := replace(pg_get_functiondef(p_fn), E'\r', ''); v_n integer;
 BEGIN
+  -- Already applied (this migration has been run before): nothing to do.
+  IF p_marker IS NOT NULL AND position(p_marker IN v_def) > 0 THEN RETURN; END IF;
   v_n := (length(v_def) - length(replace(v_def, p_old, ''))) / length(p_old);
   IF v_n <> 1 THEN RAISE EXCEPTION 'Expected to find % exactly once in %, found % times', p_old, p_fn, v_n; END IF;
   EXECUTE replace(v_def, p_old, p_new);
 END $$;
 
+-- Repair: a migration that patches a function by text (20260429100000, Gauge R&R) adds its piece again every time it is run, because its anchor is still there
+-- afterwards. If it was run more than once, the function holds the piece twice (a trigger or area listed twice, a branch twice). Every copy of a piece after
+-- the first is removed, wherever it sits; nothing changes when there is no duplicate. `p_block` is a regular expression for one whole piece.
+CREATE OR REPLACE FUNCTION pg_temp.dedupe(p_fn regprocedure, p_block text) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE v_orig text := replace(pg_get_functiondef(p_fn), E'\r', ''); v_def text := v_orig; v_piece text; v_pos integer;
+BEGIN
+  FOR v_piece IN SELECT DISTINCT m[1] FROM regexp_matches(v_def, '(' || p_block || ')', 'g') AS m LOOP
+    v_pos := strpos(v_def, v_piece);
+    IF v_pos > 0 THEN
+      v_def := left(v_def, v_pos - 1 + length(v_piece)) || replace(substr(v_def, v_pos + length(v_piece)), v_piece, '');
+    END IF;
+  END LOOP;
+  IF v_def <> v_orig THEN EXECUTE v_def; END IF;
+END $$;
+
+SELECT pg_temp.dedupe('app.workflow_triggers()'::regprocedure, '\n[^\n]*''msa\.study\.completed''[^\n]*');
+SELECT pg_temp.dedupe('app.reminder_areas()'::regprocedure, '\n[^\n]*''msa_studies'',[^\n]*');
+SELECT pg_temp.dedupe('app.system_workflow_facts(uuid, text, uuid, jsonb)'::regprocedure, 'ELSIF p_entity_type = ''msa_study'' THEN(?:(?!ELSIF).)*');
+SELECT pg_temp.dedupe('app.reminder_candidates(uuid, date)'::regprocedure, '-- Gauge R&R studies that expire:(?:(?!-- ).)*');
+
 -- ---------------------------------------------------------------------------
 -- The events (the trigger only writes to the outbox)
 -- ---------------------------------------------------------------------------
-CREATE FUNCTION app.workflow_emit_change_stage() RETURNS trigger
+CREATE OR REPLACE FUNCTION app.workflow_emit_change_stage() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_event text;
 BEGIN
@@ -35,6 +58,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END $$;
+DROP TRIGGER IF EXISTS change_requests_workflow_event ON public.change_requests;
 CREATE TRIGGER change_requests_workflow_event AFTER UPDATE OF stage ON public.change_requests
   FOR EACH ROW WHEN (OLD.stage IS DISTINCT FROM NEW.stage) EXECUTE FUNCTION app.workflow_emit_change_stage();
 REVOKE ALL ON FUNCTION app.workflow_emit_change_stage() FROM PUBLIC, anon, authenticated;
@@ -47,7 +71,8 @@ SELECT pg_temp.patch('app.workflow_triggers()'::regprocedure,
   '(''change.submitted'',                    ''change_request'',           ''A change is submitted for assessment'',        ''change.read''),
     (''change.approved'',                     ''change_request'',           ''A change is approved'',                        ''change.read''),
     (''change.closed'',                       ''change_request'',           ''A change is closed'',                          ''change.read''),
-    (''quality_alert.issued'',');
+    (''quality_alert.issued'',',
+  '''change.submitted''');
 
 SELECT pg_temp.patch('app.system_workflow_facts(uuid, text, uuid, jsonb)'::regprocedure,
   'ELSIF p_entity_type = ''quality_alert'' THEN',
@@ -58,7 +83,8 @@ SELECT pg_temp.patch('app.system_workflow_facts(uuid, text, uuid, jsonb)'::regpr
              ''review_result'', (SELECT r.result FROM public.change_reviews r WHERE r.change_id = c.id AND r.organisation_id = c.organisation_id ORDER BY r.created_at DESC, (c.stage = ''closed'' AND r.result = ''effective'') DESC, r.id DESC LIMIT 1))
       INTO v FROM public.change_requests c JOIN public.change_types t ON t.id = c.type_id AND t.organisation_id = c.organisation_id
      WHERE c.id = p_entity_id AND c.organisation_id = p_organisation_id;
-  ELSIF p_entity_type = ''quality_alert'' THEN');
+  ELSIF p_entity_type = ''quality_alert'' THEN',
+  'p_entity_type = ''change_request''');
 
 -- ---------------------------------------------------------------------------
 -- The reminders areas
@@ -67,7 +93,8 @@ SELECT pg_temp.patch('app.reminder_areas()'::regprocedure,
   '(''competence'',',
   '(''change_tasks'',    14, ''Change tasks'',             ''Tasks on a change that were given to you'',                       3),
     (''change_signoffs'',  15, ''Change sign-offs'',         ''Changes waiting for your sign-off as a board member'',            2),
-    (''competence'',');
+    (''competence'',',
+  '''change_tasks''');
 
 SELECT pg_temp.patch('app.reminder_candidates(uuid, date)'::regprocedure,
   '-- Gauge R&R studies that expire:',
@@ -82,4 +109,5 @@ SELECT pg_temp.patch('app.reminder_candidates(uuid, date)'::regprocedure,
       FROM public.change_signoffs s JOIN public.change_requests c ON c.id = s.change_id AND c.organisation_id = s.organisation_id AND c.stage = ''approval'' AND c.review_round = s.round
      WHERE s.organisation_id = p_organisation_id AND s.status = ''pending''
     UNION ALL
-    -- Gauge R&R studies that expire:');
+    -- Gauge R&R studies that expire:',
+  '''change_signoffs''');

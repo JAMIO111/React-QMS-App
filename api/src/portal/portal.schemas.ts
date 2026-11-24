@@ -104,3 +104,7 @@ export const LotEvidenceBody = z
     sizeBytes: z.number().int().min(0).max(26_214_400),
   })
   .strict();
+
+export const ChangeApprovalDecisionBody = z
+  .object({ approve: z.boolean(), note: z.string().trim().max(2000).nullish(), reference: z.string().trim().max(200).nullish() })
+  .strict();

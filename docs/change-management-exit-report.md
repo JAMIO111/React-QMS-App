@@ -13,7 +13,7 @@ One record, the **change request** (`ECR-YY-NNNN`; an ECR while it is assessed a
 - **Workflow and reminders (CH5a):** triggers `change.submitted`, `change.approved`, `change.closed`; reminder areas for open tasks and for sign-offs waiting (due seven days after they were asked for).
 - **Dashboard, home page, management review (CH5b):** `/Change` is the change dashboard, the register is `/Change/Register`; the home page has a `change` area; a management review has a thirteenth section, **Changes to the quality management system**. **One set of SQL fragments serves all three, so they cannot disagree** (the home e2e compares them).
 - **Portal (CH6a):** a customer asks for a change on one of their parts and a supplier notifies a process change; each lands as a **draft change** with the sender named, staff are told, and the sender sees a plain status only.
-- **Decided against:** CH5c, the opt-in release gate (it could not fire as written, and the owner chose to build neither alternative; see plan §8g). **Not built:** CH6b (asking a customer to approve in the portal), default signers per function, files or comments on a portal request, emergency changes.
+- **Decided against:** CH5c, the opt-in release gate (it could not fire as written, and the owner chose to build neither alternative; see plan §8g). **Built after this report:** CH6b (asking a customer to approve in the portal, plan §8j). **Not built:** default signers per function, files or comments on a portal request, emergency changes.
 - **Exit check (CHX):** this report, the live checks below and a browser journey step.
 
 ## Evidence
@@ -45,7 +45,7 @@ No table writes on any change table: every change is a SECURITY DEFINER function
 ## What is not done, and what to know
 
 - **No release gate.** Nothing stops a revision being released because of a change (CH5c, §8g). The cut-in point and the customer approval are recorded, not enforced.
-- **CH6b** (asking a customer to approve a change in the portal) is not built; the customer's answer is recorded by staff.
+- **CH6b** (asking a customer to approve a change in the portal) was not built when this report was written; it was added afterwards (plan §8j) and is not part of the evidence above.
 - **Portal requests** carry no files, no conversation and no email back to the sender, and raise no workflow event.
 - The journey releases the two revisions through the API (the part and control plan release screens are covered by their own steps), and signs for both board functions as one person because the organisation has two people.
 - Not checked in a browser: mobile layouts, the portal change request page, the change notice's print layout.

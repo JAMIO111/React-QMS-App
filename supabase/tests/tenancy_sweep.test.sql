@@ -531,6 +531,10 @@ BEGIN
   INSERT INTO public.portal_closure_requests (organisation_id, share_id)
     SELECT a, x.id FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_closure_request', (SELECT id FROM public.portal_closure_requests WHERE organisation_id = a));
+  -- Change management (CH6b): a request for a customer to approve a change (written by a function; seeded directly here).
+  INSERT INTO public.portal_change_approvals (organisation_id, change_id, party_id)
+    SELECT a, x.id, (SELECT id FROM public.portal_parties WHERE organisation_id = a LIMIT 1) FROM public.change_requests x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_change_approval', (SELECT id FROM public.portal_change_approvals WHERE organisation_id = a));
   -- External portal (PT5c): a customer contact.
   INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
     SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;

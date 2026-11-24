@@ -5,6 +5,7 @@ import { assignments, iso, personName, Row } from '../calibration/calibration.se
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { PortalMailer } from '../portal/portal-mailer.service';
 import {
   AllQuery, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
   CreateTypeBody, DeletedQuery, DraftQuery, ORIGIN_KINDS, LinkedQuery, LinkItem, LinkTaskBody, ListItem, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
@@ -212,7 +213,10 @@ const keyFor = async (db: Db, table: 'change_types' | 'change_functions', org: s
 /** Change management (CH1): the lists a change is set up with, and the change itself with its scope and files. Every write to a change is a database function; reading is by RLS. */
 @Injectable()
 export class ChangeService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly portalMailer: PortalMailer,
+  ) {}
 
   // ---- the lists -----------------------------------------------------------------------------------
 
@@ -577,6 +581,69 @@ export class ChangeService {
       id,
       sql`select app.set_change_customer_approval(${id}::uuid, ${body.status}, ${body.reference ?? null}, ${body.on ?? null}::date, ${body.waivedReason ?? null})`,
     );
+  }
+
+  // ---- asking a customer to approve in the portal (CH6b) ------------------------------------------
+
+  /** The requests put to customers for one change, with who may still be asked (customers the change is about whose portal is on). */
+  private async customerApprovals(db: Db, id: string) {
+    const requests = (await db.execute<{ r: unknown[] }>(sql`select app.change_customer_approvals(${id}::uuid) as r`)).rows[0].r;
+    const customers = (await db.execute<{ party_id: string; customer_id: string; party_name: string }>(sql`select * from app.change_customer_parties(${id}::uuid)`)).rows.map((c) => ({
+      partyId: c.party_id,
+      customerId: c.customer_id,
+      name: c.party_name,
+    }));
+    return { data: requests, customers };
+  }
+
+  customerApprovalRequests(ctx: RequestContext, id: string) {
+    return this.database.asUser(ctx, (db) => this.customerApprovals(db, id));
+  }
+
+  /** Staff ask a customer to approve (they are emailed, best effort: a failed send never undoes the request). */
+  async askCustomer(ctx: RequestContext, id: string, partyId: string, note: string | null) {
+    const asked = await this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ id: string }>(sql`select app.request_customer_change_approval(${id}::uuid, ${partyId}::uuid, ${note}) as id`);
+      return { requestId: r.rows[0].id, ...(await this.customerApprovals(db, id)) };
+    });
+    const email = await this.tellCustomer(ctx, asked.requestId, note);
+    return { data: asked.data, customers: asked.customers, email };
+  }
+
+  withdrawCustomerApproval(ctx: RequestContext, requestId: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ change_id: string }>(sql`select change_id from public.portal_change_approvals where id = ${requestId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows[0]) throw ApiError.notFound('request_not_found', 'That request was not found');
+      await db.execute(sql`select app.withdraw_customer_change_approval(${requestId}::uuid, ${reason})`);
+      return this.customerApprovals(db, found.rows[0].change_id);
+    });
+  }
+
+  private async tellCustomer(ctx: RequestContext, requestId: string, note: string | null) {
+    try {
+      const info = await this.database.asUser(ctx, async (db) => {
+        const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.change_approval_recipients(${requestId}::uuid)`);
+        const rec = await db.execute<{ reference: string; title: string; org_name: string }>(
+          sql`select c.reference, c.title, o.name as org_name
+                from public.portal_change_approvals r join public.change_requests c on c.id = r.change_id join public.organisations o on o.id = r.organisation_id
+               where r.id = ${requestId}::uuid`,
+        );
+        return { people: people.rows, rec: rec.rows[0] };
+      });
+      if (!info.rec) return { attempted: 0, sent: 0 };
+      return await this.portalMailer.send({
+        to: info.people.map((p) => ({ email: p.email, name: p.name })),
+        subject: `${info.rec.org_name} asks you to approve a change: ${info.rec.reference}`,
+        heading: 'Please approve a change',
+        paragraphs: [`${info.rec.org_name} asks for your approval of ${info.rec.reference} — ${info.rec.title}. Open it on your portal to approve it, or to say what you cannot accept.`],
+        quote: note ? { text: note, by: info.rec.org_name } : undefined,
+        path: `/portal/change-approvals/${requestId}?org=${orgOf(ctx)}`,
+        button: 'Open in the portal',
+        footerWho: info.rec.org_name,
+      });
+    } catch {
+      return { attempted: 0, sent: 0 };
+    }
   }
 
   /** The people who could be put on the board, and whether each can sign. */

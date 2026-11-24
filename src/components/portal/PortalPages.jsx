@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, Navigate, useNavigate, useOutletContext } from "react-router-dom";
 import Callout from "../ui/Callout";
 import PortalChangeRequests from "./PortalChangeRequests";
+import { ChangeApprovalList } from "./PortalChangeApprovalPage";
 import PortalComplaints, { PortalEvidence } from "./PortalComplaints";
 import PortalPeople from "./PortalPeople";
 import PortalRegister from "./PortalRegister";
@@ -198,6 +199,7 @@ export function PortalChangeRequestsPage() {
   if (access.mfaRequired) return <MfaNeeded access={access} />;
   return (
     <Content>
+      <ChangeApprovalList access={access} />
       <PortalChangeRequests access={access} />
     </Content>
   );

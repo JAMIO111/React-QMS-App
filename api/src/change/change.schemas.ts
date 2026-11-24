@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Uuid } from '../common/validation';
 
 /** Optional text that is trimmed; empty means "clear it". */
 const text = (max: number) =>
@@ -214,3 +215,6 @@ export const LINKED_KINDS = [
 ] as const;
 export const LinkedQuery = z.object({ kind: z.enum(LINKED_KINDS), id: z.string().uuid() }).strict();
 export type LinkedQuery = z.infer<typeof LinkedQuery>;
+
+export const AskCustomerBody = z.object({ partyId: Uuid, note: z.string().trim().max(500).nullish() }).strict();
+export type AskCustomerBody = z.infer<typeof AskCustomerBody>;

@@ -111,6 +111,17 @@ export const useMyChangeCount = ({ enabled = true } = {}) => {
   });
 };
 
+/** The requests put to customers to approve a change in the portal, and the customers that may still be asked (CH6b). */
+export const useCustomerApprovalRequests = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "customer-approvals", id),
+    queryFn: () => apiFetch(`/changes/${id}/customer-approvals`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
 /** The files on a change, removed ones included (the page folds them away). */
 export const useChangeAttachments = (id) => {
   const { organisationId } = useOrganisation();
@@ -190,6 +201,10 @@ export const useChangeMutation = () => {
           return send(`/changes/${id}/cut-in`, "PUT");
         case "setCustomerApproval":
           return send(`/changes/${id}/customer-approval`, "PUT");
+        case "askCustomer":
+          return send(`/changes/${id}/customer-approvals`);
+        case "withdrawCustomerApproval":
+          return send(`/change-customer-approvals/${id}/withdraw`);
         case "addTask":
           return send(`/changes/${id}/tasks`);
         case "updateTask":

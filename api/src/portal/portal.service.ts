@@ -99,11 +99,15 @@ export class PortalService {
       const scars = (await this.scarRows(db, ctx)).map((r) => this.scarItem(r, counts));
       const pending = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_acknowledgements(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
       const closing = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_closures(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
+      const approvals = ctx.portal?.partyKind === 'customer'
+        ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_change_approvals(${ctx.organisationId}::uuid) where can_decide`)).rows.length
+        : 0;
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
         access: mine,
         attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id) || closing.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id), needsClosure: closing.has(i.id) })),
         toConfirm: closing.size,
+        changesToApprove: approvals,
         toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
@@ -297,6 +301,39 @@ export class PortalService {
         sql`select app.portal_raise_change(${ctx.organisationId}::uuid, ${party}::uuid, ${b.title}, ${b.description}, ${b.reason ?? null}, ${b.partId ?? null}::uuid, ${b.wantedOn ?? null}::date, ${b.clientKey ?? null}) as r`,
       );
       return r.rows[0].r;
+    });
+  }
+
+  /** The changes a customer has been asked to approve (CH6b): named fields only; a withdrawn request is not shown. */
+  listChangeApprovals(ctx: RequestContext) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_change_approvals(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.request_id as string,
+          reference: c.reference as string,
+          title: c.title as string,
+          status: c.status as 'pending' | 'approved' | 'rejected',
+          requestedAt: iso(c.requested_at),
+          decidedAt: iso(c.decided_at),
+          canDecide: Boolean(c.can_decide),
+        })),
+      };
+    });
+  }
+
+  getChangeApproval(ctx: RequestContext, id: string) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_change_approval(${id}::uuid) as r`)).rows[0].r);
+  }
+
+  /** The customer's answer: it is recorded on the change's own customer-approval record, and nothing else moves. */
+  decideChangeApproval(ctx: RequestContext, id: string, b: { approve: boolean; note?: string | null; reference?: string | null }) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_decide_change_approval(${id}::uuid, ${b.approve}, ${b.note ?? null}, ${b.reference ?? null})`);
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_change_approval(${id}::uuid) as r`)).rows[0].r;
     });
   }
 

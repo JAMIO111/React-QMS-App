@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, ChangeRequestBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ChangeApprovalDecisionBody, ChangeRequestBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -204,6 +204,29 @@ export class PortalController {
   @ApiOkResponse({ description: 'A customer sends a change request, or a supplier notifies a process change; it becomes a draft change for staff to review. A retry with the same clientKey returns the same request' })
   raiseChangeRequest(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.raiseChangeRequest(ctx, parse(ChangeRequestBody, body));
+  }
+
+  @Get('change-approvals')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Changes staff have asked this customer to approve (customers only): reference, title and status, nothing else' })
+  changeApprovals(@Ctx() ctx: RequestContext) {
+    return this.service.listChangeApprovals(ctx);
+  }
+
+  @Get('change-approvals/:id')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'One request with the change as the customer may see it: what is changing, why, from when, the parts of theirs it covers (named fields only)' })
+  changeApproval(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getChangeApproval(ctx, Uuid.parse(id));
+  }
+
+  @Post('change-approvals/:id/decide')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(ChangeApprovalDecisionBody) })
+  @ApiOkResponse({ description: 'The customer approves the change, or says what they cannot accept (a note is then needed). Final. Recorded on the change; nothing else moves' })
+  decideChangeApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decideChangeApproval(ctx, Uuid.parse(id), parse(ChangeApprovalDecisionBody, body));
   }
 
   @Get('change-request-parts')

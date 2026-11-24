@@ -445,6 +445,38 @@ export const usePortalChangeRequestMutation = (organisationId) => {
   });
 };
 
+/** The changes staff have asked a customer to approve, and one of them with the change as the customer may see it (CH6b). */
+export const usePortalChangeApprovals = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "change-approvals"),
+    queryFn: () => apiFetch("/portal/change-approvals", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+export const usePortalChangeApproval = (organisationId, id) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "change-approval", id),
+    queryFn: () => apiFetch(`/portal/change-approvals/${id}`, { organisationId }),
+    enabled: !!user && !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** The customer's answer waits for the server (it is final and recorded on the change); the answer replaces the cached request. */
+export const usePortalChangeApprovalMutation = (organisationId, id) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch(`/portal/change-approvals/${id}/decide`, { method: "POST", body, organisationId }),
+    onSuccess: (data) => queryClient.setQueryData(portalKey(user?.id, organisationId, "change-approval", id), data),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};
+
 /** One SCAR as the supplier sees it, with what they may do next. */
 export const usePortalScar = (organisationId, scarId) => {
   const { user } = useAuth();

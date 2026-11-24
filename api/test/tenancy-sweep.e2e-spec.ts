@@ -598,6 +598,11 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/customers/{id}/contacts': { name: 'Hijacked' },
     'POST /api/v1/external-access/shares/{id}/closures': { note: 'Hijacked' },
     'POST /api/v1/external-access/closure-requests/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/changes/{id}/customer-approvals': undefined,
+    'POST /api/v1/changes/{id}/customer-approvals': { partyId: '00000000-0000-0000-0000-0000000000aa', note: 'Hijacked' },
+    'POST /api/v1/change-customer-approvals/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/portal/change-approvals/{id}': undefined,
+    'POST /api/v1/portal/change-approvals/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/portal/closure-requests/{id}/decide': { confirm: true },
     'POST /api/v1/external-access/shares/{id}/comments': { body: 'Hijacked' },
     'POST /api/v1/external-access/comments/{id}/withdraw': undefined,
@@ -1165,6 +1170,11 @@ const hasSample = (op: Op) =>
     'POST /api/v1/customers/{id}/contacts',
     'POST /api/v1/external-access/shares/{id}/closures',
     'POST /api/v1/external-access/closure-requests/{id}/withdraw',
+    'GET /api/v1/changes/{id}/customer-approvals',
+    'POST /api/v1/changes/{id}/customer-approvals',
+    'POST /api/v1/change-customer-approvals/{id}/withdraw',
+    'GET /api/v1/portal/change-approvals/{id}',
+    'POST /api/v1/portal/change-approvals/{id}/decide',
     'POST /api/v1/portal/closure-requests/{id}/decide',
     'POST /api/v1/external-access/shares/{id}/comments',
     'POST /api/v1/external-access/comments/{id}/withdraw',
@@ -1271,6 +1281,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/change-functions/')) return a.changeFunction;
   if (path.startsWith('/api/v1/change-areas/')) return a.changeArea;
   if (path.startsWith('/api/v1/change-attachments/')) return a.changeAttachment;
+  if (path.startsWith('/api/v1/change-customer-approvals/') || path.startsWith('/api/v1/portal/change-approvals/')) return a.portalChangeApproval;
   if (path.startsWith('/api/v1/change-signoffs/')) return a.changeSignoff;
   if (path.startsWith('/api/v1/change-tasks/')) return a.changeTask;
   if (path.startsWith('/api/v1/changes/')) return a.change;
@@ -1517,6 +1528,15 @@ beforeAll(async () => {
     a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
     a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;
     a.change = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha change', 'typeId', $2::text)) as id`, [ids.orgA, a.changeType])).id;
+    // CH6b: a request for a customer to approve a change (written by a function; seeded directly here, on a change of its own that the admin connection can see).
+    const sweepChange = (await admin.query(
+      `insert into public.change_requests (organisation_id, reference, title, type_id, raised_by) select $1, 'ECR-99-9999', 'Sweep portal change', id, $2 from public.change_types where organisation_id = $1 and key = 'process' returning id`,
+      [ids.orgA, ids.ownerA],
+    )).rows[0].id;
+    a.portalChangeApproval = (await admin.query(
+      `insert into public.portal_change_approvals (organisation_id, change_id, party_id) select $1, $2, party_id from public.external_access where id = $3 returning id`,
+      [ids.orgA, sweepChange, a.externalAccess],
+    )).rows[0].id;
     a.changeAttachment = (await q1(`select app.add_change_attachment($2::uuid, $1::text || '/change/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.change])).id;
     await admin.query(`update public.organisation_settings set change_allow_self_approval = true where organisation_id = $1`, [ids.orgA]);
     const changeB = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha board change', 'typeId', $2::text, 'description', 'x', 'reason', 'y', 'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', $3::text)))) as id`, [ids.orgA, a.changeType, a.part])).id;

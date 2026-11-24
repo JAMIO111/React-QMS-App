@@ -172,6 +172,7 @@ const PortalCertificatesPage = portalPage("PortalCertificatesPage");
 const PortalTeamPage = portalPage("PortalTeamPage");
 const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
 const PortalScarPage = lazy(() => import("./components/portal/PortalScarPage.jsx"));
+const PortalChangeApprovalPage = lazy(() => import("./components/portal/PortalChangeApprovalPage.jsx"));
 const PortalPerformancePage = lazy(() => import("./components/portal/PortalPerformancePage.jsx"));
 const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
 const InspectionsPage = lazy(() => import("./components/inspection/InspectionsPage.jsx"));
@@ -260,6 +261,7 @@ const router = createBrowserRouter([
           { path: "team", element: <PortalTeamPage /> },
           { path: "shared/:shareId", element: <PortalContent><PortalSharedPage /></PortalContent> },
           { path: "scars/:scarId", element: <PortalContent><PortalScarPage /></PortalContent> },
+          { path: "change-approvals/:approvalId", element: <PortalContent><PortalChangeApprovalPage /></PortalContent> },
           // The performance page is the dashboard now; the old address still works.
           { path: "performance", element: <PortalPerformancePage /> },
         ],

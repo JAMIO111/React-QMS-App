@@ -4,7 +4,8 @@ import { CheckIcon, PencilIcon, PlusIcon, XIcon } from "@/components/icons";
 import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAuth } from "../../contexts/AuthProvider";
-import { useChangeFunctions, useChangeMutation, useChangeSigners } from "../../hooks/useChange";
+import { useChangeFunctions, useChangeMutation, useChangeSigners, useCustomerApprovalRequests } from "../../hooks/useChange";
+import { ApprovalRequests, AskCustomerDialog } from "./ChangeCustomerApproval";
 import { CUSTOMER_APPROVALS, CUT_IN_KINDS, customerLabel, cutInWords, formatDay, IMPACT_OPTIONS, impactLabel, impactPill, signoffLabel, signoffPill, STOCK_ACTIONS, stockLabel } from "../../lib/change";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { OrderPicker, LotPicker, SerialPicker } from "../production/pickers";
@@ -346,18 +347,31 @@ const CustomerDialog = ({ change, onClose }) => {
 
 export const CustomerCard = ({ change }) => {
   const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
   const c = change.customerApproval;
   const needed = change.typeNeedsCustomerApproval;
+  const approvals = useCustomerApprovalRequests(change.id, { enabled: change.stage !== "draft" });
+  const customers = approvals.data?.customers ?? [];
+  const requests = approvals.data?.data ?? [];
+  const waiting = requests.some((r) => r.status === "pending");
+  const canAsk = change.canSetCustomerApproval && change.stage !== "draft" && customers.length > 0 && !waiting && c.status !== "approved";
   if (change.stage === "draft" && !c.status && !needed) return null;
   return (
     <MenuCard
       title="Customer approval"
-      subtitle="Recorded here; asking the customer happens outside Fortress for now."
+      subtitle="Record the customer's answer here, or ask a customer to approve it in their portal."
       action={
         change.canSetCustomerApproval && (
-          <CTAButton type="secondary" icon={PencilIcon} onClick={() => setOpen(true)}>
-            {c.status ? "Change" : "Record"}
-          </CTAButton>
+          <div className="flex flex-wrap gap-2">
+            {canAsk && (
+              <CTAButton type="main" onClick={() => setAsking(true)}>
+                Ask the customer
+              </CTAButton>
+            )}
+            <CTAButton type="secondary" icon={PencilIcon} onClick={() => setOpen(true)}>
+              {c.status ? "Change" : "Record"}
+            </CTAButton>
+          </div>
         )
       }>
       {!c.status && needed && change.stage !== "cancelled" && (
@@ -385,7 +399,9 @@ export const CustomerCard = ({ change }) => {
           </div>
         )}
       </dl>
+      <ApprovalRequests requests={requests} canWithdraw={change.canSetCustomerApproval} />
       {open && <CustomerDialog change={change} onClose={() => setOpen(false)} />}
+      {asking && <AskCustomerDialog change={change} customers={customers} onClose={() => setAsking(false)} />}
     </MenuCard>
   );
 };

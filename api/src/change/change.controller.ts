@@ -6,7 +6,7 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AllQuery, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
+  AllQuery, AskCustomerBody, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
   CreateTypeBody, DeleteBody, DeletedQuery, DraftQuery, LinkedQuery, LinksBody, LinkTaskBody, ListItem, ReasonBody, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
 } from './change.schemas';
 import { ChangeService } from './change.service';
@@ -236,6 +236,31 @@ export class ChangeController {
   @ApiOkResponse({ description: 'Records the customer\'s approval: not needed, required, requested, approved, rejected or waived (with a reason)' })
   setCustomerApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.setCustomerApproval(ctx, parse(Uuid, id), parse(CustomerApprovalBody, body));
+  }
+
+  @Get('changes/:id/customer-approvals')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The requests put to customers to approve this change in the portal (who asked, who answered), and the customers that may still be asked' })
+  customerApprovalRequests(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.customerApprovalRequests(ctx, parse(Uuid, id));
+  }
+
+  @Post('changes/:id/customer-approvals')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AskCustomerBody) })
+  @ApiOkResponse({ description: 'Asks a customer the change is about to approve it in the portal (their people are emailed); the answer is recorded on the change\'s customer approval. Information only: nothing else moves' })
+  askCustomer(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    const b = parse(AskCustomerBody, body);
+    return this.service.askCustomer(ctx, parse(Uuid, id), b.partyId, b.note ?? null);
+  }
+
+  @Post('change-customer-approvals/:id/withdraw')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Withdraws a request that is still waiting for the customer (a reason is needed); the change goes back to "required"' })
+  withdrawCustomerApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawCustomerApproval(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
   }
 
   @Post('changes/:id/tasks')

@@ -150,6 +150,13 @@ export const CHANGE_REQUEST_STATUS = {
   declined: { label: "Declined", tone: "bg-error-color/15 text-error-color" },
   cancelled: { label: "Cancelled", tone: "bg-border-color text-secondary-text" },
 };
+// ---- A customer approves a change (CH6b) ----
+export const CHANGE_APPROVAL_STATUS = {
+  pending: { label: "Waiting for your answer", tone: "bg-warning-color/20 text-primary-text" },
+  approved: { label: "Approved", tone: "bg-success-color/15 text-success-color" },
+  rejected: { label: "Not approved", tone: "bg-error-color/15 text-error-color" },
+};
+export const changeApprovalPath = (id, organisationId) => `/portal/change-approvals/${id}${organisationId ? `?org=${organisationId}` : ""}`;
 /** The words for each kind of party: a customer asks for a change, a supplier tells us about one. */
 export const CHANGE_WORDS = {
   customer: {
@@ -197,7 +204,7 @@ export const portalMenu = (access) => {
     ...(supplier ? [{ key: "scars", name: "Corrective actions", icon: "scar", path: "/portal/scars", badge: "scars" }] : []),
     ...(customer ? [{ key: "capas", name: "8D reports", icon: "capa", path: "/portal/8ds", badge: "capas" }] : []),
     ...(customer ? [{ key: "complaints", name: "Complaints", icon: "complaint", path: "/portal/complaints" }] : []),
-    ...(customer || supplier ? [{ key: "changes", name: CHANGE_WORDS[customer ? "customer" : "supplier"].menu, icon: "change", path: "/portal/change-requests" }] : []),
+    ...(customer || supplier ? [{ key: "changes", name: CHANGE_WORDS[customer ? "customer" : "supplier"].menu, icon: "change", path: "/portal/change-requests", badge: "changeApprovals" }] : []),
     { key: "documents", name: "Documents and alerts", icon: "document", path: "/portal/documents", badge: "documents" },
     ...(customer ? [{ key: "certificates", name: "Certificates and reports", icon: "certificate", path: "/portal/certificates" }] : []),
     ...(access?.role === "admin" ? [{ key: "team", name: "Team", icon: "team", path: "/portal/team" }] : []),
@@ -212,7 +219,7 @@ export const portalPageTitle = (pathname) => {
   if (p.startsWith("/portal/scars")) return "Corrective actions";
   if (p.startsWith("/portal/8ds")) return "8D reports";
   if (p.startsWith("/portal/complaints")) return "Complaints";
-  if (p.startsWith("/portal/change-requests")) return "Change requests";
+  if (p.startsWith("/portal/change-requests") || p.startsWith("/portal/change-approvals")) return "Change requests";
   if (p.startsWith("/portal/documents")) return "Documents and alerts";
   if (p.startsWith("/portal/certificates")) return "Certificates and reports";
   if (p.startsWith("/portal/team")) return "Team";

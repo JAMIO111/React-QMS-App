@@ -24,7 +24,8 @@ const ChangeNoticePage = () => {
   const notAffected = c.impacts.filter((i) => i.status === "not_affected");
   const open = c.impacts.filter((i) => i.status === "not_assessed");
   const latest = c.signoffs.filter((s) => s.round === c.reviewRound);
-  const approved = c.stage === "approved";
+  // a change the board approved stays an ECN while it is carried out, checked and after it is closed
+  const approved = ["approved", "implementing", "verifying", "closed"].includes(c.stage);
   const cut = cutInWords(c.cutIn);
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">

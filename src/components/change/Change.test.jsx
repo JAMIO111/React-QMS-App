@@ -243,6 +243,17 @@ describe("the change notice", () => {
     expect(within(notice).getByText(/Approved · their reference ACME-77/)).toBeInTheDocument();
   });
 
+  it("is still the notice while the change is carried out, checked and after it is closed", async () => {
+    for (const stage of ["implementing", "verifying", "closed"]) {
+      current = { ...approved, stage };
+      const { unmount } = renderAt("/Change/c1/notice", <ChangeNoticePage />, "/Change/:id/notice");
+      const notice = await screen.findByRole("article", { name: "Change notice" });
+      expect(within(notice).getByText("Engineering change notice")).toBeInTheDocument();
+      expect(within(notice).queryByText(/Not approved/)).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("says plainly that an unapproved change is a draft of the notice", async () => {
     current = assessing;
     renderAt("/Change/c1/notice", <ChangeNoticePage />, "/Change/:id/notice");

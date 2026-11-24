@@ -230,6 +230,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await giveColinController();
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
+  await changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
@@ -1737,6 +1738,8 @@ async function riskAndReview({ browser, page, stack, APP, orgName, see, shot, st
   await see(page.getByRole('heading', { name: 'Inputs' }));
   await see(page.getByRole('region', { name: 'Quality objectives' }).getByText(/Customer complaints answered/));
   await see(page.getByRole('region', { name: 'Effectiveness of actions on risks and opportunities' }).getByText('High or critical'));
+  // Changes to the quality management system (change management): its figures come from the changes dashboard, as the person.
+  await see(page.getByRole('region', { name: 'Changes to the quality management system' }));
   await shot(page, 'a5-review-inputs');
 
   step('the meeting: every section reviewed, Colin present, a decision and an action for Colin, then completed');
@@ -1798,7 +1801,214 @@ async function riskAndReview({ browser, page, stack, APP, orgName, see, shot, st
     [org.id, colleague.email],
   );
   log(`review: ${JSON.stringify(mr)}`);
-  if (!mr || mr.status !== 'completed' || mr.reviewed !== 12 || mr.action !== 'done' || mr.told !== 1) throw new Error(`the review was not held end to end: ${JSON.stringify(mr)}`);
+  if (!mr || mr.status !== 'completed' || mr.reviewed !== 13 || mr.action !== 'done' || mr.told !== 1) throw new Error(`the review was not held end to end: ${JSON.stringify(mr)}`);
+}
+
+
+/**
+ * Change management (docs/change-management-plan.md, CHX): the owner raises a change from a non-conformance (the NC kept as its origin), submits it, assesses
+ * every impact area, names a board (Colin signs for two functions), records the customer's answer and the cut-in point and sends it to the board; Colin
+ * approves from his own sign-in; the owner adds two tasks that each start a revision (a part revision and a control plan revision) and sees them "not in
+ * force yet"; once both are released the tasks are finished and the effectiveness check closes the change. Then the change notice, the Changes card on the NC
+ * and the dashboard show it. Its own part, plan and NC, so the other steps' records are untouched.
+ */
+async function changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  step('set-up for change management: a part with its drawing and control plan in force, and a non-conformance on it');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const family = await api('POST', '/part-families', { code: 'CHG', name: 'Change brackets' });
+  const part = await api('POST', '/parts', { partNumber: 'CHG-100', name: 'Change bracket', partFamilyId: family.id, initialRevision: { revision: 'A' } });
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-CHG', title: 'Change brackets', partFamilyId: family.id });
+  const planRev = plan.revisions[0].id;
+  const planOps = await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-10', name: 'Milling' });
+  await api('POST', `/control-plan-revisions/${planRev}/characteristics`, {
+    operationId: planOps.operations[0].id, characteristicKey: 'VISUAL', name: 'No burrs in the bore', dataType: 'attribute', sampling: [{ triggerType: 'first_off', sampleSize: 1 }],
+  });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Bracket bore burr', partId: part.id, siteId: org.site, categoryId: product.id });
+  await api('PATCH', `/ncrs/${ncr.id}`, { severity: 'minor', quantityAffected: 3, description: 'Burr left inside the bore after milling' });
+  await api('POST', `/ncrs/${ncr.id}/transitions`, { to: 'open' });
+  const { rows: [nc] } = await stack.admin.query(`select reference from public.nonconformances where id = $1`, [ncr.id]);
+
+  step('owner raises a change from the non-conformance and submits it for assessment');
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  const raiseCard = page.getByRole('region', { name: 'Changes raised from this non-conformance' });
+  await raiseCard.getByRole('button', { name: 'Raise a change' }).click();
+  const raise = page.getByRole('dialog', { name: `Raise a change from ${nc.reference}` });
+  await see(raise.getByLabel('Title'));
+  await raise.getByRole('combobox', { name: /Type of change/ }).click();
+  await page.getByRole('option', { name: /^Product design/ }).click();
+  await raise.getByLabel('What is changing').fill('Add a deburr callout to the bore on the drawing and a first-part burr check to the control plan');
+  await raise.getByLabel('Why').fill('Burrs found inside the bore on three brackets');
+  await raise.getByRole('button', { name: 'Raise change' }).click();
+  await page.waitForURL(/\/Change\/[0-9a-f-]{36}$/);
+  const changeUrl = page.url();
+  await see(page.getByText(new RegExp(`Raised from.*${nc.reference}`)));
+  await see(page.getByRole('list', { name: 'What it covers' }).getByText(/CHG-100/));
+  await shot(page, 'c0-change-draft');
+  await page.getByRole('button', { name: 'Submit for assessment' }).click();
+  await see(page.getByRole('list', { name: 'Impact assessment' }));
+
+  step('owner assesses every impact area (two affected, with how), records the customer and the cut-in point, and names the board');
+  const areas = page.getByRole('list', { name: 'Impact assessment' }).getByRole('listitem');
+  const areaCount = await areas.count();
+  if (areaCount !== 12) throw new Error(`expected the twelve impact areas, found ${areaCount}`);
+  for (let i = 0; i < areaCount; i++) {
+    const item = areas.nth(i);
+    const label = (await item.locator('.font-medium').first().innerText()).trim();
+    if (label === 'Design and drawing' || label === 'Process and control plan') {
+      await item.getByRole('button', { name: 'Affected', exact: true }).click();
+      const how = page.getByRole('dialog', { name: `${label}: how is it affected?` });
+      await how.getByLabel('How it is affected').fill(label === 'Design and drawing' ? 'The bore gets a deburr callout: drawing revision B' : 'A first-part burr check is added: control plan revision B');
+      await how.getByRole('button', { name: 'Save' }).click();
+    } else {
+      await item.getByRole('button', { name: 'Not affected', exact: true }).click();
+    }
+  }
+  await see(page.getByText('Every area is assessed.'));
+  await page.getByRole('region', { name: 'Customer approval' }).getByRole('button', { name: 'Record' }).click();
+  const customer = page.getByRole('dialog', { name: "The customer's approval" });
+  await customer.getByRole('combobox', { name: /Where it stands/ }).click();
+  await page.getByRole('option', { name: /^Not needed/ }).click();
+  await customer.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByRole('region', { name: 'Customer approval' }).getByText('Not needed'));
+  await page.getByRole('region', { name: 'Cut-in point' }).getByRole('button', { name: 'Set' }).click();
+  const cutIn = page.getByRole('dialog', { name: 'From when does it apply?' });
+  await cutIn.getByRole('combobox', { name: /Cut-in point/ }).click();
+  await page.getByRole('option', { name: /^From a date/ }).click();
+  await cutIn.getByRole('button', { name: /^Date\b/ }).click();
+  await page.getByRole('dialog', { name: 'Choose date' }).getByRole('button', { name: dayName(new Date()) }).click();
+  await cutIn.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByRole('region', { name: 'Cut-in point' }).getByText(/^From /));
+  await page.getByRole('button', { name: 'Choose the board' }).click();
+  const board = page.getByRole('dialog', { name: 'Who signs this change off' });
+  for (const fn of ['Quality', 'Engineering']) {
+    await board.getByRole('checkbox', { name: new RegExp(`^${fn}$`) }).check();
+    await board.getByRole('combobox', { name: new RegExp(`Who signs for ${fn}`) }).click();
+    await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  }
+  await board.getByRole('button', { name: 'Save the board' }).click();
+  await see(page.getByRole('list', { name: 'Board' }).getByText(/Quality/));
+  await shot(page, 'c1-change-assessed');
+
+  step('owner sends it to the board; Colin finds it in My changes and approves for both functions');
+  await page.getByRole('button', { name: 'Send to the board' }).click();
+  await see(page.getByText(/Waiting for 2 sign-off/));
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  watch(colin, 'colin');
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colin.goto(`${APP}/Change/Mine`);
+  await see(colin.getByRole('list', { name: 'Sign-offs waiting for me' }).getByText(/Bracket bore burr/));
+  await colin.goto(changeUrl);
+  for (let i = 0; i < 2; i++) {
+    await colin.getByRole('button', { name: 'Approve', exact: true }).first().click();
+    const decide = colin.getByRole('dialog', { name: /^Approve for / });
+    await decide.getByLabel('Comment').fill(i === 0 ? 'The check is cheap and the burr is real' : 'The callout fits our process');
+    await decide.getByRole('button', { name: 'Approve', exact: true }).click();
+    await decide.waitFor({ state: 'hidden' });
+  }
+  await see(colin.getByText(/Add the tasks that carry it out/));
+  await shot(colin, 'c2-change-approved');
+  await ctx.close();
+
+  step('owner adds two tasks that each start a revision: both are "not in force yet", so neither can be finished');
+  await page.reload();
+  await see(page.getByText(/Add the tasks that carry it out/));
+  const addTask = async (what) => {
+    await page.getByRole('region', { name: 'Tasks' }).getByRole('button', { name: 'Add a task' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Add a task' });
+    await dlg.getByLabel('What has to be done').fill(what);
+    await dlg.getByRole('combobox', { name: /Who does it/ }).click();
+    await page.getByRole('option', { name: /Olivia Owner/ }).click();
+    await dlg.getByRole('button', { name: 'Add task' }).click();
+    await see(page.getByRole('list', { name: 'Tasks' }).getByText(what));
+  };
+  await addTask('Release drawing revision B with the bore deburr callout');
+  await addTask('Release control plan revision B with the first-part burr check');
+  const tasks = page.getByRole('list', { name: 'Tasks' });
+  await tasks.getByRole('listitem').filter({ hasText: 'drawing revision B' }).getByRole('button', { name: 'Start a revision' }).click();
+  let start = page.getByRole('dialog', { name: 'Start a revision for this task' });
+  await start.getByRole('combobox', { name: /Part/ }).click();
+  await page.getByRole('option', { name: /CHG-100/ }).click();
+  await start.getByLabel('New revision letter or code').fill('B');
+  await start.getByLabel('What changes').fill('Deburr callout on the bore');
+  await start.getByRole('button', { name: 'Start the revision' }).click();
+  await see(tasks.getByText(/CHG-100/).first());
+  await tasks.getByRole('listitem').filter({ hasText: 'control plan revision B' }).getByRole('button', { name: 'Start a revision' }).click();
+  start = page.getByRole('dialog', { name: 'Start a revision for this task' });
+  await start.getByRole('combobox', { name: /What to revise/ }).click();
+  await page.getByRole('option', { name: /^Control plan revision/ }).click();
+  await start.getByRole('combobox', { name: /Control plan/ }).click();
+  await page.getByRole('option', { name: /CP-CHG/ }).click();
+  await start.getByLabel('New revision letter or code').fill('B');
+  await start.getByLabel('Why it changes').fill('First-part burr check on the bore');
+  await start.getByRole('button', { name: 'Start the revision' }).click();
+  await see(tasks.getByText(/CP-CHG/).first());
+  await see(page.getByText('Not in force yet').first());
+  // A manager can try to finish it, but the database refuses while the revision is still a draft: the dialog says so and the task stays open.
+  await tasks.getByRole('button', { name: 'Done' }).first().click();
+  const tooSoon = page.getByRole('dialog', { name: 'Mark as done' });
+  await see(tooSoon.getByText(/has to be in force first/));
+  await tooSoon.getByRole('button', { name: 'Mark as done' }).click();
+  await see(tooSoon.getByText(/not in force yet/));
+  await tooSoon.getByRole('button', { name: 'Cancel' }).click();
+  await tooSoon.waitFor({ state: 'hidden' });
+  await shot(page, 'c3-change-tasks-not-in-force');
+
+  step('both revisions are released; the tasks show "In force" and are finished; the effectiveness check closes the change');
+  const { rows: [partRev] } = await stack.admin.query(`select id from public.part_revisions where part_id = $1 and revision = 'B'`, [part.id]);
+  await api('POST', `/part-revisions/${partRev.id}/release`);
+  const { rows: [cpRev] } = await stack.admin.query(`select id from public.control_plan_revisions where control_plan_id = $1 and revision_code = 'B'`, [plan.id]);
+  await api('POST', `/control-plan-revisions/${cpRev.id}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${cpRev.id}/transitions`, { action: 'approve' });
+  await page.reload();
+  await see(tasks.getByText('In force').first());
+  for (let i = 0; i < 2; i++) {
+    await tasks.getByRole('button', { name: 'Done' }).first().click();
+    const done = page.getByRole('dialog', { name: 'Mark as done' });
+    await done.getByLabel(/What was done/).fill(i === 0 ? 'Drawing revision B is released' : 'Control plan revision B is in force');
+    await done.getByRole('button', { name: 'Mark as done' }).click();
+    await done.waitFor({ state: 'hidden' });
+  }
+  await see(page.getByText(/Every task is done: check the change worked/));
+  await page.getByRole('button', { name: 'Record the check' }).click();
+  const check = page.getByRole('dialog', { name: 'Check the change worked' });
+  await check.getByRole('combobox', { name: /Did it work/ }).click();
+  await page.getByRole('option', { name: /^Yes, it is effective/ }).click();
+  await check.getByLabel('What did you check, and what did you find?').fill('No burrs on the first parts of the next three batches');
+  await check.getByRole('button', { name: 'Record the check' }).click();
+  await see(page.getByText(/^Closed /));
+  await shot(page, 'c4-change-closed');
+
+  step('the change notice, the Changes card on the non-conformance and the dashboard show it');
+  await page.goto(`${changeUrl}/notice`);
+  const notice = page.getByRole('article', { name: 'Change notice' });
+  await see(notice.getByText('Engineering change notice'));
+  await see(notice.getByText(/Bracket bore burr|deburr callout/i));
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  await see(page.getByRole('region', { name: 'Changes raised from this non-conformance' }).getByRole('list', { name: 'Linked changes' }).getByText('Closed'));
+  await page.goto(`${APP}/Change`);
+  await see(page.getByRole('heading', { name: 'Change dashboard' }));
+  await see(page.getByRole('list', { name: 'Recently closed changes' }).getByText(/Bracket bore burr|deburr callout/i));
+  await shot(page, 'c5-change-dashboard');
+  const { rows: [done] } = await stack.admin.query(
+    `select c.stage, c.origin_kind,
+            (select count(*)::int from public.change_signoffs s where s.change_id = c.id and s.status = 'approved') as approved,
+            (select count(*)::int from public.change_tasks t where t.change_id = c.id and t.status = 'done' and t.link_kind in ('part_revision', 'control_plan_revision')) as tasks_done,
+            (select r.result from public.change_reviews r where r.change_id = c.id) as review
+       from public.change_requests c where c.organisation_id = $1 and c.origin_kind = 'ncr' and c.origin_id = $2`,
+    [org.id, ncr.id],
+  );
+  log(`change: ${JSON.stringify(done)}`);
+  if (!done || done.stage !== 'closed' || done.approved !== 2 || done.tasks_done !== 2 || done.review !== 'effective') throw new Error(`the change was not carried through: ${JSON.stringify(done)}`);
 }
 
 

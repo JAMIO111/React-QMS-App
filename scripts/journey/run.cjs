@@ -73,6 +73,7 @@ const ALLOWED = [
   (s, u) => s === 409 && /\/api\/v1\/ncrs\/[^/]+\/transitions$/.test(u), // the stage gates refuse a move and say what is missing (the journey provokes it once)
   (s, u) => s === 409 && /\/api\/v1\/ncrs\/[^/]+$/.test(u), // edit conflicts: the owner saves on the version they opened after Colin saved; the app merges or asks (provoked twice)
   (s, u) => s === 409 && /\/api\/v1\/production-orders\/[^/]+$/.test(u), // the database refuses to complete an order with an open operation and says which (provoked once)
+  (s, u) => s === 409 && /\/api\/v1\/change-tasks\/[^/]+\/complete$/.test(u), // the database refuses to finish a change task while its revision is still a draft and says so (the journey provokes it once)
   (s, u) => s === 403 && u.includes('/api/v1/') && /subscription_required|mfa_required/.test(u) === false && false,
 ];
 

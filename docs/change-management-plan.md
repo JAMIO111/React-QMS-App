@@ -1,6 +1,6 @@
 # Change management (ECR / ECN) — plan
 
-**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **CH1–CH4 built (§8a–§8d), CH5 in parts (CH5a built, §8e; CH5b built, §8f; CH5c decided against, §8g; CH6a built, §8h); CH6b (the customer's approval asked for in the portal) not built** · **Branch:** `Dev`
+**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **CH1–CH4 built (§8a–§8d), CH5 in parts (CH5a built, §8e; CH5b built, §8f; CH5c decided against, §8g; CH6a built, §8h); CHX (exit check) done, `docs/change-management-exit-report.md`; CH6b (the customer's approval asked for in the portal) not built** · **Branch:** `Dev`
 **Menu name:** Change (`GitPullRequestArrow`) · **Slices:** CH1–CH6, CHX (exit check)
 
 Per `docs/design-brief.md` §3.5 (preserve approval and revision history), §6.5 (a change creates a new revision) and Phase 4's "consistent
@@ -205,6 +205,10 @@ Migration `20260436100000_portal_change_requests.sql`. The plan's CH6 has two pa
 - **UI:** the portal menu has **Change requests** (customers) / **Process changes** (suppliers) at `/portal/change-requests` (`PortalChangeRequests.jsx`: the list with its status and the date asked for, a dialog with title, description, why, part and date; the words differ for a customer and a supplier, `CHANGE_WORDS` in `lib/portal.js`); Settings → External access → Options has a switch for each customer (**Allow them to send change requests**) and each supplier (**Allow them to notify process changes**); the change page says "Sent in through the portal: Customer request · Wayne Ltd · Pat" (no link), and the register's origin filter offers it.
 - **Tests:** `supabase/tests/portal_change_requests.test.sql` (+ sweep seed), `api/test/portal-change-requests.e2e-spec.ts`, `PortalChangeRequests.test.jsx`, `Portal.test.jsx` (menus), `Change.test.jsx`, `notifications.test.js`, `email.spec.ts`.
 - **Not built:** files on a request, comments back and forth with the sender (the portal's shared-record conversation would need a share kind for a change), telling the sender by email when staff decide, a portal request raising an event for workflow rules, sharing the resulting change with the sender; **CH6b** (asking the customer to approve) is next, then CHX.
+
+## 8i. CHX as built (2026-11-24): the exit check
+
+No migration. All nine migrations applied live with their history rows; live guardrails 0 violations; advisors nothing new for these tables; `npm run journey` has a **change management** step (the whole path from a non-conformance to a closed change, with Colin signing from his own sign-in) and the management review step expects thirteen sections. The browser found that the printable notice stopped being an ECN once work began (fixed, tested). Evidence and what is not done: `docs/change-management-exit-report.md`. Next, only if wanted: CH6b.
 
 ## 9. Reuse, not rebuild
 

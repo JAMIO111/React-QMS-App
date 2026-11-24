@@ -31,6 +31,7 @@ const fromDashboards = async () => {
   const supplier = await get(`/supplier-quality/dashboard?${last90()}`);
   const competence = await get(`/competence-dashboard?${last90()}`);
   const master = await get('/master-data-dashboard');
+  const change = await get(`/changes-dashboard?${last90()}`);
   return {
     nc: { open: nc.kpis.open, criticalOpen: nc.kpis.criticalOpen, awaitingClosure: nc.byStage.find((s: { key: string }) => s.key === 'awaiting_closure').count },
     capa: { running: await capa(''), overdue: await capa('overdue=true&'), awaitingVerification: await capa('stage=awaiting_verification&') },
@@ -47,6 +48,7 @@ const fromDashboards = async () => {
       receiving: { awaitingDecision: supplier.receiving.awaitingDecision, lateOrderLines: supplier.receiving.lateOrderLines },
     },
     competence: { withGaps: competence.kpis.withGaps, gaps: competence.kpis.gaps, expired: competence.kpis.expired, expiring30: competence.kpis.expiring30, neverAssessed: competence.kpis.neverAssessed },
+    change: { open: change.kpis.open, signoffsWaiting: change.kpis.signoffsWaiting, tasksOverdue: change.kpis.tasksOverdue, pastCutIn: change.kpis.pastCutIn, customerWaiting: change.kpis.customerWaiting },
     masterData: { checks: master.attention.map(({ key, label, kind, count }: { key: string; label: string; kind: string; count: number }) => ({ key, label, kind, count })) },
   };
 };
@@ -130,7 +132,7 @@ describe('who sees what', () => {
     const routes: Record<string, string> = {
       nc: `/ncr-dashboard?${last90()}`, capa: '/capas?pageSize=1', calibration: `/calibration-dashboard?${last90()}`, processControl: `/process-control-dashboard?${last90()}`,
       audits: `/audits-dashboard?${last90()}`, documents: `/documents-dashboard?${last90()}`, supplier: `/supplier-quality/dashboard?${last90()}`,
-      competence: `/competence-dashboard?${last90()}`, masterData: '/master-data-dashboard',
+      competence: `/competence-dashboard?${last90()}`, change: `/changes-dashboard?${last90()}`, masterData: '/master-data-dashboard',
     };
     for (const [area, path] of Object.entries(routes)) {
       const status = (await api().get(`/api/v1${path}`).set(await as(ids.inspectorA))).status;

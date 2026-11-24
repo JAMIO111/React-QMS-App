@@ -30,14 +30,14 @@ describe('management reviews (MR2)', () => {
   let review = '';
   let action = '';
 
-  it('plans a review with its twelve sections; only managers plan, readers read', async () => {
+  it('plans a review with its thirteen sections; only managers plan, readers read', async () => {
     const h = await as(ids.ownerA);
     await api().post('/api/v1/management-reviews').set(await as(ids.inspectorA)).send({ title: 'x', periodFrom: '2026-01-01', periodTo: '2026-06-30' }).expect(403);
     await api().get('/api/v1/management-reviews').set(await as(ids.inspectorA)).expect(403);
     await api().post('/api/v1/management-reviews').set(h).send({ title: 'x', periodFrom: '2026-06-30', periodTo: '2026-01-01' }).expect(409);
     const made = (await api().post('/api/v1/management-reviews').set(h).send({ title: 'H1 review', periodFrom: '2026-01-01', periodTo: '2026-06-30', plannedOn: '2026-07-15' }).expect(201)).body;
     review = made.id;
-    expect(made).toMatchObject({ status: 'planned', chair: { id: ids.ownerA }, sections: 12, sectionsReviewed: 0, problems: ['Start the review'], canEdit: true, canHold: false });
+    expect(made).toMatchObject({ status: 'planned', chair: { id: ids.ownerA }, sections: 13, sectionsReviewed: 0, problems: ['Start the review'], canEdit: true, canHold: false });
     expect(made.reference).toMatch(/^MR-\d{2}-01$/);
     expect(made.inputs.map((i: Input) => i.section)[0]).toBe('previous_actions');
     expect(made.inputs.filter((i: Input) => i.commentaryOnly).map((i: Input) => i.section)).toEqual(['context', 'improvement']);
@@ -51,10 +51,12 @@ describe('management reviews (MR2)', () => {
     expect(started.status).toBe('in_progress');
     expect(started.heldOn).toBeTruthy();
     const data = started.inputs.filter((i: Input) => !i.commentaryOnly);
-    expect(data).toHaveLength(10);
+    expect(data).toHaveLength(11);
     expect(data.every((i: Input) => i.available === true && i.snapshot && Array.isArray(i.snapshot.figures))).toBe(true);
     const audits = data.find((i: Input) => i.section === 'audit_results');
     expect(audits.snapshot.figures.map((f: { label: string }) => f.label)).toContain('Pass rate');
+    const changes = data.find((i: Input) => i.section === 'changes');
+    expect(changes.snapshot.figures.map((f: { label: string }) => f.label)).toEqual(expect.arrayContaining(['Submitted in the period', 'Closed in the period', 'Past the cut-in point']));
     expect(started.inputs.find((i: Input) => i.section === 'context')).toMatchObject({ available: null, snapshot: null });
     await api().patch(`/api/v1/management-reviews/${review}`).set(h).send({ periodTo: '2026-07-31' }).expect(409);
     const again = (await api().post(`/api/v1/management-reviews/${review}/gather`).set(h).send({ sections: ['risks'] }).expect(200)).body;

@@ -51,7 +51,7 @@ export class ManagementReviewsController {
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(PlanReviewBody) })
-  @ApiCreatedResponse({ description: 'Plans a review (MR-YY-NN) for a period, with its twelve input sections' })
+  @ApiCreatedResponse({ description: 'Plans a review (MR-YY-NN) for a period, with its thirteen input sections' })
   plan(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.plan(ctx, parse(PlanReviewBody, body));
   }

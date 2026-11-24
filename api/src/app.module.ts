@@ -106,6 +106,7 @@ import { ReviewInputsService } from './management-review/review-inputs';
 import { RiskService } from './risk/risk.service';
 import { DocumentFileStore, SupabaseDocumentFileStore } from './documents/controlled-copy';
 import { DocumentsDashboardController, DocumentsDashboardService } from './documents/documents-dashboard';
+import { ChangeDashboardController, ChangeDashboardService } from './change/change-dashboard';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
 import { SupplierDashboardController, SupplierDashboardService } from './supplier-quality/supplier-dashboard';
 import { CompetencePeopleService } from './competence/competence-people.service';
@@ -306,6 +307,7 @@ export class AppModule implements NestModule {
         CustomValuesController,
         SupplierQualityController,
         CompetenceController,
+        ChangeDashboardController,
         CompetenceDashboardController,
         SupplierDashboardController,
         DocumentsController,
@@ -425,6 +427,7 @@ export class AppModule implements NestModule {
         SupplierQualityService,
         CompetenceService,
         CompetencePeopleService,
+        ChangeDashboardService,
         CompetenceDashboardService,
         SupplierDashboardService,
         CompetenceTrainingService,

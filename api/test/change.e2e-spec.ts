@@ -480,6 +480,73 @@ describe('raising a change from a record, and finding the changes on a record', 
   });
 });
 
+describe('the dashboard and the home page', () => {
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const range = () => {
+    const from = new Date();
+    from.setUTCDate(from.getUTCDate() - 89);
+    return `from=${from.toISOString().slice(0, 10)}&to=${todayIso()}`;
+  };
+  const get = async (path: string, user = ids.ownerA) => (await api().get(`/api/v1${path}`).set(await as(user)).expect(200)).body;
+  const ready = async (title: string) => {
+    const h = await as(ids.ownerA);
+    const c = (await api().post('/api/v1/changes').set(h).send({ title, typeId: ctx.tooling, description: 'x', reason: 'y', links: [{ kind: 'part', id: ctx.part }] }).expect(201)).body;
+    const sub = (await api().post(`/api/v1/changes/${c.id}/submit`).set(h).expect(200)).body;
+    for (const i of sub.impacts) await api().put(`/api/v1/changes/${c.id}/impacts`).set(h).send({ areaId: i.areaId, status: 'not_affected' }).expect(200);
+    await api().put(`/api/v1/changes/${c.id}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: QM }] }).expect(200);
+    return c.id as string;
+  };
+
+  it('counts what is open, waiting and late, and the home page says the same', async () => {
+    const h = await as(ids.ownerA);
+    const before = await get(`/changes-dashboard?${range()}`);
+    // one at the board, waiting for its signer
+    const atBoard = await ready('Dashboard: at the board');
+    await api().post(`/api/v1/changes/${atBoard}/send-to-board`).set(h).expect(200);
+    // one approved, being carried out: an overdue task, a cut-in date already gone, the customer still to answer
+    const running = await ready('Dashboard: running');
+    const sent = (await api().post(`/api/v1/changes/${running}/send-to-board`).set(h).expect(200)).body;
+    await api().post(`/api/v1/change-signoffs/${sent.signoffs[0].id}/decide`).set(await as(QM)).send({ approve: true }).expect(200);
+    await api().post(`/api/v1/changes/${running}/tasks`).set(h).send({ description: 'Late task', ownerId: ids.ownerA, dueOn: '2020-01-01' }).expect(201);
+    await api().put(`/api/v1/changes/${running}/cut-in`).set(h).send({ kind: 'date', date: '2020-02-01' }).expect(200);
+    await api().put(`/api/v1/changes/${running}/customer-approval`).set(h).send({ status: 'requested' }).expect(200);
+
+    const after = await get(`/changes-dashboard?${range()}`);
+    const k = (key: string) => after.kpis[key] - before.kpis[key];
+    expect(k('open')).toBe(2);
+    expect(k('atBoard')).toBe(1);
+    expect(k('signoffsWaiting')).toBe(1);
+    expect(k('tasksOverdue')).toBe(1);
+    expect(k('pastCutIn')).toBe(1);
+    expect(k('customerWaiting')).toBe(1);
+    expect(k('submitted')).toBe(2);
+    expect(k('approved')).toBe(1);
+    expect(after.waitingSignoffs.map((w: { changeId: string }) => w.changeId)).toContain(atBoard);
+    expect(after.waitingSignoffs.find((w: { changeId: string }) => w.changeId === atBoard)).toMatchObject({ signer: 'Quinn Manager', function: 'Quality', days: 0 });
+    expect(after.overdueTasks.find((t: { changeId: string }) => t.changeId === running)).toMatchObject({ description: 'Late task', owner: 'Ada Owner', dueOn: '2020-01-01' });
+    expect(after.overdueTasks[0].daysLate).toBeGreaterThan(1000);
+    expect(after.pastCutInList.find((p: { changeId: string }) => p.changeId === running)).toMatchObject({ cutInOn: '2020-02-01', stage: 'implementing' });
+    expect(after.byStage.find((s: { stage: string }) => s.stage === 'approval').count).toBeGreaterThanOrEqual(1);
+    expect(after.byStage.map((s: { stage: string }) => s.stage)).toEqual(['assessment', 'approval', 'approved', 'implementing', 'verifying']);
+    expect(after.byType.length).toBeGreaterThan(0);
+    expect(after.trend.reduce((sum: number, b: { submitted: number }) => sum + b.submitted, 0)).toBe(after.kpis.submitted);
+
+    const home = (await get('/home-dashboard')).change;
+    expect(home).toEqual({
+      open: after.kpis.open, signoffsWaiting: after.kpis.signoffsWaiting, tasksOverdue: after.kpis.tasksOverdue, pastCutIn: after.kpis.pastCutIn, customerWaiting: after.kpis.customerWaiting,
+    });
+  });
+
+  it('is for people who may read changes, and shows another organisation nothing of it', async () => {
+    await api().get(`/api/v1/changes-dashboard?${range()}`).set(await as(ids.ownerB, ids.orgA)).expect(404);
+    const b = await api().get(`/api/v1/changes-dashboard?${range()}`).set(await as(ids.ownerB, ids.orgB)).expect(200);
+    expect(b.body.kpis.open).toBe(0);
+    expect(b.body.waitingSignoffs).toEqual([]);
+    await api().get('/api/v1/changes-dashboard').set(await as(ids.ownerA)).expect(400);
+    await api().get(`/api/v1/changes-dashboard?from=${todayIso()}&to=2000-01-01`).set(await as(ids.ownerA)).expect(400);
+  });
+});
+
 describe('tenancy', () => {
   it('does not show another organisation’s changes or lists, and refuses its ids', async () => {
     const b = await as(ids.ownerB, ids.orgB);

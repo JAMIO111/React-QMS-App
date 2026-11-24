@@ -5,6 +5,7 @@ import {
   ClipboardListIcon,
   FileTextIcon,
   GaugeIcon,
+  GitPullRequestArrowIcon,
   GraduationCapIcon,
   TriangleAlertIcon,
   TruckIcon,
@@ -33,6 +34,7 @@ export const HOME_MODULES = [
   { key: "documents", label: "Documents", icon: FileTextIcon, to: "/Documentation" },
   { key: "supplier", label: "Supplier quality", icon: TruckIcon, to: "/Supplier-Quality" },
   { key: "competence", label: "Competence", icon: GraduationCapIcon, to: "/Competence" },
+  { key: "change", label: "Change", icon: GitPullRequestArrowIcon, to: "/Change" },
   { key: "masterData", label: "Master data", icon: BoxesIcon, to: "/Master-Data" },
 ];
 
@@ -112,6 +114,15 @@ const READERS = {
       line("gaps", `${plural(n(k.gaps), "Skill")} short of what a position needs`, k.gaps, "warning", "/Competence/Matrix?status=gap"),
       line("expiring", "Expiring in the next 30 days", k.expiring30, "warning", "/Competence/Matrix?status=expiring"),
       line("never", `${plural(n(k.neverAssessed), "Person", "People")} never assessed`, k.neverAssessed, "warning", "/Competence"),
+    ],
+  }),
+  change: (k) => ({
+    headline: { value: n(k.open), label: `open ${plural(n(k.open), "change")}` },
+    lines: [
+      line("cutin", `${plural(n(k.pastCutIn), "Change")} past ${n(k.pastCutIn) === 1 ? "its" : "their"} cut-in point and still open`, k.pastCutIn, "critical", "/Change/Register"),
+      line("tasks", `Change ${plural(n(k.tasksOverdue), "task")} overdue`, k.tasksOverdue, "critical", "/Change/Mine"),
+      line("signoffs", `${plural(n(k.signoffsWaiting), "Sign-off")} waiting at the board`, k.signoffsWaiting, "warning", "/Change/Register"),
+      line("customer", `${plural(n(k.customerWaiting), "Change")} waiting for the customer`, k.customerWaiting, "warning", "/Change/Register"),
     ],
   }),
   masterData: (k) => {

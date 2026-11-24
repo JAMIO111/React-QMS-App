@@ -156,7 +156,8 @@ export const menuStructure = [
     // badge: "my-changes" = sign-offs waiting for me + my open change tasks (see Navbar)
     badge: "my-changes",
     subMenu: [
-      { name: "Changes", path: "/Change" },
+      { name: "Dashboard", path: "/Change", end: true },
+      { name: "Changes", path: "/Change/Register" },
       { name: "My changes", path: "/Change/Mine", badge: "my-changes" },
     ],
   },

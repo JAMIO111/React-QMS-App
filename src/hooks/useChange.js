@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -222,5 +223,18 @@ export const useChangeMutation = () => {
     // The guessed commands show at once; a refusal puts the change back and says why in a toast.
     ...commandGuessHandlers({ queryClient, prefix: key(organisationId), guess: guessChange, guessed: CHANGE_GUESSED, showToast: toast?.showToast }),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** The changes dashboard for a period (`period` from useDashboardPeriod): what is open, waiting and late as of today, and what moved in the period. */
+export const useChangeDashboard = (period) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", period?.fromIso, period?.toIso),
+    queryFn: () => apiFetch(`/changes-dashboard?${qs({ from: period.fromIso, to: period.toIso })}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
+    enabled: !!organisationId && !!period?.fromIso,
+    placeholderData: keepPreviousData,
+    retry: false,
   });
 };

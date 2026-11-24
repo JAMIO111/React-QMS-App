@@ -25,7 +25,7 @@ const COLUMNS = [
   ["stage", "Stage"],
 ];
 
-/** The change register (`/Change`): every engineering or process change, where it stands and who raised it. Finished ones are left out unless asked for. */
+/** The change register (`/Change/Register`): every engineering or process change, where it stands and who raised it. Finished ones are left out unless asked for. */
 const ChangeRegisterPage = () => {
   const { can } = usePermissions();
   const navigate = useNavigate();

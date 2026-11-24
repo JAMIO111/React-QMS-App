@@ -126,6 +126,7 @@ const QualityAlertsPage = lazy(() => import("./components/documentation/QualityA
 const DocumentsPage = lazy(() => import("./components/documents/DocumentsPage.jsx"));
 const MyDocumentsPage = lazy(() => import("./components/documents/MyDocumentsPage.jsx"));
 const RiskRegisterPage = lazy(() => import("./components/risk/RiskRegisterPage.jsx"));
+const ChangeDashboard = lazy(() => import("./components/change/ChangeDashboard.jsx"));
 const ChangeRegisterPage = lazy(() => import("./components/change/ChangeRegisterPage.jsx"));
 const ChangePage = lazy(() => import("./components/change/ChangePage.jsx"));
 const MyChangesPage = lazy(() => import("./components/change/MyChangesPage.jsx"));
@@ -359,7 +360,8 @@ const router = createBrowserRouter([
           { path: "Management-Review/Reviews/:id/report", element: <ReviewReportPage /> },
           { path: "Management-Review/Objectives", element: <ObjectivesPage /> },
           { path: "Management-Review/Objectives/:id", element: <ObjectivePage /> },
-          { path: "Change", element: <ChangeRegisterPage /> },
+          { path: "Change", element: <ChangeDashboard /> },
+          { path: "Change/Register", element: <ChangeRegisterPage /> },
           { path: "Change/Mine", element: <MyChangesPage /> },
           { path: "Change/:id", element: <ChangePage /> },
           { path: "Change/:id/notice", element: <ChangeNoticePage /> },

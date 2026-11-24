@@ -26,7 +26,7 @@ const MyChangesPage = () => {
           </h1>
           <p className="text-sm text-secondary-text">Sign-offs waiting for you, tasks given to you and the changes you raised</p>
         </div>
-        <Link to="/Change" className={linkClass}>
+        <Link to="/Change/Register" className={linkClass}>
           All changes
         </Link>
       </div>

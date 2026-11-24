@@ -231,6 +231,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch });
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
@@ -2011,6 +2012,122 @@ async function changeManagement({ browser, page, stack, APP, orgName, see, shot,
   if (!done || done.stage !== 'closed' || done.approved !== 2 || done.tasks_done !== 2 || done.review !== 'effective') throw new Error(`the change was not carried through: ${JSON.stringify(done)}`);
 }
 
+
+/**
+ * The portal side of change management (CH6b): the owner opens the portal for a customer and invites one of its people; a change about the customer's
+ * part is put to them from the change page; the customer signs up, accepts the invitation, sees it on their dashboard and says what they cannot accept;
+ * the owner sees the answer on the change, asks again, and the customer approves with their own reference. Nothing else about the change moves.
+ */
+async function portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch }) {
+  step('set-up for the portal: a customer who buys a part, the portal switched on for them, one of their people invited, and a change about the part under assessment');
+  const { rows: [org] } = await stack.admin.query(`select o.id from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const customerPerson = { first: 'Pat', surname: 'Customer', email: `pat.${RUN}@wayne-journey.test` };
+  const wayne = await api('POST', '/customers', { code: 'WAYNE', name: 'Wayne Ltd' });
+  const part = await api('POST', '/parts', { partNumber: 'PRT-200', name: 'Portal bracket', initialRevision: { revision: 'A' } });
+  await api('POST', `/parts/${part.id}/customers`, { customerId: wayne.id, customerPartNumber: 'W-77', isPrimary: true });
+  await api('PUT', '/external-access/settings', { enabled: true, requireMfa: false });
+  const parties = await api('PUT', '/external-access/parties', { kind: 'customer', partyId: wayne.id, enabled: true, contactName: 'Olivia in Quality' });
+  const party = parties.parties.find((p) => p.name === 'Wayne Ltd');
+  await api('POST', '/external-access/people', { partyId: party.partyId, email: customerPerson.email, role: 'admin' });
+  const types = await api('GET', '/change-types');
+  const typeId = types.data.find((t) => t.key === 'product_design').id;
+  const change = await api('POST', '/changes', {
+    title: 'Tighten the bracket bend radius', typeId, description: 'Reduce the bend radius on the bracket from 3 mm to 2 mm', reason: 'The customer asked for a tighter fit',
+    links: [{ kind: 'part', id: part.id }],
+  });
+  await api('POST', `/changes/${change.id}/submit`);
+  const { rows: [ecr] } = await stack.admin.query(`select reference from public.change_requests where id = $1`, [change.id]);
+
+  step('owner asks the customer to approve it in the portal');
+  await page.goto(`${APP}/Change/${change.id}`);
+  const card = page.getByRole('region', { name: 'Customer approval' });
+  await card.getByRole('button', { name: 'Ask the customer' }).click();
+  const ask = page.getByRole('dialog', { name: `Ask a customer to approve ${ecr.reference}` });
+  await ask.getByLabel('Message to them').fill('Please approve the tighter radius.');
+  await ask.getByRole('button', { name: 'Ask them' }).click();
+  await ask.waitFor({ state: 'hidden' });
+  await see(page.getByRole('list', { name: 'Requests to customers' }).getByText('Waiting for the customer'));
+  await see(card.getByText('Requested'));
+  await shot(page, 'p0-asked');
+
+  step('the customer signs up, accepts the invitation and finds the change waiting on their dashboard');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const customer = await ctx.newPage();
+  customer.setDefaultTimeout(15000);
+  watch(customer, 'customer');
+  await signUp(customer, APP, customerPerson);
+  await see(customer.getByText(/check your email/i).first());
+  await verify(stack, customerPerson.email);
+  await signIn(customer, APP, customerPerson.email);
+  await customer.waitForURL(/\/portal/);
+  await see(customer.getByRole('heading', { name: 'You have been invited' }));
+  await customer.getByRole('button', { name: 'Accept' }).click();
+  await see(customer.getByRole('heading', { level: 1, name: 'Wayne Ltd' }));
+  const waiting = customer.getByRole('list', { name: 'Changes waiting for your approval' });
+  await see(waiting.getByText('Waiting for your answer'));
+  await shot(customer, 'p1-customer-dashboard');
+
+  step('the customer reads it in their own terms (their part, their number, no internal detail) and says what they cannot accept');
+  await waiting.getByRole('link', { name: new RegExp(`${ecr.reference} · Tighten the bracket bend radius`) }).click();
+  await see(customer.getByRole('heading', { name: new RegExp(`${ecr.reference} · Tighten the bracket bend radius`) }));
+  await see(customer.getByText('Reduce the bend radius on the bracket from 3 mm to 2 mm'));
+  await see(customer.getByRole('list', { name: 'Parts' }).getByText(/PRT-200/));
+  await see(customer.getByText(/your number W-77/));
+  await see(customer.getByText('Please approve the tighter radius.'));
+  if (await customer.getByText(/\b(impact|board|tasks?)\b/i).count()) throw new Error('the customer was shown internal change detail');
+  await shot(customer, 'p2-customer-change');
+  await customer.getByRole('button', { name: 'I cannot accept it' }).click();
+  const no = customer.getByRole('dialog', { name: 'Say what you cannot accept' });
+  await no.getByLabel(/What you cannot accept/).fill('A 2 mm radius cracks on our press.');
+  await no.getByRole('button', { name: 'Send' }).click();
+  await no.waitFor({ state: 'hidden' });
+  const answer = customer.getByRole('region', { name: 'Your answer' });
+  await see(answer.getByText('Not approved'));
+  await see(answer.getByText('A 2 mm radius cracks on our press.'));
+  await shot(customer, 'p3-customer-declined');
+
+  step('the owner sees the no on the change (nothing else has moved), and asks again');
+  await page.reload();
+  const list = page.getByRole('list', { name: 'Requests to customers' });
+  await see(list.getByText('Not approved'));
+  await see(list.getByText(/They wrote: A 2 mm radius cracks on our press\./));
+  await see(page.getByRole('region', { name: 'Customer approval' }).getByText('Rejected'));
+  const stage = (await stack.admin.query(`select stage from public.change_requests where id = $1`, [change.id])).rows[0].stage;
+  if (stage !== 'assessment') throw new Error(`the customer's answer moved the change to ${stage}`);
+  await page.getByRole('region', { name: 'Customer approval' }).getByRole('button', { name: 'Ask the customer' }).click();
+  const again = page.getByRole('dialog', { name: `Ask a customer to approve ${ecr.reference}` });
+  await again.getByRole('button', { name: 'Ask them' }).click();
+  await again.waitFor({ state: 'hidden' });
+  await see(list.getByText('Waiting for the customer'));
+
+  step('the customer approves with their own reference, and the owner sees it on the change');
+  await customer.goto(`${APP}/portal`);
+  await customer.getByRole('list', { name: 'Changes waiting for your approval' }).getByRole('link', { name: new RegExp(ecr.reference) }).click();
+  await customer.getByRole('button', { name: 'Approve this change' }).click();
+  const yes = customer.getByRole('dialog', { name: 'Approve this change' });
+  await yes.getByLabel('Your own reference').fill('WAYNE-ECN-12');
+  await yes.getByRole('button', { name: 'Approve', exact: true }).click();
+  await yes.waitFor({ state: 'hidden' });
+  await see(customer.getByRole('region', { name: 'Your answer' }).getByText('WAYNE-ECN-12'));
+  await shot(customer, 'p4-customer-approved');
+  await page.reload();
+  await see(page.getByRole('list', { name: 'Requests to customers' }).getByText(/Their reference: WAYNE-ECN-12/));
+  await see(page.getByRole('region', { name: 'Customer approval' }).getByText('WAYNE-ECN-12'));
+  await shot(page, 'p5-owner-sees-approval');
+  await ctx.close();
+
+  const { rows: [done] } = await stack.admin.query(
+    `select c.stage, c.customer_approval, c.customer_reference,
+            (select string_agg(r.status, ',' order by r.requested_at) from public.portal_change_approvals r where r.change_id = c.id) as requests,
+            (select count(*)::int from public.portal_activity a where a.record_id = c.id and a.kind in ('change_approved', 'change_declined')) as told
+       from public.change_requests c where c.id = $1`, [change.id]);
+  log(`portal approval: ${JSON.stringify(done)}`);
+  if (done.stage !== 'assessment' || done.customer_approval !== 'approved' || done.customer_reference !== 'WAYNE-ECN-12' || done.requests !== 'rejected,approved' || done.told !== 2) {
+    throw new Error(`the customer's approval was not carried through: ${JSON.stringify(done)}`);
+  }
+}
 
 /**
  * The background worker and workflow rules (docs/workflow-engine-plan.md, WX): the owner writes a rule in Settings → Workflows ("when an inspection reading

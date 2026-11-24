@@ -35,6 +35,8 @@ export const useMsaStudy = (id) => useOrgQuery(["study", id], `/msa/studies/${id
 /** The analysis: worked out from the readings now while collecting, the frozen result once completed. */
 export const useMsaAnalysis = (id, { enabled = true } = {}) => useOrgQuery(["study", id, "analysis"], `/msa/studies/${id}/analysis`, { enabled: !!id && enabled });
 export const useMsaReport = (id) => useOrgQuery(["study", id, "report"], `/msa/studies/${id}/report`, { enabled: !!id });
+/** Coverage of the critical and major characteristics: `{ available, reason, today, counts, rows, total, truncated }`. */
+export const useMsaCoverage = (params, { enabled = true } = {}) => useOrgQuery(["coverage", params], `/msa/coverage?${toQuery(params)}`, { enabled, keepPrevious: true });
 /** `{ current, open, earlier }` for one gauge's page. */
 export const useGaugeMsa = (gaugeId, { enabled = true } = {}) => useOrgQuery(["gauge", gaugeId], `/gauges/${gaugeId}/msa`, { enabled: !!gaugeId && enabled });
 

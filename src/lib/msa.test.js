@@ -94,3 +94,21 @@ describe("design problems shown before saving", () => {
     expect(designProblem("attribute", { ...ok, partCount: 5 })).toMatch(/at least 10 samples/);
   });
 });
+
+describe("coverage words", () => {
+  it("orders the states worst first and picks the worst of several gauges", async () => {
+    const { COVERAGE_STATES, worstCoverage, coverageOf } = await import("./msa");
+    expect(COVERAGE_STATES.map((s) => s.value)).toEqual(["not_accepted", "expired", "no_study", "not_judged", "marginal", "no_readings", "acceptable"]);
+    expect(worstCoverage(["acceptable", "expired", "marginal"])).toBe("expired");
+    expect(worstCoverage([])).toBeNull();
+    expect(coverageOf("no_study").label).toBe("No study");
+  });
+
+  it("starts a study from a row: variable data is a crossed study, pass / fail an attribute one", async () => {
+    const { studyDefaultsFor } = await import("./msa");
+    const row = (dataType) => ({ characteristic: { key: "OD", name: "Outer diameter", dataType }, gauge: { id: "g1", assetNumber: "CAL-1", description: "Mic" }, part: { id: "p1", partNumber: "P-1", name: "Rod" } });
+    expect(studyDefaultsFor(row("variable"))).toMatchObject({ studyType: "grr_crossed", characteristicKey: "OD", gauge: { id: "g1" }, part: { id: "p1" } });
+    expect(studyDefaultsFor(row("attribute")).studyType).toBe("attribute");
+    expect(studyDefaultsFor({ ...row("variable"), part: null }).part).toBeNull();
+  });
+});

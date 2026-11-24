@@ -39,7 +39,7 @@ const toCsvRow = (s) => ({
  * Gauge R&R: the register of measurement system studies — the same server-side table, column set, header search and filter drawer as the other registers.
  * Every study but cancelled ones by default; filters live in the URL.
  */
-const MsaStudiesPage = () => {
+const MsaStudiesPage = ({ toggle }) => {
   const navigate = useNavigate();
   const { can } = usePermissions();
   const manage = can("calibration.manage");
@@ -129,7 +129,8 @@ const MsaStudiesPage = () => {
             {selectedRows.length === 0 && !isLoading && `${total.toLocaleString()} ${total === 1 ? "study" : "studies"}`}
           </p>
         </div>
-        <div className="flex flex-row items-center justify-end gap-3">
+        <div className="flex flex-row flex-wrap items-center justify-end gap-3">
+          {toggle}
           {selectedRows.length > 0 && <CTAButton callbackFn={() => exportCSV(selectedRows.map(toCsvRow), "measurement-system-studies.csv")} text="Export CSV" type="success" title="Export the selected studies to a CSV file" icon={ShareIcon} iconSize="h-6 w-6" />}
           <ColumnVisibilityMenu columns={columns} columnVisibility={columnVisibility} onColumnVisibilityChange={prefs.setColumnVisibility} columnOrder={prefs.columnOrder} onColumnOrderChange={prefs.setColumnOrder} onReset={prefs.resetColumns} />
           {manage && <CTAButton callbackFn={() => setPlanning(true)} text="Plan a study" type="main" icon={PlusIcon} iconSize="h-6 w-6" title="Plan a Gauge R&R, Type 1 or attribute agreement study" />}

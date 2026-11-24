@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } fr
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { CancelBody, CompleteBody, CreateStudyBody, DesignBody, ListQuery, ParseBody, RecordBody } from './msa.schemas';
+import { CancelBody, CompleteBody, CoverageQuery, CreateStudyBody, DesignBody, ListQuery, ParseBody, RecordBody } from './msa.schemas';
 import { MsaService } from './msa.service';
 
 // Site-scoped role assignments count: row-level security then shows only the studies of gauges at the person's sites.
@@ -28,6 +28,13 @@ export class MsaController {
   @ApiOkResponse({ description: 'Studies the caller may read, page-based: { data, page, pageSize, total }; each with its progress, verdict, headline figure and validity' })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(ListQuery, query));
+  }
+
+  @Get('msa/coverage')
+  @OrganisationScoped(READ, SITE_SCOPED)
+  @ApiOkResponse({ description: 'Coverage: each critical or major characteristic of an effective control plan against the gauges that measured it in the last 12 months, with the state of the latest study; { available, reason, counts, rows }' })
+  coverage(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.coverage(ctx, parse(CoverageQuery, query));
   }
 
   @Post('msa/studies')

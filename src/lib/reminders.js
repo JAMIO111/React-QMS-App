@@ -27,6 +27,8 @@ export function reminderPath(area, targetId) {
       return t ? `/Supplier-Quality/SCARs/${t}` : "/Supplier-Quality/SCARs";
     case "competence":
       return "/Competence/Mine";
+    case "msa_studies":
+      return t ? `/Calibration/Gauge-RR/${t}` : "/Calibration/Gauge-RR";
     default:
       return null;
   }

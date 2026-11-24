@@ -303,6 +303,23 @@ export const TRIGGERS: Trigger[] = [
     ],
   },
   {
+    eventType: 'msa.study.completed',
+    entityType: 'msa_study',
+    label: 'A Gauge R&R study is completed',
+    permission: 'calibration.read',
+    fields: [
+      { key: 'verdict', label: 'Result', type: 'ordered', options: o(['acceptable', 'Acceptable'], ['marginal', 'Marginal'], ['unacceptable', 'Not acceptable'], ['not_judged', 'Not judged']) },
+      { key: 'conclusion', label: 'Conclusion', type: 'enum', options: o(['accepted', 'Accepted'], ['accepted_with_conditions', 'Accepted with conditions'], ['not_accepted', 'Not accepted']) },
+      { key: 'study_type', label: 'Kind of study', type: 'enum', options: o(['grr_crossed', 'Gauge R&R (crossed)'], ['type1', 'Type 1 (bias and repeatability)'], ['attribute', 'Attribute agreement']) },
+      { key: 'pct_grr', label: 'Gauge R&R, % of study variation', type: 'number' },
+      { key: 'cgk', label: 'Cgk (Type 1)', type: 'number' },
+      { key: 'effectiveness', label: 'Effectiveness (attribute, 0 to 1)', type: 'number' },
+      { key: 'characteristic_key', label: 'Characteristic (key)', type: 'text' },
+      { key: 'part_id', label: 'Part', type: 'ref', ref: 'part' },
+      { key: 'site_id', label: 'Site', type: 'ref', ref: 'site' },
+    ],
+  },
+  {
     eventType: 'quality_alert.issued',
     entityType: 'quality_alert',
     label: 'A quality alert is issued',
@@ -352,6 +369,8 @@ export function workflowRecordPath(kind: unknown, id: unknown): string | null {
       return `/Risk/Register/${t}`;
     case 'quality_alert':
       return `/Documentation/Quality-Alerts/${t}`;
+    case 'msa_study':
+      return `/Calibration/Gauge-RR/${t}`;
     default:
       return null;
   }

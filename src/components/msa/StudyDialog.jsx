@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import CTAButton from "@/components/CTAButton";
 import Dialog from "../ui/Dialog";
@@ -95,11 +95,19 @@ const NEW = (type = "grr_crossed") => ({
 const resized = (list, n, make) => Array.from({ length: n }, (_, i) => list[i] ?? make(i));
 
 /** The characteristic of a chosen part's released revision, to fill in what is measured and its limits. */
-const SpecChooser = ({ partId, value, onPick }) => {
+const SpecChooser = ({ partId, value, onPick, autoKey }) => {
   const part = usePart(partId);
   const released = part.data?.revisions?.find((r) => r.status === "released");
   const values = useSpecValues(released?.id);
   const options = (values.data ?? []).map((v) => ({ id: v.characteristicKey, name: v.description ? `${v.characteristicKey} · ${v.description}` : v.characteristicKey }));
+  // A study planned from a coverage row picks the characteristic by itself, once its values have arrived.
+  const [autoDone, setAutoDone] = useState(false);
+  useEffect(() => {
+    if (!autoKey || autoDone || !values.data) return;
+    const found = values.data.find((v) => v.characteristicKey.toUpperCase() === autoKey.toUpperCase());
+    setAutoDone(true);
+    if (found) onPick(found);
+  }, [autoKey, autoDone, values.data, onPick]);
   if (!partId) return null;
   if (part.data && !released) return <Callout tone="info">This part has no released revision, so its values cannot be copied. Type what is measured and its limits below.</Callout>;
   if (options.length === 0) return null;
@@ -163,13 +171,18 @@ const Count = ({ label, value, onChange, min, max }) => (
  * Plan a study, or change the design of a draft. The kind and the gauge are chosen once. What the server decides (numbers, the run sheet) is not guessed:
  * a new study opens its page when the server has made it.
  */
-const StudyDialog = ({ study, defaultGauge, onClose }) => {
+const StudyDialog = ({ study, defaultGauge, defaults, onClose }) => {
   const editing = !!study;
   const navigate = useNavigate();
   const mutation = useMsaMutation();
   const [opened] = useState(study);
-  const [form, setForm] = useState(() => (study ? formFrom(study) : { ...NEW(), gaugeId: defaultGauge?.id ?? null }));
-  const [gaugeItem, setGaugeItem] = useState(defaultGauge ? gaugeOption(defaultGauge) : null);
+  const startGauge = defaultGauge ?? defaults?.gauge ?? null;
+  const [form, setForm] = useState(() => {
+    if (study) return formFrom(study);
+    const type = defaults?.studyType ?? "grr_crossed";
+    return { ...NEW(type), gaugeId: startGauge?.id ?? null, partId: defaults?.part?.id ?? null, characteristicKey: defaults?.characteristicKey ?? "", characteristicName: defaults?.characteristicName ?? "" };
+  });
+  const [gaugeItem, setGaugeItem] = useState(startGauge ? gaugeOption(startGauge) : null);
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -234,10 +247,11 @@ const StudyDialog = ({ study, defaultGauge, onClose }) => {
         {editing && <p className="text-sm text-secondary-text">{typeOf(type).label} on {study.gauge?.assetNumber}. The design can be changed until collecting starts.</p>}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <PartPicker label="Part (optional)" value={form.partId} current={study?.part ?? undefined} onChange={(id) => setForm((f) => ({ ...f, partId: id ?? null, characteristicKey: id ? f.characteristicKey : "" }))} />
+          <PartPicker label="Part (optional)" value={form.partId} current={study?.part ?? defaults?.part ?? undefined} onChange={(id) => setForm((f) => ({ ...f, partId: id ?? null, characteristicKey: id ? f.characteristicKey : "" }))} />
           <SpecChooser
             partId={form.partId}
             value={form.characteristicKey}
+            autoKey={!editing ? defaults?.characteristicKey : undefined}
             onPick={(v) =>
               setForm((f) =>
                 v

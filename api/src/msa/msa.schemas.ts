@@ -96,3 +96,14 @@ export const ListQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type ListQuery = z.infer<typeof ListQuery>;
+
+export const COVERAGE_FILTER_STATES = ['attention', 'all', 'no_readings', 'no_study', 'expired', 'not_accepted', 'not_judged', 'marginal', 'acceptable'] as const;
+
+/** Coverage of the critical and major characteristics of effective control plans. `state` is `attention` (the default: everything but acceptable and no readings), `all`, or states. */
+export const CoverageQuery = z.object({
+  state: csv(COVERAGE_FILTER_STATES).default('attention'),
+  gaugeId: z.string().uuid().optional(),
+  controlPlanId: z.string().uuid().optional(),
+  characteristicKey: z.string().trim().min(1).max(40).optional(),
+});
+export type CoverageQuery = z.infer<typeof CoverageQuery>;

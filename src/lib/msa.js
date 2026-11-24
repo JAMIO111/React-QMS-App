@@ -158,3 +158,35 @@ export const type1Readings = (study) =>
     .filter((c) => c.value !== null && c.value !== undefined)
     .sort((a, b) => a.trial - b.trial)
     .map((c) => Number(c.value));
+
+/**
+ * Coverage: for each critical or major characteristic of a plan in force, the gauge it was measured with in the last 12 months and what is known about
+ * that pair from Gauge R&R studies. Information only. Order = worst first.
+ */
+export const COVERAGE_STATES = [
+  { value: "not_accepted", label: "Not accepted", tone: "error", hint: "The latest study did not accept this gauge for this characteristic." },
+  { value: "expired", label: "Study expired", tone: "error", hint: "The latest study is past its valid-until date." },
+  { value: "no_study", label: "No study", tone: "warning", hint: "Readings were taken with this gauge but no completed study covers it." },
+  { value: "not_judged", label: "Not judged", tone: "warning", hint: "A study exists but could not be judged (no limits or reference decisions)." },
+  { value: "marginal", label: "Marginal", tone: "warning", hint: "The latest study says marginal." },
+  { value: "no_readings", label: "No readings", tone: "neutral", hint: "Nothing has been measured with a recorded gauge in the last 12 months." },
+  { value: "acceptable", label: "Acceptable", tone: "success", hint: "The latest study is valid and acceptable." },
+];
+export const coverageOf = (value) => COVERAGE_STATES.find((s) => s.value === value) ?? { value, label: value, tone: "neutral", hint: "" };
+export const COVERAGE_ATTENTION = ["not_accepted", "expired", "no_study", "not_judged", "marginal"];
+export const COVERAGE_FILTERS = [{ key: "attention", label: "Needs attention" }, ...COVERAGE_STATES.map((s) => ({ key: s.value, label: s.label })), { key: "all", label: "All" }];
+
+/** The worst state among rows (the state list is in order, worst first). */
+export const worstCoverage = (states) => {
+  const order = COVERAGE_STATES.map((s) => s.value);
+  return [...states].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] ?? null;
+};
+
+/** What a study planned from a coverage row starts with. */
+export const studyDefaultsFor = (row) => ({
+  studyType: row.characteristic.dataType === "attribute" ? "attribute" : "grr_crossed",
+  gauge: row.gauge ? { id: row.gauge.id, assetNumber: row.gauge.assetNumber, description: row.gauge.description } : null,
+  part: row.part ? { id: row.part.id, partNumber: row.part.partNumber, name: row.part.name } : null,
+  characteristicKey: row.characteristic.key,
+  characteristicName: row.characteristic.name,
+});

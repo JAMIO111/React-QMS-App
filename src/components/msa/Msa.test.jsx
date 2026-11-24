@@ -11,6 +11,8 @@ const listCalls = [];
 let study;
 let analysis;
 let parsed;
+let coverage;
+const coverageCalls = [];
 
 const crossedResult = {
   studyType: "grr_crossed",
@@ -68,6 +70,7 @@ vi.mock("../../hooks/useMsa", async (importOriginal) => ({
   useMsaStudy: () => ({ data: study, isLoading: false, isError: false }),
   useMsaAnalysis: () => ({ data: analysis, isLoading: false, isError: false }),
   useMsaReport: () => ({ data: { study, result: crossedResult, dataHash: "a".repeat(64), dataMatchesResult: true }, isLoading: false, isError: false }),
+  useMsaCoverage: (params) => (coverageCalls.push(params), { data: coverage, isLoading: false, isError: false }),
   useGaugeMsa: () => ({ data: { current: [{ ...base, status: "completed", verdict: "acceptable", validity: { state: "expiring", daysLeft: 12 }, validUntil: "2026-12-06", completedAt: "2026-11-24T10:00:00Z", headline: { pctGrr: 8 } }], open: [{ ...base, id: "s2", reference: "MSA-26-0002", status: "draft" }], earlier: [] }, isLoading: false, isError: false }),
   useMsaMutation: () => ({ mutate, isPending: false, error: null }),
   useRecordMeasurements: () => ({ mutate: record, isPending: false }),
@@ -78,6 +81,7 @@ import MsaStudiesPage from "./MsaStudiesPage";
 import MsaStudyPage from "./MsaStudyPage";
 import MsaReportPage from "./MsaReportPage";
 import GaugeStudies from "./GaugeStudies";
+import MsaHome from "./MsaHome";
 import AnalysisView from "./AnalysisView";
 
 beforeEach(() => {
@@ -88,6 +92,15 @@ beforeEach(() => {
   study = base;
   analysis = { frozen: false, complete: false, filled: 1, total: 4, problem: "3 of 4 readings are still missing.", result: null, dataHash: null };
   parsed = undefined;
+  coverageCalls.length = 0;
+  coverage = {
+    available: true, reason: null, today: "2026-11-24", total: 2, truncated: false,
+    counts: { not_accepted: 0, expired: 1, no_study: 1, not_judged: 0, marginal: 0, no_readings: 1, acceptable: 3 },
+    rows: [
+      { plan: { id: "cp1", code: "CP-001", title: "Rods", revisionId: "cr1", revisionCode: "B" }, characteristic: { key: "OD", name: "Outer diameter", charNumber: "3", criticality: "critical", dataType: "variable", operationCode: "OP-020" }, gauge: { id: "g1", assetNumber: "CAL-001", description: "Micrometer" }, readings: 42, lastMeasuredAt: "2026-11-20T10:00:00Z", part: { id: "p1", partNumber: "HCR-100", name: "Rod" }, study: { id: "s9", reference: "MSA-26-0009", studyType: "grr_crossed", completedAt: "2025-10-01T10:00:00Z", validUntil: "2026-10-01", conclusion: "accepted", verdict: "acceptable" }, state: "expired" },
+      { plan: { id: "cp1", code: "CP-001", title: "Rods", revisionId: "cr1", revisionCode: "B" }, characteristic: { key: "BORE", name: "Bore", charNumber: null, criticality: "major", dataType: "variable", operationCode: "OP-030" }, gauge: { id: "g2", assetNumber: "CAL-002", description: "Bore gauge" }, readings: 7, lastMeasuredAt: "2026-11-21T10:00:00Z", part: null, study: null, state: "no_study" },
+    ],
+  };
   permissions = ["calibration.read", "calibration.record", "calibration.manage"];
 });
 
@@ -328,5 +341,66 @@ describe("the analysis of the other kinds of study", () => {
     expect(within(table).getByText("Ada")).toBeInTheDocument();
     expect(within(table).getAllByText("90%").length).toBeGreaterThan(0);
     expect(screen.getByText("Ada misses 10% of the bad samples.")).toBeInTheDocument();
+  });
+});
+
+
+describe("coverage", () => {
+  const openCoverage = (url = "/Calibration/Gauge-RR?view=coverage") => render(<MemoryRouter initialEntries={[url]}><MsaHome /></MemoryRouter>);
+
+  it("switches between the studies and coverage with a toggle kept in the address", async () => {
+    render(<MemoryRouter><MsaHome /></MemoryRouter>);
+    expect(screen.getByRole("region", { name: "Measurement system studies" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Coverage" }));
+    expect(screen.getByRole("table", { name: "Gauge R&R coverage" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Studies" }));
+    expect(screen.getByRole("region", { name: "Measurement system studies" })).toBeInTheDocument();
+  });
+
+  it("lists what needs attention first: the characteristic, gauge, readings, state in words and the study behind it", () => {
+    openCoverage();
+    const table = screen.getByRole("table", { name: "Gauge R&R coverage" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText("Outer diameter")).toBeInTheDocument();
+    expect(within(rows[0]).getByRole("link", { name: "CAL-001" })).toHaveAttribute("href", "/Calibration/Gauges/g1");
+    expect(within(rows[0]).getByText("Study expired")).toBeInTheDocument();
+    expect(within(rows[0]).getByRole("link", { name: "MSA-26-0009" })).toHaveAttribute("href", "/Calibration/Gauge-RR/s9");
+    expect(within(rows[0]).getByRole("link", { name: "CP-001" })).toHaveAttribute("href", "/Process-Control/Plans/cp1/revisions/cr1");
+    expect(within(rows[1]).getByText("No study")).toBeInTheDocument();
+    expect(coverageCalls.at(-1)).toMatchObject({ state: "attention" });
+  });
+
+  it("shows the number in each state and asks for that state when one is chosen", async () => {
+    openCoverage();
+    const group = screen.getByRole("group", { name: "Filter by state" });
+    expect(within(group).getByRole("button", { name: /Needs attention/ })).toHaveTextContent("2");
+    expect(within(group).getByRole("button", { name: /Acceptable/ })).toHaveTextContent("3");
+    await userEvent.click(within(group).getByRole("button", { name: /^No study/ }));
+    expect(coverageCalls.at(-1)).toMatchObject({ state: "no_study" });
+  });
+
+  it("plans a study from a row with the kind, gauge and characteristic already chosen, only for people who manage calibrations", async () => {
+    openCoverage();
+    await userEvent.click(screen.getByRole("button", { name: "Plan a study for Outer diameter on CAL-001" }));
+    const dialog = screen.getByRole("dialog", { name: "Plan a measurement system study" });
+    expect(within(dialog).getByDisplayValue("Outer diameter")).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: /Gauge/ })).toHaveValue("CAL-001 · Micrometer");
+  });
+
+  it("offers no study to someone who cannot manage calibrations", () => {
+    permissions = ["calibration.read"];
+    openCoverage();
+    expect(screen.queryByRole("button", { name: /Plan a study for/ })).toBeNull();
+  });
+
+  it("says why it cannot be shown when the person may not read the plans or inspections, and says so when all is well", () => {
+    coverage = { available: false, reason: "Coverage reads control plans (process_control.read), which you may not read.", today: "2026-11-24", counts: {}, rows: [], truncated: false };
+    const { unmount } = openCoverage();
+    expect(screen.getByText(/which you may not read/)).toBeInTheDocument();
+    unmount();
+    coverage = { available: true, reason: null, today: "2026-11-24", counts: {}, rows: [], total: 0, truncated: false };
+    openCoverage();
+    expect(screen.getByText(/Nothing needs attention/)).toBeInTheDocument();
   });
 });

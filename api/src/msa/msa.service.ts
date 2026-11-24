@@ -5,8 +5,9 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { expiryOf, todayIn } from '../supplier-quality/expiry';
+import { COVERAGE_STATES, coverageState, NEEDS_ATTENTION, type CoverageState } from './msa-coverage';
 import { analyseStudy, dataHash, frozenResult, parsePaste, type CellRow, type PartRow, type StudyHeader, type StudyType } from './msa-data';
-import { CancelBody, CompleteBody, CreateStudyBody, DesignBody, ListQuery, ParseBody, RecordBody } from './msa.schemas';
+import { CancelBody, CompleteBody, CoverageQuery, CreateStudyBody, DesignBody, ListQuery, ParseBody, RecordBody } from './msa.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -390,7 +391,7 @@ export class MsaService {
       const rows = (
         await db.execute<Row>(sql`
           select s.*, row_number() over (partition by s.study_type, coalesce(s.part_id::text, ''), lower(coalesce(s.characteristic_key, s.characteristic_name))
-                                         order by s.completed_at desc nulls last) as rn
+                                         order by s.completed_at desc nulls last, s.reference desc) as rn
             from (${SUMMARY}) s where s.gauge_id = ${gaugeId}::uuid and s.organisation_id = ${orgOf(ctx)}::uuid and s.status in ('draft', 'collecting', 'completed')`)
       ).rows;
       const today = todayIn(ctx.timeZone);
@@ -399,6 +400,104 @@ export class MsaService {
         open: rows.filter((r) => r.status === 'draft' || r.status === 'collecting').map((r) => this.summary(r, today)),
         earlier: rows.filter((r) => r.status === 'completed' && Number(r.rn) > 1).map((r) => this.summary(r, today)),
       };
+    });
+  }
+
+  // ---- coverage -------------------------------------------------------------------------------
+
+  /**
+   * Every critical or major characteristic of an effective control plan revision, against each gauge that recorded readings for it in the last twelve months, with what
+   * the latest completed study of that gauge and characteristic says. A readings-and-plans view needs three rights, so someone who lacks one is told (`available: false`),
+   * never shown a list that quietly leaves rows out. Information only.
+   */
+  coverage(ctx: RequestContext, q: CoverageQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const rights = (
+        await db.execute<Row>(sql`
+          select app.has_permission_somewhere(${org}::uuid, 'process_control.read') as plans, app.has_permission_somewhere(${org}::uuid, 'inspection.read') as readings`)
+      ).rows[0];
+      const missing = [rights.plans ? null : 'control plans (process_control.read)', rights.readings ? null : 'inspections (inspection.read)'].filter(Boolean);
+      const today = todayIn(ctx.timeZone);
+      if (missing.length > 0) {
+        return { available: false, reason: `Coverage reads ${missing.join(' and ')}, which you may not read.`, today, counts: {}, rows: [], truncated: false };
+      }
+      const rows = (
+        await db.execute<Row>(sql`
+          with chars as (
+            select c.characteristic_key, c.name as characteristic_name, c.char_number, c.criticality, c.data_type, o.operation_code,
+                   cp.id as plan_id, cp.plan_code, cp.title as plan_title, r.id as revision_id, r.revision_code
+              from public.control_plan_characteristics c
+              join public.control_plan_revisions r on r.id = c.control_plan_revision_id and r.organisation_id = c.organisation_id and r.status = 'effective'
+              join public.control_plans cp on cp.id = r.control_plan_id and cp.organisation_id = r.organisation_id and cp.active
+              join public.control_plan_operations o on o.id = c.operation_id and o.organisation_id = c.organisation_id
+             where c.organisation_id = ${org}::uuid and c.criticality in ('critical', 'major')
+          ),
+          used as (
+            select m.gauge_id, q.characteristic_key, q.operation_code, pr.control_plan_id as plan_id,
+                   count(*)::int as readings, max(m.measured_at) as last_measured_at,
+                   (array_agg(i.part_id order by m.measured_at desc))[1] as last_part_id,
+                   array_agg(distinct i.part_id) as part_ids
+              from public.inspection_measurements m
+              join public.resolved_inspection_requirements q on q.id = m.requirement_id and q.organisation_id = m.organisation_id
+              join public.inspection_records i on i.id = m.inspection_record_id and i.organisation_id = m.organisation_id
+              join public.control_plan_characteristics pc on pc.id = q.plan_characteristic_id and pc.organisation_id = q.organisation_id
+              join public.control_plan_revisions pr on pr.id = pc.control_plan_revision_id and pr.organisation_id = pc.organisation_id
+             where m.organisation_id = ${org}::uuid and m.gauge_id is not null and m.measured_at >= now() - interval '12 months'
+             group by m.gauge_id, q.characteristic_key, q.operation_code, pr.control_plan_id
+          )
+          select ch.*, u.gauge_id, g.asset_number, g.description as gauge_description, u.readings, u.last_measured_at, u.last_part_id, p.part_number, p.name as part_name,
+                 st.id as study_id, st.reference as study_reference, st.study_type, st.completed_at, st.valid_until::text as valid_until, st.conclusion, st.verdict
+            from chars ch
+            left join used u on u.plan_id = ch.plan_id and u.characteristic_key = ch.characteristic_key and u.operation_code = ch.operation_code
+            left join public.gauges g on g.id = u.gauge_id and g.organisation_id = ${org}::uuid and g.deleted_at is null
+            left join public.parts p on p.id = u.last_part_id and p.organisation_id = ${org}::uuid
+            left join lateral (
+              select s.id, s.reference, s.study_type, s.completed_at, s.valid_until, s.conclusion, r.verdict
+                from public.msa_studies s
+                join public.msa_study_results r on r.study_id = s.id
+               where s.organisation_id = ${org}::uuid and s.status = 'completed' and s.gauge_id = u.gauge_id and upper(s.characteristic_key) = upper(ch.characteristic_key)
+                 and (s.part_id is null or s.part_id = any(u.part_ids))
+               order by s.completed_at desc, s.reference desc limit 1
+            ) st on u.gauge_id is not null
+           where (u.gauge_id is null or g.id is not null)
+             ${q.controlPlanId ? sql`and ch.plan_id = ${q.controlPlanId}::uuid` : sql``}
+             ${q.gaugeId ? sql`and u.gauge_id = ${q.gaugeId}::uuid` : sql``}
+             ${q.characteristicKey ? sql`and upper(ch.characteristic_key) = upper(${q.characteristicKey})` : sql``}
+           order by ch.plan_code, ch.operation_code, ch.characteristic_key, g.asset_number
+           limit 2000`)
+      ).rows;
+
+      const built = rows.map((r) => {
+        const study = r.study_id ? { validUntil: (r.valid_until as string) ?? null, conclusion: (r.conclusion as string) ?? null, verdict: (r.verdict as string) ?? null } : null;
+        const state = coverageState(Boolean(r.gauge_id), study, today);
+        return {
+          plan: { id: r.plan_id as string, code: r.plan_code as string, title: r.plan_title as string, revisionId: r.revision_id as string, revisionCode: r.revision_code as string },
+          characteristic: {
+            key: r.characteristic_key as string,
+            name: r.characteristic_name as string,
+            charNumber: (r.char_number as string) ?? null,
+            criticality: r.criticality as 'critical' | 'major',
+            dataType: r.data_type as 'variable' | 'attribute',
+            operationCode: r.operation_code as string,
+          },
+          gauge: r.gauge_id ? { id: r.gauge_id as string, assetNumber: r.asset_number as string, description: r.gauge_description as string } : null,
+          readings: r.gauge_id ? Number(r.readings) : 0,
+          lastMeasuredAt: iso(r.last_measured_at),
+          part: r.last_part_id ? { id: r.last_part_id as string, partNumber: r.part_number as string, name: (r.part_name as string) ?? null } : null,
+          study: r.study_id
+            ? { id: r.study_id as string, reference: r.study_reference as string, studyType: r.study_type as string, completedAt: iso(r.completed_at), validUntil: (r.valid_until as string) ?? null, conclusion: (r.conclusion as string) ?? null, verdict: (r.verdict as string) ?? null }
+            : null,
+          state,
+        };
+      });
+
+      const counts = Object.fromEntries(COVERAGE_STATES.map((s) => [s, built.filter((b) => b.state === s).length])) as Record<CoverageState, number>;
+      const wanted = new Set<string>(
+        q.state.split(',').flatMap((x): readonly string[] => (x === 'all' ? COVERAGE_STATES : x === 'attention' ? NEEDS_ATTENTION : [x])),
+      );
+      const shown = built.filter((b) => wanted.has(b.state));
+      return { available: true, reason: null, today, counts, rows: shown.slice(0, 500), total: shown.length, truncated: shown.length > 500 || rows.length >= 2000 };
     });
   }
 }

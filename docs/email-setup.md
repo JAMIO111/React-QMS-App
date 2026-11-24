@@ -17,9 +17,15 @@ do step 1 in either case.
 
 Supabase → **Authentication → URL Configuration**:
 
-- **Site URL**: the app's address (for Dev: `https://qms-web-git-dev-jamie-drydens-projects.vercel.app`). The templates load the logo from it.
-- **Redirect URLs**: add `https://qms-web-git-dev-jamie-drydens-projects.vercel.app/**` (and later the production address with `/**`).
-  Without it Supabase replaces the link's destination with the Site URL and the templates' links break.
+- **Site URL**: `https://app.fortress-qms.com` — **with `https://`**. The templates load the logo from it.
+- **Redirect URLs**: `https://app.fortress-qms.com/**` and `https://qms-web-git-dev-jamie-drydens-projects.vercel.app/**` (Dev shares the project).
+  Without the right entry Supabase replaces the link's destination with the Site URL and the templates' links break: the email's button
+  becomes `<site url>&token_hash=…` with no path, which a browser reads as a host name (`DNS_PROBE_FINISHED_NXDOMAIN`). This happened on
+  2026-11-24: the Site URL was `http://app.fortress-qms.com`, so Supabase accepted only `http://…` addresses and refused the
+  `https://app.fortress-qms.com/auth/confirm?next=…` the app sends.
+- **Check without sending an email**: ask the verify endpoint with a made-up token and see where it sends you (needs the public anon key):
+  `curl -s -o /dev/null -w '%{redirect_url}\n' -H "apikey: $ANON" "https://<project>.supabase.co/auth/v1/verify?type=signup&token=x&redirect_to=https%3A%2F%2Fapp.fortress-qms.com%2Fauth%2Fconfirm%3Fnext%3D%252F"`
+  — an accepted address comes back as it was asked; a refused one comes back as the Site URL.
 
 ## 2a. Supabase sends the emails (works today, no new service)
 

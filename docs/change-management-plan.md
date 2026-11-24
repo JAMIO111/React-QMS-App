@@ -1,6 +1,6 @@
 # Change management (ECR / ECN) — plan
 
-**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **CH1–CH4 built (§8a–§8d), CH5 in parts (CH5a built, §8e; CH5b built, §8f); CH5c and CH6 not built** · **Branch:** `Dev`
+**Status:** planned 2026-11-24; decisions CH1–CH4 and Q1–Q4 (§10) chosen by the user, the rest proposed · **CH1–CH4 built (§8a–§8d), CH5 in parts (CH5a built, §8e; CH5b built, §8f; CH5c decided against, §8g); CH6 not built** · **Branch:** `Dev`
 **Menu name:** Change (`GitPullRequestArrow`) · **Slices:** CH1–CH6, CHX (exit check)
 
 Per `docs/design-brief.md` §3.5 (preserve approval and revision history), §6.5 (a change creates a new revision) and Phase 4's "consistent
@@ -185,6 +185,14 @@ Frontend and API, plus one small migration (`20260435100000_management_review_ch
 - **UI:** `/Change` is now the **Change dashboard** (`ChangeDashboard.jsx`: hero with open changes split by type, the five stages as steps, tiles for the board, tasks, cut-in and customer, submitted / closed per period, how long it takes, the lists), the register moved to **`/Change/Register`** (menu: Dashboard, Changes, My changes); hook `useChangeDashboard`, period from `useDashboardPeriod("90d")`, `DashboardSkeleton` while loading. Notices to a change still link to `/Change/<id>`.
 - **Tests:** `api/test/change.e2e-spec.ts` (dashboard and home agree), `home-dashboard.e2e-spec.ts`, `management-reviews.e2e-spec.ts` (thirteen sections, the Changes snapshot), `supabase/tests/management_reviews.test.sql`, `tenancy-sweep.e2e-spec.ts`, `ChangeDashboard.test.jsx`, `HomeAttention.test.jsx`.
 - **Not built:** the opt-in gate (CH5c), the portal (CH6), a time-to-approve trend, a Changes card on the management review home page, a journey step.
+
+## 8g. CH5c decided against (2026-11-24): the opt-in release gate is not built
+
+The gate in §5 and CH1 (refuse to release a revision named by a change that is not yet approved) **cannot fire as written**: a change task, which is the only thing that names a part, control plan or document revision, can be added only once the board has approved the change (`app.add_change_task`, "Tasks are added once the board has approved … and until it is closed"), so no open task ever belongs to an unapproved change. Two ways of giving it meaning were put to the owner — hold a release while a submitted change covers the part, family or operation (by scope), or hold a linked revision until the customer's approval is settled — and **the owner chose to build neither**. Changes therefore keep informing and never stop a release, as decision CH1 says by default.
+
+- Nothing was changed in the database, API or screens for CH5c: no `organisation_settings.change_gate_enabled`, no patch to the part revision, control plan revision or document revision lifecycle functions.
+- If it is wanted later it needs a fresh decision on **what is held** (the scope rule needs a way to say which document a change covers, since `change_links` has no document kind), and then a checked text patch (`pg_temp.patch` with a marker) of the three lifecycle functions, a switch under `organisation.manage`, and a test that a revision no change names is never touched.
+- The rest of CH5 (CH5a, CH5b) is complete. Next: CH6 (portal requests) and the exit check CHX.
 
 ## 9. Reuse, not rebuild
 

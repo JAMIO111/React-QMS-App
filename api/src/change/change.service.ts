@@ -7,7 +7,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
   AllQuery, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
-  CreateTypeBody, DeletedQuery, LinkItem, LinkTaskBody, ListItem, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
+  CreateTypeBody, DeletedQuery, DraftQuery, ORIGIN_KINDS, LinkedQuery, LinkItem, LinkTaskBody, ListItem, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
 } from './change.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -42,6 +42,8 @@ const originLabel = (kind: string, id: string) => {
     case 'capa': return sql`select reference as ref, title as name from public.capas where id = ${id}::uuid`;
     case 'audit_finding': return sql`select reference as ref, title as name from public.audit_findings where id = ${id}::uuid`;
     case 'risk': return sql`select reference as ref, title as name from public.risks where id = ${id}::uuid`;
+    case 'capa_action': return sql`select c.reference as ref, left(a.description, 120) as name, c.id as pid from public.capa_actions a join public.capas c on c.id = a.capa_id where a.id = ${id}::uuid`;
+    case 'management_review_decision': return sql`select r.reference as ref, left(d.description, 120) as name, r.id as pid from public.management_review_decisions d join public.management_reviews r on r.id = d.review_id where d.id = ${id}::uuid`;
     default: return sql`select reference as ref, null::text as name from public.document_change_requests where id = ${id}::uuid`;
   }
 };
@@ -351,10 +353,10 @@ export class ChangeService {
     const links = (await db.execute<Row>(labelledLinks(id, org))).rows
       .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || KIND_ORDER.indexOf(a.kind as string) - KIND_ORDER.indexOf(b.kind as string))
       .map(toLink);
-    let origin: { kind: string; id: string; reference: string | null; name: string | null; readable: boolean } | null = null;
+    let origin: { kind: string; id: string; parentId: string | null; reference: string | null; name: string | null; readable: boolean } | null = null;
     if (r.origin_kind) {
       const found = (await db.execute<Row>(originLabel(r.origin_kind as string, r.origin_id as string))).rows[0];
-      origin = { kind: r.origin_kind as string, id: r.origin_id as string, reference: (found?.ref as string) ?? null, name: (found?.name as string) ?? null, readable: !!found };
+      origin = { kind: r.origin_kind as string, id: r.origin_id as string, parentId: (found?.pid as string) ?? null, reference: (found?.ref as string) ?? null, name: (found?.name as string) ?? null, readable: !!found };
     }
     const attachments = (await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.change_id = ${id}::uuid and a.organisation_id = ${org}::uuid order by a.created_at desc`)).rows.map(toAttachment);
     const impacts = (
@@ -664,6 +666,87 @@ export class ChangeService {
   /** The effectiveness check: effective closes the change, not effective sends it back to implementing. */
   review(ctx: RequestContext, id: string, body: ReviewBody) {
     return this.command(ctx, id, sql`select app.record_change_review(${id}::uuid, ${body.effective}, ${body.note})`);
+  }
+
+  /**
+   * The suggestion for a change raised from a record (title, what, why, type and what it covers), read as the caller; nothing is saved. The suggested scope is
+   * given its labels, each read under the caller's own rules.
+   */
+  draft(ctx: RequestContext, q: DraftQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      const d = (await db.execute<{ d: Record<string, unknown> }>(sql`select app.change_draft_from(${q.kind}, ${q.id}::uuid) as d`)).rows[0].d;
+      const links = (d.links as { kind: string; id?: string; code?: string }[]) ?? [];
+      const labelled: { kind: string; id: string | null; code: string | null; reference: string | null; name: string | null; readable: boolean }[] = [];
+      for (const l of links) {
+        if (l.kind === 'operation_code') {
+          labelled.push({ kind: l.kind, id: null, code: l.code ?? null, reference: l.code ?? null, name: null, readable: true });
+          continue;
+        }
+        const col = LINK_COLUMN[l.kind];
+        if (!col) continue;
+        const found = (
+          await db.execute<Row>(sql`
+            select coalesce(p.part_number, pf.code, m.code, s.code, c.code) as t_reference, coalesce(p.name, pf.name, m.name, s.name, c.name) as t_name
+              from (select ${l.id}::uuid as id) x
+              left join public.parts p on ${l.kind} = 'part' and p.id = x.id
+              left join public.part_families pf on ${l.kind} = 'part_family' and pf.id = x.id
+              left join public.machines m on ${l.kind} = 'machine' and m.id = x.id
+              left join public.suppliers s on ${l.kind} = 'supplier' and s.id = x.id
+              left join public.customers c on ${l.kind} = 'customer' and c.id = x.id`)
+        ).rows[0];
+        labelled.push({ kind: l.kind, id: l.id ?? null, code: null, reference: (found?.t_reference as string) ?? null, name: (found?.t_name as string) ?? null, readable: found?.t_reference != null });
+      }
+      return { ...d, links: labelled };
+    });
+  }
+
+  /**
+   * The changes that name one record: raised from it (`origin`), covering it in their scope (`scope`), or with a task on it or on a revision of it (`task`).
+   * Read as the caller; also whether they may raise one from this kind of record.
+   */
+  linked(ctx: RequestContext, q: LinkedQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const id = q.id;
+      const scopeCol = LINK_COLUMN[q.kind];
+      const origin =
+        q.kind === 'capa'
+          ? sql`(c.origin_kind = 'capa' and c.origin_id = ${id}::uuid) or (c.origin_kind = 'capa_action' and c.origin_id in (select a.id from public.capa_actions a where a.capa_id = ${id}::uuid))`
+          : q.kind === 'document'
+            ? sql`c.origin_kind = 'document_change_request' and c.origin_id in (select r.id from public.document_change_requests r where r.document_id = ${id}::uuid)`
+            : (ORIGIN_KINDS as readonly string[]).includes(q.kind)
+              ? sql`c.origin_kind = ${q.kind} and c.origin_id = ${id}::uuid`
+              : sql`false`;
+      const scope = scopeCol ? sql`exists (select 1 from public.change_links l where l.change_id = c.id and ${sql.raw(`l.${scopeCol}`)} = ${id}::uuid)` : sql`false`;
+      const taskOn = (cond: SQL) => sql`exists (select 1 from public.change_tasks t where t.change_id = c.id and t.status <> 'cancelled' and (${cond}))`;
+      const task =
+        q.kind === 'part'
+          ? taskOn(sql`t.part_revision_id in (select r.id from public.part_revisions r where r.part_id = ${id}::uuid)`)
+          : q.kind === 'control_plan'
+            ? taskOn(sql`t.control_plan_revision_id in (select r.id from public.control_plan_revisions r where r.control_plan_id = ${id}::uuid)`)
+            : q.kind === 'control_plan_revision'
+              ? taskOn(sql`t.control_plan_revision_id = ${id}::uuid`)
+              : q.kind === 'document'
+                ? taskOn(sql`t.document_revision_id in (select r.id from public.document_revisions r where r.document_id = ${id}::uuid)`)
+                : q.kind === 'gauge_type'
+                  ? taskOn(sql`t.gauge_type_id = ${id}::uuid`)
+                  : q.kind === 'supplier'
+                    ? taskOn(sql`t.supplier_id = ${id}::uuid`)
+                    : q.kind === 'risk'
+                      ? taskOn(sql`t.risk_id = ${id}::uuid`)
+                      : sql`false`;
+      const rows = (
+        await db.execute<Row>(sql`
+          select * from (select c.*, c.type_label as t_label, (${origin}) as via_origin, (${scope}) as via_scope, (${task}) as via_task from (${CHANGE_SELECT}) c) c
+           where c.organisation_id = ${org}::uuid and (c.via_origin or c.via_scope or c.via_task)
+           order by (c.stage in ('closed', 'cancelled', 'rejected')), c.urgency desc, c.reference desc limit 50`)
+      ).rows;
+      const can = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'change.manage') as manage`)).rows[0];
+      return {
+        data: rows.map((r) => ({ ...toSummary(r), via: { origin: !!r.via_origin, scope: !!r.via_scope, task: !!r.via_task } })),
+        canRaise: Boolean(can.manage) && (ORIGIN_KINDS as readonly string[]).includes(q.kind),
+      };
+    });
   }
 
   /** What is waiting for the caller: sign-offs, open tasks, and the changes they raised that are still going. */

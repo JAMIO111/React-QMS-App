@@ -88,6 +88,8 @@ vi.mock("recharts", async (importOriginal) => {
   return { ...mod, ResponsiveContainer: ({ children }) => cloneElement(children, { width: 600, height: 300 }) };
 });
 vi.mock("../ui/FileDrop", () => ({ AttachmentDrop: ({ title, extraBody }) => <div data-testid={`drop-${extraBody.role}`}>{title}</div> }));
+// the Changes card has its own tests (change/LinkedChanges.test.jsx); here it would need a query client
+vi.mock("../change/LinkedChanges", () => ({ default: () => null, RaiseChangeButton: () => null }));
 
 import DocumentsPage from "./DocumentsPage";
 import DocumentPage from "./DocumentPage";

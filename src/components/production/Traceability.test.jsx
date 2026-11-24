@@ -148,6 +148,32 @@ describe("traceability page", () => {
     expect(within(gauges).getByText("MIC-7")).toBeInTheDocument();
   });
 
+  it("shows the changes that cover the order, with their cut-in point and which side of it this record is on", async () => {
+    result = trace({
+      changes: {
+        available: true,
+        data: [
+          { id: "ch1", reference: "ECR-26-0001", title: "Move rod to CNC 7", stage: "implementing", cutIn: { kind: "order", label: "WO-154700", date: null, stockAction: null }, position: "after" },
+          { id: "ch2", reference: "ECR-26-0002", title: "New drawing", stage: "closed", cutIn: { kind: "date", label: null, date: "2026-12-01", stockAction: null }, position: null },
+        ],
+      },
+    });
+    renderAt("/Production/Traceability?type=order&id=o1");
+    const table = await screen.findByRole("table", { name: "Changes" });
+    expect(within(table).getByRole("link", { name: "ECR-26-0001" })).toHaveAttribute("href", "/Change/ch1");
+    expect(within(table).getByText("From production order WO-154700")).toBeInTheDocument();
+    expect(within(table).getByText("Made after the cut-in point")).toBeInTheDocument();
+    expect(within(table).getByText(/From 1 Dec 2026|From .*2026/)).toBeInTheDocument();
+    expect(within(table).getByText("Not decided by a fixed point")).toBeInTheDocument();
+  });
+
+  it("leaves the Changes section out when the reader may not read changes", async () => {
+    result = trace({ changes: { available: false, data: [] } });
+    renderAt("/Production/Traceability?type=order&id=o1");
+    await screen.findByRole("heading", { name: "WO-154789" });
+    expect(screen.queryByRole("table", { name: "Changes" })).toBeNull();
+  });
+
   it("finds a number and opens its report", async () => {
     searchResult = [{ type: "lot", id: "l1", number: "LOT-1", status: "open", part: rod }];
     renderAt("/Production/Traceability");

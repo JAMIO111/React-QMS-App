@@ -42,9 +42,11 @@ export const urgencyLabel = (urgency) => (urgency === "expedited" ? "Expedited" 
 export const ORIGIN_KINDS = {
   ncr: "Non-conformance",
   capa: "8D",
+  capa_action: "8D action",
   audit_finding: "Audit finding",
   risk: "Risk",
   document_change_request: "Document change request",
+  management_review_decision: "Management review decision",
 };
 export const originLabel = (kind) => ORIGIN_KINDS[kind] ?? "Record";
 
@@ -60,9 +62,14 @@ export const LINK_KINDS = [
 export const linkKindLabel = (kind) => LINK_KINDS.find((k) => k.value === kind)?.label ?? kind;
 
 /** The page of a record a change covers or came from, or null when it has none. */
-export const recordPath = (kind, id) => {
+export const recordPath = (kind, id, parentId) => {
   if (!id) return null;
   switch (kind) {
+    // an 8D action and a review decision live on their parent's page (the API gives its id as `parentId`)
+    case "capa_action":
+      return parentId ? `/CAPA/${parentId}` : null;
+    case "management_review_decision":
+      return parentId ? `/Management-Review/Reviews/${parentId}` : null;
     case "ncr":
       return `/Non-Conformance/Register/${id}`;
     case "capa":
@@ -257,3 +264,7 @@ export const REVIEW_RESULT = {
 };
 export const reviewLabel = (result) => REVIEW_RESULT[result]?.label ?? result;
 export const reviewPill = (result) => TONE_CLASS[REVIEW_RESULT[result]?.tone ?? "neutral"];
+
+/** How a change on a record's page relates to it, in words. */
+export const viaWords = (via) =>
+  [via?.origin && "Raised from this", via?.scope && "Covers this", via?.task && "Has a task on this"].filter(Boolean).join(" · ") || "Linked";

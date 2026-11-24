@@ -1743,6 +1743,8 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/integrations/reference-values': '?kind=part',
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
+      '/api/v1/changes/linked': `?kind=part&id=${b.part}`,
+      '/api/v1/change-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/exchange-rates/preview': '?from=EUR&to=GBP&date=2026-01-02',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',

@@ -13,6 +13,7 @@ import { AssessDialog, RetireDialog, RiskDialog } from "./RiskDialogs";
 import RiskMatrix from "./RiskMatrix";
 import { AcceptanceCard, CloseDialog, ReviewsCard, TextDialog, TreatmentCard } from "./RiskTreatment";
 import { LinksCard } from "./RiskLinks";
+import LinkedChanges from "../change/LinkedChanges";
 
 const Fact = ({ label, children }) => (
   <div>
@@ -207,6 +208,7 @@ const RiskPage = () => {
       </MenuCard>
 
       <LinksCard risk={risk} />
+      <LinkedChanges kind="risk" id={risk.id} />
 
       {risk.status !== "draft" && <TreatmentCard risk={risk} />}
 

@@ -78,6 +78,7 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { useCustomFields } from "../../hooks/useCustomFields";
 import { withCustomValues } from "../../lib/customFields";
 import { withVersion } from "../../lib/editConflicts";
+import LinkedChanges from "../change/LinkedChanges";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -604,6 +605,15 @@ const NcrPage = () => {
                   {ncr.closedAt && ` · closed ${formatDate(ncr.closedAt)} by ${ncr.closedBy?.name ?? "—"}`}
                 </p>
               </Card>
+
+              {can("change.read") && (
+                <>
+                  <SectionHeading id="ncr-changes" title="Changes" />
+                  <Card>
+                    <LinkedChanges kind="ncr" id={ncr.id} plain title="Changes raised from this non-conformance" />
+                  </Card>
+                </>
+              )}
 
               {can("risk.read") && (
                 <>

@@ -14,7 +14,7 @@ const nothingToChange = (b: object) => Object.keys(b).length > 0;
 export const CHANGE_STAGES = ['draft', 'assessment', 'approval', 'approved', 'implementing', 'verifying', 'closed', 'rejected', 'cancelled'] as const;
 export const OPEN_STAGES = ['draft', 'assessment', 'approval', 'approved', 'implementing', 'verifying'] as const;
 export const URGENCIES = ['normal', 'expedited'] as const;
-export const ORIGIN_KINDS = ['ncr', 'capa', 'audit_finding', 'risk', 'document_change_request'] as const;
+export const ORIGIN_KINDS = ['ncr', 'capa', 'capa_action', 'audit_finding', 'risk', 'document_change_request', 'management_review_decision'] as const;
 export const LINK_KINDS = ['part', 'part_family', 'machine', 'supplier', 'customer', 'production_order', 'operation_code'] as const;
 
 // ---- the lists --------------------------------------------------------------------------------------
@@ -202,3 +202,15 @@ export type StartRevisionBody = z.infer<typeof StartRevisionBody>;
 /** The effectiveness check: effective closes the change, not effective sends it back to implementing. */
 export const ReviewBody = z.object({ effective: z.boolean(), note: z.string().trim().min(3).max(1000) }).strict();
 export type ReviewBody = z.infer<typeof ReviewBody>;
+
+// ---- raising a change from a record, and the Changes card (CH4) -----------------------------------------
+/** A record a change can be raised from; the suggestion for it. */
+export const DraftQuery = z.object({ kind: z.enum(ORIGIN_KINDS), id: z.string().uuid() }).strict();
+export type DraftQuery = z.infer<typeof DraftQuery>;
+
+/** The records whose page shows "Changes": the ones a change comes from, covers (its scope) or has a task on. */
+export const LINKED_KINDS = [
+  ...ORIGIN_KINDS, 'part', 'part_family', 'machine', 'supplier', 'customer', 'production_order', 'control_plan', 'control_plan_revision', 'document', 'gauge_type',
+] as const;
+export const LinkedQuery = z.object({ kind: z.enum(LINKED_KINDS), id: z.string().uuid() }).strict();
+export type LinkedQuery = z.infer<typeof LinkedQuery>;

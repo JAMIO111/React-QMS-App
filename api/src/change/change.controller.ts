@@ -7,7 +7,7 @@ import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
   AllQuery, Attachment, BoardBody, ChangeListQuery, CompleteTaskBody, CreateAttachmentBody, CreateTaskBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody,
-  CreateTypeBody, DeleteBody, DeletedQuery, LinksBody, LinkTaskBody, ListItem, ReasonBody, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
+  CreateTypeBody, DeleteBody, DeletedQuery, DraftQuery, LinkedQuery, LinksBody, LinkTaskBody, ListItem, ReasonBody, ReviewBody, StartRevisionBody, UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTaskBody, UpdateTypeBody,
 } from './change.schemas';
 import { ChangeService } from './change.service';
 
@@ -97,6 +97,24 @@ export class ChangeController {
   @ApiOkResponse({ description: 'Active members who could be put on a change board, and whether each can sign (the approve right and a package that includes it)' })
   signers(@Ctx() ctx: RequestContext) {
     return this.service.signers(ctx);
+  }
+
+  @Get('changes/linked')
+  @OrganisationScoped(READ)
+  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string' } })
+  @ApiQuery({ name: 'id', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ description: 'Changes that name one record: raised from it, covering it, or with a task on it; and whether the caller may raise one from it (declared before `changes/{id}`)' })
+  linked(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.linked(ctx, parse(LinkedQuery, query));
+  }
+
+  @Get('change-draft')
+  @OrganisationScoped(MANAGE)
+  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string' } })
+  @ApiQuery({ name: 'id', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ description: 'The suggested change for a record (title, what, why, type, what it covers); nothing is saved' })
+  draft(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.draft(ctx, parse(DraftQuery, query));
   }
 
   @Get('changes/mine')

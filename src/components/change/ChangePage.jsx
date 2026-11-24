@@ -145,7 +145,7 @@ const ChangePage = () => {
             <p className="text-sm text-secondary-text">
               Raised from {originLabel(change.origin.kind).toLowerCase()}{" "}
               {change.origin.readable ? (
-                <Link to={recordPath(change.origin.kind, change.origin.id)} className="font-medium text-primary-text hover:underline">
+                <Link to={recordPath(change.origin.kind, change.origin.id, change.origin.parentId)} className="font-medium text-primary-text hover:underline">
                   {[change.origin.reference, change.origin.name].filter(Boolean).join(" · ")}
                 </Link>
               ) : (

@@ -11,6 +11,7 @@ import { LINK_KINDS, linkKindLabel, linksBody, linkWords, sameLink, URGENCIES } 
 import { FormError, TextAreaField } from "../master-data/shared";
 import { MachinePicker, PartPicker, PartyPicker, RemoteComboBox } from "../ncr/Pickers";
 import { OrderPicker } from "../production/pickers";
+import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
@@ -27,17 +28,20 @@ const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
 );
 
 /** Raise a change, or edit the wording of a draft. */
-export const ChangeDialog = ({ existing, onClose, onSaved }) => {
+export const ChangeDialog = ({ existing, draft, onClose, onSaved }) => {
   const mutation = useChangeMutation();
   const types = useChangeTypes();
   const { showToast } = useToast();
   // the change as the dialog opened it: only what the person changes from it is sent, with its version (edit conflicts)
   const [opened] = useState(existing);
-  const [title, setTitle] = useState(existing?.title ?? "");
-  const [typeId, setTypeId] = useState(existing?.type.id ?? null);
-  const [urgency, setUrgency] = useState(existing?.urgency ?? "normal");
-  const [description, setDescription] = useState(existing?.description ?? "");
-  const [reason, setReason] = useState(existing?.reason ?? "");
+  const [title, setTitle] = useState(existing?.title ?? draft?.title ?? "");
+  const [typeId, setTypeId] = useState(existing?.type.id ?? draft?.typeId ?? null);
+  const [urgency, setUrgency] = useState(existing?.urgency ?? draft?.urgency ?? "normal");
+  const [description, setDescription] = useState(existing?.description ?? draft?.description ?? "");
+  const [reason, setReason] = useState(existing?.reason ?? draft?.reason ?? "");
+  // A change raised from a record keeps that record as its origin and starts with the records it suggests (each can be taken off).
+  const source = draft?.source ?? null;
+  const [extraLinks, setExtraLinks] = useState(() => draft?.links ?? []);
 
   const typeOptions = (types.data?.data ?? []).map((t) => ({ value: t.id, label: t.label, hint: t.description ?? (t.needsCustomerApproval ? "Usually needs the customer" : undefined) }));
   // A type switched off since stays on the change that has it.
@@ -54,6 +58,10 @@ export const ChangeDialog = ({ existing, onClose, onSaved }) => {
       onClose();
       return;
     }
+    if (source) {
+      body.origin = { kind: source.kind, id: source.id };
+      body.links = linksBody(extraLinks);
+    }
     mutation.mutate(
       { action: "create", body },
       {
@@ -67,8 +75,27 @@ export const ChangeDialog = ({ existing, onClose, onSaved }) => {
   };
 
   return (
-    <Dialog title={existing ? `Edit ${existing.reference}` : "Raise a change"} onClose={onClose} width="max-w-2xl">
+    <Dialog title={existing ? `Edit ${existing.reference}` : source ? `Raise a change from ${source.reference}` : "Raise a change"} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        {source && (
+          <Callout tone="info" title={`Raised from ${source.reference}`}>
+            {source.title}. It stays linked to the change{extraLinks.length ? ", which will cover the records below unless you take them off" : ""}.
+            {extraLinks.length > 0 && (
+              <ul aria-label="It will cover" className="mt-2 flex flex-wrap gap-2">
+                {extraLinks.map((l) => (
+                  <li key={`${l.kind}:${l.id ?? l.code}`} className="flex items-center gap-1 rounded-full border border-border-color bg-primary-bg px-2 py-0.5 text-xs">
+                    <span>
+                      {linkKindLabel(l.kind)} {linkWords(l)}
+                    </span>
+                    <button type="button" aria-label={`Do not cover ${linkWords(l)}`} className="text-secondary-text hover:text-error-color" onClick={() => setExtraLinks((c) => c.filter((x) => x !== l))}>
+                      <XIcon className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Callout>
+        )}
         <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} placeholder="e.g. Move the bracket to the new CNC" />
         <div className="grid gap-3 sm:grid-cols-2">
           <ComboField label="Type of change" required value={typeId} onChange={setTypeId} options={typeOptions} sort={false} disabled={existing && existing.stage !== "draft"} hint={existing && existing.stage !== "draft" ? "Fixed once the change leaves draft" : undefined} />

@@ -64,6 +64,29 @@ export const useChange = (id) => {
 };
 
 /** What is waiting for the caller: sign-offs, open tasks, and the changes they raised that are still going. */
+/** The changes that name one record (raised from it, covering it, or with a task on it), and whether the caller may raise one from it. */
+export const useLinkedChanges = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "linked", kind, id),
+    queryFn: () => apiFetch(`/changes/linked?${qs({ kind, id })}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** What a change raised from a record starts with (nothing saved). */
+export const useChangeDraft = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "draft", kind, id),
+    queryFn: () => apiFetch(`/change-draft?${qs({ kind, id })}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+    staleTime: 0,
+  });
+};
+
 export const useMyChanges = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({

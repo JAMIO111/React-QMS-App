@@ -7,12 +7,17 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { STAGES, formatDate, ncrPath } from "../../lib/ncr";
 import { LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, TRACE_TYPE, partLabel, tracePath } from "../../lib/production";
 import { formatDateTime } from "../../lib/processControl";
+import { changePath, formatDay, stageLabel, stagePill } from "../../lib/change";
 import { ErrorNotice } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "../inspection/shared";
 import MenuCard from "../ui/MenuCard";
 import { StatusBadge } from "./shared";
 import CTAButton from "@/components/CTAButton";
 
+const POSITION_WORDS = { at: "The cut-in point itself", before: "Made before the cut-in point", after: "Made after the cut-in point" };
+const CUT_KIND = { order: "production order", lot: "lot", serial: "serial number" };
+/** This trace's own shape of a cut-in point: { kind, label, date }. */
+const cutInHere = (c) => (!c || c.kind === "none" ? "Not stated" : c.kind === "date" ? `From ${formatDay(c.date)}` : `From ${CUT_KIND[c.kind] ?? c.kind} ${c.label ?? "(one you cannot open)"}`);
 const STATUS_MAP = { order: ORDER_STATUS, lot: LOT_STATUS, serial: SERIAL_STATUS };
 const STAGE = Object.fromEntries(STAGES.map((s) => [s.key, { label: s.label, className: s.tone }]));
 
@@ -238,6 +243,31 @@ const Report = ({ type, id }) => {
           </>
         )}
       </MenuCard>
+
+      {t.changes?.available && (
+        <MenuCard title="Changes" subtitle="Engineering changes that cover this part or order, or whose cut-in point is this record">
+          {t.changes.data.length === 0 ? (
+            <p className="text-sm text-secondary-text">No approved change covers this {TRACE_TYPE[type].toLowerCase()}.</p>
+          ) : (
+            <table className="w-full text-sm" aria-label="Changes">
+              <thead><tr className="text-left text-xs text-secondary-text"><Th>Change</Th><Th>Stage</Th><Th>Cut-in point</Th><Th>This {TRACE_TYPE[type].toLowerCase()} is</Th></tr></thead>
+              <tbody>
+                {t.changes.data.map((c) => (
+                  <tr key={c.id} className="border-t border-border-color">
+                    <Td>
+                      <Link className="font-medium text-link-color hover:underline" to={changePath(c.id)}>{c.reference}</Link>
+                      <div className="text-xs text-secondary-text">{c.title}</div>
+                    </Td>
+                    <Td><span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${stagePill(c.stage)}`}>{stageLabel(c.stage)}</span></Td>
+                    <Td>{cutInHere(c.cutIn)}</Td>
+                    <Td>{POSITION_WORDS[c.position] ?? "Not decided by a fixed point"}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </MenuCard>
+      )}
 
       <MenuCard title="Equipment" subtitle="The machines it ran on and the gauges it was measured with">
         {t.equipment.machines.length === 0 && t.equipment.gauges.length === 0 ? (

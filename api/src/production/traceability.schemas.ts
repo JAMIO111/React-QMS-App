@@ -27,6 +27,17 @@ const TraceNcr = z.object({
   capas: z.array(z.object({ id: Id, reference: z.string(), stage: z.string(), title: z.string() })),
 });
 
+/** An approved change that names this order's part or order, or has its cut-in point at it; `position` says where the subject stands against the cut-in point. */
+const TraceChange = z.object({
+  id: Id,
+  reference: z.string(),
+  title: z.string(),
+  stage: z.string(),
+  cutIn: z.object({ kind: z.enum(['none', 'date', 'order', 'lot', 'serial']), label: z.string().nullable(), date: z.string().nullable(), stockAction: z.string().nullable() }),
+  /** at: the cut-in point is this record; before / after: built before or after it (by when each was created in Fortress); null: no fixed point. */
+  position: z.enum(['at', 'before', 'after']).nullable(),
+});
+
 export const Traceability = z.object({
   subject: z.object({
     type: z.enum(SUBJECT_TYPES),
@@ -75,6 +86,7 @@ export const Traceability = z.object({
     ),
   }),
   ncrs: z.object({ available: z.boolean(), total: z.number(), data: z.array(TraceNcr) }),
+  changes: z.object({ available: z.boolean(), data: z.array(TraceChange) }),
   equipment: z.object({
     machines: z.array(z.object({ id: Id, code: z.string(), name: z.string(), inspections: z.number(), operations: z.number() })),
     gauges: z.array(z.object({ id: Id, assetNumber: z.string(), readings: z.number(), outOfCalibration: z.number(), lastUsed: dateTime })),

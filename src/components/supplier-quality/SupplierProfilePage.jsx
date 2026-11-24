@@ -30,6 +30,7 @@ import SupplierNcs from "./SupplierNcs";
 import SupplierPerformance from "./SupplierPerformance";
 import SupplierReceiving from "./SupplierReceiving";
 import SupplierScars from "./SupplierScars";
+import LinkedChanges from "../change/LinkedChanges";
 
 const TABS = [
   { value: "overview", label: "Overview" },
@@ -125,6 +126,7 @@ const Overview = ({ supplier, canManage, canEditCustom, onEditContact, onAddCont
       </MenuCard>
       <CustomFieldsCard entityType="supplier" record={s} editable={canEditCustom} />
       <LinkedRisks kind="supplier" id={s.id} />
+      <LinkedChanges kind="supplier" id={s.id} />
       <MenuCard
         title="Contacts"
         action={canManage && (

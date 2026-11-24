@@ -20,6 +20,7 @@ import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard from "../custom-fields/CustomFieldsCard";
 import { useQuickSave } from "../../hooks/useQuickSave";
 import { changeRecord } from "../../lib/guessRequest";
+import LinkedChanges from "../change/LinkedChanges";
 
 /** Choose parts to add to the family; parts in another family are moved (shown with their family). */
 const AddPartsForm = ({ family, onDone }) => {
@@ -136,6 +137,7 @@ const PartFamilyPage = () => {
           <ActiveAlertsBanner partFamilyId={family.id} />
           <DocumentsInForce partFamilyId={family.id} />
           <CustomFieldsCard entityType="part_family" record={family} editable={canManage} />
+          <LinkedChanges kind="part_family" id={family.id} />
 
           <MenuCard
             title="Parts"

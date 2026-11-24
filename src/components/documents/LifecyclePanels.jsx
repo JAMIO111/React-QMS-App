@@ -17,6 +17,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
+import { RaiseChangeButton } from "../change/LinkedChanges";
 
 const useRun = () => {
   const mutation = useDocumentMutation();
@@ -224,6 +225,11 @@ export const ChangeRequestRow = ({ request, canManage, showDocument = false }) =
         <Link to={revisionPath(request.document.id, request.revision.id)} className="w-fit text-sm text-link-color hover:underline">
           {request.revision.letter ? `Rev ${request.revision.letter}` : "The draft"} it went into
         </Link>
+      )}
+      {request.status === "accepted" && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <RaiseChangeButton kind="document_change_request" id={request.id} ariaLabel={`Raise a change from request ${request.reference}`} />
+        </div>
       )}
       {open && (
         <div className="flex flex-wrap gap-2 pt-1">

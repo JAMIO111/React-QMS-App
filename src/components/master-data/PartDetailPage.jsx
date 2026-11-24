@@ -28,6 +28,7 @@ import { useQuickSave } from "../../hooks/useQuickSave";
 import { addToList, changeRecord } from "../../lib/guessRequest";
 import { isPending, pendingId } from "../../lib/optimistic";
 import { useImportLocks } from "../../hooks/useImportLocks";
+import LinkedChanges from "../change/LinkedChanges";
 
 const STATUS_STYLE = {
   draft: "bg-warning-color/15 text-primary-text",
@@ -317,6 +318,7 @@ const PartDetailPage = () => {
           <DocumentsInForce partId={part.id} />
           <PartDetails part={part} canManage={canManage} />
           <CustomFieldsCard entityType="part" record={part} editable={canManage} />
+          <LinkedChanges kind="part" id={part.id} />
           <PartCustomers part={part} canManage={canManage} />
           <Revisions part={part} canManage={canManage} />
           <CorrectionImpactCard part={part} />

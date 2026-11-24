@@ -81,6 +81,8 @@ vi.mock("../../hooks/useRisk", async (importOriginal) => ({
   useRiskMutation: () => ({ mutate, isPending: false, error: null }),
   useToggleRiskCategory: () => ({ mutate: toggle }),
 }));
+// the Changes card has its own tests (change/LinkedChanges.test.jsx); here it would need a query client
+vi.mock("../change/LinkedChanges", () => ({ default: () => null, RaiseChangeButton: () => null }));
 
 import RiskRegisterPage from "./RiskRegisterPage";
 import RiskPage from "./RiskPage";

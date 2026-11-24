@@ -21,6 +21,7 @@ import CTAButton from "@/components/CTAButton";
 import { useQuickSave } from "../../hooks/useQuickSave";
 import { addToList, changeRecord } from "../../lib/guessRequest";
 import { isPending, pendingId } from "../../lib/optimistic";
+import LinkedChanges from "../change/LinkedChanges";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -409,6 +410,7 @@ const RevisionPage = () => {
           </MenuCard>
 
           <Comparison revision={revision} />
+          <LinkedChanges kind="control_plan_revision" id={revision.id} />
 
           {editingOperation && (
             <Dialog title={editingOperation === "new" ? "Add operation" : `Edit ${editingOperation.operationCode}`} onClose={() => setEditingOperation(null)}>

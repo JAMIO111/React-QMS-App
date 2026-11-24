@@ -417,6 +417,69 @@ describe('tasks, the effectiveness check and closing', () => {
   });
 });
 
+describe('raising a change from a record, and finding the changes on a record', () => {
+  it('suggests a draft from an NC, labelled under the caller’s own rights, and saves nothing', async () => {
+    const h = await as(ids.ownerA);
+    const supplier = (await admin.query(`insert into public.suppliers (organisation_id, code, name) values ($1, 'CH-S1', 'Castings Ltd') returning id`, [ids.orgA])).rows[0].id;
+    const ncr = (await admin.query(
+      `insert into public.nonconformances (organisation_id, reference, source, title, description, category_id, part_id, supplier_id)
+       values ($1, 'CH-NCR-2', 'supplier', 'Cracked castings', 'Cracks at the gate', $2, $3, $4) returning id`,
+      [ids.orgA, await categoryId(admin, ids.orgA), ctx.part, supplier],
+    )).rows[0].id;
+    ctx.draftNcr = ncr;
+    const before = (await api().get('/api/v1/changes').set(h).expect(200)).body.total;
+    const d = (await api().get(`/api/v1/change-draft?kind=ncr&id=${ncr}`).set(h).expect(200)).body;
+    expect(d.source).toMatchObject({ kind: 'ncr', id: ncr, reference: 'CH-NCR-2' });
+    expect(d.title).toContain('Cracked castings');
+    expect(d.urgency).toBe('normal');
+    expect(d.links.map((l: { kind: string }) => l.kind).sort()).toEqual(['part', 'supplier']);
+    expect(d.links.find((l: { kind: string }) => l.kind === 'part')).toMatchObject({ id: ctx.part, reference: 'CH-P1', readable: true });
+    expect((await api().get('/api/v1/changes').set(h).expect(200)).body.total).toBe(before);
+  });
+
+  it('refuses people who cannot raise a change or cannot read the record, and unknown kinds', async () => {
+    const h = await as(ids.ownerA);
+    await api().get(`/api/v1/change-draft?kind=ncr&id=${ctx.draftNcr}`).set(await as(ids.inspectorA)).expect(403);
+    await api().get('/api/v1/change-draft?kind=ncr&id=00000000-0000-0000-0000-0000000000cc').set(h).expect(404);
+    await api().get(`/api/v1/change-draft?kind=part&id=${ctx.part}`).set(h).expect(400);
+    await api().get('/api/v1/change-draft?kind=ncr').set(h).expect(400);
+  });
+
+  it('raises a change from the draft and shows it on the record it came from', async () => {
+    const h = await as(ids.ownerA);
+    const d = (await api().get(`/api/v1/change-draft?kind=ncr&id=${ctx.draftNcr}`).set(h).expect(200)).body;
+    const made = await api()
+      .post('/api/v1/changes')
+      .set(h)
+      .send({ title: d.title, description: d.description, reason: d.reason, typeId: d.typeId ?? ctx.process, origin: { kind: 'ncr', id: ctx.draftNcr }, links: d.links.map((l: { kind: string; id: string | null; code: string | null }) => (l.id ? { kind: l.kind, id: l.id } : { kind: l.kind, code: l.code })) })
+      .expect(201);
+    ctx.fromDraft = made.body.id;
+    const linked = (await api().get(`/api/v1/changes/linked?kind=ncr&id=${ctx.draftNcr}`).set(h).expect(200)).body;
+    expect(linked.canRaise).toBe(true);
+    expect(linked.data.map((c: { id: string }) => c.id)).toContain(made.body.id);
+    expect(linked.data.find((c: { id: string }) => c.id === made.body.id).via.origin).toBe(true);
+    const viewer = (await api().get(`/api/v1/changes/linked?kind=ncr&id=${ctx.draftNcr}`).set(await as(ids.inspectorA)).expect(200)).body;
+    expect(viewer.canRaise).toBe(false);
+  });
+
+  it('finds changes on a part through their scope, and answers an empty list for a record nothing touches', async () => {
+    const h = await as(ids.ownerA);
+    const onPart = (await api().get(`/api/v1/changes/linked?kind=part&id=${ctx.part}`).set(h).expect(200)).body;
+    expect(onPart.data.length).toBeGreaterThan(0);
+    expect(onPart.data.find((c: { id: string }) => c.id === ctx.change).via.scope).toBe(true);
+    expect(onPart.canRaise).toBe(false);
+    const other = (await admin.query(`insert into public.parts (organisation_id, part_number, name) values ($1, 'CH-P2', 'Untouched') returning id`, [ids.orgA])).rows[0].id;
+    expect((await api().get(`/api/v1/changes/linked?kind=part&id=${other}`).set(h).expect(200)).body.data).toEqual([]);
+    await api().get('/api/v1/changes/linked?kind=bogus&id=00000000-0000-0000-0000-0000000000cc').set(h).expect(400);
+  });
+
+  it('does not show another organisation the change, the draft or the link', async () => {
+    const b = await as(ids.ownerB, ids.orgB);
+    await api().get(`/api/v1/change-draft?kind=ncr&id=${ctx.draftNcr}`).set(b).expect(404);
+    expect((await api().get(`/api/v1/changes/linked?kind=ncr&id=${ctx.draftNcr}`).set(b).expect(200)).body.data).toEqual([]);
+  });
+});
+
 describe('tenancy', () => {
   it('does not show another organisation’s changes or lists, and refuses its ids', async () => {
     const b = await as(ids.ownerB, ids.orgB);

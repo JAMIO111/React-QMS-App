@@ -1,4 +1,6 @@
--- Runbook: wake the background worker every minute (docs/workflow-engine-plan.md, WK1, decision W1).
+-- Runbook: wake the background worker every five minutes (docs/workflow-engine-plan.md, WK1, decision W1; was every minute until 2026-11-24, when
+-- the idle ticks used most of Vercel Hobby's Active CPU allowance). If you change the interval, set WORKER_TICK_MINUTES on the API to match (default 5):
+-- the date-driven steps run on the first tick of each quarter of an hour.
 --
 -- Run in the Supabase SQL editor AFTER the migration 20260219100000_worker_foundation.sql. Not a migration: local test databases have neither
 -- pg_cron nor pg_net, and the address and secret belong to the live project only. Safe to run again (each step replaces what was there).
@@ -20,10 +22,10 @@ SELECT vault.create_secret(
   'worker_tick_url', 'Fortress QMS: the API worker tick pg_cron calls every minute');
 SELECT vault.create_secret('<the CRON_SECRET value from Vercel>', 'worker_cron_secret', 'Fortress QMS: Bearer secret for the worker tick');
 
--- 3. The schedule: every minute, an asynchronous POST (pg_net never holds a database connection while it waits). A tick works for up to 40 s
+-- 3. The schedule: every five minutes, an asynchronous POST (pg_net never holds a database connection while it waits). A tick works for up to 40 s
 --    (budgetMs above; lower it if the API's function time limit is shorter); one that is still working makes the next one record itself as skipped.
 SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'fortress-worker-tick';
-SELECT cron.schedule('fortress-worker-tick', '* * * * *', $job$
+SELECT cron.schedule('fortress-worker-tick', '*/5 * * * *', $job$
   SELECT net.http_post(
     url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'worker_tick_url'),
     headers := jsonb_build_object(

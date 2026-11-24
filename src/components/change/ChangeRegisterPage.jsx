@@ -12,7 +12,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import SlidingToggle from "../ui/SlidingToggle";
 import { ChangeDialog } from "./ChangeDialogs";
 
-const CHANGE_FILTER_KEYS = ["search", "stage", "type", "urgency", "origin", "owner", "sort", "order", "page"];
+const CHANGE_FILTER_KEYS = ["search", "stage", "type", "urgency", "origin", "owner", "signer", "sort", "order", "page"];
 
 const COLUMNS = [
   ["reference", "Change"],
@@ -35,9 +35,9 @@ const ChangeRegisterPage = () => {
   const page = Number(f.page) || 1;
   const sort = f.sort || "reference";
   const order = f.order || "desc";
-  const changes = useChanges({ q: f.search, stage: f.stage, typeId: f.type, urgency: f.urgency, originKind: f.origin, owner: f.owner, sort, order, page: f.page || undefined });
+  const changes = useChanges({ q: f.search, stage: f.stage, typeId: f.type, urgency: f.urgency, originKind: f.origin, owner: f.owner, signer: f.signer, sort, order, page: f.page || undefined });
   const typeOptions = (types.data?.data ?? []).map((t) => ({ value: t.id, label: t.label, hint: t.active ? undefined : "Switched off" }));
-  const filtered = f.search || f.stage || f.type || f.urgency || f.origin || f.owner;
+  const filtered = f.search || f.stage || f.type || f.urgency || f.origin || f.owner || f.signer;
   const sortBy = (key) => f.updateFilters({ sort: key, order: sort === key && order === "desc" ? "asc" : "desc", page: "" });
 
   return (
@@ -74,6 +74,7 @@ const ChangeRegisterPage = () => {
         </div>
         <SlidingToggle ariaLabel="Urgency" options={[{ value: "", label: "Any urgency" }, { value: "expedited", label: "Expedited" }]} value={f.urgency || ""} onChange={(v) => f.updateFilters({ urgency: v, page: "" })} />
         <SlidingToggle ariaLabel="Raised by" options={[{ value: "", label: "Everyone's" }, { value: "me", label: "Mine" }]} value={f.owner || ""} onChange={(v) => f.updateFilters({ owner: v, page: "" })} />
+        <SlidingToggle ariaLabel="Sign-off" options={[{ value: "", label: "Any sign-off" }, { value: "me", label: "Waiting for me" }]} value={f.signer || ""} onChange={(v) => f.updateFilters({ signer: v, page: "" })} />
       </div>
       <SlidingToggle ariaLabel="Stage" options={STAGE_OPTIONS} value={f.stage || ""} onChange={(v) => f.updateFilters({ stage: v, page: "" })} />
 
@@ -118,6 +119,7 @@ const ChangeRegisterPage = () => {
                   <td className="whitespace-nowrap px-3 py-2 text-secondary-text">{formatDay(c.createdAt)}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${stagePill(c.stage)}`}>{stageLabel(c.stage)}</span>
+                    {c.waitingForMe && <span className="ml-2 inline-flex rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">Waiting for you</span>}
                   </td>
                 </tr>
               ))}

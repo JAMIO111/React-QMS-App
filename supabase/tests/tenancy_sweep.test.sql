@@ -282,6 +282,16 @@ BEGIN
       'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
   PERFORM app.add_change_attachment(k.id, a || '/change/' || k.id || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1)
      FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  -- CH2: taken through assessment to the board, with the raiser allowed to sign (so there is a pending sign-off).
+  UPDATE public.organisation_settings SET change_allow_self_approval = true WHERE organisation_id = a;
+  PERFORM app.update_change(k.id, '{"description":"Sweep what","reason":"Sweep why"}'::jsonb), app.submit_change(k.id)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  PERFORM app.set_change_impact(i.change_id, i.area_id, 'not_affected', NULL) FROM public.change_impacts i JOIN public.change_requests k ON k.id = i.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  PERFORM app.set_change_board(k.id, jsonb_build_array(jsonb_build_object('functionId', (SELECT id FROM public.change_functions WHERE organisation_id = a AND key = 'quality'), 'signerId', '50000000-0000-0000-0000-0000000000a1')))
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  PERFORM app.set_change_customer_approval(k.id, 'not_needed'), app.send_change_to_board(k.id)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

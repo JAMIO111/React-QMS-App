@@ -6,13 +6,14 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AllQuery, Attachment, ChangeListQuery, CreateAttachmentBody, CreateChangeBody, CreateFunctionBody, CreateTypeBody, DeleteBody, DeletedQuery, LinksBody, ListItem, ReasonBody,
+  AllQuery, Attachment, BoardBody, ChangeListQuery, CreateAttachmentBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody, CreateTypeBody, DeleteBody, DeletedQuery, LinksBody, ListItem, ReasonBody,
   UpdateAreaBody, UpdateChangeBody, UpdateFunctionBody, UpdateTypeBody,
 } from './change.schemas';
 import { ChangeService } from './change.service';
 
 const READ = 'change.read';
 const MANAGE = 'change.manage';
+const APPROVE = 'change.approve';
 
 /** Change management (CH1): types, functions and impact areas, and changes (ECR-YY-NNNN) with their scope and files. */
 @ApiTags('change')
@@ -91,6 +92,13 @@ export class ChangeController {
 
   // ---- changes ------------------------------------------------------------------------------------
 
+  @Get('change-signers')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Active members who could be put on a change board, and whether each can sign (the approve right and a package that includes it)' })
+  signers(@Ctx() ctx: RequestContext) {
+    return this.service.signers(ctx);
+  }
+
   @Get('changes')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'The register, page-based (`q`, `stage` (default open), `typeId`, `urgency`, `owner=me`, `originKind`, `partId|partFamilyId|machineId|supplierId|customerId`, `sort`, `order`, `page`, `pageSize`)' })
@@ -130,6 +138,72 @@ export class ChangeController {
   @ApiOkResponse({ description: 'Replaces everything the change covers (parts, families, machines, suppliers, customers, orders, operations); a draft only' })
   setLinks(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.setLinks(ctx, parse(Uuid, id), parse(LinksBody, body).links);
+  }
+
+  @Post('changes/:id/submit')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Draft to assessment: needs what, why and what it covers; makes a row for every active impact area' })
+  submit(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.submit(ctx, parse(Uuid, id));
+  }
+
+  @Put('changes/:id/impacts')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ImpactBody) })
+  @ApiOkResponse({ description: 'Answers one impact area while the change is in assessment: affected (a note says how), not affected, or not assessed' })
+  setImpact(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setImpact(ctx, parse(Uuid, id), parse(ImpactBody, body));
+  }
+
+  @Put('changes/:id/board')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(BoardBody) })
+  @ApiOkResponse({ description: 'Chooses the board (replaces it): the functions that must sign and who signs for each' })
+  setBoard(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setBoard(ctx, parse(Uuid, id), parse(BoardBody, body));
+  }
+
+  @Post('changes/:id/send-to-board')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Assessment to approval: starts a new review round with a pending sign-off per function' })
+  sendToBoard(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.sendToBoard(ctx, parse(Uuid, id));
+  }
+
+  @Post('changes/:id/recall')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Takes the change back from the board to assessment with a reason; the pending sign-offs are superseded' })
+  recall(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.recall(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('change-signoffs/:id/decide')
+  @HttpCode(200)
+  @OrganisationScoped(APPROVE)
+  @ApiBody({ schema: openApiSchema(DecideBody) })
+  @ApiOkResponse({ description: 'The named signer approves, or rejects with a comment (which returns the change to assessment). The last approval approves the change.' })
+  decide(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decide(ctx, parse(Uuid, id), parse(DecideBody, body));
+  }
+
+  @Put('changes/:id/cut-in')
+  @OrganisationScoped(READ)
+  @ApiBody({ schema: openApiSchema(CutInBody) })
+  @ApiOkResponse({ description: 'Sets the cut-in point (none, a date, an order, a lot or a serial number) and what happens to existing stock. A manager, or a signer of the current round (the database decides).' })
+  setCutIn(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setCutIn(ctx, parse(Uuid, id), parse(CutInBody, body));
+  }
+
+  @Put('changes/:id/customer-approval')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(CustomerApprovalBody) })
+  @ApiOkResponse({ description: 'Records the customer\'s approval: not needed, required, requested, approved, rejected or waived (with a reason)' })
+  setCustomerApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setCustomerApproval(ctx, parse(Uuid, id), parse(CustomerApprovalBody, body));
   }
 
   @Post('changes/:id/cancel')

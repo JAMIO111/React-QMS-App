@@ -31,6 +31,9 @@ export function notificationLink(n) {
       return "/Competence/Mine";
     case "document_change_requests":
       return d.document_id ? `/Documentation/Documents/${d.document_id}` : "/Documentation/Change-Requests";
+    case "change_signoffs":
+    case "change_requests":
+      return d.change_id ? `/Change/${d.change_id}` : "/Change";
     case "document_signoffs":
     case "document_recipients":
       return d.document_id && d.revision_id ? `/Documentation/Documents/${d.document_id}/revisions/${d.revision_id}` : "/Documentation/Documents";

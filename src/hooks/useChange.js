@@ -28,6 +28,19 @@ export const useChangeTypes = (opts) => useList("/change-types", "types", opts);
 export const useChangeFunctions = (opts) => useList("/change-functions", "functions", opts);
 export const useChangeAreas = (opts) => useList("/change-areas", "areas", opts);
 
+/** Members who could be put on a board, and whether each can sign. */
+export const useChangeSigners = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "signers"),
+    queryFn: () => apiFetch("/change-signers", { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    retry: false,
+    select: (r) => r.data,
+  });
+};
+
 /** The register: filters and paging are the server's. */
 export const useChanges = (params) => {
   const { organisationId } = useOrganisation();
@@ -73,7 +86,7 @@ export const useChangeAttachmentMutation = () => {
 };
 
 /** The change commands shown before the server answers; the others wait (raising a change, cancelling: the database decides). */
-export const CHANGE_GUESSED = new Set(["update", "setLinks", "updateType", "updateFunction", "updateArea"]);
+export const CHANGE_GUESSED = new Set(["update", "setLinks", "setImpact", "updateType", "updateFunction", "updateArea"]);
 
 /** Cached change data as it will be after a command (`show.links`: the links with their labels, for `setLinks`). */
 export const guessChange = (data, { action, id, body = {}, show = {} }) => {
@@ -83,6 +96,12 @@ export const guessChange = (data, { action, id, body = {}, show = {} }) => {
     case "updateFunction":
     case "updateArea":
       return updateById(data, id, (x) => setFields(x, body));
+    case "setImpact":
+      return updateById(data, id, (c) =>
+        Array.isArray(c.impacts)
+          ? { ...c, impacts: c.impacts.map((i) => (i.areaId === body.areaId ? { ...i, status: body.status, note: body.status === "not_assessed" ? null : body.note ?? null, assessedBy: show.me ?? i.assessedBy } : i)) }
+          : c,
+      );
     case "setLinks":
       return show.links ? updateById(data, id, (c) => ("links" in c ? { ...c, links: show.links, linkCount: show.links.length } : c)) : data;
     default:
@@ -107,6 +126,22 @@ export const useChangeMutation = () => {
           return send(`/changes/${id}/links`, "PUT");
         case "cancel":
           return send(`/changes/${id}/cancel`);
+        case "submit":
+          return send(`/changes/${id}/submit`);
+        case "setImpact":
+          return send(`/changes/${id}/impacts`, "PUT");
+        case "setBoard":
+          return send(`/changes/${id}/board`, "PUT");
+        case "sendToBoard":
+          return send(`/changes/${id}/send-to-board`);
+        case "recall":
+          return send(`/changes/${id}/recall`);
+        case "decide":
+          return send(`/change-signoffs/${id}/decide`);
+        case "setCutIn":
+          return send(`/changes/${id}/cut-in`, "PUT");
+        case "setCustomerApproval":
+          return send(`/changes/${id}/customer-approval`, "PUT");
         case "createType":
           return send("/change-types");
         case "updateType":

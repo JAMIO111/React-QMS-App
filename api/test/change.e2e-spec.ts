@@ -8,6 +8,7 @@ import request from 'supertest';
 import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('a1d');
+const QM = 'a1d00000-0000-0000-0000-0000000000e1';
 let app: INestApplication;
 let admin: Pool;
 const api = () => request(app.getHttpServer());
@@ -17,9 +18,15 @@ const ctx: Record<string, string> = {};
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-ch');
+  await admin.query(`insert into auth.users (id, email) values ($1, 'qm@example.test')`, [QM]);
+  await admin.query(`update public.profiles set first_name = 'Quinn', surname = 'Manager' where id = $1`, [QM]);
+  const m = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status, joined_at) values ($1, $2, 'active', now()) returning id`, [ids.orgA, QM]);
+  await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA, m.rows[0].id]);
   app = await startApp({ RATE_LIMIT_PER_MINUTE: '10000' });
 });
 afterAll(async () => {
+  // The "waiting for you" notices are emailed by default; leave no queued email for the suites that drain the shared queue.
+  await admin?.query(`delete from public.email_outbox where organisation_id = $1`, [ids.orgA]);
   await app?.close();
   await admin?.end();
 });
@@ -173,6 +180,148 @@ describe('changes', () => {
   });
 });
 
+describe('assessment, the board and approval', () => {
+  it('lists who can be named for the board, and whether they can sign', async () => {
+    const res = await api().get('/api/v1/change-signers').set(await as(ids.inspectorA)).expect(200);
+    const byId = Object.fromEntries(res.body.data.map((p: { id: string; canApprove: boolean }) => [p.id, p.canApprove]));
+    expect(byId[QM]).toBe(true);
+    expect(byId[ids.ownerA]).toBe(true);
+    expect(byId[ids.inspectorA]).toBe(false);
+  });
+
+  it('refuses to submit an incomplete draft and says what is missing', async () => {
+    const h = await as(ids.ownerA);
+    const made = await api().post('/api/v1/changes').set(h).send({ title: 'Board flow', typeId: ctx.tooling }).expect(201);
+    ctx.flow = made.body.id;
+    expect(made.body.problems).toEqual(['Say what is changing', 'Say why', 'Say what it covers (parts, machines, suppliers…)']);
+    const early = await api().post(`/api/v1/changes/${ctx.flow}/submit`).set(h).expect(409);
+    expect(early.body.error).toMatchObject({ code: 'change_rule' });
+    expect(early.body.error.message).toMatch(/Not ready to assess/);
+    await api().patch(`/api/v1/changes/${ctx.flow}`).set(h).send({ description: 'New fixture', reason: 'Wear' }).expect(200);
+    await api().put(`/api/v1/changes/${ctx.flow}/links`).set(h).send({ links: [{ kind: 'part', id: ctx.part }] }).expect(200);
+    await api().post(`/api/v1/changes/${ctx.flow}/submit`).set(await as(ids.inspectorA)).expect(403);
+  });
+
+  it('submits into assessment with a row per area, and answers them', async () => {
+    const h = await as(ids.ownerA);
+    const sub = await api().post(`/api/v1/changes/${ctx.flow}/submit`).set(h).expect(200);
+    expect(sub.body).toMatchObject({ stage: 'assessment', canAssess: true, canSendToBoard: true, canSubmit: false });
+    expect(sub.body.impacts).toHaveLength(12);
+    expect(sub.body.impacts.every((i: { status: string }) => i.status === 'not_assessed')).toBe(true);
+    expect(sub.body.problems[0]).toBe('12 impact areas still to assess');
+    const first = sub.body.impacts[0].areaId;
+    const bad = await api().put(`/api/v1/changes/${ctx.flow}/impacts`).set(h).send({ areaId: first, status: 'affected' }).expect(409);
+    expect(bad.body.error.message).toMatch(/Say how the area is affected/);
+    const ok = await api().put(`/api/v1/changes/${ctx.flow}/impacts`).set(h).send({ areaId: first, status: 'affected', note: 'Drawing gets a note' }).expect(200);
+    expect(ok.body.impacts[0]).toMatchObject({ status: 'affected', note: 'Drawing gets a note', assessedBy: 'Ada Owner' });
+    for (const i of sub.body.impacts.slice(1)) await api().put(`/api/v1/changes/${ctx.flow}/impacts`).set(h).send({ areaId: i.areaId, status: 'not_affected' }).expect(200);
+    await api().put(`/api/v1/changes/${ctx.flow}/impacts`).set(await as(ids.inspectorA)).send({ areaId: first, status: 'not_affected' }).expect(403);
+  });
+
+  it('chooses the board, with only people who can sign', async () => {
+    const h = await as(ids.ownerA);
+    const fns = (await api().get('/api/v1/change-functions').set(h).expect(200)).body.data;
+    ctx.fnQuality = fns.find((f: { key: string }) => f.key === 'quality').id;
+    const refused = await api().put(`/api/v1/changes/${ctx.flow}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: ids.inspectorA }] }).expect(409);
+    expect(refused.body.error.message).toMatch(/cannot sign off changes/);
+    const early = await api().post(`/api/v1/changes/${ctx.flow}/send-to-board`).set(h).expect(409);
+    expect(early.body.error.message).toMatch(/Choose at least one function/);
+    const raiser = await api().put(`/api/v1/changes/${ctx.flow}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: ids.ownerA }] }).expect(200);
+    expect(raiser.body.problems.join(' | ')).toMatch(/Ada Owner raised this change/);
+    const board = await api().put(`/api/v1/changes/${ctx.flow}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: QM }] }).expect(200);
+    expect(board.body.board).toEqual([expect.objectContaining({ function: expect.objectContaining({ label: 'Quality' }), signer: { id: QM, name: 'Quinn Manager' } })]);
+    expect(board.body.problems).toEqual([]);
+  });
+
+  it('sends it to the board; the signer is the only one who can decide, and a rejection sends it back', async () => {
+    const h = await as(ids.ownerA);
+    const sent = await api().post(`/api/v1/changes/${ctx.flow}/send-to-board`).set(h).expect(200);
+    expect(sent.body).toMatchObject({ stage: 'approval', reviewRound: 1, canRecall: true, canEdit: false });
+    expect(sent.body.signoffs).toHaveLength(1);
+    expect(sent.body.signoffs[0]).toMatchObject({ status: 'pending', round: 1, canDecide: false });
+    ctx.signoff = sent.body.signoffs[0].id;
+    const waiting = await api().get('/api/v1/changes?signer=me').set(await as(QM)).expect(200);
+    expect(waiting.body.total).toBe(1);
+    expect(waiting.body.data[0]).toMatchObject({ id: ctx.flow, waitingForMe: true });
+    expect((await api().get('/api/v1/changes?signer=me').set(h).expect(200)).body.total).toBe(0);
+    const theirs = await api().get(`/api/v1/changes/${ctx.flow}`).set(await as(QM)).expect(200);
+    expect(theirs.body.signoffs[0].canDecide).toBe(true);
+    await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(h).send({ approve: true }).expect(403);
+    await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(await as(ids.inspectorA)).send({ approve: true }).expect(403);
+    const noComment = await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(await as(QM)).send({ approve: false }).expect(409);
+    expect(noComment.body.error.message).toMatch(/Say why you are sending it back/);
+    const rejected = await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(await as(QM)).send({ approve: false, comment: 'Needs a control plan change' }).expect(200);
+    expect(rejected.body).toMatchObject({ stage: 'assessment', returnReason: 'Quality: Needs a control plan change', canSendToBoard: true });
+    expect(rejected.body.signoffs[0]).toMatchObject({ status: 'rejected', comment: 'Needs a control plan change' });
+    await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(await as(QM)).send({ approve: true }).expect(409);
+  });
+
+  it('asks again in a new round, and the last approval approves the change', async () => {
+    const h = await as(ids.ownerA);
+    const again = await api().post(`/api/v1/changes/${ctx.flow}/send-to-board`).set(h).expect(200);
+    expect(again.body).toMatchObject({ stage: 'approval', reviewRound: 2, returnReason: null });
+    expect(again.body.signoffs.map((x: { round: number; status: string }) => [x.round, x.status])).toEqual([[2, 'pending'], [1, 'rejected']]);
+    const second = again.body.signoffs.find((x: { round: number }) => x.round === 2).id;
+    const done = await api().post(`/api/v1/change-signoffs/${second}/decide`).set(await as(QM)).send({ approve: true, comment: 'Agreed' }).expect(200);
+    expect(done.body).toMatchObject({ stage: 'approved', approvedBy: 'Quinn Manager', canRecall: false, canEdit: false, canAssess: false });
+    expect(done.body.approvedAt).toBeTruthy();
+    await api().patch(`/api/v1/changes/${ctx.flow}`).set(h).send({ title: 'Too late' }).expect(409);
+  });
+
+  it('records the cut-in point (a manager or a signer) and the customer approval', async () => {
+    const h = await as(ids.ownerA);
+    const bad = await api().put(`/api/v1/changes/${ctx.flow}/cut-in`).set(h).send({ kind: 'date' }).expect(409);
+    expect(bad.body.error.message).toMatch(/Choose the date/);
+    const ok = await api().put(`/api/v1/changes/${ctx.flow}/cut-in`).set(h).send({ kind: 'date', date: '2026-12-01', stockAction: 'use_up', stockNote: 'Finish the batch' }).expect(200);
+    expect(ok.body.cutIn).toMatchObject({ kind: 'date', date: '2026-12-01', stockAction: 'use_up', stockNote: 'Finish the batch' });
+    const bySigner = await api().put(`/api/v1/changes/${ctx.flow}/cut-in`).set(await as(QM)).send({ kind: 'none' }).expect(200);
+    expect(bySigner.body.cutIn).toMatchObject({ kind: 'none', date: null });
+    await api().put(`/api/v1/changes/${ctx.flow}/cut-in`).set(await as(ids.inspectorA)).send({ kind: 'none' }).expect(403);
+    const waiver = await api().put(`/api/v1/changes/${ctx.flow}/customer-approval`).set(h).send({ status: 'waived', waivedReason: 'short' }).expect(409);
+    expect(waiver.body.error.message).toMatch(/at least 10 characters/);
+    const approved = await api().put(`/api/v1/changes/${ctx.flow}/customer-approval`).set(h).send({ status: 'approved', reference: 'ACME-77' }).expect(200);
+    expect(approved.body.customerApproval).toMatchObject({ status: 'approved', reference: 'ACME-77' });
+    expect(approved.body.customerApproval.on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await api().put(`/api/v1/changes/${ctx.flow}/customer-approval`).set(await as(ids.inspectorA)).send({ status: 'approved' }).expect(403);
+  });
+
+  it('can recall a change from the board, and cancel one that is there', async () => {
+    const h = await as(ids.ownerA);
+    const made = await api().post('/api/v1/changes').set(h).send({ title: 'Recall me', typeId: ctx.tooling, description: 'x', reason: 'y', links: [{ kind: 'part', id: ctx.part }] }).expect(201);
+    await api().post(`/api/v1/changes/${made.body.id}/submit`).set(h).expect(200);
+    const detail = (await api().get(`/api/v1/changes/${made.body.id}`).set(h).expect(200)).body;
+    for (const i of detail.impacts) await api().put(`/api/v1/changes/${made.body.id}/impacts`).set(h).send({ areaId: i.areaId, status: 'not_affected' }).expect(200);
+    await api().put(`/api/v1/changes/${made.body.id}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: QM }] }).expect(200);
+    await api().post(`/api/v1/changes/${made.body.id}/send-to-board`).set(h).expect(200);
+    await api().post(`/api/v1/changes/${made.body.id}/recall`).set(h).send({ reason: 'x' }).expect(400);
+    const back = await api().post(`/api/v1/changes/${made.body.id}/recall`).set(h).send({ reason: 'The signer has left' }).expect(200);
+    expect(back.body).toMatchObject({ stage: 'assessment', returnReason: 'The signer has left' });
+    expect(back.body.signoffs[0].status).toBe('superseded');
+    await api().post(`/api/v1/changes/${made.body.id}/send-to-board`).set(h).expect(200);
+    const cancelled = await api().post(`/api/v1/changes/${made.body.id}/cancel`).set(h).send({ reason: 'Not going ahead' }).expect(200);
+    expect(cancelled.body.stage).toBe('cancelled');
+  });
+
+  it('keeps the raiser from signing unless the organisation allows it', async () => {
+    const h = await as(ids.ownerA);
+    const get = async () => (await api().get('/api/v1/organisations/current').set(h).expect(200)).body.settings.changeAllowSelfApproval;
+    expect(await get()).toBe(false);
+    await api().patch('/api/v1/organisations/current').set(await as(ids.inspectorA)).send({ settings: { changeAllowSelfApproval: true } }).expect(403);
+    await api().patch('/api/v1/organisations/current').set(h).send({ settings: { changeAllowSelfApproval: true } }).expect(200);
+    expect(await get()).toBe(true);
+    const made = await api().post('/api/v1/changes').set(h).send({ title: 'Mine to sign', typeId: ctx.tooling, description: 'x', reason: 'y', links: [{ kind: 'part', id: ctx.part }] }).expect(201);
+    await api().post(`/api/v1/changes/${made.body.id}/submit`).set(h).expect(200);
+    const detail = (await api().get(`/api/v1/changes/${made.body.id}`).set(h).expect(200)).body;
+    for (const i of detail.impacts) await api().put(`/api/v1/changes/${made.body.id}/impacts`).set(h).send({ areaId: i.areaId, status: 'not_affected' }).expect(200);
+    await api().put(`/api/v1/changes/${made.body.id}/board`).set(h).send({ board: [{ functionId: ctx.fnQuality, signerId: ids.ownerA }] }).expect(200);
+    const sent = await api().post(`/api/v1/changes/${made.body.id}/send-to-board`).set(h).expect(200);
+    expect(sent.body.signoffs[0].canDecide).toBe(true);
+    const done = await api().post(`/api/v1/change-signoffs/${sent.body.signoffs[0].id}/decide`).set(h).send({ approve: true }).expect(200);
+    expect(done.body.stage).toBe('approved');
+    await api().patch('/api/v1/organisations/current').set(h).send({ settings: { changeAllowSelfApproval: false } }).expect(200);
+  });
+});
+
 describe('tenancy', () => {
   it('does not show another organisation’s changes or lists, and refuses its ids', async () => {
     const b = await as(ids.ownerB, ids.orgB);
@@ -180,6 +329,9 @@ describe('tenancy', () => {
     await api().get(`/api/v1/changes/${ctx.change}`).set(b).expect(404);
     await api().patch(`/api/v1/changes/${ctx.change}`).set(b).send({ title: 'Stolen' }).expect(404);
     await api().post(`/api/v1/changes/${ctx.change}/cancel`).set(b).send({ reason: 'Not yours at all' }).expect(404);
+    await api().post(`/api/v1/changes/${ctx.flow}/submit`).set(b).expect(404);
+    await api().put(`/api/v1/changes/${ctx.flow}/cut-in`).set(b).send({ kind: 'none' }).expect(404);
+    await api().post(`/api/v1/change-signoffs/${ctx.signoff}/decide`).set(b).send({ approve: true }).expect(404);
     await api().patch(`/api/v1/change-types/${ctx.process}`).set(b).send({ label: 'Stolen' }).expect(404);
     const bTypes = (await api().get('/api/v1/change-types').set(b).expect(200)).body.data;
     expect(bTypes.map((t: { id: string }) => t.id)).not.toContain(ctx.process);

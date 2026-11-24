@@ -71,7 +71,7 @@ export const ChangeDialog = ({ existing, onClose, onSaved }) => {
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
         <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} placeholder="e.g. Move the bracket to the new CNC" />
         <div className="grid gap-3 sm:grid-cols-2">
-          <ComboField label="Type of change" required value={typeId} onChange={setTypeId} options={typeOptions} sort={false} />
+          <ComboField label="Type of change" required value={typeId} onChange={setTypeId} options={typeOptions} sort={false} disabled={existing && existing.stage !== "draft"} hint={existing && existing.stage !== "draft" ? "Fixed once the change leaves draft" : undefined} />
           <ComboField label="Urgency" required value={urgency} onChange={(v) => setUrgency(v ?? "normal")} options={URGENCIES} clearable={false} sort={false} />
         </div>
         <TextAreaField label="What is changing" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={4000} rows={4} hint="What will be different afterwards" />

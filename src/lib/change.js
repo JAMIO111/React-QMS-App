@@ -25,6 +25,9 @@ export const stagePill = (stage) => TONE_CLASS[CHANGE_STAGE[stage]?.tone ?? "neu
 export const STAGE_OPTIONS = [
   { value: "", label: "In progress" },
   { value: "draft", label: "Draft" },
+  { value: "assessment", label: "Assessment" },
+  { value: "approval", label: "With the board" },
+  { value: "approved", label: "Approved" },
   { value: "closed", label: "Closed" },
   { value: "cancelled", label: "Cancelled" },
   { value: "all", label: "All" },
@@ -97,6 +100,73 @@ export const sameLink = (a, b) => a.kind === b.kind && (a.kind === "operation_co
 export const linksBody = (links) => links.map((l) => (l.kind === "operation_code" ? { kind: "operation_code", code: l.code } : { kind: l.kind, id: l.id }));
 
 export const changePath = (id) => `/Change/${id}`;
+export const noticePath = (id) => `/Change/${id}/notice`;
+
+/** The steps a change moves through, for the stepper (later stages come with their slices). */
+export const STEPS = [
+  { stage: "draft", label: "Draft" },
+  { stage: "assessment", label: "Assessment" },
+  { stage: "approval", label: "Board" },
+  { stage: "approved", label: "Approved" },
+];
+export const stepState = (current, stage) => {
+  const order = STEPS.map((s) => s.stage);
+  const here = order.indexOf(current);
+  const mine = order.indexOf(stage);
+  if (here === -1) return "other";
+  return mine < here ? "done" : mine === here ? "current" : "todo";
+};
+
+export const IMPACT_STATUS = {
+  not_assessed: { label: "Not assessed", tone: "neutral" },
+  affected: { label: "Affected", tone: "warning" },
+  not_affected: { label: "Not affected", tone: "success" },
+};
+export const IMPACT_OPTIONS = ["not_assessed", "affected", "not_affected"].map((value) => ({ value, label: IMPACT_STATUS[value].label }));
+export const impactPill = (status) => TONE_CLASS[IMPACT_STATUS[status]?.tone ?? "neutral"];
+export const impactLabel = (status) => IMPACT_STATUS[status]?.label ?? status;
+
+export const SIGNOFF_STATUS = {
+  pending: { label: "Waiting", tone: "warning" },
+  approved: { label: "Approved", tone: "success" },
+  rejected: { label: "Sent back", tone: "error" },
+  superseded: { label: "Not needed", tone: "neutral" },
+};
+export const signoffLabel = (status) => SIGNOFF_STATUS[status]?.label ?? status;
+export const signoffPill = (status) => TONE_CLASS[SIGNOFF_STATUS[status]?.tone ?? "neutral"];
+
+export const CUSTOMER_APPROVALS = [
+  { value: "not_needed", label: "Not needed", hint: "The customer does not have to approve this change" },
+  { value: "required", label: "Required", hint: "The customer has to approve it; not asked yet" },
+  { value: "requested", label: "Requested", hint: "We have asked them and are waiting" },
+  { value: "approved", label: "Approved", hint: "They approved it (give their reference)" },
+  { value: "rejected", label: "Rejected", hint: "They said no" },
+  { value: "waived", label: "Waived", hint: "Not asked, and why" },
+];
+export const customerLabel = (status) => CUSTOMER_APPROVALS.find((c) => c.value === status)?.label ?? "Not stated";
+
+export const CUT_IN_KINDS = [
+  { value: "none", label: "No fixed point", hint: "It applies from approval, or as the tasks say" },
+  { value: "date", label: "From a date" },
+  { value: "order", label: "From a production order" },
+  { value: "lot", label: "From a lot" },
+  { value: "serial", label: "From a serial number" },
+];
+export const STOCK_ACTIONS = [
+  { value: "use_up", label: "Use up what we have" },
+  { value: "rework", label: "Rework it" },
+  { value: "scrap", label: "Scrap it" },
+  { value: "return", label: "Return it" },
+];
+export const stockLabel = (action) => STOCK_ACTIONS.find((a) => a.value === action)?.label ?? null;
+/** The cut-in point in words ("From 1 Dec 2026"), or null when there is none. */
+export const cutInWords = (cutIn) => {
+  if (!cutIn || cutIn.kind === "none") return null;
+  if (cutIn.kind === "date") return `From ${formatDay(cutIn.date)}`;
+  if (cutIn.kind === "order") return `From production order ${cutIn.order?.label ?? "(one you cannot open)"}`;
+  if (cutIn.kind === "lot") return `From lot ${cutIn.lot?.label ?? "(one you cannot open)"}`;
+  return `From serial number ${cutIn.serial?.label ?? "(one you cannot open)"}`;
+};
 
 /** What still has to happen before a draft can move on (nothing moves it yet in this slice). */
 export const draftProblems = (change) => {

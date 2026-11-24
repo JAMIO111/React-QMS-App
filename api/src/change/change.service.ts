@@ -6,7 +6,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
-  AllQuery, Attachment, ChangeListQuery, CreateAttachmentBody, CreateChangeBody, CreateFunctionBody, CreateTypeBody, DeletedQuery, LinkItem, ListItem, UpdateAreaBody,
+  AllQuery, Attachment, BoardBody, ChangeListQuery, CreateAttachmentBody, CustomerApprovalBody, CutInBody, DecideBody, ImpactBody, CreateChangeBody, CreateFunctionBody, CreateTypeBody, DeletedQuery, LinkItem, ListItem, UpdateAreaBody,
   UpdateChangeBody, UpdateFunctionBody, UpdateTypeBody,
 } from './change.schemas';
 
@@ -59,6 +59,8 @@ const CHANGE_SELECT = sql`
   select c.*, t.label as type_label, t.needs_customer_approval, ${sql.raw(personName('pr'))} as raised_by_name, ${sql.raw(personName('pc'))} as cancelled_by_name,
          (select count(*)::int from public.change_links l where l.change_id = c.id) as link_count,
          (select count(*)::int from public.change_attachments a where a.change_id = c.id and a.deleted_at is null) as file_count,
+         exists (select 1 from public.change_signoffs w where w.change_id = c.id and w.signer_user_id = auth.uid() and w.status = 'pending') as waiting_for_me,
+         ${sql.raw(personName('pap'))} as approved_by_name,
          (select string_agg(coalesce(p.part_number, pf.code, m.code, s.code, cu.code, po.order_number, l.operation_code), ' ')
             from public.change_links l
             left join public.parts p on p.id = l.part_id left join public.part_families pf on pf.id = l.part_family_id left join public.machines m on m.id = l.machine_id
@@ -67,7 +69,8 @@ const CHANGE_SELECT = sql`
     from public.change_requests c
     join public.change_types t on t.id = c.type_id
     left join public.profiles pr on pr.id = c.raised_by
-    left join public.profiles pc on pc.id = c.cancelled_by`;
+    left join public.profiles pc on pc.id = c.cancelled_by
+    left join public.profiles pap on pap.id = c.approved_by`;
 
 const SORT: Record<ChangeListQuery['sort'], string> = {
   reference: 'c.reference',
@@ -89,6 +92,8 @@ const toSummary = (r: Row) => ({
   type: { id: r.type_id as string, label: r.type_label as string, needsCustomerApproval: !!r.needs_customer_approval },
   raisedBy: person(r.raised_by, r.raised_by_name),
   originKind: (r.origin_kind as string) ?? null,
+  /** A sign-off on this change is waiting for the caller. */
+  waitingForMe: !!r.waiting_for_me,
   linkCount: Number(r.link_count ?? 0),
   fileCount: Number(r.file_count ?? 0),
   createdAt: iso(r.created_at) as string,
@@ -239,6 +244,7 @@ export class ChangeService {
       if (q.typeId) where.push(sql`c.type_id = ${q.typeId}::uuid`);
       if (q.urgency) where.push(sql`c.urgency = ${q.urgency}`);
       if (q.owner === 'me') where.push(sql`c.raised_by = auth.uid()`);
+      if (q.signer === 'me') where.push(sql`c.waiting_for_me`);
       if (q.originKind) where.push(sql`c.origin_kind = any(string_to_array(${q.originKind}, ','))`);
       const linked = (column: string, id: string) =>
         where.push(sql`exists (select 1 from public.change_links l where l.change_id = c.id and ${sql.raw(`l.${column}`)} = ${id}::uuid)`);
@@ -269,7 +275,13 @@ export class ChangeService {
     const rows = (await db.execute<Row>(sql`select * from (${CHANGE_SELECT}) c where c.id = ${id}::uuid and c.organisation_id = ${org}::uuid`)).rows;
     if (rows.length === 0) throw ApiError.notFound('change_not_found', 'Change not found');
     const r = rows[0];
-    const can = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'change.manage') as manage`)).rows[0];
+    const stage = r.stage as string;
+    const can = (
+      await db.execute<Row>(sql`
+        select app.has_permission(${org}::uuid, 'change.manage') as manage, app.has_permission(${org}::uuid, 'change.approve') as approve, auth.uid() as me,
+               coalesce((select s.change_allow_self_approval from public.organisation_settings s where s.organisation_id = ${org}::uuid), false) as self_ok,
+               exists (select 1 from public.change_signoffs s where s.change_id = ${id}::uuid and s.round = ${Number(r.review_round)} and s.signer_user_id = auth.uid()) as in_round`)
+    ).rows[0];
     const links = (await db.execute<Row>(labelledLinks(id, org))).rows
       .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || KIND_ORDER.indexOf(a.kind as string) - KIND_ORDER.indexOf(b.kind as string))
       .map(toLink);
@@ -279,8 +291,67 @@ export class ChangeService {
       origin = { kind: r.origin_kind as string, id: r.origin_id as string, reference: (found?.ref as string) ?? null, name: (found?.name as string) ?? null, readable: !!found };
     }
     const attachments = (await db.execute<Row>(sql`${ATTACHMENT_SELECT} where a.change_id = ${id}::uuid and a.organisation_id = ${org}::uuid order by a.created_at desc`)).rows.map(toAttachment);
-    const stage = r.stage as string;
+    const impacts = (
+      await db.execute<Row>(sql`
+        select i.*, a.key, a.label, a.description, ${sql.raw(personName('pa'))} as by_name
+          from public.change_impacts i join public.change_areas a on a.id = i.area_id left join public.profiles pa on pa.id = i.assessed_by
+         where i.change_id = ${id}::uuid and i.organisation_id = ${org}::uuid order by a.sequence, lower(a.label)`)
+    ).rows.map((i) => ({
+      id: i.id as string,
+      areaId: i.area_id as string,
+      key: i.key as string,
+      label: i.label as string,
+      description: (i.description as string) ?? null,
+      status: i.status as 'not_assessed' | 'affected' | 'not_affected',
+      note: (i.note as string) ?? null,
+      assessedAt: i.assessed_at ? (iso(i.assessed_at) as string) : null,
+      assessedBy: (i.by_name as string) ?? null,
+    }));
+    const board = (
+      await db.execute<Row>(sql`
+        select b.*, f.label, f.key, ${sql.raw(personName('ps'))} as signer_name
+          from public.change_board b join public.change_functions f on f.id = b.function_id left join public.profiles ps on ps.id = b.signer_user_id
+         where b.change_id = ${id}::uuid and b.organisation_id = ${org}::uuid order by f.sequence, lower(f.label)`)
+    ).rows.map((b) => ({
+      id: b.id as string,
+      function: { id: b.function_id as string, label: b.label as string },
+      signer: person(b.signer_user_id, b.signer_name),
+    }));
+    const signoffs = (
+      await db.execute<Row>(sql`
+        select s.*, f.label, ${sql.raw(personName('ps'))} as signer_name
+          from public.change_signoffs s join public.change_functions f on f.id = s.function_id left join public.profiles ps on ps.id = s.signer_user_id
+         where s.change_id = ${id}::uuid and s.organisation_id = ${org}::uuid order by s.round desc, f.sequence, lower(f.label)`)
+    ).rows.map((x) => {
+      const mine = x.signer_user_id === can.me;
+      return {
+        id: x.id as string,
+        round: Number(x.round),
+        function: { id: x.function_id as string, label: x.label as string },
+        signer: person(x.signer_user_id, x.signer_name),
+        status: x.status as 'pending' | 'approved' | 'rejected' | 'superseded',
+        comment: (x.comment as string) ?? null,
+        decidedAt: x.decided_at ? (iso(x.decided_at) as string) : null,
+        /** The caller is the signer, it is waiting, and nothing (the approve right, the raiser's rule) stands in the way. */
+        canDecide: mine && x.status === 'pending' && stage === 'approval' && Number(x.round) === Number(r.review_round) && Boolean(can.approve) && (r.raised_by !== can.me || Boolean(can.self_ok)),
+      };
+    });
+    const labelOf = async (table: string, column: string, rid: unknown) =>
+      rid ? ((await db.execute<Row>(sql`select ${sql.raw(column)} as label from ${sql.raw(`public.${table}`)} where id = ${rid as string}::uuid`)).rows[0]?.label as string | undefined) ?? null : null;
+    const cutIn = {
+      kind: r.cut_in_kind as 'none' | 'date' | 'order' | 'lot' | 'serial',
+      date: (r.cut_in_date as string | Date | null) ? (iso(r.cut_in_date) as string).slice(0, 10) : null,
+      order: r.cut_in_order_id ? { id: r.cut_in_order_id as string, label: await labelOf('production_orders', 'order_number', r.cut_in_order_id) } : null,
+      lot: r.cut_in_lot_id ? { id: r.cut_in_lot_id as string, label: await labelOf('lots', 'lot_number', r.cut_in_lot_id) } : null,
+      serial: r.cut_in_serial_id ? { id: r.cut_in_serial_id as string, label: await labelOf('serial_numbers', 'serial_number', r.cut_in_serial_id) } : null,
+      stockAction: (r.stock_action as string) ?? null,
+      stockNote: (r.stock_note as string) ?? null,
+    };
+    const target = stage === 'draft' ? 'submit' : stage === 'assessment' ? 'board' : null;
+    const problems = target ? (await db.execute<{ p: string[] }>(sql`select app.change_problems(${id}::uuid, ${target}) as p`)).rows[0].p : [];
     const manage = Boolean(can.manage);
+    const finished = ['closed', 'rejected', 'cancelled'].includes(stage);
+    const day = (v: unknown) => (v ? (iso(v) as string).slice(0, 10) : null);
     return {
       ...toSummary(r),
       description: (r.description as string) ?? null,
@@ -292,12 +363,40 @@ export class ChangeService {
       cancelReason: (r.cancel_reason as string) ?? null,
       cancelledAt: r.cancelled_at ? (iso(r.cancelled_at) as string) : null,
       cancelledBy: (r.cancelled_by_name as string) ?? null,
+      reviewRound: Number(r.review_round),
+      submittedAt: r.submitted_at ? (iso(r.submitted_at) as string) : null,
+      approvedAt: r.approved_at ? (iso(r.approved_at) as string) : null,
+      approvedBy: (r.approved_by_name as string) ?? null,
+      /** Why it is back in assessment (a sign-off was rejected, or a manager took it back). */
+      returnReason: (r.return_reason as string) ?? null,
+      /** Whether this type of change usually needs the customer. */
+      typeNeedsCustomerApproval: !!r.needs_customer_approval,
+      customerApproval: {
+        status: (r.customer_approval as string) ?? null,
+        reference: (r.customer_reference as string) ?? null,
+        on: day(r.customer_approval_on),
+        waivedReason: (r.customer_waived_reason as string) ?? null,
+      },
+      cutIn,
+      impacts,
+      board,
+      signoffs,
+      /** What still stands between this change and its next step (draft: to assessment; assessment: to the board). */
+      problems,
       /** The caller may raise and manage changes. */
       canManage: manage,
-      /** Its wording and scope can still change (a draft). */
-      canEdit: manage && stage === 'draft',
-      canCancel: manage && !['closed', 'rejected', 'cancelled'].includes(stage),
-      canAddFiles: manage && !['closed', 'rejected', 'cancelled'].includes(stage),
+      /** Its wording and scope can still change (a draft, or in assessment); the type only in draft. */
+      canEdit: manage && ['draft', 'assessment'].includes(stage),
+      canEditType: manage && stage === 'draft',
+      canSubmit: manage && stage === 'draft',
+      canAssess: manage && stage === 'assessment',
+      canSendToBoard: manage && stage === 'assessment',
+      canRecall: manage && stage === 'approval',
+      canCancel: manage && !finished,
+      canAddFiles: manage && !finished,
+      /** The cut-in point and the customer's approval can be recorded until the change is finished. */
+      canSetCutIn: !finished && (manage || (Boolean(can.approve) && Boolean(can.in_round))),
+      canSetCustomerApproval: manage && !finished,
     };
   }
 
@@ -315,6 +414,64 @@ export class ChangeService {
   update(ctx: RequestContext, id: string, body: UpdateChangeBody) {
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.update_change(${id}::uuid, ${json(body)}::jsonb)`);
+      return this.change(db, ctx, id);
+    });
+  }
+
+  submit(ctx: RequestContext, id: string) {
+    return this.command(ctx, id, sql`select app.submit_change(${id}::uuid)`);
+  }
+
+  setImpact(ctx: RequestContext, id: string, body: ImpactBody) {
+    return this.command(ctx, id, sql`select app.set_change_impact(${id}::uuid, ${body.areaId}::uuid, ${body.status}, ${body.note ?? null})`);
+  }
+
+  setBoard(ctx: RequestContext, id: string, body: BoardBody) {
+    return this.command(ctx, id, sql`select app.set_change_board(${id}::uuid, ${json(body.board)}::jsonb)`);
+  }
+
+  sendToBoard(ctx: RequestContext, id: string) {
+    return this.command(ctx, id, sql`select app.send_change_to_board(${id}::uuid)`);
+  }
+
+  recall(ctx: RequestContext, id: string, reason: string) {
+    return this.command(ctx, id, sql`select app.recall_change(${id}::uuid, ${reason})`);
+  }
+
+  /** The sign-off belongs to a change; the answer is that whole change. */
+  decide(ctx: RequestContext, signoffId: string, body: DecideBody) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = (await db.execute<Row>(sql`select change_id from public.change_signoffs where id = ${signoffId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`)).rows[0];
+      if (!found) throw ApiError.notFound('change_signoff_not_found', 'Sign-off not found');
+      await db.execute(sql`select app.decide_change_signoff(${signoffId}::uuid, ${body.approve}, ${body.comment ?? null})`);
+      return this.change(db, ctx, found.change_id as string);
+    });
+  }
+
+  setCutIn(ctx: RequestContext, id: string, body: CutInBody) {
+    return this.command(ctx, id, sql`select app.set_change_cut_in(${id}::uuid, ${json(body)}::jsonb)`);
+  }
+
+  setCustomerApproval(ctx: RequestContext, id: string, body: CustomerApprovalBody) {
+    return this.command(
+      ctx,
+      id,
+      sql`select app.set_change_customer_approval(${id}::uuid, ${body.status}, ${body.reference ?? null}, ${body.on ?? null}::date, ${body.waivedReason ?? null})`,
+    );
+  }
+
+  /** The people who could be put on the board, and whether each can sign. */
+  signers(ctx: RequestContext) {
+    return this.database.asUser(ctx, async (db) => {
+      const res = await db.execute<Row>(sql`select * from app.change_signer_candidates(${orgOf(ctx)}::uuid)`);
+      return { data: res.rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: !!r.can_approve })) };
+    });
+  }
+
+  /** Runs one database command, then answers with the whole change. */
+  private command(ctx: RequestContext, id: string, statement: SQL) {
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(statement);
       return this.change(db, ctx, id);
     });
   }

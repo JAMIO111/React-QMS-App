@@ -13,8 +13,9 @@ vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => p
 vi.mock("../../lib/breadcrumbs", () => ({ useBreadcrumbNames: () => {} }));
 
 import { apiFetch } from "../../lib/api-client";
-import { draftProblems, linksBody, linkWords, sameLink, stageLabel } from "../../lib/change";
+import { cutInWords, draftProblems, formatDay, linksBody, linkWords, sameLink, stageLabel, stepState } from "../../lib/change";
 import ChangePage from "./ChangePage";
+import ChangeNoticePage from "./ChangeNoticePage";
 import ChangeRegisterPage from "./ChangeRegisterPage";
 
 const type = { id: "t1", key: "process", label: "Process", description: null, sequence: 1, active: true, needsCustomerApproval: true, changes: 1 };
@@ -27,7 +28,21 @@ const detail = {
   links: [{ kind: "part", id: "p1", code: null, reference: "BR-100", name: "Bracket", readable: true }],
   origin: { kind: "ncr", id: "n1", reference: "NC-26-0012", name: "Cracked weld", readable: true },
   attachments: [], cancelReason: null, cancelledAt: null, cancelledBy: null, canManage: true, canEdit: true, canCancel: true, canAddFiles: true,
+  reviewRound: 0, returnReason: null, submittedAt: null, approvedAt: null, approvedBy: null, typeNeedsCustomerApproval: true,
+  customerApproval: { status: null, reference: null, on: null, waivedReason: null },
+  cutIn: { kind: "none", date: null, order: null, lot: null, serial: null, stockAction: null, stockNote: null },
+  impacts: [], board: [], signoffs: [], problems: ["Say why"],
+  canEditType: true, canSubmit: true, canAssess: false, canSendToBoard: false, canRecall: false, canSetCutIn: true, canSetCustomerApproval: true,
 };
+const area = (over) => ({ id: "i1", areaId: "a1", key: "design", label: "Design and drawing", description: "The drawing", status: "not_assessed", note: null, assessedAt: null, assessedBy: null, ...over });
+const assessing = { ...detail, stage: "assessment", canSubmit: false, canAssess: true, canSendToBoard: true, problems: ["1 impact area still to assess"], impacts: [area({}), area({ id: "i2", areaId: "a2", key: "process", label: "Process and control plan", status: "not_affected" })] };
+const withBoard = { ...detail, stage: "approval", reviewRound: 1, canSubmit: false, canRecall: true, canEdit: false, problems: [],
+  board: [{ id: "b1", function: { id: "f1", label: "Quality" }, signer: { id: "u2", name: "Quinn Manager" } }],
+  signoffs: [{ id: "s1", round: 1, function: { id: "f1", label: "Quality" }, signer: { id: "u2", name: "Quinn Manager" }, status: "pending", comment: null, decidedAt: null, canDecide: true }] };
+const approved = { ...withBoard, stage: "approved", canRecall: false, approvedAt: "2026-11-25T10:00:00Z", approvedBy: "Quinn Manager",
+  signoffs: [{ ...withBoard.signoffs[0], status: "approved", comment: "Agreed", decidedAt: "2026-11-25T10:00:00Z", canDecide: false }],
+  cutIn: { kind: "date", date: "2026-12-01", order: null, lot: null, serial: null, stockAction: "use_up", stockNote: "Finish the batch" },
+  customerApproval: { status: "approved", reference: "ACME-77", on: "2026-11-26", waivedReason: null } };
 
 const renderAt = (path, element, route = path) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -42,14 +57,18 @@ const renderAt = (path, element, route = path) => {
   );
 };
 
+let current = detail;
 beforeEach(() => {
+  current = detail;
   apiFetch.mockReset();
   permissions.clear();
   ["change.read", "change.manage"].forEach((p) => permissions.add(p));
   apiFetch.mockImplementation(async (path) => {
     if (path.startsWith("/change-types")) return { data: [type] };
     if (path.startsWith("/changes/c1/attachments")) return { data: [] };
-    if (path.startsWith("/changes/c1")) return detail;
+    if (path.startsWith("/change-functions")) return { data: [{ id: "f1", key: "quality", label: "Quality", description: null, active: true }] };
+    if (path.startsWith("/change-signers")) return { data: [{ id: "u2", name: "Quinn Manager", canApprove: true }, { id: "u3", name: "Vic Viewer", canApprove: false }] };
+    if (path.startsWith("/changes/c1")) return current;
     if (path.startsWith("/changes?")) return { data: [summary], page: 1, pageSize: 50, total: 1 };
     return {};
   });
@@ -126,6 +145,103 @@ describe("the change page", () => {
   });
 });
 
+describe("moving a change on", () => {
+  it("shows the stages and offers to submit a draft only when nothing is missing", async () => {
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    const stages = await screen.findByRole("list", { name: "Stages" });
+    expect(within(stages).getByText("Draft").closest("li")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByRole("button", { name: "Submit for assessment" })).toBeDisabled();
+    current = { ...detail, problems: [] };
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Submit for assessment" }).some((b) => !b.disabled)).toBe(true));
+  });
+
+  it("submits for assessment", async () => {
+    current = { ...detail, problems: [] };
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    await userEvent.click(await screen.findByRole("button", { name: "Submit for assessment" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/changes/c1/submit", expect.objectContaining({ method: "POST" })));
+  });
+
+  it("answers an impact area at once, and asks how when it is affected", async () => {
+    current = assessing;
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    const list = await screen.findByRole("list", { name: "Impact assessment" });
+    expect(within(list).getByText("Design and drawing")).toBeInTheDocument();
+    const toggle = within(list).getByRole("group", { name: "Process and control plan impact" });
+    await userEvent.click(within(toggle).getByRole("button", { name: "Not assessed" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/changes/c1/impacts", expect.objectContaining({ method: "PUT", body: { areaId: "a2", status: "not_assessed", note: null } })));
+    const design = within(list).getByRole("group", { name: "Design and drawing impact" });
+    await userEvent.click(within(design).getByRole("button", { name: "Affected" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("How it is affected"), "New note on the drawing");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/changes/c1/impacts", expect.objectContaining({ body: { areaId: "a1", status: "affected", note: "New note on the drawing" } })));
+  });
+
+  it("sends an assessed change to the board and says what is still needed", async () => {
+    current = assessing;
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    expect(await screen.findByRole("button", { name: "Send to the board" })).toBeDisabled();
+    expect(within(screen.getByRole("list", { name: "Still needed" })).getByText("1 impact area still to assess")).toBeInTheDocument();
+  });
+
+  it("lets the named signer approve, or send back with a reason", async () => {
+    current = withBoard;
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    expect(await screen.findByText("Waiting for 1 sign-off(s).")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send back" }));
+    let dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: "Send it back" });
+    expect(confirm).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Why are you sending it back?"), "Needs a control plan change");
+    await userEvent.click(confirm);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/change-signoffs/s1/decide", expect.objectContaining({ method: "POST", body: { approve: false, comment: "Needs a control plan change" } })));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/change-signoffs/s1/decide", expect.objectContaining({ body: { approve: true, comment: null } })));
+  });
+
+  it("shows the decision, the cut-in point and the customer's approval once approved, and links to the notice", async () => {
+    current = approved;
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    expect(await screen.findByText(/Approved .* by Quinn Manager/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Change notice" })).toHaveAttribute("href", "/Change/c1/notice");
+    expect(screen.getByText(`From ${formatDay("2026-12-01")}`)).toBeInTheDocument();
+    expect(screen.getByText("Use up what we have — Finish the batch")).toBeInTheDocument();
+    expect(screen.getByText("ACME-77")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+  });
+
+  it("shows why a change was sent back to assessment", async () => {
+    current = { ...assessing, returnReason: "Quality: Needs a control plan change", reviewRound: 1 };
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    expect(await screen.findByText(/Quality: Needs a control plan change/)).toBeInTheDocument();
+  });
+});
+
+describe("the change notice", () => {
+  it("prints what changed, the impact, who agreed and from when", async () => {
+    current = { ...approved, impacts: [area({ status: "affected", note: "New note on the drawing" }), area({ id: "i2", areaId: "a2", label: "Process and control plan", status: "not_affected" })] };
+    renderAt("/Change/c1/notice", <ChangeNoticePage />, "/Change/:id/notice");
+    const notice = await screen.findByRole("article", { name: "Change notice" });
+    expect(within(notice).getByText("Engineering change notice")).toBeInTheDocument();
+    expect(within(notice).getByText(/New note on the drawing/)).toBeInTheDocument();
+    expect(within(notice).getByText(/Quality/)).toBeInTheDocument();
+    expect(within(notice).getByText(`From ${formatDay("2026-12-01")}`)).toBeInTheDocument();
+    expect(within(notice).getByText(/Approved · their reference ACME-77/)).toBeInTheDocument();
+  });
+
+  it("says plainly that an unapproved change is a draft of the notice", async () => {
+    current = assessing;
+    renderAt("/Change/c1/notice", <ChangeNoticePage />, "/Change/:id/notice");
+    expect(await screen.findByText(/Not approved: this is a draft of the notice/)).toBeInTheDocument();
+  });
+});
+
 describe("helpers", () => {
   it("names what a draft still needs", () => {
     expect(draftProblems({ description: null, reason: null, links: [] })).toHaveLength(3);
@@ -138,6 +254,15 @@ describe("helpers", () => {
     expect(linkWords({ kind: "operation_code", code: "OP10" })).toBe("OP10");
     expect(sameLink({ kind: "operation_code", code: "op10" }, { kind: "operation_code", code: "OP10" })).toBe(true);
     expect(linksBody([part, { kind: "operation_code", id: null, code: "OP10" }])).toEqual([{ kind: "part", id: "p1" }, { kind: "operation_code", code: "OP10" }]);
+  });
+  it("works out the stepper and the cut-in words", () => {
+    expect(stepState("assessment", "draft")).toBe("done");
+    expect(stepState("assessment", "assessment")).toBe("current");
+    expect(stepState("assessment", "approved")).toBe("todo");
+    expect(stepState("cancelled", "draft")).toBe("other");
+    expect(cutInWords({ kind: "none" })).toBeNull();
+    expect(cutInWords({ kind: "lot", lot: { id: "l", label: "LOT-9" } })).toBe("From lot LOT-9");
+    expect(cutInWords({ kind: "order", order: null })).toBe("From production order (one you cannot open)");
   });
   it("labels stages", () => {
     expect(stageLabel("cancelled")).toBe("Cancelled");

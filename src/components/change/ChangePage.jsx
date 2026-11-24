@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { LinkIcon, PencilIcon, XIcon } from "@/components/icons";
+import { FileTextIcon, LinkIcon, PencilIcon, RotateCcwIcon, SendIcon, XIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
-import { useChange, useChangeAttachmentMutation, useChangeAttachments } from "../../hooks/useChange";
+import { useChange, useChangeAttachmentMutation, useChangeAttachments, useChangeMutation } from "../../hooks/useChange";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { draftProblems, formatDay, linkKindLabel, linkPath, linkWords, originLabel, recordPath, stageLabel, stagePill, urgencyLabel } from "../../lib/change";
-import { ErrorNotice } from "../master-data/shared";
+import { formatDay, linkKindLabel, linkPath, linkWords, noticePath, originLabel, recordPath, STEPS, stageLabel, stagePill, stepState, urgencyLabel } from "../../lib/change";
+import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
+import Dialog from "../ui/Dialog";
 import { AttachmentDrop } from "../ui/FileDrop";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
+import { BoardCard, CustomerCard, CutInCard, ImpactCard } from "./ChangeAssessment";
 import { CancelDialog, ChangeDialog, LinksDialog } from "./ChangeDialogs";
 
 const Fact = ({ label, children }) => (
@@ -63,20 +65,70 @@ const ChangeFiles = ({ change }) => {
   );
 };
 
+/** The stages a change moves through, with where this one is. */
+const Stepper = ({ stage }) => (
+  <ol aria-label="Stages" className="flex flex-wrap items-center gap-2 text-sm">
+    {STEPS.map((s, i) => {
+      const state = stepState(stage, s.stage);
+      return (
+        <li
+          key={s.stage}
+          aria-current={state === "current" ? "step" : undefined}
+          className={`flex items-center gap-2 rounded-full border px-3 py-1 ${
+            state === "current" ? "border-brand-primary bg-brand-primary/10 font-medium text-primary-text" : state === "done" ? "border-success-color/40 text-success-color" : "border-border-color text-secondary-text"
+          }`}>
+          <span className="text-xs">{state === "done" ? "✓" : i + 1}</span>
+          {s.label}
+        </li>
+      );
+    })}
+  </ol>
+);
+
+/** Take a change back from the board, with a reason. */
+const RecallDialog = ({ change, onClose }) => {
+  const mutation = useChangeMutation();
+  const [reason, setReason] = useState("");
+  const send = (e) => {
+    e.preventDefault();
+    mutation.mutate({ action: "recall", id: change.id, body: { reason: reason.trim() } }, { onSuccess: onClose });
+  };
+  return (
+    <Dialog title={`Take ${change.reference} back from the board`} onClose={onClose}>
+      <form noValidate onSubmit={send} className="flex flex-col gap-3">
+        <p className="text-sm text-secondary-text">It returns to assessment and the sign-offs still waiting are dropped. Everyone signs again once it is sent to the board.</p>
+        <TextAreaField label="Why is it taken back?" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={3} required />
+        <FormError error={mutation.error} />
+        <div className="flex justify-end gap-2">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
+            Cancel
+          </CTAButton>
+          <CTAButton buttonType="submit" type="main" size="md" disabled={reason.trim().length < 3 || mutation.isPending} loading={mutation.isPending}>
+            Take it back
+          </CTAButton>
+        </div>
+      </form>
+    </Dialog>
+  );
+};
+
 /**
- * A change (`/Change/:id`): what is changing and why, where it came from, what it covers and its files. In this first slice a change is a draft
- * (or cancelled); assessing it, the board's sign-off and the tasks that carry it out come next.
+ * A change (`/Change/:id`): what is changing and why, where it came from, what it covers, the impact assessment, the board and its sign-offs, the
+ * cut-in point, the customer's approval and the files. Tasks, carrying the change out and closing it come in the next slices.
  */
 const ChangePage = () => {
   const { id } = useParams();
   const query = useChange(id);
+  const mutation = useChangeMutation();
   const [dialog, setDialog] = useState(null);
   const change = query.data;
   useBreadcrumbNames([{ path: `/Change/${id}`, label: change ? `${change.reference} · ${change.title}` : null }]);
 
   if (query.isLoading) return <LoadingScreen />;
   if (query.error) return <ErrorNotice error={query.error} />;
-  const problems = change.stage === "draft" ? draftProblems(change) : [];
+  const stage = change.stage;
+  const notReady = change.problems.length > 0;
+  const move = (action) => mutation.mutate({ action, id: change.id });
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -84,7 +136,7 @@ const ChangePage = () => {
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold text-primary-text">{change.reference}</h1>
-            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${stagePill(change.stage)}`}>{stageLabel(change.stage)}</span>
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${stagePill(stage)}`}>{stageLabel(stage)}</span>
             {change.urgency === "expedited" && <span className="inline-flex rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">Expedited</span>}
           </div>
           <p className="text-lg text-primary-text">{change.title}</p>
@@ -102,6 +154,26 @@ const ChangePage = () => {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {change.canSubmit && (
+            <CTAButton type="main" icon={SendIcon} disabled={notReady} loading={mutation.isPending && mutation.variables?.action === "submit"} onClick={() => move("submit")}>
+              Submit for assessment
+            </CTAButton>
+          )}
+          {change.canSendToBoard && (
+            <CTAButton type="main" icon={SendIcon} disabled={notReady} loading={mutation.isPending && mutation.variables?.action === "sendToBoard"} onClick={() => move("sendToBoard")}>
+              Send to the board
+            </CTAButton>
+          )}
+          {change.canRecall && (
+            <CTAButton type="secondary" icon={RotateCcwIcon} onClick={() => setDialog("recall")}>
+              Take back from the board
+            </CTAButton>
+          )}
+          {["approved"].includes(stage) && (
+            <CTAButton type="secondary" icon={FileTextIcon} to={noticePath(change.id)}>
+              Change notice
+            </CTAButton>
+          )}
           {change.canEdit && (
             <CTAButton type="secondary" icon={PencilIcon} onClick={() => setDialog("edit")}>
               Edit details
@@ -115,24 +187,38 @@ const ChangePage = () => {
         </div>
       </header>
 
-      {change.stage === "cancelled" && (
+      {stage !== "cancelled" && <Stepper stage={stage} />}
+      <FormError error={mutation.error} />
+
+      {stage === "cancelled" && (
         <Callout tone="warning" title="Cancelled">
           {change.cancelReason} ({formatDay(change.cancelledAt)}
           {change.cancelledBy ? `, ${change.cancelledBy}` : ""}). It is kept as it is.
         </Callout>
       )}
-      {change.stage === "draft" && problems.length > 0 && (
-        <Callout tone="info" title="Still needed before it can be assessed">
+      {stage === "assessment" && change.returnReason && (
+        <Callout tone="warning" title="Sent back">
+          {change.returnReason}. Deal with it, then send the change to the board again; everyone signs again.
+        </Callout>
+      )}
+      {stage === "approval" && (
+        <Callout tone="info" title="With the board">
+          Waiting for {change.signoffs.filter((s) => s.round === change.reviewRound && s.status === "pending").length} sign-off(s).
+        </Callout>
+      )}
+      {stage === "approved" && (
+        <Callout tone="success" title="Approved">
+          Approved {formatDay(change.approvedAt)}
+          {change.approvedBy ? ` by ${change.approvedBy}` : ""}. Tasks to carry it out, and closing it with a check that it worked, come in the next slices.
+        </Callout>
+      )}
+      {["draft", "assessment"].includes(stage) && change.canManage && notReady && (
+        <Callout tone="info" title={stage === "draft" ? "Still needed before it can be assessed" : "Still needed before it can go to the board"}>
           <ul aria-label="Still needed" className="list-disc pl-5">
-            {problems.map((p) => (
+            {change.problems.map((p) => (
               <li key={p}>{p}</li>
             ))}
           </ul>
-        </Callout>
-      )}
-      {change.stage === "draft" && (
-        <Callout tone="info" title="Assessment and sign-off are not built yet">
-          For now a change records what is changing, why, where it came from, what it covers and its files. Assessing it, the board&apos;s sign-off and the tasks that carry it out come in the next slices.
         </Callout>
       )}
 
@@ -164,11 +250,16 @@ const ChangePage = () => {
         {change.links.length === 0 ? <p className="text-sm text-secondary-text">Nothing yet.</p> : <CoverList links={change.links} />}
       </MenuCard>
 
+      <ImpactCard change={change} />
+      <BoardCard change={change} />
+      <CutInCard change={change} />
+      <CustomerCard change={change} />
       <ChangeFiles change={change} />
 
       {dialog === "edit" && <ChangeDialog existing={change} onClose={() => setDialog(null)} />}
       {dialog === "links" && <LinksDialog change={change} onClose={() => setDialog(null)} />}
       {dialog === "cancel" && <CancelDialog change={change} onClose={() => setDialog(null)} />}
+      {dialog === "recall" && <RecallDialog change={change} onClose={() => setDialog(null)} />}
     </div>
   );
 };

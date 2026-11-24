@@ -104,6 +104,8 @@ export const ChangeListQuery = z.object({
   urgency: z.enum(URGENCIES).optional(),
   /** Only changes the caller raised. */
   owner: z.enum(['me']).optional(),
+  /** Only changes with a sign-off waiting for the caller. */
+  signer: z.enum(['me']).optional(),
   originKind: csv(ORIGIN_KINDS),
   partId: z.string().uuid().optional(),
   partFamilyId: z.string().uuid().optional(),
@@ -116,5 +118,42 @@ export const ChangeListQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type ChangeListQuery = z.infer<typeof ChangeListQuery>;
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date as yyyy-MM-dd');
+export const IMPACT_STATUSES = ['not_assessed', 'affected', 'not_affected'] as const;
+export const CUSTOMER_APPROVALS = ['not_needed', 'required', 'requested', 'approved', 'rejected', 'waived'] as const;
+export const CUT_IN_KINDS = ['none', 'date', 'order', 'lot', 'serial'] as const;
+export const STOCK_ACTIONS = ['use_up', 'rework', 'scrap', 'return'] as const;
+
+/** One impact area answered: affected (a note says how), not affected, or put back to not assessed. */
+export const ImpactBody = z.object({ areaId: z.string().uuid(), status: z.enum(IMPACT_STATUSES), note: text(1000) }).strict();
+export type ImpactBody = z.infer<typeof ImpactBody>;
+
+/** The board: which functions must sign and who signs for each. Replaces the whole board. */
+export const BoardBody = z.object({ board: z.array(z.object({ functionId: z.string().uuid(), signerId: z.string().uuid() }).strict()).max(30) }).strict();
+export type BoardBody = z.infer<typeof BoardBody>;
+
+export const DecideBody = z.object({ approve: z.boolean(), comment: text(1000) }).strict();
+export type DecideBody = z.infer<typeof DecideBody>;
+
+/** Keys present are set; null clears (the cut-in point, and what happens to existing stock). */
+export const CutInBody = z
+  .object({
+    kind: z.enum(CUT_IN_KINDS).optional(),
+    date: isoDay.nullable().optional(),
+    orderId: z.string().uuid().nullable().optional(),
+    lotId: z.string().uuid().nullable().optional(),
+    serialId: z.string().uuid().nullable().optional(),
+    stockAction: z.enum(STOCK_ACTIONS).nullable().optional(),
+    stockNote: text(1000),
+  })
+  .strict()
+  .refine(nothingToChange, 'Nothing to change');
+export type CutInBody = z.infer<typeof CutInBody>;
+
+export const CustomerApprovalBody = z
+  .object({ status: z.enum(CUSTOMER_APPROVALS), reference: text(200), on: isoDay.nullable().optional(), waivedReason: text(500) })
+  .strict();
+export type CustomerApprovalBody = z.infer<typeof CustomerApprovalBody>;
 
 export { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../calibration/calibration.schemas';

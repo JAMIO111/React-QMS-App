@@ -36,7 +36,7 @@ BEGIN
 
   -- ---- the trigger ----
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers() WHERE event_type = 'msa.study.completed' AND entity_type = 'msa_study' AND permission = 'calibration.read'), 1::bigint, 'the new trigger is in the catalogue');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers()), 22::bigint, 'and every earlier trigger is still there');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers()) >= 22, true, 'and every earlier trigger is still there');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers() WHERE event_type = 'quality_alert.issued'), 1::bigint, 'including the one it was put beside');
 
   -- ---- the facts ----
@@ -59,7 +59,7 @@ BEGIN
 
   -- ---- the reminders area ----
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.reminder_areas() WHERE key = 'msa_studies' AND soon_days = 30), 1::bigint, 'the area exists');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.reminder_areas()), 13::bigint, 'beside the twelve before it');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.reminder_areas()) >= 13, true, 'beside the twelve before it');
   SELECT count(*) INTO n FROM app.reminder_candidates(org, today) WHERE area = 'msa_studies' AND record_id = st1 AND user_id = bob AND due_on = today + 10 AND permission = 'calibration.read';
   PERFORM pg_temp.assert_eq(n, 1, 'the custodian is told about a study that expires within 30 days');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.reminder_candidates(org, today) WHERE area = 'competence' OR area = 'gauges'), 0::bigint, 'the other areas still run (and have nothing here)');

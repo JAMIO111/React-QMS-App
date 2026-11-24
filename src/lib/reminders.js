@@ -29,6 +29,9 @@ export function reminderPath(area, targetId) {
       return "/Competence/Mine";
     case "msa_studies":
       return t ? `/Calibration/Gauge-RR/${t}` : "/Calibration/Gauge-RR";
+    case "change_tasks":
+    case "change_signoffs":
+      return t ? `/Change/${t}` : "/Change/Mine";
     default:
       return null;
   }

@@ -36,6 +36,8 @@ export function workflowRecordPath(kind, id) {
       return `/Documentation/Quality-Alerts/${id}`;
     case "msa_study":
       return `/Calibration/Gauge-RR/${id}`;
+    case "change":
+      return `/Change/${id}`;
     default:
       return null;
   }

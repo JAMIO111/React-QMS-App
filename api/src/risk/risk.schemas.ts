@@ -77,8 +77,8 @@ const riskFields = {
   siteId: z.string().uuid().nullable().optional(),
   departmentId: z.string().uuid().nullable().optional(),
 };
-export const LINK_KINDS = ['ncr', 'capa', 'audit_finding', 'supplier', 'part', 'part_family', 'machine', 'document', 'operation_code'] as const;
-export const SOURCE_KINDS = ['ncr', 'capa', 'audit_finding'] as const;
+export const LINK_KINDS = ['ncr', 'capa', 'audit_finding', 'supplier', 'part', 'part_family', 'machine', 'document', 'operation_code', 'fmea_cause'] as const;
+export const SOURCE_KINDS = ['ncr', 'capa', 'audit_finding', 'fmea_cause'] as const;
 /** A record a risk is linked to: `{ kind, id }`, or `{ kind: 'operation_code', code }`. */
 export const LinkItem = z.union([
   z.object({ kind: z.enum(LINK_KINDS).exclude(['operation_code']), id: z.string().uuid() }).strict(),
@@ -89,7 +89,7 @@ export const LinksBody = z.object({ links: z.array(LinkItem).max(100) }).strict(
 export type LinksBody = z.infer<typeof LinksBody>;
 export const SourceRef = z.object({ kind: z.enum(SOURCE_KINDS), id: z.string().uuid() }).strict();
 
-/** `raisedFrom` raises it from a non-conformance, an 8D or an audit finding (that record is linked and kept as its origin); `links` adds others. */
+/** `raisedFrom` raises it from a non-conformance, an 8D, an audit finding or an FMEA cause (that record is linked and kept as its origin); `links` adds others. */
 export const CreateRiskBody = z.object({ ...riskFields, raisedFrom: SourceRef.optional(), links: z.array(LinkItem).max(100).optional() }).strict();
 export type CreateRiskBody = z.infer<typeof CreateRiskBody>;
 

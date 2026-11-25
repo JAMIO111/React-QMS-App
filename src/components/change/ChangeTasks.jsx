@@ -5,6 +5,7 @@ import { CheckIcon, PencilIcon, PlusIcon, RotateCcwIcon, XIcon } from "@/compone
 import { useChangeAreas, useChangeMutation, useChangeSigners } from "../../hooks/useChange";
 import { useControlPlans } from "../../hooks/useProcessControl";
 import { useDocuments } from "../../hooks/useDocuments";
+import { useFmeas } from "../../hooks/useFmea";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { formatDay, linkStateLabel, linkStatePill, REVISION_KINDS, reviewLabel, reviewPill, taskLabel, taskLinkKindLabel, taskLinkPath, taskPill } from "../../lib/change";
 import { FormError, TextAreaField } from "../master-data/shared";
@@ -94,13 +95,16 @@ const StartRevisionDialog = ({ task, onClose }) => {
   const [partId, setPartId] = useState(null);
   const [planId, setPlanId] = useState(null);
   const [documentId, setDocumentId] = useState(null);
+  const [fmeaId, setFmeaId] = useState(null);
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
   const [planQ, setPlanSearch] = useDebouncedSearch();
   const [docQ, setDocSearch] = useDebouncedSearch();
+  const [fmeaQ, setFmeaSearch] = useDebouncedSearch();
   const plans = useControlPlans({ q: planQ, pageSize: 20 });
   const documents = useDocuments({ q: docQ, status: "active", pageSize: 20 });
-  const ready = kind === "part" ? !!partId && code.trim() : kind === "control_plan" ? !!planId && code.trim() : !!documentId;
+  const fmeas = useFmeas({ q: fmeaQ, status: "active", pageSize: 20 }, { enabled: kind === "fmea" });
+  const ready = kind === "part" ? !!partId && code.trim() : kind === "control_plan" ? !!planId && code.trim() : kind === "fmea" ? !!fmeaId : !!documentId;
   const start = (e) => {
     e.preventDefault();
     if (!ready) return;
@@ -109,7 +113,9 @@ const StartRevisionDialog = ({ task, onClose }) => {
         ? { kind, partId, revision: code.trim(), changeSummary: note.trim() || null }
         : kind === "control_plan"
           ? { kind, planId, revisionCode: code.trim(), changeReason: note.trim() || null }
-          : { kind, documentId };
+          : kind === "fmea"
+            ? { kind, fmeaId }
+            : { kind, documentId };
     mutation.mutate({ action: "startRevision", id: task.id, body }, { onSuccess: onClose });
   };
   return (
@@ -142,9 +148,22 @@ const StartRevisionDialog = ({ task, onClose }) => {
             onSearch={setDocSearch}
           />
         )}
-        {kind !== "document" && <Field label="New revision letter or code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={10} required hint="For example B" />}
-        {kind !== "document" && <TextAreaField label={kind === "part" ? "What changes" : "Why it changes"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={2} />}
+        {kind === "fmea" && (
+          <RemoteComboBox
+            label="FMEA"
+            required
+            placeholder="Search an FMEA in force…"
+            value={fmeaId}
+            onChange={(id) => setFmeaId(id)}
+            items={(fmeas.data?.data ?? []).map((f) => ({ id: f.id, name: `${f.number} · ${f.title}`, hint: f.currentLetter ? `Rev ${f.currentLetter}` : undefined }))}
+            isFetching={fmeas.isFetching}
+            onSearch={setFmeaSearch}
+          />
+        )}
+        {kind !== "document" && kind !== "fmea" && <Field label="New revision letter or code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={10} required hint="For example B" />}
+        {kind !== "document" && kind !== "fmea" && <TextAreaField label={kind === "part" ? "What changes" : "Why it changes"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={2} />}
         {kind === "document" && <p className="text-sm text-secondary-text">The new draft starts as a copy of the revision in force, with its text and files.</p>}
+        {kind === "fmea" && <p className="text-sm text-secondary-text">The new draft starts as a copy of the revision in force: its team, scope and analysis. Say what changed on the revision.</p>}
         <FormError error={mutation.error} />
         <Buttons onClose={onClose} pending={mutation.isPending} disabled={!ready} label="Start the revision" />
       </form>

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import CTAButton from "@/components/CTAButton";
-import { CheckIcon, LinkIcon, PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "@/components/icons";
+import { CheckIcon, LinkIcon, PencilIcon, PlusIcon, RotateCcwIcon, ShieldAlertIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "@/components/icons";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useFmeaActionMutation, useFmeaNodeMutation } from "../../hooks/useFmea";
+import { usePermissions } from "../../hooks/useQmsApi";
 import { actionKindLabel, actionStatusLabel, actionStatusPill, CHILD_KINDS, controlKindLabel, dueWords, linkStateLabel, linkStatePill, planTargetWords, elementTypeLabel, effectLevelLabel, fmeaPath, itemKindLabel, modelWords, priorityLabel, priorityPill, ratingWords, revisedWords, revisionPath, specialClassLabel, topKinds, worstSeverity } from "../../lib/fmea";
 import { FormError } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
+import { RaiseFromRecord as RaiseRiskFromCause } from "../risk/LinkedRisks";
 import RowActionsMenu from "../ui/RowActionsMenu";
 import { ActionDialog, CancelActionDialog, CompleteActionDialog } from "./ActionDialogs";
 import { CauseDialog, EffectDialog, FailureModeDialog, FunctionDialog, ItemDialog } from "./AnalysisDialogs";
@@ -149,6 +151,7 @@ const CauseRow = ({ cause, scale, severityUsed, menu, actions }) => (
  */
 const AnalysisEditor = ({ revision }) => {
   const { net, model, base, canEdit, canAct, fmea } = revision;
+  const { can } = usePermissions();
   const mutation = useFmeaNodeMutation();
   const actionMutation = useFmeaActionMutation();
   const confirm = useConfirm();
@@ -244,10 +247,15 @@ const AnalysisEditor = ({ revision }) => {
                           </ul>
                         )}
                         {canAct && (
-                          <div>
+                          <div className="flex flex-wrap gap-2">
                             <CTAButton type="secondary" icon={PlusIcon} onClick={() => setDialog({ type: "action", cause: c })}>
                               Add an action
                             </CTAButton>
+                            {can("risk.manage") && (
+                              <CTAButton type="secondary" icon={ShieldAlertIcon} onClick={() => setDialog({ type: "risk", cause: c })} aria-label={`Raise a risk from ${c.text}`}>
+                                Raise a risk
+                              </CTAButton>
+                            )}
                           </div>
                         )}
                         {(c.controlLinks.length > 0 || (canAct && (c.preventionControls || c.detectionControls))) && (
@@ -399,6 +407,7 @@ const AnalysisEditor = ({ revision }) => {
       {dialog?.type === "complete" && <CompleteActionDialog action={dialog.action} cause={dialog.cause} scale={scale} onClose={close} />}
       {dialog?.type === "cancelAction" && <CancelActionDialog action={dialog.action} onClose={close} />}
       {dialog?.type === "carry" && <CarryDialog cause={dialog.cause} onClose={close} />}
+      {dialog?.type === "risk" && <RaiseRiskFromCause kind="fmea_cause" id={dialog.cause.id} onClose={close} />}
       {dialog?.type === "endLink" && <EndLinkDialog link={dialog.link} onClose={close} />}
       {dialog?.type === "cause" && <CauseDialog mode={dialog.mode} existing={dialog.existing} scale={scale} onClose={close} />}
     </MenuCard>

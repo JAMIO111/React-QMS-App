@@ -10,10 +10,10 @@ import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import { RiskDialog } from "./RiskDialogs";
 
-const RAISABLE = ["ncr", "capa", "audit_finding"];
+const RAISABLE = ["ncr", "capa", "audit_finding", "fmea_cause"];
 
 /** Fetches the suggestion for a risk raised from this record, then opens the usual raise dialog with it. */
-const RaiseFromRecord = ({ kind, id, onClose }) => {
+export const RaiseFromRecord = ({ kind, id, onClose }) => {
   const navigate = useNavigate();
   const draft = useRiskDraft(kind, id);
   if (draft.isLoading)

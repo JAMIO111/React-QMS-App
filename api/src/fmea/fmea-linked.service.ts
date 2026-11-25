@@ -6,7 +6,7 @@ import { DatabaseService, Db } from '../database/database.service';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 
-export type LinkedKind = 'part' | 'part_family' | 'machine' | 'control_plan' | 'ncr' | 'capa' | 'audit_finding' | 'supplier_scar' | 'change';
+export type LinkedKind = 'part' | 'part_family' | 'machine' | 'control_plan' | 'ncr' | 'capa' | 'audit_finding' | 'supplier_scar' | 'change' | 'capa_scope';
 const ORIGIN_KINDS = ['ncr', 'capa', 'audit_finding', 'supplier_scar', 'change'];
 
 export interface LinkedFmea {
@@ -37,8 +37,17 @@ export class FmeaLinkedService {
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.settle_fmeas(${org}::uuid)`);
       if (ORIGIN_KINDS.includes(kind)) return this.raisedFrom(db, org, kind, id);
+      // The 8D's own scope: the parts, their families and the machines of the non-conformances it is linked to (for the prompt on its prevention step).
+      const capaScope = sql`(select n.part_id, p.part_family_id, n.causal_process_id as machine_id
+                               from public.capa_ncr_links cl join public.nonconformances n on n.id = cl.nonconformance_id and n.deleted_at is null
+                               left join public.parts p on p.id = n.part_id
+                              where cl.capa_id = ${id}::uuid and cl.ended_at is null and cl.organisation_id = ${org}::uuid)`;
       const match =
-        kind === 'part'
+        kind === 'capa_scope'
+          ? sql`((l.kind = 'part' and l.part_id in (select a.part_id from ${capaScope} a))
+                 or (l.kind = 'part_family' and l.part_family_id in (select b.part_family_id from ${capaScope} b))
+                 or (l.kind = 'machine' and l.machine_id in (select c.machine_id from ${capaScope} c)))`
+          : kind === 'part'
           ? sql`((l.kind = 'part' and l.part_id = ${id}::uuid)
                  or (l.kind = 'part_family' and l.part_family_id = (select p.part_family_id from public.parts p where p.id = ${id}::uuid and p.organisation_id = ${org}::uuid)))`
           : kind === 'part_family'

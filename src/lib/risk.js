@@ -117,6 +117,8 @@ export const LINK_KINDS = [
   { value: "machine", label: "Machine", plural: "Machines" },
   { value: "document", label: "Document", plural: "Documents" },
   { value: "operation_code", label: "Operation", plural: "Operations" },
+  // Made from the FMEA cause (Raise a risk), not chosen here: a cause is found in its FMEA.
+  { value: "fmea_cause", label: "FMEA cause", plural: "FMEA causes" },
 ];
 export const linkKindLabel = (kind) => LINK_KINDS.find((k) => k.value === kind)?.label ?? kind;
 
@@ -140,6 +142,8 @@ export const linkPath = (link) => {
       return "/Machines";
     case "document":
       return `/Documentation/Documents/${link.id}`;
+    case "fmea_cause":
+      return link.parentId && link.revisionId ? `/FMEA/${link.parentId}/revisions/${link.revisionId}` : null;
     default:
       return null;
   }

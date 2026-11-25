@@ -224,6 +224,7 @@ export const TASK_LINK_KINDS = {
   inspection_requirement: "Inspection requirement",
   quality_alert: "Quality alert",
   risk: "Risk",
+  fmea_revision: "FMEA revision",
 };
 export const taskLinkKindLabel = (kind) => TASK_LINK_KINDS[kind] ?? "Record";
 
@@ -237,6 +238,8 @@ export const taskLinkPath = (link) => {
       return link.parentId ? `/Process-Control/Plans/${link.parentId}/revisions/${link.id}` : null;
     case "document_revision":
       return link.parentId ? `/Documentation/Documents/${link.parentId}/revisions/${link.id}` : null;
+    case "fmea_revision":
+      return link.parentId ? `/FMEA/${link.parentId}/revisions/${link.id}` : null;
     case "supplier":
       return `/Suppliers/${link.id}`;
     case "risk":
@@ -257,6 +260,7 @@ export const REVISION_KINDS = [
   { value: "part", label: "Part revision", hint: "The next revision of a part's drawing and values" },
   { value: "control_plan", label: "Control plan revision", hint: "The next revision of a control plan" },
   { value: "document", label: "Document revision", hint: "The next revision of a controlled document" },
+  { value: "fmea", label: "FMEA revision", hint: "The next revision of an FMEA in force" },
 ];
 
 export const REVIEW_RESULT = {

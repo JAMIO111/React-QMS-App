@@ -87,7 +87,7 @@ export class RiskController {
 
   @Get('risks/linked')
   @OrganisationScoped(READ)
-  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string', enum: ['ncr', 'capa', 'audit_finding', 'supplier', 'part', 'part_family', 'machine', 'document'] } })
+  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string', enum: ['ncr', 'capa', 'audit_finding', 'supplier', 'part', 'part_family', 'machine', 'document', 'fmea_cause'] } })
   @ApiQuery({ name: 'id', required: true, schema: { type: 'string', format: 'uuid' } })
   @ApiOkResponse({ description: 'Risks linked to one record (not retired; closed ones last), and whether the caller may raise one' })
   linked(@Ctx() ctx: RequestContext, @Query() query: unknown) {
@@ -96,7 +96,7 @@ export class RiskController {
 
   @Get('risk-draft')
   @OrganisationScoped(READ)
-  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string', enum: ['ncr', 'capa', 'audit_finding'] } })
+  @ApiQuery({ name: 'kind', required: true, schema: { type: 'string', enum: ['ncr', 'capa', 'audit_finding', 'fmea_cause'] } })
   @ApiQuery({ name: 'id', required: true, schema: { type: 'string', format: 'uuid' } })
   @ApiOkResponse({ description: 'What a risk raised from a non-conformance, an 8D or an audit finding would start with: fields and suggested links. Nothing is saved.' })
   draft(@Ctx() ctx: RequestContext, @Query() query: unknown) {

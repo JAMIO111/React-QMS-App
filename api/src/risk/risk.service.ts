@@ -10,7 +10,7 @@ import {
 } from './risk.schemas';
 
 const LINK_COLUMN: Record<string, string> = {
-  ncr: 'ncr_id', capa: 'capa_id', audit_finding: 'audit_finding_id', supplier: 'supplier_id', part: 'part_id', part_family: 'part_family_id', machine: 'machine_id', document: 'document_id',
+  ncr: 'ncr_id', capa: 'capa_id', audit_finding: 'audit_finding_id', supplier: 'supplier_id', part: 'part_id', part_family: 'part_family_id', machine: 'machine_id', document: 'document_id', fmea_cause: 'fmea_cause_id',
 };
 
 /**
@@ -19,8 +19,9 @@ const LINK_COLUMN: Record<string, string> = {
  */
 const labelled = (src: SQL) => sql`
   select x.*,
-         coalesce(n.reference, c.reference, f.reference, s.code, p.part_number, pf.code, m.code, d.number) as t_reference,
-         coalesce(n.title, c.title, f.title, s.name, p.name, pf.name, m.name, d.title) as t_name
+         coalesce(n.reference, c.reference, f.reference, s.code, p.part_number, pf.code, m.code, d.number, ff.number) as t_reference,
+         coalesce(n.title, c.title, f.title, s.name, p.name, pf.name, m.name, d.title, fc.text) as t_name,
+         fr.fmea_id as t_fmea_id, fc.revision_id as t_revision_id
     from (${src}) x
     left join public.nonconformances n on x.kind = 'ncr' and n.id = x.target_id
     left join public.capas c on x.kind = 'capa' and c.id = x.target_id
@@ -29,7 +30,10 @@ const labelled = (src: SQL) => sql`
     left join public.parts p on x.kind = 'part' and p.id = x.target_id
     left join public.part_families pf on x.kind = 'part_family' and pf.id = x.target_id
     left join public.machines m on x.kind = 'machine' and m.id = x.target_id
-    left join public.documents d on x.kind = 'document' and d.id = x.target_id`;
+    left join public.documents d on x.kind = 'document' and d.id = x.target_id
+    left join public.fmea_causes fc on x.kind = 'fmea_cause' and fc.id = x.target_id
+    left join public.fmea_revisions fr on fr.id = fc.revision_id
+    left join public.fmeas ff on ff.id = fr.fmea_id`;
 
 const toLink = (r: Row) => ({
   kind: r.kind as string,
@@ -39,6 +43,9 @@ const toLink = (r: Row) => ({
   /** Number and name; null when the caller may not read the record. */
   reference: r.kind === 'operation_code' ? (r.operation_code as string) : ((r.t_reference as string) ?? null),
   name: (r.t_name as string) ?? null,
+  /** For an FMEA cause: the FMEA and the revision it sits in, to open it. */
+  parentId: (r.t_fmea_id as string) ?? null,
+  revisionId: (r.t_revision_id as string) ?? null,
   readable: r.kind === 'operation_code' || r.t_reference != null,
 });
 const TARGET = sql.raw(`coalesce(${Object.values(LINK_COLUMN).map((c) => `l.${c}`).join(', ')})`);

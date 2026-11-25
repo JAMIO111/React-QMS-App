@@ -851,6 +851,61 @@ describe("Revision page: Gauge R&R coverage", () => {
   });
 });
 
+describe("Revision page: FMEA causes that carry a control to a characteristic", () => {
+  const effective = () => ({
+    ...rev({ id: "cr2", revisionCode: "B", status: "effective" }),
+    plan: { id: "cp1", planCode: "CP-HCR-001", title: "Rods", active: true },
+    operations: [
+      {
+        id: "o1", operationCode: "OP-020", sequence: 20, name: "CNC turning", machine: null, workCentre: null, notes: null,
+        characteristics: [
+          { id: "c1", operationId: "o1", characteristicKey: "OD", sequence: 10, charNumber: null, name: "Outer diameter", dataType: "variable", valueSource: "plan", appliesTo: "all", nominal: 25, lowerLimit: 24.9, upperLimit: 25.1, unitCode: "mm", criticality: "critical", spcEligible: false, parts: [], sampling: [], reactions: [], notes: null },
+          { id: "c2", operationId: "o1", characteristicKey: "LEN", sequence: 20, charNumber: null, name: "Length", dataType: "variable", valueSource: "plan", appliesTo: "all", nominal: 100, lowerLimit: 99, upperLimit: 101, unitCode: "mm", criticality: "major", spcEligible: false, parts: [], sampling: [], reactions: [], notes: null },
+        ],
+      },
+    ],
+    reactions: [],
+    scopeParts: [],
+  });
+  const cover = {
+    available: true,
+    data: [
+      {
+        operationCode: "OP-020", characteristicKey: "OD",
+        covers: [{ causeId: "k1", cause: "Tool wear", failureMode: "Bore oversize", priority: "high", needsAttention: true, kind: "prevention", fmeaId: "f1", fmeaNumber: "FMEA-001", fmeaTitle: "Turning", revisionLetter: "A" }],
+      },
+    ],
+  };
+
+  it("names the FMEA and the cause beside the characteristic it is carried to, and nothing beside the others", async () => {
+    permissions.push("fmea.read");
+    routeApi({ "GET /control-plan-revisions/cr2": effective(), "GET /control-plan-revisions/cr2/fmea-cover": cover });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    const list = await screen.findByRole("list", { name: "FMEA causes covered by OD" });
+    expect(within(list).getByRole("link", { name: "FMEA-001" })).toHaveAttribute("href", "/FMEA/f1");
+    expect(within(list).getByText(/Tool wear/)).toBeInTheDocument();
+    expect(within(list).getByText("High")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "FMEA causes covered by LEN" })).toBeNull();
+  });
+
+  it("asks nothing and shows nothing without permission to read FMEAs", async () => {
+    routeApi({ "GET /control-plan-revisions/cr2": effective() });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    expect(apiFetch.mock.calls.some(([path]) => path.includes("fmea-cover"))).toBe(false);
+    expect(screen.queryByText(/FMEA causes covered/)).toBeNull();
+  });
+
+  it("says nothing when the answer is that FMEAs are not available to the reader", async () => {
+    permissions.push("fmea.read");
+    routeApi({ "GET /control-plan-revisions/cr2": effective(), "GET /control-plan-revisions/cr2/fmea-cover": { available: false, data: [] } });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    expect(screen.queryByRole("list", { name: /FMEA causes covered by/ })).toBeNull();
+  });
+});
+
 describe("Requirement preview", () => {
   const resolution = (over) => ({
     status: "ok",

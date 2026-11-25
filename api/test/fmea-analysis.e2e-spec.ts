@@ -39,7 +39,7 @@ describe('building the analysis', () => {
     ctx.fmea = made.body.id;
     ctx.rev = made.body.inProgress.id;
     const rev = (await api().get(`/api/v1/fmea-revisions/${ctx.rev}`).set(h).expect(200)).body;
-    expect(rev.net).toEqual({ items: [], counts: { items: 0, functions: 0, failureModes: 0, effects: 0, causes: 0, needAttention: 0, unrated: 0, openActions: 0, doneActions: 0, overdueActions: 0 } });
+    expect(rev.net).toEqual({ items: [], counts: { items: 0, functions: 0, failureModes: 0, effects: 0, causes: 0, needAttention: 0, unrated: 0, openActions: 0, doneActions: 0, overdueActions: 0, controlLinks: 0 } });
     expect(rev.model).toMatchObject({ version: 1, method: 'rpn', isLatest: true, rpnHighFrom: 200, rpnMediumFrom: 100, severityFloor: 9 });
     expect(rev.model.scale.severity).toHaveLength(10);
     expect(rev.base).toBeNull();

@@ -10,6 +10,8 @@ import { usePermissions } from "../../hooks/useQmsApi";
 import { useMsaCoverage } from "../../hooks/useMsa";
 import { worstCoverage } from "../../lib/msa";
 import { CoveragePill } from "../msa/CoverageView";
+import { usePlanFmeaCover } from "../../hooks/useFmea";
+import { fmeaPath, priorityLabel, priorityPill } from "../../lib/fmea";
 import { useControlPlanRevision, useMachines, useProcessControlMutation, useRevisionComparison } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
 import { CRITICALITY, REACTION_ACTIONS, REACTION_TRIGGERS, describeRequirement, describeSampling, describeSpc } from "../../lib/processControl";
@@ -155,7 +157,7 @@ const Criticality = ({ value }) => {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${c.className}`}>{c.label}</span>;
 };
 
-const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCharacteristic, coverage }) => {
+const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCharacteristic, coverage, fmeaCover }) => {
   const mutation = useProcessControlMutation();
   const confirm = useConfirm();
   const { showToast } = useToast();
@@ -219,6 +221,20 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
                     <div className="mt-1 flex items-center gap-1 text-xs text-secondary-text">
                       Gauge R&amp;R <CoveragePill state={coverage.get(`${operation.operationCode}:${ch.characteristicKey.toUpperCase()}`)} />
                     </div>
+                  )}
+                  {fmeaCover?.get(`${operation.operationCode.toUpperCase()}:${ch.characteristicKey.toUpperCase()}`)?.length > 0 && (
+                    <ul className="mt-1 flex flex-col gap-0.5 text-xs text-secondary-text" aria-label={`FMEA causes covered by ${ch.characteristicKey}`}>
+                      {fmeaCover.get(`${operation.operationCode.toUpperCase()}:${ch.characteristicKey.toUpperCase()}`).map((c) => (
+                        <li key={`${c.causeId}-${c.kind}`} className="flex flex-wrap items-center gap-1">
+                          FMEA{" "}
+                          <Link className="text-brand-primary hover:underline" to={fmeaPath(c.fmeaId)}>
+                            {c.fmeaNumber}
+                          </Link>
+                          : {c.cause}
+                          {c.priority && <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${priorityPill(c.priority)}`}>{priorityLabel(c.priority)}</span>}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </td>
                 <td className={`${td} tabular-nums`}>{describeRequirement(ch)}</td>
@@ -339,6 +355,13 @@ const RevisionPage = () => {
     });
     return new Map([...by].map(([k, states]) => [k, worstCoverage(states)]));
   }, [coverageQuery.data]);
+  // The FMEA causes (of FMEAs in force) that carry a control to a characteristic of this revision: information beside the characteristic.
+  const fmeaQuery = usePlanFmeaCover(revisionId, { enabled: can("fmea.read") });
+  const fmeaCover = useMemo(() => {
+    const by = new Map();
+    (fmeaQuery.data?.available ? fmeaQuery.data.data : []).forEach((g) => by.set(`${g.operationCode.toUpperCase()}:${g.characteristicKey.toUpperCase()}`, g.covers));
+    return by;
+  }, [fmeaQuery.data]);
   const count = revision?.operations.reduce((n, o) => n + o.characteristics.length, 0) ?? 0;
 
   return (
@@ -378,6 +401,7 @@ const RevisionPage = () => {
               onAddCharacteristic={(op) => setEditingCharacteristic({ operationId: op.id })}
               onEditCharacteristic={(ch) => setEditingCharacteristic({ characteristic: ch })}
               coverage={showCoverage ? coverage : undefined}
+              fmeaCover={fmeaCover}
             />
           ))}
           {editable && (

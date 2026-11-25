@@ -11,6 +11,7 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import AnalysisEditor from "./AnalysisEditor";
+import CoverageCard from "./CoverageCard";
 import { BaseChangesCallout, CompareCard } from "./LifecyclePanels";
 import { ApproveDialog, ApproverDialog, LinksDialog, ReasonDialog, TeamDialog } from "./FmeaDialogs";
 
@@ -131,6 +132,7 @@ const RevisionPage = () => {
       )}
       <BaseChangesCallout revision={revision} />
       <AnalysisEditor revision={revision} />
+      <CoverageCard revision={revision} />
       <CompareCard revision={revision} />
 
       <MenuCard

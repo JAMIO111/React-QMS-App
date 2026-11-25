@@ -316,3 +316,54 @@ export const useFmeaBaseChanges = (id, { enabled = true } = {}) => {
     retry: false,
   });
 };
+
+// ---- controls carried to the control plan (FM5a) -------------------------------------------------------------------
+
+/** Carry a control of a cause to a plan characteristic, or end a carried one. The answer is the whole revision: it is put where the page reads it. */
+export const useFmeaControlMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      if (action === "carry") return apiFetch(`/fmea-causes/${id}/carry-to-plan`, { method: "POST", body, organisationId });
+      if (action === "end") return apiFetch(`/fmea-control-links/${id}/end`, { method: "POST", body, organisationId });
+      throw new Error(`Unknown action ${action}`);
+    },
+    onSuccess: (revision) => queryClient.setQueryData(key(organisationId, "revision", revision.id), revision),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** The control plan characteristics a control can be carried to (searchable); `causeId` adds the special class suggestion. */
+export const usePlanCharacteristics = ({ causeId, q } = {}, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "plan-characteristics", causeId ?? null, q ?? ""),
+    queryFn: () => apiFetch(`/fmea-plan-characteristics?${qs({ causeId, q, limit: 100 })}`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
+/** Which causes that need attention the control plan in force covers. */
+export const useControlCoverage = (revisionId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "control-coverage", revisionId),
+    queryFn: () => apiFetch(`/fmea-revisions/${revisionId}/control-coverage`, { organisationId }),
+    enabled: !!organisationId && !!revisionId && enabled,
+    retry: false,
+  });
+};
+
+/** For a control plan revision's page: the FMEA causes that carry a control to each of its characteristics. */
+export const usePlanFmeaCover = (planRevisionId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "plan-cover", planRevisionId),
+    queryFn: () => apiFetch(`/control-plan-revisions/${planRevisionId}/fmea-cover`, { organisationId }),
+    enabled: !!organisationId && !!planRevisionId && enabled,
+    retry: false,
+  });
+};

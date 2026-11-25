@@ -1,19 +1,44 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import CTAButton from "@/components/CTAButton";
-import { CheckIcon, PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "@/components/icons";
+import { CheckIcon, LinkIcon, PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "@/components/icons";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useFmeaActionMutation, useFmeaNodeMutation } from "../../hooks/useFmea";
-import { actionKindLabel, actionStatusLabel, actionStatusPill, CHILD_KINDS, dueWords, elementTypeLabel, effectLevelLabel, fmeaPath, itemKindLabel, modelWords, priorityLabel, priorityPill, ratingWords, revisedWords, revisionPath, specialClassLabel, topKinds, worstSeverity } from "../../lib/fmea";
+import { actionKindLabel, actionStatusLabel, actionStatusPill, CHILD_KINDS, controlKindLabel, dueWords, linkStateLabel, linkStatePill, planTargetWords, elementTypeLabel, effectLevelLabel, fmeaPath, itemKindLabel, modelWords, priorityLabel, priorityPill, ratingWords, revisedWords, revisionPath, specialClassLabel, topKinds, worstSeverity } from "../../lib/fmea";
 import { FormError } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
 import RowActionsMenu from "../ui/RowActionsMenu";
 import { ActionDialog, CancelActionDialog, CompleteActionDialog } from "./ActionDialogs";
 import { CauseDialog, EffectDialog, FailureModeDialog, FunctionDialog, ItemDialog } from "./AnalysisDialogs";
+import { CarryDialog, EndLinkDialog } from "./ControlDialogs";
 
 const Pill = ({ className = "", children }) => <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>{children}</span>;
 const FromBase = () => <Pill className="bg-secondary-bg text-secondary-text">From the base</Pill>;
+
+/** A control carried to a control plan characteristic, and where it stands against the plan now. */
+const ControlLinkLine = ({ link, onEnd }) => (
+  <li className="rounded-lg border border-border-color bg-secondary-bg px-3 py-2 text-sm">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-primary-text">
+          <Pill className="mr-2 bg-brand-primary/15 text-brand-primary">{controlKindLabel(link.kind)}</Pill>
+          {planTargetWords(link)}
+          {link.carried && <span className="ml-2 text-xs text-secondary-text">carried on from the revision before</span>}
+        </p>
+        {link.note && <p className="text-xs text-secondary-text">{link.note}</p>}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Pill className={linkStatePill(link.state)}>{linkStateLabel(link.state)}</Pill>
+        {link.canEnd && (
+          <CTAButton type="neutral" icon={XIcon} aria-label={`End the link to ${planTargetWords(link)}`} onClick={onEnd}>
+            End link
+          </CTAButton>
+        )}
+      </div>
+    </div>
+  </li>
+);
 
 /** One cause: its controls, the ratings and what the database worked out from them. */
 const ActionLine = ({ action, cause, onComplete, onEdit, onCancel, onReopen, busy }) => (
@@ -199,7 +224,7 @@ const AnalysisEditor = ({ revision }) => {
                     { label: "Remove", icon: Trash2Icon, tone: "danger", onSelect: () => removeNode("removeCause", c.id, "Remove this cause?", "It is taken out of the analysis.") },
                   ])}
                   actions={
-                    (c.actions.length > 0 || canAct) && (
+                    (c.actions.length > 0 || c.controlLinks.length > 0 || canAct) && (
                       <div className="mt-2 flex flex-col gap-2" role="group" aria-label={`Actions for ${c.text}`}>
                         {c.actions.length > 0 && (
                           <ul className="flex flex-col gap-2">
@@ -222,6 +247,24 @@ const AnalysisEditor = ({ revision }) => {
                             <CTAButton type="secondary" icon={PlusIcon} onClick={() => setDialog({ type: "action", cause: c })}>
                               Add an action
                             </CTAButton>
+                          </div>
+                        )}
+                        {(c.controlLinks.length > 0 || (canAct && (c.preventionControls || c.detectionControls))) && (
+                          <div className="flex flex-col gap-2" role="group" aria-label={`Control plan for ${c.text}`}>
+                            {c.controlLinks.length > 0 && (
+                              <ul className="flex flex-col gap-2">
+                                {c.controlLinks.map((l) => (
+                                  <ControlLinkLine key={l.id} link={l} onEnd={() => setDialog({ type: "endLink", link: l })} />
+                                ))}
+                              </ul>
+                            )}
+                            {canAct && (c.preventionControls || c.detectionControls) && (
+                              <div>
+                                <CTAButton type="secondary" icon={LinkIcon} onClick={() => setDialog({ type: "carry", cause: c })}>
+                                  Carry to the control plan
+                                </CTAButton>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -336,7 +379,7 @@ const AnalysisEditor = ({ revision }) => {
         )}
         <p className="text-sm text-secondary-text" aria-label="Analysis figures">
           {counts.items} {counts.items === 1 ? "item" : "items"} · {counts.failureModes} failure {counts.failureModes === 1 ? "mode" : "modes"} · {counts.causes} {counts.causes === 1 ? "cause" : "causes"} ·{" "}
-          {counts.needAttention} {counts.needAttention === 1 ? "needs" : "need"} attention · {counts.unrated} not rated · {counts.openActions} open {counts.openActions === 1 ? "action" : "actions"}{counts.overdueActions > 0 ? ` (${counts.overdueActions} late)` : ""}
+          {counts.needAttention} {counts.needAttention === 1 ? "needs" : "need"} attention · {counts.unrated} not rated · {counts.openActions} open {counts.openActions === 1 ? "action" : "actions"}{counts.overdueActions > 0 ? ` (${counts.overdueActions} late)` : ""} · {counts.controlLinks} carried to the control plan
         </p>
         <FormError error={mutation.error ?? actionMutation.error} />
         {net.items.length === 0 ? (
@@ -354,6 +397,8 @@ const AnalysisEditor = ({ revision }) => {
       {dialog?.type === "action" && <ActionDialog cause={dialog.cause} existing={dialog.existing} onClose={close} />}
       {dialog?.type === "complete" && <CompleteActionDialog action={dialog.action} cause={dialog.cause} scale={scale} onClose={close} />}
       {dialog?.type === "cancelAction" && <CancelActionDialog action={dialog.action} onClose={close} />}
+      {dialog?.type === "carry" && <CarryDialog cause={dialog.cause} onClose={close} />}
+      {dialog?.type === "endLink" && <EndLinkDialog link={dialog.link} onClose={close} />}
       {dialog?.type === "cause" && <CauseDialog mode={dialog.mode} existing={dialog.existing} scale={scale} onClose={close} />}
     </MenuCard>
   );

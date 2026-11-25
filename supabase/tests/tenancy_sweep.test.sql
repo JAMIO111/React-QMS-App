@@ -322,6 +322,11 @@ BEGIN
   PERFORM set_config('role', 'postgres', true);
   INSERT INTO public.fmea_reviews (organisation_id, fmea_id, revision_id, outcome, note)
     SELECT f.organisation_id, f.id, r.id, 'no_change', 'Sweep review' FROM public.fmeas f JOIN public.fmea_revisions r ON r.fmea_id = f.id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA';
+  -- FMEA (FM5a): a control carried to a control plan characteristic (written straight in as well: the sweep only needs a row in the table).
+  INSERT INTO public.control_plans (organisation_id, plan_code, title) VALUES (a, 'SWEEP-FMEA-CP', 'Sweep FMEA plan');
+  INSERT INTO public.fmea_control_links (organisation_id, revision_id, cause_id, control_kind, control_plan_id, operation_code, characteristic_key)
+    SELECT c.organisation_id, c.revision_id, c.id, 'prevention', (SELECT id FROM public.control_plans WHERE organisation_id = a AND plan_code = 'SWEEP-FMEA-CP'), 'OP-10', 'OD'
+      FROM public.fmea_causes c JOIN public.fmea_revisions r ON r.id = c.revision_id JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA' LIMIT 1;
   PERFORM set_config('role', 'authenticated', true);
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);

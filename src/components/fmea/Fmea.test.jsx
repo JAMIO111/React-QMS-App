@@ -25,7 +25,7 @@ const summary = (over = {}) => ({
 });
 const LEVELS = (word) => Array.from({ length: 10 }, (_, i) => ({ label: `${word} ${i + 1}` }));
 const MODEL = { id: "m1", version: 1, method: "rpn", rpnHighFrom: 200, rpnMediumFrom: 100, severityFloor: 9, scale: { severity: LEVELS("Sev"), occurrence: LEVELS("Occ"), detection: LEVELS("Det") }, latestVersion: 1, isLatest: true };
-const cause = (over = {}) => ({ id: "c1", text: "Tool wear", preventionControls: "Tool life counter", detectionControls: null, occurrence: 5, detection: 6, severityUsed: 8, rpn: 240, priority: "high", needsAttention: true, noActionReason: null, position: 1, fromBase: false, actions: [], ...over });
+const cause = (over = {}) => ({ id: "c1", text: "Tool wear", preventionControls: "Tool life counter", detectionControls: null, occurrence: 5, detection: 6, severityUsed: 8, rpn: 240, priority: "high", needsAttention: true, noActionReason: null, position: 1, fromBase: false, actions: [], controlLinks: [], ...over });
 const NET = {
   items: [
     {
@@ -49,7 +49,7 @@ const NET = {
       ],
     },
   ],
-  counts: { items: 2, functions: 1, failureModes: 1, effects: 2, causes: 1, needAttention: 1, unrated: 0, openActions: 0, doneActions: 0, overdueActions: 0 },
+  counts: { items: 2, functions: 1, failureModes: 1, effects: 2, causes: 1, needAttention: 1, unrated: 0, openActions: 0, doneActions: 0, overdueActions: 0, controlLinks: 0 },
 };
 const revision = (over = {}) => ({
   id: "r2", fmeaId: "f1", fmea: { id: "f1", number: "FMEA-001", kind: "process", title: "Machining of the bracket", status: "active" }, sequence: 2, letter: null, status: "draft",
@@ -71,7 +71,13 @@ const renderAt = (path, ui) => {
 };
 
 let current;
+let coverageAnswer;
 beforeEach(() => {
+  coverageAnswer = {
+    revision: { id: "r2", fmeaId: "f1", number: "FMEA-001", title: "Machining of the bracket", letter: null, status: "draft" }, canReadPlans: true, canCarry: true,
+    rows: [{ id: "c1", text: "Tool wear", failureMode: "Bore oversize", itemName: "OP10 Turn", priority: "high", severity: 8, rpn: 240, specialClass: "critical", status: "not_covered", links: [], why: "No control plan characteristic checks this: carry a control to one, or say why not." }],
+    totals: { needingAttention: 1, covered: 0, unverified: 0, linkProblems: 0, notCovered: 1, coveredPercent: 0 },
+  };
   held = ["fmea.read", "fmea.manage"];
   apiFetch.mockReset();
   current = revision();
@@ -122,6 +128,18 @@ beforeEach(() => {
       };
     }
     if (path === "/fmea-revisions/r2/base-changes") return { hasBase: false };
+    if (path.startsWith("/fmea-plan-characteristics")) {
+      return {
+        available: true,
+        data: [
+          { plan: { id: "p1", code: "CP-1", title: "Brackets" }, operationCode: "OP-020", operationName: "Turning", characteristicKey: "OD", name: "Outer diameter", criticality: "major", inForce: true, revisionStatus: "effective", revisionCode: "A", suggestion: "The failure mode is marked critical, but the plan characteristic is major. Consider raising it to critical in the next plan revision." },
+          { plan: { id: "p1", code: "CP-1", title: "Brackets" }, operationCode: "OP-020", operationName: "Turning", characteristicKey: "VISUAL", name: "Free from burrs", criticality: "minor", inForce: false, revisionStatus: "draft", revisionCode: "B", suggestion: null },
+        ],
+      };
+    }
+    if (path === "/fmea-causes/c1/carry-to-plan") return revision();
+    if (path === "/fmea-control-links/l1/end") return revision();
+    if (path === "/fmea-revisions/r2/control-coverage") return coverageAnswer;
     return {};
   });
 });
@@ -427,5 +445,122 @@ describe("actions, My actions, comparing and the review (FM4)", () => {
       await userEvent.click(within(dialog).getByRole("button", { name: "Mark as done" }));
       await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmea-actions/a1/complete", expect.objectContaining({ method: "POST", body: expect.objectContaining({ note: "Done on both lathes" }) })));
     });
+  });
+});
+
+describe("controls carried to the control plan (FM5a)", () => {
+  const link = (over = {}) => ({
+    id: "l1", causeId: "c1", revisionId: "r2", kind: "prevention", plan: { id: "p1", code: "CP-1", title: "Brackets" }, operationCode: "OP-020", characteristicKey: "OD", characteristicName: "Outer diameter",
+    criticality: "major", note: null, createdAt: "2026-11-02T10:00:00Z", state: "in_plan", carried: false, canEnd: true, ...over,
+  });
+  const withLinks = (links) =>
+    revision({
+      net: { ...NET, counts: { ...NET.counts, controlLinks: links.length }, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], causes: [cause({ controlLinks: links })] }] }] }] }] },
+    });
+  const open = () =>
+    renderAt("/FMEA/f1/revisions/r2", (
+      <Routes>
+        <Route path="/FMEA/:id/revisions/:revisionId" element={<RevisionPage />} />
+      </Routes>
+    ));
+
+  it("carries a control the cause holds to a plan characteristic and sends the plan, the operation and the key", async () => {
+    open();
+    const group = await screen.findByRole("group", { name: "Control plan for Tool wear" });
+    await userEvent.click(within(group).getByRole("button", { name: "Carry to the control plan" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Carry to the plan" })).toBeDisabled();
+    expect(within(dialog).getByText("Tool life counter")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /^Control plan characteristic/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /CP-1 · OP-020 · OD \(Outer diameter\)/ }));
+    expect(within(dialog).getByText(/marked critical, but the plan characteristic is major/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText(/^Note/), "Tool life is on the plan");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Carry to the plan" }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        "/fmea-causes/c1/carry-to-plan",
+        expect.objectContaining({ method: "POST", body: { controlKind: "prevention", controlPlanId: "p1", operationCode: "OP-020", characteristicKey: "OD", note: "Tool life is on the plan" } }),
+      ),
+    );
+  });
+
+  it("offers only the kind of control the cause holds, and says so when it holds none", async () => {
+    current = revision({
+      net: { ...NET, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], causes: [cause({ preventionControls: null, detectionControls: "Gauge every part" })] }] }] }] }] },
+    });
+    open();
+    const group = await screen.findByRole("group", { name: "Control plan for Tool wear" });
+    await userEvent.click(within(group).getByRole("button", { name: "Carry to the control plan" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Gauge every part")).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: /^Which control/ })).toHaveValue("Detection control");
+  });
+
+  it("offers no way to carry a control when the cause holds none, or to a reader", async () => {
+    current = revision({
+      net: { ...NET, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], causes: [cause({ preventionControls: null })] }] }] }] }] },
+    });
+    open();
+    await screen.findByText("Tool wear");
+    expect(screen.queryByRole("button", { name: "Carry to the control plan" })).not.toBeInTheDocument();
+  });
+
+  it("shows a carried control with where it stands, and ends it with a reason", async () => {
+    current = withLinks([link(), link({ id: "l2", kind: "detection", characteristicKey: "VISUAL", characteristicName: "Free from burrs", state: "not_in_force" })]);
+    open();
+    const group = await screen.findByRole("group", { name: "Control plan for Tool wear" });
+    expect(within(group).getByText(/CP-1 · OP-020 · OD \(Outer diameter\)/)).toBeInTheDocument();
+    expect(within(group).getByText("In the plan in force")).toBeInTheDocument();
+    expect(within(group).getByText("Only on a draft of the plan")).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole("button", { name: /End the link to CP-1 · OP-020 · OD/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "End the link" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/^Why does the link end/), "Tool life is checked elsewhere");
+    await userEvent.click(within(dialog).getByRole("button", { name: "End the link" }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/fmea-control-links/l1/end", expect.objectContaining({ method: "POST", body: { reason: "Tool life is checked elsewhere" } })),
+    );
+  });
+
+  it("shows a link that points at nothing as broken, and a reader cannot end or carry", async () => {
+    held = ["fmea.read"];
+    current = withLinks([link({ state: "missing", canEnd: false })]);
+    current.canAct = false;
+    open();
+    const group = await screen.findByRole("group", { name: "Control plan for Tool wear" });
+    expect(within(group).getByText("No longer in the plan")).toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: /End the link/ })).not.toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: "Carry to the control plan" })).not.toBeInTheDocument();
+  });
+
+  it("reads the coverage only when asked, and lists the cause that is not covered", async () => {
+    open();
+    await screen.findByText("Tool wear");
+    expect(apiFetch).not.toHaveBeenCalledWith("/fmea-revisions/r2/control-coverage", expect.anything());
+    await userEvent.click(screen.getByRole("button", { name: "Show" }));
+    const list = await screen.findByRole("list", { name: "Causes that need attention" });
+    expect(within(list).getByText("Not covered")).toBeInTheDocument();
+    expect(within(list).getByText("High")).toBeInTheDocument();
+    expect(screen.getByLabelText("Coverage figures")).toHaveTextContent("0 of 1 covered (0%) · 1 not covered");
+  });
+
+  it("says what a link needs when the plan in force does not have it, and when the reader cannot check", async () => {
+    coverageAnswer = {
+      ...coverageAnswer,
+      canReadPlans: false,
+      rows: [{ ...coverageAnswer.rows[0], status: "unverified", why: "Controls are carried to the control plan, but you cannot read control plans, so this cannot be checked.", links: [{ id: "l1", causeId: "c1", kind: "prevention", state: "unknown", planCode: null, operationCode: "OP-020", characteristicKey: "OD" }] }],
+      totals: { needingAttention: 1, covered: 0, unverified: 1, linkProblems: 0, notCovered: 0, coveredPercent: 0 },
+    };
+    open();
+    await userEvent.click(await screen.findByRole("button", { name: "Show" }));
+    expect(await screen.findByText(/cannot be checked against them/)).toBeInTheDocument();
+    expect(screen.getAllByText("Not checked")).toHaveLength(2);
+  });
+
+  it("shows no coverage card when nothing needs attention", async () => {
+    current = revision({ net: { ...NET, counts: { ...NET.counts, needAttention: 0 } } });
+    open();
+    await screen.findByText("Tool wear");
+    expect(screen.queryByText("Covered by the control plan?")).not.toBeInTheDocument();
   });
 });

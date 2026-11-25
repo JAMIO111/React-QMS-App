@@ -234,3 +234,45 @@ export const compareValue = (field, value) => {
 };
 
 export const REVIEW_OUTCOME = { no_change: "No change needed", revision_started: "A revision was started" };
+
+// ---- controls carried to the control plan (FM5a) -----------------------------------------------------------------
+
+export const CONTROL_KINDS = [
+  { value: "prevention", label: "Prevention control" },
+  { value: "detection", label: "Detection control" },
+];
+export const controlKindLabel = (kind) => CONTROL_KINDS.find((k) => k.value === kind)?.label ?? kind;
+
+/** Where a carried control stands against the control plan now. */
+export const LINK_STATE = {
+  in_plan: { label: "In the plan in force", tone: "success" },
+  not_in_force: { label: "Only on a draft of the plan", tone: "warning" },
+  missing: { label: "No longer in the plan", tone: "error" },
+  unknown: { label: "Not checked", tone: "neutral" },
+};
+export const linkStateLabel = (state) => LINK_STATE[state]?.label ?? state;
+export const linkStatePill = (state) => TONE_CLASS[LINK_STATE[state]?.tone ?? "neutral"];
+
+/** Whether the causes that need attention are covered by the control plan. */
+export const COVERAGE_STATUS = {
+  covered: { label: "Covered", tone: "success" },
+  unverified: { label: "Not checked", tone: "neutral" },
+  link_problem: { label: "Link needs attention", tone: "warning" },
+  not_covered: { label: "Not covered", tone: "error" },
+};
+export const coverageLabel = (status) => COVERAGE_STATUS[status]?.label ?? status;
+export const coveragePill = (status) => TONE_CLASS[COVERAGE_STATUS[status]?.tone ?? "neutral"];
+
+/** "FL-CP1 · OP-020 · OD (Outer diameter)": a plan characteristic in a line. */
+export const planTargetWords = (t) => `${t.plan?.code ?? "A control plan"} · ${t.operationCode} · ${t.characteristicKey}${t.characteristicName ? ` (${t.characteristicName})` : ""}`;
+
+/** The choices for carrying a control: every characteristic the server offered, "FL-CP1 · OP-020 · OD (Outer diameter)", with where it stands as the hint. */
+export const planCharacteristicOptions = (items = []) =>
+  items.map((c) => ({
+    value: `${c.plan.id}|${c.operationCode}|${c.characteristicKey}`,
+    label: `${c.plan.code} · ${c.operationCode} · ${c.characteristicKey} (${c.name})`,
+    hint: `${c.inForce ? "In force" : `Revision ${c.revisionCode} not in force yet`} · ${c.criticality}`,
+  }));
+
+/** The two controls a cause can carry (only the ones it holds), as choices. */
+export const carriableKinds = (cause) => CONTROL_KINDS.filter((k) => (k.value === "prevention" ? cause.preventionControls : cause.detectionControls));

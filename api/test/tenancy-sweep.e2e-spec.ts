@@ -681,6 +681,8 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/fmea-actions/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/fmea-actions/{id}/reopen': undefined,
     'POST /api/v1/fmeas/{id}/reviews': { outcome: 'no_change', note: 'Hijacked' },
+    'POST /api/v1/fmea-causes/{id}/carry-to-plan': { controlKind: 'prevention', controlPlanId: ids.ownerA, operationCode: 'OP-10', characteristicKey: 'OD' },
+    'POST /api/v1/fmea-control-links/{id}/end': { reason: 'Hijacked' },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -1291,6 +1293,10 @@ const hasSample = (op: Op) =>
     'POST /api/v1/fmeas/{id}/reviews',
     'GET /api/v1/fmea-revisions/{id}/compare',
     'GET /api/v1/fmea-revisions/{id}/base-changes',
+    'POST /api/v1/fmea-causes/{id}/carry-to-plan',
+    'POST /api/v1/fmea-control-links/{id}/end',
+    'GET /api/v1/fmea-revisions/{id}/control-coverage',
+    'GET /api/v1/control-plan-revisions/{id}/fmea-cover',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -1358,6 +1364,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/fmea-effects/')) return a.fmeaEffect;
   if (path.startsWith('/api/v1/fmea-causes/')) return a.fmeaCause;
   if (path.startsWith('/api/v1/fmea-actions/')) return a.fmeaAction;
+  if (path.startsWith('/api/v1/fmea-control-links/')) return a.fmeaControlLink;
   if (path.startsWith('/api/v1/fmeas/')) return a.fmea;
   if (path.startsWith('/api/v1/change-types/')) return a.changeType;
   if (path.startsWith('/api/v1/change-functions/')) return a.changeFunction;
@@ -1614,6 +1621,8 @@ beforeAll(async () => {
     a.fmeaEffect = (await q1(`select app.save_fmea_effect($1::uuid, null, '{"level":"own_plant","text":"Alpha effect","severity":5}'::jsonb) as id`, [a.fmeaMode])).id;
     a.fmeaCause = (await q1(`select app.save_fmea_cause($1::uuid, null, '{"text":"Alpha cause","occurrence":3,"detection":3}'::jsonb) as id`, [a.fmeaMode])).id;
     a.fmeaAction = (await q1(`select app.add_fmea_action($1::uuid, jsonb_build_object('kind', 'prevention', 'description', 'Alpha action', 'ownerUserId', $2::text, 'dueOn', (current_date + 30)::text)) as id`, [a.fmeaCause, ids.ownerA])).id;
+    await q1(`select app.save_fmea_cause($1::uuid, $2::uuid, '{"preventionControls":"Alpha control"}'::jsonb) as id`, [a.fmeaMode, a.fmeaCause]);
+    a.fmeaControlLink = (await q1(`select app.carry_fmea_cause_to_plan($1::uuid, jsonb_build_object('controlKind', 'prevention', 'controlPlanId', $2::text, 'operationCode', 'OP-10', 'characteristicKey', 'OD')) as id`, [a.fmeaCause, a.plan])).id;
     a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
     a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;

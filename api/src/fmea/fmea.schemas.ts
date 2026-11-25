@@ -179,3 +179,19 @@ export type ReviewBody = z.infer<typeof ReviewBody>;
 
 export const CompareQuery = z.object({ with: z.string().uuid().optional() }).strict();
 export type CompareQuery = z.infer<typeof CompareQuery>;
+
+// ---- FM5a: controls carried to the control plan ---------------------------------------------------------------------
+export const CarryToPlanBody = z
+  .object({
+    controlKind: z.enum(['prevention', 'detection']),
+    controlPlanId: z.string().uuid(),
+    operationCode: z.string().trim().min(1).max(30),
+    characteristicKey: z.string().trim().regex(/^[A-Z][A-Z0-9_]{0,39}$/, 'A characteristic key such as OD or GROOVE_POS'),
+    note: text(500),
+  })
+  .strict();
+export type CarryToPlanBody = z.infer<typeof CarryToPlanBody>;
+export const PlanCharacteristicsQuery = z
+  .object({ q: z.string().trim().max(100).optional(), planId: z.string().uuid().optional(), causeId: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) })
+  .strict();
+export type PlanCharacteristicsQuery = z.infer<typeof PlanCharacteristicsQuery>;

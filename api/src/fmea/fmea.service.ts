@@ -4,6 +4,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { linkState } from './fmea-coverage';
 import { ApproveBody, CreateFmeaBody, FmeaListQuery, LinkItem, ReviewBody, TeamItem, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -106,6 +107,40 @@ export const ACTION_SELECT = sql`
     left join public."Employees" e on e.id = a.owner_employee_id and e.organisation_id = a.organisation_id
     left join public.profiles op on op.id = a.owner_user_id
     left join public.profiles dp on dp.id = a.done_by`;
+
+/** The plan characteristic a carried control names, as the caller can read it: its name and criticality, looked for on the revision in force first, then on any live revision. */
+const planChar = (select: string, statuses: string) => `(select ${select} from public.control_plan_revisions cr
+    join public.control_plan_operations o on o.control_plan_revision_id = cr.id and upper(o.operation_code) = upper(l.operation_code)
+    join public.control_plan_characteristics ch on ch.control_plan_revision_id = cr.id and ch.operation_id = o.id and ch.characteristic_key = l.characteristic_key
+   where cr.control_plan_id = l.control_plan_id and cr.organisation_id = l.organisation_id and cr.status in (${statuses})
+   order by (cr.status = 'effective') desc, cr.created_at desc limit 1)`;
+const LIVE_PLAN = "'effective', 'approved', 'pending_approval', 'draft'";
+/** Controls carried to a control plan (FM5a): with the plan, the characteristic as it is now, and whether the plan in force has it. Read under the caller's own rights. */
+export const LINK_SELECT = sql`
+  select l.*, p.plan_code, p.title as plan_title,
+         ${sql.raw(planChar('ch.name', LIVE_PLAN))} as char_name,
+         ${sql.raw(planChar('ch.criticality', LIVE_PLAN))} as char_criticality,
+         (${sql.raw(planChar('true', "'effective'"))}) is not null as in_force
+    from public.fmea_control_links l
+    left join public.control_plans p on p.id = l.control_plan_id and p.organisation_id = l.organisation_id`;
+
+/** One carried control as the screens see it. `canReadPlans`: the caller may read control plans; `canEnd`: the caller may end it. */
+export const toControlLink = (l: Row, canReadPlans: boolean, canEnd: boolean) => ({
+  id: l.id as string,
+  causeId: l.cause_id as string,
+  revisionId: l.revision_id as string,
+  kind: l.control_kind as 'prevention' | 'detection',
+  plan: l.plan_code ? { id: l.control_plan_id as string, code: l.plan_code as string, title: (l.plan_title as string) ?? '' } : null,
+  operationCode: l.operation_code as string,
+  characteristicKey: l.characteristic_key as string,
+  characteristicName: (l.char_name as string) ?? null,
+  criticality: (l.char_criticality as 'critical' | 'major' | 'minor' | null) ?? null,
+  note: (l.note as string) ?? null,
+  createdAt: iso(l.created_at) as string,
+  state: linkState(canReadPlans, Boolean(l.in_force), l.char_name != null),
+  carried: l.prev_row_id != null,
+  canEnd,
+});
 
 const num = (v: unknown) => (v == null ? null : Number(v));
 
@@ -337,7 +372,7 @@ export class FmeaService {
     if (found.length === 0) throw ApiError.notFound('fmea_revision_not_found', 'Revision not found');
     const r = found[0];
     const can = (
-      await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'fmea.manage') as manage, app.has_permission(${org}::uuid, 'fmea.approve') as approve, auth.uid() as me`)
+      await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'fmea.manage') as manage, app.has_permission(${org}::uuid, 'fmea.approve') as approve, app.has_permission(${org}::uuid, 'process_control.read') as plans, auth.uid() as me`)
     ).rows[0];
     const team = (
       await db.execute<Row>(sql`
@@ -359,7 +394,7 @@ export class FmeaService {
       .map(toLink);
     const problems = ((await db.execute<Row>(sql`select app.fmea_revision_problems(${id}::uuid) as p`)).rows[0].p as string[] | null) ?? [];
     const status = r.status as string;
-    const [net, model, base] = await Promise.all([this.net(db, id, org, { status, canManage: Boolean(can.manage), me: (can.me as string) ?? null }), this.model(db, r.model_id as string, r.kind as string, org), this.base(db, r, org)]);
+    const [net, model, base] = await Promise.all([this.net(db, id, org, { status, canManage: Boolean(can.manage), canReadPlans: Boolean(can.plans), me: (can.me as string) ?? null }), this.model(db, r.model_id as string, r.kind as string, org), this.base(db, r, org)]);
     const mine = r.approver_id != null && r.approver_id === can.me;
     return {
       id: r.id as string,
@@ -404,9 +439,9 @@ export class FmeaService {
   }
 
   /** The analysis of a revision as a tree: items (nested), each with its functions, failure modes, effects and causes. Read as the caller; five queries for any size. */
-  private async net(db: Db, revisionId: string, org: string, who: { status: string; canManage: boolean; me: string | null }) {
+  private async net(db: Db, revisionId: string, org: string, who: { status: string; canManage: boolean; canReadPlans: boolean; me: string | null }) {
     const where = sql`revision_id = ${revisionId}::uuid and organisation_id = ${org}::uuid`;
-    const [items, functions, modes, effects, causes, actions] = await Promise.all([
+    const [items, functions, modes, effects, causes, actions, links] = await Promise.all([
       db.execute<Row>(sql`select i.*, m.code as machine_code, m.name as machine_name, p.part_number, p.name as part_name from public.fmea_items i
                            left join public.machines m on m.id = i.machine_id left join public.parts p on p.id = i.part_id
                           where i.revision_id = ${revisionId}::uuid and i.organisation_id = ${org}::uuid order by i.position, i.created_at`),
@@ -415,6 +450,7 @@ export class FmeaService {
       db.execute<Row>(sql`select * from public.fmea_effects where ${where} order by position, created_at`),
       db.execute<Row>(sql`select * from public.fmea_causes where ${where} order by position, created_at`),
       db.execute<Row>(sql`${ACTION_SELECT} where a.revision_id = ${revisionId}::uuid and a.organisation_id = ${org}::uuid order by a.due_on, a.created_at`),
+      db.execute<Row>(sql`${LINK_SELECT} where l.revision_id = ${revisionId}::uuid and l.organisation_id = ${org}::uuid and l.ended_at is null order by l.created_at`),
     ]);
     const n = (v: unknown) => (v == null ? null : Number(v));
     const group = <T extends Row>(rows: T[], key: string) => {
@@ -427,6 +463,7 @@ export class FmeaService {
     const eByMode = group(effects.rows, 'failure_mode_id');
     const cByMode = group(causes.rows, 'failure_mode_id');
     const aByCause = group(actions.rows, 'cause_id');
+    const lByCause = group(links.rows, 'cause_id');
     const live = who.status === 'draft' || who.status === 'effective';
     const cause = (c: Row) => ({
       id: c.id as string, text: c.text as string, preventionControls: (c.prevention_controls as string) ?? null, detectionControls: (c.detection_controls as string) ?? null,
@@ -434,6 +471,8 @@ export class FmeaService {
       priority: (c.priority as 'high' | 'medium' | 'low' | null) ?? null, needsAttention: c.needs_attention == null ? null : Boolean(c.needs_attention),
       noActionReason: (c.no_action_reason as string) ?? null, position: Number(c.position), fromBase: c.base_row_id != null,
       actions: (aByCause.get(c.id as string) ?? []).map((a) => toAction(a, live, who.canManage)),
+      /** The controls carried to a control plan (live ones only): where each stands against the plan now. */
+      controlLinks: (lByCause.get(c.id as string) ?? []).map((l) => toControlLink(l, who.canReadPlans, who.canManage && live)),
     });
     const mode = (m: Row) => ({
       id: m.id as string, text: m.text as string, specialClass: (m.special_class as 'critical' | 'significant' | null) ?? null, position: Number(m.position), fromBase: m.base_row_id != null,
@@ -472,7 +511,7 @@ export class FmeaService {
     const counts = { items: items.rows.length, functions: functions.rows.length, failureModes: modes.rows.length, effects: effects.rows.length, causes: causes.rows.length,
       needAttention: causes.rows.filter((c) => c.needs_attention).length, unrated: causes.rows.filter((c) => c.rpn == null).length,
       openActions: actions.rows.filter((a) => a.status === 'open').length, doneActions: actions.rows.filter((a) => a.status === 'done').length,
-      overdueActions: actions.rows.filter((a) => a.overdue).length };
+      overdueActions: actions.rows.filter((a) => a.overdue).length, controlLinks: links.rows.length };
     return { items: roots, counts };
   }
 

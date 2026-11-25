@@ -110,12 +110,66 @@ export const UNHANDLED_FAILURE = sql`
       and not exists (select 1 from public.inspection_failure_acknowledgements a where a.measurement_id = m.id)
       and app.reading_live_ncr(m.id) is null`;
 
+/**
+ * How long the SPC part of the dashboard may be reused for the same person and organisation. The overview reads the readings of up to 40 characteristics
+ * one after another (0.4 s alone, several seconds when the database is busy), and its figures only move when someone records a reading. The other
+ * dashboards are fresh for a minute in the browser (`DASHBOARD_STALE_MS`); this is the same minute on the server, so a second person or a second tab asking
+ * does not repeat the work. Keyed by person as well as organisation because row-level security decides what each person's overview contains.
+ * `PC_DASHBOARD_SPC_CACHE_MS` overrides it (0 = off); under NODE_ENV=test it is off unless a test sets `spcCacheMs`.
+ */
+const SPC_CACHE_MS_DEFAULT = 60_000;
+const SPC_CACHE_MAX_ENTRIES = 500;
+
+type SpcOverviewResult = Awaited<ReturnType<SpcService['overview']>>;
+
+function spcCacheMs(): number {
+  const raw = process.env.PC_DASHBOARD_SPC_CACHE_MS;
+  if (raw !== undefined && raw !== '' && Number.isFinite(Number(raw))) return Math.max(0, Number(raw));
+  return process.env.NODE_ENV === 'test' ? 0 : SPC_CACHE_MS_DEFAULT;
+}
+
 @Injectable()
 export class ProcessControlDashboardService {
+  /** Set by tests to turn the cache on (or off) regardless of the environment; undefined follows the environment. */
+  spcCacheMs: number | undefined;
+  private readonly spcCache = new Map<string, { at: number; value: SpcOverviewResult }>();
+  private readonly spcInflight = new Map<string, Promise<SpcOverviewResult>>();
+
   constructor(
     private readonly database: DatabaseService,
     private readonly spc: SpcService,
   ) {}
+
+  /** Forget every kept SPC overview (tests; also what a deployment restart does). */
+  clearSpcCache(): void {
+    this.spcCache.clear();
+  }
+
+  /** The SPC overview, reused for a minute for the same person and organisation; one evaluation at a time for each key. */
+  private async spcOverview(ctx: RequestContext): Promise<SpcOverviewResult> {
+    const ttl = this.spcCacheMs ?? spcCacheMs();
+    const run = () => this.spc.overview(ctx, { days: 30, maxCharts: 40, maxRecent: 10 });
+    if (ttl <= 0) return run();
+
+    const key = `${ctx.organisationId}:${ctx.user.id}`;
+    const hit = this.spcCache.get(key);
+    if (hit && Date.now() - hit.at < ttl) return hit.value;
+    const waiting = this.spcInflight.get(key);
+    if (waiting) return waiting;
+
+    const started = run()
+      .then((value) => {
+        if (this.spcCache.size >= SPC_CACHE_MAX_ENTRIES) {
+          const oldest = this.spcCache.keys().next().value;
+          if (oldest !== undefined) this.spcCache.delete(oldest);
+        }
+        this.spcCache.set(key, { at: Date.now(), value });
+        return value;
+      })
+      .finally(() => this.spcInflight.delete(key));
+    this.spcInflight.set(key, started);
+    return started;
+  }
 
   async get(ctx: RequestContext, q: z.infer<typeof ProcessControlDashboardQuery>): Promise<ProcessControlDashboard> {
     const from = new Date(`${q.from}T00:00:00Z`);
@@ -127,7 +181,7 @@ export class ProcessControlDashboardService {
     const org = ctx.organisationId!;
     const unhandled = UNHANDLED_FAILURE;
 
-    const spc = await this.spc.overview(ctx, { days: 30, maxCharts: 40, maxRecent: 10 });
+    const spc = await this.spcOverview(ctx);
 
     return this.database.asUser(ctx, async (db) => {
       const rows = async (query: ReturnType<typeof sql>) => (await db.execute<Row>(query)).rows;

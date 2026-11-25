@@ -6,6 +6,8 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
+import { ProcessControlDashboardService } from '../src/process-control/process-control-dashboard';
+import { SpcService } from '../src/spc/spc.service';
 import { makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('a1');
@@ -116,5 +118,56 @@ describe('process control dashboard', () => {
 
   it('is readable by viewers', async () => {
     expect((await get(ids.dual)).status).toBe(200);
+  });
+
+  describe('SPC part cache', () => {
+    const service = () => app.get(ProcessControlDashboardService);
+    afterEach(() => {
+      service().spcCacheMs = undefined;
+      service().clearSpcCache();
+      jest.restoreAllMocks();
+    });
+
+    it('is off under test, so every request evaluates the charts', async () => {
+      const spy = jest.spyOn(app.get(SpcService), 'overview');
+      await get();
+      await get();
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it('reuses one evaluation per person and organisation while fresh, and gives the same answer', async () => {
+      service().spcCacheMs = 60_000;
+      const spy = jest.spyOn(app.get(SpcService), 'overview');
+      const first = await get(ids.ownerA);
+      const second = await get(ids.ownerA);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(second.body.spc).toEqual(first.body.spc);
+      // another person is evaluated on their own: row-level security decides what each overview holds
+      await get(ids.dual);
+      expect(spy).toHaveBeenCalledTimes(2);
+      // another organisation is a different key as well
+      await get(ids.ownerB, ids.orgB);
+      expect(spy).toHaveBeenCalledTimes(3);
+    });
+
+    it('runs one evaluation for requests that arrive together, and again once it is stale', async () => {
+      service().spcCacheMs = 50;
+      const spy = jest.spyOn(app.get(SpcService), 'overview');
+      await Promise.all([get(ids.ownerA), get(ids.ownerA), get(ids.ownerA)]);
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2); // the first starts it, the rest wait for it (or reuse it)
+      const before = spy.mock.calls.length;
+      await new Promise((r) => setTimeout(r, 80));
+      await get(ids.ownerA);
+      expect(spy).toHaveBeenCalledTimes(before + 1);
+    });
+
+    it('does not keep a failed evaluation', async () => {
+      service().spcCacheMs = 60_000;
+      const spy = jest.spyOn(app.get(SpcService), 'overview').mockRejectedValueOnce(new Error('database busy'));
+      expect((await get(ids.dual)).status).toBe(500);
+      const retry = await get(ids.dual);
+      expect(retry.status).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
   });
 });

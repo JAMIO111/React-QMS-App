@@ -78,6 +78,10 @@ export const useControlPlanFilters = () => useUrlFilters(CONTROL_PLAN_FILTER_KEY
 export const FMEA_FILTER_KEYS = ["search", "kind", "status", "owner", "waiting", "overdue", "part", "partLabel", "family"];
 export const useFmeaFilters = () => useUrlFilters(FMEA_FILTER_KEYS);
 
+/** PPAP register filters. `status`, `level` and `reason` are comma lists (empty status = those not withdrawn or rejected); `owner` is "me"; `customer` and `part` are ids with their labels. */
+export const PPAP_FILTER_KEYS = ["search", "status", "level", "reason", "owner", "customer", "customerLabel", "part", "partLabel"];
+export const usePpapFilters = () => useUrlFilters(PPAP_FILTER_KEYS);
+
 /** Supplier register filters. Empty `active` = active suppliers only; `inactive` or `all` otherwise. Classifications are ids (comma list). */
 export const SUPPLIER_FILTER_KEYS = ["search", "status", "type", "classification", "risk", "active"];
 export const useSupplierFilters = () => useUrlFilters(SUPPLIER_FILTER_KEYS);

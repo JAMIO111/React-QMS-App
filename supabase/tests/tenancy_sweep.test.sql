@@ -328,6 +328,12 @@ BEGIN
     SELECT c.organisation_id, c.revision_id, c.id, 'prevention', (SELECT id FROM public.control_plans WHERE organisation_id = a AND plan_code = 'SWEEP-FMEA-CP'), 'OP-10', 'OD'
       FROM public.fmea_causes c JOIN public.fmea_revisions r ON r.id = c.revision_id JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA' LIMIT 1;
   PERFORM set_config('role', 'authenticated', true);
+  -- PPAP (PP1): a customer's rules, a submission with its 18 elements and a file as evidence (written by the functions as the owner).
+  PERFORM app.set_ppap_customer_rules(c.id, '{"defaultLevel":2}'::jsonb) FROM public.customers c WHERE c.organisation_id = a AND c.code = 'SWC';
+  PERFORM app.create_ppap(a, jsonb_build_object('partId', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'),
+      'customerId', (SELECT id FROM public.customers WHERE organisation_id = a AND code = 'SWC'), 'reason', 'new_part'));
+  PERFORM app.add_ppap_file(e.id, a::text || '/ppap/' || e.submission_id::text || '/sweep-drawing.pdf', 'sweep-drawing.pdf', 'application/pdf', 100)
+    FROM public.ppap_elements e JOIN public.ppap_submissions s ON s.id = e.submission_id WHERE s.organisation_id = a AND e.element_key = 'design_records';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

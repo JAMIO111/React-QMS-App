@@ -17,6 +17,7 @@ export const ORGANISATION_BUCKETS = [
   'integration-files',
   'nc-files',
   'org-logos',
+  'ppap-files',
   'quality-alert-files',
   'lot-evidence',
   'scar-files',

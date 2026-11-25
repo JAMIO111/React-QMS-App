@@ -1,6 +1,6 @@
 # PPAP (production part approval process) — plan
 
-**Status:** planned 2026-11-25; decisions PP1–PP16 are **proposed** · **Depends on:** the FMEA module (`docs/fmea-plan.md`, built first: PPAP elements 4 and 6 point at an FMEA revision in force) ·
+**Status:** planned 2026-11-25; **PP1 built** (migration `20260447100000_ppap_foundation.sql`, not yet applied live); decisions PP1–PP16 are **proposed** · **Depends on:** the FMEA module (`docs/fmea-plan.md`, built first: PPAP elements 4 and 6 point at an FMEA revision in force) ·
 **Menu name:** PPAP (`BadgeCheckIcon`, to be checked in `components/icons`) · **Slices:** PP1–PP6, PPX (exit check)
 
 Per `docs/design-brief.md` §3.5 (approval and revision history preserved), §6.5 and the Phase 4 pattern: complete, tested vertical slices, informing rather than blocking.

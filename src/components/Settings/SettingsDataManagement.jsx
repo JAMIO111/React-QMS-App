@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, ListTreeIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, BadgeCheckIcon, ListTreeIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -15,6 +15,7 @@ const SettingsDocuments = lazy(() => import("./SettingsDocuments"));
 const SettingsRisk = lazy(() => import("./SettingsRisk"));
 const SettingsChange = lazy(() => import("./SettingsChange"));
 const SettingsFmea = lazy(() => import("./SettingsFmea"));
+const SettingsPpap = lazy(() => import("./SettingsPpap"));
 const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
@@ -104,6 +105,15 @@ const DATA_TABS = [
     manage: "fmea.approve",
     description: "How FMEAs are rated: the ten-level scales for severity, occurrence and detection, whether priority comes from the RPN or from your own action priority grid, and the versions of the model.",
     Component: SettingsFmea,
+  },
+  {
+    value: "ppap",
+    icon: BadgeCheckIcon,
+    label: "PPAP",
+    read: "ppap.read",
+    manage: "ppap.approve",
+    description: "Which of the 18 PPAP elements a submission needs at each level, the study minimums, and each customer's own rules. Saved as versions; submissions keep the version they started with.",
+    Component: SettingsPpap,
   },
   {
     value: "change",

@@ -107,6 +107,8 @@ import { FmeaLinkedService } from './fmea/fmea-linked.service';
 import { FmeaModelController } from './fmea/fmea-model.controller';
 import { FmeaModelService } from './fmea/fmea-model.service';
 import { FmeaService } from './fmea/fmea.service';
+import { PpapController } from './ppap/ppap.controller';
+import { PpapService } from './ppap/ppap.service';
 import { ChangeService } from './change/change.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
@@ -332,6 +334,7 @@ export class AppModule implements NestModule {
         FmeaControlsController,
         FmeaEvidenceController,
         FmeaModelController,
+        PpapController,
         RiskController,
         RiskDashboardController,
         FmeaDashboardController,
@@ -455,6 +458,7 @@ export class AppModule implements NestModule {
         DocumentsService,
         ChangeService,
         FmeaService,
+        PpapService,
         FmeaLinkedService,
         FmeaAnalysisService,
         FmeaActionsService,

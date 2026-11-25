@@ -134,6 +134,7 @@ import {
   Gauge as LucideGauge,
   Ruler as LucideRuler,
   ClipboardCheck as LucideClipboardCheck,
+  BadgeCheck as LucideBadgeCheck,
   ShieldAlert as LucideShieldAlert,
   CalendarClock as LucideCalendarClock,
   Handshake as LucideHandshake,
@@ -317,6 +318,7 @@ export const GripVerticalIcon = withDefaults(LucideGripVertical);
 export const GaugeIcon = withDefaults(LucideGauge);
 export const RulerIcon = withDefaults(LucideRuler);
 export const ClipboardCheckIcon = withDefaults(LucideClipboardCheck);
+export const BadgeCheckIcon = withDefaults(LucideBadgeCheck);
 export const ShieldAlertIcon = withDefaults(LucideShieldAlert);
 export const CalendarClockIcon = withDefaults(LucideCalendarClock);
 export const HandshakeIcon = withDefaults(LucideHandshake);

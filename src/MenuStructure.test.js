@@ -73,4 +73,8 @@ describe("menuStructure", () => {
       ["Skills and positions", "/Competence/Skills", "competence.read"],
     ]);
   });
+
+  it("has PPAP as its own item for people who may read it", () => {
+    expect(menuStructure.find((m) => m.name === "PPAP")).toMatchObject({ path: "/PPAP", permission: "ppap.read" });
+  });
 });

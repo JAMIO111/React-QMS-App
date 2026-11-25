@@ -683,6 +683,18 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/fmeas/{id}/reviews': { outcome: 'no_change', note: 'Hijacked' },
     'POST /api/v1/fmea-causes/{id}/carry-to-plan': { controlKind: 'prevention', controlPlanId: ids.ownerA, operationCode: 'OP-10', characteristicKey: 'OD' },
     'POST /api/v1/fmea-control-links/{id}/end': { reason: 'Hijacked' },
+    'GET /api/v1/ppaps/{id}': undefined,
+    'PATCH /api/v1/ppaps/{id}': { notes: 'Hijacked' },
+    'PUT /api/v1/ppaps/{id}/level': { level: 1 },
+    'POST /api/v1/ppaps/{id}/ready': undefined,
+    'POST /api/v1/ppaps/{id}/reopen': undefined,
+    'POST /api/v1/ppaps/{id}/withdraw': { reason: 'Hijacked' },
+    'PATCH /api/v1/ppap-elements/{id}': { note: 'Hijacked' },
+    'POST /api/v1/ppap-elements/{id}/files': { storagePath: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/ppap-elements/{id}/waive': { reason: 'Hijacked, without a reason of substance' },
+    'POST /api/v1/ppap-elements/{id}/unwaive': undefined,
+    'POST /api/v1/ppap-evidence/{id}/remove': { reason: 'Hijacked' },
+    'PUT /api/v1/ppap-customer-rules/{id}': { defaultLevel: 1 },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -1295,6 +1307,18 @@ const hasSample = (op: Op) =>
     'GET /api/v1/fmea-revisions/{id}/base-changes',
     'POST /api/v1/fmea-causes/{id}/carry-to-plan',
     'POST /api/v1/fmea-control-links/{id}/end',
+    'GET /api/v1/ppaps/{id}',
+    'PATCH /api/v1/ppaps/{id}',
+    'PUT /api/v1/ppaps/{id}/level',
+    'POST /api/v1/ppaps/{id}/ready',
+    'POST /api/v1/ppaps/{id}/reopen',
+    'POST /api/v1/ppaps/{id}/withdraw',
+    'PATCH /api/v1/ppap-elements/{id}',
+    'POST /api/v1/ppap-elements/{id}/files',
+    'POST /api/v1/ppap-elements/{id}/waive',
+    'POST /api/v1/ppap-elements/{id}/unwaive',
+    'POST /api/v1/ppap-evidence/{id}/remove',
+    'PUT /api/v1/ppap-customer-rules/{id}',
     'GET /api/v1/fmea-revisions/{id}/control-coverage',
     'GET /api/v1/fmea-revisions/{id}/occurrence-evidence',
     'GET /api/v1/control-plan-revisions/{id}/fmea-cover',
@@ -1358,6 +1382,10 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/ppap-elements/')) return a.ppapElement;
+  if (path.startsWith('/api/v1/ppap-evidence/')) return a.ppapEvidence;
+  if (path.startsWith('/api/v1/ppap-customer-rules/')) return a.customer;
+  if (path.startsWith('/api/v1/ppaps/')) return a.ppap;
   if (path.startsWith('/api/v1/fmea-revisions/')) return a.fmeaRevision;
   if (path.startsWith('/api/v1/fmea-items/')) return a.fmeaItem;
   if (path.startsWith('/api/v1/fmea-functions/')) return a.fmeaFunction;
@@ -1624,6 +1652,12 @@ beforeAll(async () => {
     a.fmeaAction = (await q1(`select app.add_fmea_action($1::uuid, jsonb_build_object('kind', 'prevention', 'description', 'Alpha action', 'ownerUserId', $2::text, 'dueOn', (current_date + 30)::text)) as id`, [a.fmeaCause, ids.ownerA])).id;
     await q1(`select app.save_fmea_cause($1::uuid, $2::uuid, '{"preventionControls":"Alpha control"}'::jsonb) as id`, [a.fmeaMode, a.fmeaCause]);
     a.fmeaControlLink = (await q1(`select app.carry_fmea_cause_to_plan($1::uuid, jsonb_build_object('controlKind', 'prevention', 'controlPlanId', $2::text, 'operationCode', 'OP-10', 'characteristicKey', 'OD')) as id`, [a.fmeaCause, a.plan])).id;
+    const ppapPart = (await q1(`insert into public.parts (organisation_id, part_number, name) values ($1, 'PPAP-SW-1', 'PPAP sweep part') returning id`, [ids.orgA])).id;
+    const ppapRev = (await q1(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, ppapPart])).id;
+    await client.query(`update public.part_revisions set status = 'released' where id = $1`, [ppapRev]);
+    a.ppap = (await q1(`select (app.create_ppap($1::uuid, jsonb_build_object('partId', $2::text, 'customerId', $3::text, 'reason', 'new_part'))->>'id')::uuid as id`, [ids.orgA, ppapPart, a.customer])).id;
+    a.ppapElement = (await q1(`select id from public.ppap_elements where submission_id = $1 and element_key = 'design_records'`, [a.ppap])).id;
+    a.ppapEvidence = (await q1(`select app.add_ppap_file($1::uuid, $2::text || '/ppap/' || $3::text || '/alpha.pdf', 'alpha.pdf', 'application/pdf', 1) as id`, [a.ppapElement, ids.orgA, a.ppap])).id;
     a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
     a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;

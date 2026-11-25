@@ -68,7 +68,8 @@ export class TraceabilityService {
       const mayCapa = can.rows[0].capa === true;
 
       const mayChange = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'change.read') as ok`)).rows[0].ok === true;
-      const [order, lots, serials, inspections, ncrs, machines, gauges, changes] = await Promise.all([
+      const mayFmea = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'fmea.read') as ok`)).rows[0].ok === true;
+      const [order, lots, serials, inspections, ncrs, machines, gauges, changes, fmeas] = await Promise.all([
         orderId ? this.loadOrder(db, org, orderId) : Promise.resolve(null),
         this.loadLots(db, org, q.type, q.id, subject.lotId),
         this.loadSerials(db, org, q.type, q.id, orderId),
@@ -77,6 +78,7 @@ export class TraceabilityService {
         this.loadMachines(db, mayInspect, linked('i'), orderId),
         mayInspect ? this.loadGauges(db, linked('i')) : Promise.resolve([]),
         mayChange ? this.loadChanges(db, org, q.type, q.id, subject) : Promise.resolve(null),
+        mayFmea ? this.loadFmeas(db, org, q.type, q.id, subject.view.part.id) : Promise.resolve(null),
       ]);
 
       return {
@@ -88,8 +90,49 @@ export class TraceabilityService {
         ncrs: ncrs ?? { available: false, total: 0, data: [] },
         equipment: { machines, gauges },
         changes: changes ?? { available: false, data: [] },
+        fmeas: fmeas ?? { available: false, data: [] },
       };
     });
+  }
+
+  /**
+   * The FMEAs that cover the subject's part (a link to the part or to its part family), each with the revision that was in force on the day the subject was created in Fortress and
+   * the one in force now. A revision was in force from when it took effect until it was superseded or withdrawn. Read as the caller (an FMEA they may not read is not listed).
+   */
+  private async loadFmeas(db: Db, org: string, type: Kind, id: string, partId: string) {
+    const table = type === 'order' ? 'production_orders' : type === 'lot' ? 'lots' : 'serial_numbers';
+    const when = (await db.execute<Row>(sql`select created_at from public.${sql.raw(table)} where id = ${id}::uuid`)).rows[0]?.created_at;
+    const family = (await db.execute<Row>(sql`select part_family_id from public.parts where id = ${partId}::uuid`)).rows[0]?.part_family_id as string | null | undefined;
+    const covers = (rev: string) =>
+      sql`exists (select 1 from public.fmea_links l where l.revision_id = ${sql.raw(rev)}.id and (l.part_id = ${partId}::uuid ${family ? sql`or l.part_family_id = ${family}::uuid` : sql``}))`;
+    const rows = (
+      await db.execute<Row>(sql`
+        select f.id, f.number, f.title, f.kind,
+               t.id as then_id, t.letter as then_letter, to_char(t.effective_from, 'YYYY-MM-DD') as then_from,
+               cr.id as now_id, cr.letter as now_letter, to_char(cr.effective_from, 'YYYY-MM-DD') as now_from
+          from public.fmeas f
+          left join lateral (
+            select r.* from public.fmea_revisions r
+             where r.fmea_id = f.id and r.effective_at is not null and r.effective_at <= ${when as string}::timestamptz
+               and coalesce(r.superseded_at, r.withdrawn_at, 'infinity'::timestamptz) > ${when as string}::timestamptz and ${covers('r')}
+             order by r.effective_at desc limit 1) t on true
+          left join public.fmea_revisions cr on cr.id = f.current_revision_id and f.status = 'active' and ${covers('cr')}
+         where f.organisation_id = ${org}::uuid and (t.id is not null or cr.id is not null)
+         order by f.number limit 20`)
+    ).rows;
+    const rev = (id: unknown, letter: unknown, from: unknown) => (id ? { id: id as string, letter: (letter as string) ?? null, effectiveFrom: (from as string) ?? null } : null);
+    return {
+      available: true,
+      data: rows.map((r) => ({
+        id: r.id as string,
+        number: r.number as string,
+        title: r.title as string,
+        kind: r.kind as 'design' | 'process',
+        then: rev(r.then_id, r.then_letter, r.then_from),
+        now: rev(r.now_id, r.now_letter, r.now_from),
+        changedSince: (r.then_id ?? null) !== (r.now_id ?? null),
+      })),
+    };
   }
 
   /**

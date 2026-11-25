@@ -40,6 +40,7 @@ No table writes on any FMEA table: every change is a SECURITY DEFINER function. 
 
 - **No stop.** An FMEA that is missing, late or does not cover a characteristic blocks nothing (decision in the plan). Coverage and evidence are reports.
 - **The rating wording.** Only neutral scales and RPN are seeded. An organisation that holds its own licence for the AIAG-VDA grid and scale wording imports or types it; the product does not carry the publisher's text.
-- **Not built:** XLSX export (the CSV opens in Excel), the full register pattern (column menu, filter drawer, saved filters, register CSV), an FMEA section on the trace page, a list of the risks on a cause or an FMEA, a change card on an FMEA, taking a change task's link off from the screen, starting a revision from a record (API only), notices before an action is due beyond the reminders, digests, push.
+- **Built after the exit check:** the full register pattern at `/FMEA/Register` (column menu, filter drawer, saved filters, CSV of selected rows, a *Covers* column) and an **FMEAs** section on the trace page (the revision in force when the record was made, the one in force now, and whether the analysis has changed since).
+- **Not built:** XLSX export (the CSV opens in Excel), a list of the risks on a cause or an FMEA, a change card on an FMEA, taking a change task's link off from the screen, starting a revision from a record (API only), notices before an action is due beyond the reminders, digests, push.
 - **Not checked in a browser:** mobile layouts, the form sheet's print layout, the base-FMEA flow, comparing revisions, the AP-grid import.
 - **PPAP** (`docs/ppap-plan.md`) is planned and not started; it builds on this module.

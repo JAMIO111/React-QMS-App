@@ -68,7 +68,7 @@ const FMEA_SELECT = sql`
          (ip.status = 'pending_approval' and ip.approver_id = auth.uid()) as waiting_for_me,
          (f.status = 'active' and f.next_review_on is not null and f.next_review_on < current_date) as review_overdue,
          (select count(*)::int from public.fmea_team_members t where t.revision_id = coalesce(ip.id, f.current_revision_id)) as team_count,
-         (select string_agg(coalesce(p.part_number, pf.code, cp.plan_code, m.code, s.code, c.code, l.operation_code), ' ')
+         (select string_agg(coalesce(p.part_number, pf.code, cp.plan_code, m.code, s.code, c.code, l.operation_code), ', ')
             from public.fmea_links l
             left join public.parts p on p.id = l.part_id left join public.part_families pf on pf.id = l.part_family_id left join public.control_plans cp on cp.id = l.control_plan_id
             left join public.machines m on m.id = l.machine_id left join public.suppliers s on s.id = l.supplier_id left join public.customers c on c.id = l.customer_id
@@ -97,6 +97,8 @@ const toSummary = (r: Row) => ({
   kind: r.kind as 'design' | 'process',
   title: r.title as string,
   scopeText: (r.scope_text as string) ?? null,
+  /** What it covers, in the words of the records named (part numbers, family and plan codes, operations), for the register. */
+  covers: (r.link_text as string) ?? null,
   status: r.status as 'draft' | 'active' | 'withdrawn' | 'discarded',
   owner: person(r.owner_user_id, r.owner_name),
   customer: r.customer_id ? { id: r.customer_id as string, name: (r.customer_name as string) ?? '', code: (r.customer_code as string) ?? null } : null,

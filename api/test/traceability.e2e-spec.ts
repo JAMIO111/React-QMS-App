@@ -186,3 +186,81 @@ describe('search', () => {
     await api().get('/api/v1/traceability/search?q=T1').set(await as(ids.ownerB, ids.orgB)).expect(200).expect((r) => expect(r.body.data).toEqual([]));
   });
 });
+
+describe('FMEAs on the trace', () => {
+  const QM = 'f5000000-0000-0000-0000-0000000000e1';
+  const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
+  /** An FMEA in force (approved by the quality manager) with the given scope links, on its own small analysis. */
+  const inForce = async (title: string, links: object[]) => {
+    const h = await as(ids.ownerA);
+    const made = await api().post('/api/v1/fmeas').set(h).send({ kind: 'process', title }).expect(201);
+    const rev = made.body.inProgress.id as string;
+    let r = (await api().post(`/api/v1/fmea-revisions/${rev}/items`).set(h).send({ kind: 'item', name: 'Rod' }).expect(201)).body;
+    r = (await api().post(`/api/v1/fmea-items/${r.net.items[0].id}/functions`).set(h).send({ text: 'Hold the size' }).expect(201)).body;
+    r = (await api().post(`/api/v1/fmea-functions/${r.net.items[0].functions[0].id}/failure-modes`).set(h).send({ text: 'Oversize' }).expect(201)).body;
+    const mode = r.net.items[0].functions[0].failureModes[0].id;
+    await api().post(`/api/v1/fmea-failure-modes/${mode}/effects`).set(h).send({ level: 'own_plant', text: 'Scrap', severity: 4 }).expect(201);
+    await api().post(`/api/v1/fmea-failure-modes/${mode}/causes`).set(h).send({ text: 'Tool wear', preventionControls: 'Change the tool', occurrence: 2, detection: 2 }).expect(201);
+    await api().put(`/api/v1/fmea-revisions/${rev}/team`).set(h).send({ team: [{ userId: ids.ownerA, role: 'lead' }, { userId: QM, role: 'quality' }] }).expect(200);
+    await api().put(`/api/v1/fmea-revisions/${rev}/links`).set(h).send({ links }).expect(200);
+    await api().put(`/api/v1/fmea-revisions/${rev}/approver`).set(h).send({ approverId: QM }).expect(200);
+    await api().post(`/api/v1/fmea-revisions/${rev}/submit`).set(h).expect(200);
+    await api().post(`/api/v1/fmea-revisions/${rev}/approve`).set(await as(QM)).send({ effectiveFrom: day(0) }).expect(200);
+    return { fmea: made.body.id as string, rev };
+  };
+
+  beforeAll(async () => {
+    await admin.query(`insert into auth.users (id, email) values ($1, 'qm-trace@example.test')`, [QM]);
+    const m = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status, joined_at) values ($1, $2, 'active', now()) returning id`, [ids.orgA, QM]);
+    await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA, m.rows[0].id]);
+    const family = (await admin.query(`select part_family_id from public.parts where id = $1`, [ctx.rod])).rows[0].part_family_id as string;
+    const turning = await inForce('Turning the rod', [{ kind: 'part', id: ctx.rod }]);
+    ctx.byPart = turning.rev;
+    ctx.fmeaByPart = turning.fmea;
+    ctx.byFamily = (await inForce('Rods in general', [{ kind: 'part_family', id: family }])).rev;
+    await inForce('Something else', [{ kind: 'operation_code', code: 'OP-99' }]);
+  });
+
+  it('lists the FMEAs that name the part or its family, with the revision in force when the record was created and the one in force now', async () => {
+    // Both were put in force after the lot was created, so none was in force when it was made: "then" is empty and "now" is rev A.
+    const t = await trace('lot', ctx.lot);
+    expect(t.fmeas.available).toBe(true);
+    expect(t.fmeas.data.map((f: { title: string }) => f.title)).toEqual(['Turning the rod', 'Rods in general']);
+    expect(t.fmeas.data[0]).toMatchObject({ number: 'FMEA-001', kind: 'process', then: null, now: { letter: 'A', effectiveFrom: day(0) }, changedSince: true });
+  });
+
+  it('says which revision was in force on the day the record was created, and that nothing has changed since', async () => {
+    // As if the lot had been made a second after the first FMEA took effect.
+    await admin.query(`update public.lots set created_at = (select effective_at from public.fmea_revisions where id = $1) + interval '1 second' where id = $2`, [ctx.byPart, ctx.lot]);
+    const t = await trace('lot', ctx.lot);
+    const first = t.fmeas.data.find((f: { title: string }) => f.title === 'Turning the rod');
+    expect(first).toMatchObject({ then: { id: ctx.byPart, letter: 'A' }, now: { id: ctx.byPart, letter: 'A' }, changedSince: false });
+    // an order and a serial number of the same part see the same analyses (matched by the part, not by the level)
+    expect((await trace('order', ctx.wo1)).fmeas.data.map((f: { title: string }) => f.title)).toContain('Turning the rod');
+    expect((await trace('serial', ctx.s1)).fmeas.data.map((f: { title: string }) => f.title)).toContain('Rods in general');
+  });
+
+  it('shows a revision that has since been replaced as the one in force then, and the new one as in force now', async () => {
+    const h = await as(ids.ownerA);
+    const started = (await api().post(`/api/v1/fmeas/${ctx.fmeaByPart}/revisions`).set(h).send({}).expect(201)).body;
+    const revB = started.inProgress.id as string;
+    await api().patch(`/api/v1/fmea-revisions/${revB}`).set(h).send({ changeSummary: 'The tool is changed more often', rowVersion: started.inProgress.rowVersion }).expect(200);
+    await api().put(`/api/v1/fmea-revisions/${revB}/approver`).set(h).send({ approverId: QM }).expect(200);
+    await api().post(`/api/v1/fmea-revisions/${revB}/submit`).set(h).expect(200);
+    await api().post(`/api/v1/fmea-revisions/${revB}/approve`).set(await as(QM)).send({ effectiveFrom: day(0) }).expect(200);
+    const times = (await admin.query(`select a.effective_at as a_from, a.superseded_at as a_to, b.effective_at as b_from from public.fmea_revisions a, public.fmea_revisions b where a.id = $1 and b.id = $2`, [ctx.byPart, revB])).rows[0];
+    expect(times.a_to).not.toBeNull();
+    // between the two: after A took effect and before B did
+    await admin.query(`update public.lots set created_at = $1::timestamptz + ($2::timestamptz - $1::timestamptz) / 2 where id = $3`, [times.a_from, times.a_to, ctx.lot]);
+    const first = (await trace('lot', ctx.lot)).fmeas.data.find((f: { title: string }) => f.title === 'Turning the rod');
+    expect(first).toMatchObject({ then: { id: ctx.byPart, letter: 'A' }, now: { id: revB, letter: 'B' }, changedSince: true });
+  });
+
+  it('leaves the section out for someone who may not read FMEAs, and never lists another organisation\'s analysis', async () => {
+    await admin.query(`delete from public.role_permissions where permission_code = 'fmea.read' and role_id = (select id from public.roles where organisation_id = $1 and key = 'viewer')`, [ids.orgA]);
+    const t = await trace('lot', ctx.lot, await as(ids.dual));
+    expect(t.fmeas).toEqual({ available: false, data: [] });
+    expect((await trace('lot', ctx.lot)).fmeas.available).toBe(true);
+  });
+});

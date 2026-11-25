@@ -24,7 +24,7 @@ Choose what an import may do: add new records only, add and update, or update on
 
 ## Templates
 
-Your mapping is saved as a **template** with versions, so next month's file is one click. Changing a template asks for a reason and makes a new version. Where it is switched on, a formula editor handles values the standard steps cannot.
+Your mapping is saved as a **template** with versions, so next month's file is one click. Changing a template asks for a reason and makes a new version. Where it is switched on, a formula editor handles values the standard steps cannot; every function and rule is in [Formulas in imports](/help/import-formulas).
 
 ## When the source and Fortress disagree
 

@@ -28,6 +28,8 @@ describe('formula language', () => {
     expect(run('[Odd]]name]')).toBe('odd');
     expect(run('[Due date]')).toBe('31.01.2026');
     expect(run('[Qty] > 5 AND NOT [Qty] > 20')).toBe('true');
+    expect(run('NOT ([Qty] > 20 OR [Qty] < 1)')).toBe('true');
+    expect(run('NOT([Qty] > 20)')).toBe('true');
     expect(run('1 = 2 OR "x" = "X"')).toBe('true');
     expect(run('"10" > 9')).toBe('true');
     expect(run('"abc" < "abd"')).toBe('true');

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import HelpLink from "../ui/HelpLink";
+import { HELP_TOPICS } from "../../lib/help";
 import { PlusIcon, Trash2Icon } from "@/components/icons";
 import {
   DECIMAL_MARKS,
@@ -195,15 +197,18 @@ const FilterBuilder = ({ columns, value, onChange, preview, previewing, total, r
       </div>
 
       {useFormula ? (
-        <TextAreaField
-          label="Formula (true means the record matches)"
-          value={f.formula ?? ""}
-          onChange={(e) => set({ ...f, formula: e.target.value, rules: [] })}
-          rows={3}
-          maxLength={2000}
-          disabled={readOnly}
-          hint='Write a column in square brackets, for example [Status]="Active" AND [Qty]>0. Columns are read as the file or API gives them.'
-        />
+        <div className="flex flex-col gap-1">
+          <TextAreaField
+            label="Formula (true means the record matches)"
+            value={f.formula ?? ""}
+            onChange={(e) => set({ ...f, formula: e.target.value, rules: [] })}
+            rows={3}
+            maxLength={2000}
+            disabled={readOnly}
+            hint='Write a column in square brackets, for example [Status]="Active" AND [Qty]>0. Columns are read as the file or API gives them.'
+          />
+          <HelpLink topic={HELP_TOPICS.importFormulas} className="self-start">How to write a formula</HelpLink>
+        </div>
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Filter rules">
           {rules.map((rule, i) => (

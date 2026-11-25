@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CheckIcon, LinkIcon, PencilIcon, SendIcon, Undo2Icon, UsersIcon, XIcon } from "@/components/icons";
+import { CheckIcon, FileTextIcon, LinkIcon, PencilIcon, SendIcon, Undo2Icon, UsersIcon, XIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
 import { useFmeaMutation, useFmeaRevision } from "../../hooks/useFmea";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { withVersion } from "../../lib/editConflicts";
-import { fmeaPath, formatDay, kindLabel, linkKindLabel, linkPath, linkWords, revisionName, revisionPill, revisionStatusLabel, roleLabel } from "../../lib/fmea";
+import { fmeaPath, formatDay, kindLabel, linkKindLabel, linkPath, linkWords, revisionName, revisionPill, revisionStatusLabel, revisionPath, roleLabel } from "../../lib/fmea";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -89,6 +89,9 @@ const RevisionPage = () => {
               Take back to draft
             </CTAButton>
           )}
+          <CTAButton to={`${revisionPath(revision.fmeaId, revision.id)}/report`} type="neutral" icon={FileTextIcon}>
+            Form
+          </CTAButton>
           {revision.canEdit && (
             <CTAButton type="danger" icon={XIcon} onClick={() => setDialog("discard")}>
               Discard draft

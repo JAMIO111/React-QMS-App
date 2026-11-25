@@ -246,7 +246,7 @@ export class FmeaService {
     const org = orgOf(ctx);
     const found = (
       await db.execute<Row>(sql`
-        select v.*, f.number, f.kind, f.title, f.status as fmea_status, f.owner_user_id, f.review_months,
+        select v.*, app.row_version(v.updated_at) as row_version, f.number, f.kind, f.title, f.status as fmea_status, f.owner_user_id, f.review_months,
                ${sql.raw(personName('pa'))} as author_name, ${sql.raw(personName('pp'))} as approver_name, ${sql.raw(personName('pr'))} as returned_by_name,
                ${sql.raw(personName('pb'))} as approved_by_name, ${sql.raw(personName('ps'))} as submitted_by_name
           from public.fmea_revisions v join public.fmeas f on f.id = v.fmea_id
@@ -314,6 +314,8 @@ export class FmeaService {
       /** The caller is the named approver, it is waiting, and nothing (the approve right, the preparer rule) stands in the way. */
       canDecide: mine && status === 'pending_approval' && Boolean(can.approve) && r.author_id !== can.me,
       canRecall: Boolean(can.manage) && status === 'pending_approval',
+      /** The version a save of this revision's own fields (the wording of what changed) is based on; node commands answer with the new one. */
+      rowVersion: r.row_version as string,
       createdAt: iso(r.created_at) as string,
       updatedAt: iso(r.updated_at) as string,
     };

@@ -9,6 +9,7 @@ vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => (
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 let held = ["fmea.read", "fmea.manage"];
 vi.mock("../ncr/Pickers", () => ({ PartyPicker: () => null, PartPicker: () => null, MachinePicker: () => null, RemoteComboBox: () => null }));
+vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => async () => true }));
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => held.includes(p), isLoading: false }) }));
 
 import { apiFetch } from "../../lib/api-client";
@@ -21,12 +22,41 @@ const summary = (over = {}) => ({
   currentRevisionId: "r1", currentLetter: "A", currentEffectiveFrom: "2026-11-01", openRevisionId: null, openStatus: null, openLetter: null, waitingForMe: false, reviewMonths: null,
   nextReviewOn: "2027-11-01", reviewOverdue: false, teamCount: 2, withdrawReason: null, createdAt: "2026-11-01T10:00:00Z", updatedAt: "2026-11-01T10:00:00Z", ...over,
 });
+const LEVELS = (word) => Array.from({ length: 10 }, (_, i) => ({ label: `${word} ${i + 1}` }));
+const MODEL = { id: "m1", version: 1, method: "rpn", rpnHighFrom: 200, rpnMediumFrom: 100, severityFloor: 9, scale: { severity: LEVELS("Sev"), occurrence: LEVELS("Occ"), detection: LEVELS("Det") }, latestVersion: 1, isLatest: true };
+const cause = (over = {}) => ({ id: "c1", text: "Tool wear", preventionControls: "Tool life counter", detectionControls: null, occurrence: 5, detection: 6, severityUsed: 8, rpn: 240, priority: "high", needsAttention: true, noActionReason: null, position: 1, fromBase: false, ...over });
+const NET = {
+  items: [
+    {
+      id: "i1", kind: "item", elementType: null, name: "Bracket machining", description: null, operationCode: null, machine: null, part: null, position: 1, fromBase: false, functions: [],
+      children: [
+        {
+          id: "i2", kind: "step", elementType: null, name: "OP10 Turn", description: null, operationCode: "OP10", machine: null, part: null, position: 1, fromBase: false, children: [],
+          functions: [
+            {
+              id: "f1", text: "Turn the bore to 25.00", requirement: null, characteristicKey: null, position: 1, fromBase: false,
+              failureModes: [
+                {
+                  id: "m1", text: "Bore oversize", specialClass: "critical", position: 1, fromBase: false,
+                  effects: [{ id: "e1", level: "own_plant", text: "Scrap", severity: 4, position: 1, fromBase: false }, { id: "e2", level: "end_user", text: "Leaks", severity: 8, position: 2, fromBase: false }],
+                  causes: [cause()],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  counts: { items: 2, functions: 1, failureModes: 1, effects: 2, causes: 1, needAttention: 1, unrated: 0 },
+};
 const revision = (over = {}) => ({
   id: "r2", fmeaId: "f1", fmea: { id: "f1", number: "FMEA-001", kind: "process", title: "Machining of the bracket", status: "active" }, sequence: 2, letter: null, status: "draft",
   author: { id: "u1", name: "Ada" }, approver: null, changeSummary: null, previousRevisionId: "r1", submittedAt: null, returnedComment: null, returnedAt: null, returnedBy: null, approvalComment: null,
   approvedAt: null, approvedBy: null, effectiveFrom: null, supersededAt: null, withdrawReason: null, discardReason: null,
   team: [{ id: "t1", kind: "member", personId: "u1", name: "Ada", jobTitle: null, role: "lead" }],
   links: [{ kind: "part", id: "p1", code: null, reference: "BR-1", name: "Bracket", readable: true }],
+  net: NET, model: MODEL, base: null, rowVersion: "100",
   problems: ["Say what changed and why", "Name the approver"], canEdit: true, canDecide: false, canRecall: false, createdAt: "2026-11-02T10:00:00Z", updatedAt: "2026-11-02T10:00:00Z", ...over,
 });
 
@@ -53,6 +83,18 @@ beforeEach(() => {
     if (path === "/fmea-revisions/r2" && !opts?.method) return current;
     if (path === "/fmea-revisions/r2/approver") {
       current = revision({ approver: { id: opts.body.approverId, name: "Quinn" }, problems: ["Say what changed and why"] });
+      return current;
+    }
+    if (path === "/fmea-items/i2/functions") {
+      current = revision({ net: { ...NET, counts: { ...NET.counts, functions: 2 } } });
+      return current;
+    }
+    if (path === "/fmea-causes/c1" && opts?.method === "DELETE") {
+      current = revision({ net: { ...NET, counts: { ...NET.counts, causes: 0, needAttention: 0 } } });
+      return current;
+    }
+    if (path === "/fmea-revisions/r2/use-latest-model") {
+      current = revision({ model: { ...MODEL, version: 2, latestVersion: 2, isLatest: true } });
       return current;
     }
     if (path === "/fmea-revisions/r2/approve") return revision({ status: "effective", letter: "B" });
@@ -83,6 +125,19 @@ describe("the register", () => {
     await userEvent.type(screen.getByLabelText(/Title/), "Casting of the housing");
     await userEvent.click(screen.getByRole("button", { name: "Start the FMEA" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmeas", expect.objectContaining({ method: "POST", body: expect.objectContaining({ kind: "process", title: "Casting of the housing" }) })));
+  });
+});
+
+describe("starting from a base", () => {
+  it("sends the FMEA in force it is copied from", async () => {
+    renderAt("/FMEA", <FmeaRegisterPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Start an FMEA" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Start from an FMEA in force/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /FMEA-001 · Machining of the bracket/ }));
+    await userEvent.type(within(dialog).getByLabelText(/Title/), "Machining (customer B)");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start the FMEA" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmeas", expect.objectContaining({ method: "POST", body: expect.objectContaining({ baseFmeaId: "f1", title: "Machining (customer B)" }) })));
   });
 });
 
@@ -148,5 +203,58 @@ describe("a revision", () => {
     expect(await screen.findByText(/; in force from/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Discard draft" })).toBeNull();
+  });
+
+  describe("the analysis", () => {
+    it("shows the structure as a tree with the effects, the causes and what the database worked out", async () => {
+      open();
+      const tree = await screen.findByRole("list", { name: "Structure" });
+      expect(within(tree).getByText("Bracket machining")).toBeInTheDocument();
+      expect(within(tree).getByText("OP10 Turn")).toBeInTheDocument();
+      expect(within(tree).getByText("Turn the bore to 25.00")).toBeInTheDocument();
+      expect(within(tree).getByText("Critical")).toBeInTheDocument();
+      const causes = within(tree).getByRole("region", { name: "Causes of Bore oversize" });
+      expect(within(causes).getByText("High · RPN 240")).toBeInTheDocument();
+      expect(within(causes).getByText("Needs attention")).toBeInTheDocument();
+      expect(within(causes).getByText("8 · Sev 8")).toBeInTheDocument();
+      expect(screen.getByLabelText("Analysis figures")).toHaveTextContent("2 items · 1 failure mode · 1 cause · 1 needs attention · 0 not rated");
+      expect(screen.getByText(/Rated with model version 1 \(RPN: high from 200, medium from 100; severity 9 or more always needs attention\)/)).toBeInTheDocument();
+    });
+
+    it("adds a function through the server and waits for its answer", async () => {
+      open();
+      const tree = await screen.findByRole("list", { name: "Structure" });
+      const actions = within(tree).getAllByRole("button", { name: "Actions" });
+      await userEvent.click(actions[1]); // the step's menu
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Add a function" }));
+      const dialog = await screen.findByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText(/^Function/), "Chamfer the edge");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmea-items/i2/functions", expect.objectContaining({ method: "POST", body: expect.objectContaining({ text: "Chamfer the edge" }) })));
+    });
+
+    it("offers to score again on the latest model, and no controls to a reader", async () => {
+      current = revision({ model: { ...MODEL, isLatest: false, latestVersion: 2 } });
+      open();
+      await userEvent.click(await screen.findByRole("button", { name: "Use version 2 and score again" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmea-revisions/r2/use-latest-model", expect.objectContaining({ method: "POST" })));
+    });
+
+    it("shows where an analysis started from when it was copied from a base", async () => {
+      current = revision({ base: { fmeaId: "f0", number: "FMEA-000", title: "Generic machining", revisionId: "r0", letter: "A" } });
+      open();
+      const note = await screen.findByText(/This analysis began as a copy of/);
+      expect(note).toHaveTextContent("FMEA-000 rev A");
+      expect(within(note.closest("div")).getByRole("link", { name: "FMEA-000 rev A" })).toHaveAttribute("href", "/FMEA/f0/revisions/r0");
+    });
+
+    it("gives a reader the analysis without any way to change it", async () => {
+      held = ["fmea.read"];
+      current = revision({ canEdit: false, status: "effective", letter: "B", problems: [] });
+      open();
+      const tree = await screen.findByRole("list", { name: "Structure" });
+      expect(within(tree).queryByRole("button", { name: "Actions" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Add a process item/ })).toBeNull();
+    });
   });
 });

@@ -5,7 +5,7 @@ import { describeApiError } from "../../lib/api-client";
 import { useToast } from "../../contexts/ToastProvider";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useEmployees } from "../../hooks/useNcr";
-import { useFmeaMutation, useFmeaPeople } from "../../hooks/useFmea";
+import { useFmeaMutation, useFmeaPeople, useFmeas } from "../../hooks/useFmea";
 import { useControlPlans, usePartFamilies } from "../../hooks/useProcessControl";
 import { changesSince } from "../../lib/editConflicts";
 import { FMEA_KINDS, LINK_KINDS, linkKindLabel, linksBody, linkWords, personValue, sameLink, TEAM_ROLES, teamBody, teamProblem } from "../../lib/fmea";
@@ -41,6 +41,10 @@ export const FmeaDialog = ({ existing, onClose, onSaved }) => {
   const [customer, setCustomer] = useState(existing?.customer ?? null);
   const [ownerId, setOwnerId] = useState(existing?.owner?.id ?? null);
   const [months, setMonths] = useState(existing?.reviewMonths ? String(existing.reviewMonths) : "");
+  const [baseId, setBaseId] = useState(null);
+  // A new FMEA can start as a copy of one in force of the same kind (a base the others inherit from); the copy is its own from then on.
+  const bases = useFmeas({ status: "active", kind, pageSize: 100 }, { enabled: !existing });
+  const baseOptions = (bases.data?.data ?? []).map((f) => ({ value: f.id, label: `${f.number} · ${f.title}`, hint: f.currentLetter ? `Rev ${f.currentLetter}` : undefined }));
   const ownerOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
   const monthsValid = months === "" || (Number.isInteger(Number(months)) && Number(months) >= 1 && Number(months) <= 120);
   const ready = title.trim() && monthsValid;
@@ -57,7 +61,7 @@ export const FmeaDialog = ({ existing, onClose, onSaved }) => {
       return;
     }
     mutation.mutate(
-      { action: "create", body: { kind, ...body } },
+      { action: "create", body: { kind, ...body, ...(baseId ? { baseFmeaId: baseId } : {}) } },
       {
         onSuccess: (fmea) => {
           onSaved?.(fmea);
@@ -71,7 +75,18 @@ export const FmeaDialog = ({ existing, onClose, onSaved }) => {
   return (
     <Dialog title={existing ? `Edit ${existing.number}` : "Start an FMEA"} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
-        <ComboField label="Kind" required value={kind} onChange={(v) => setKind(v ?? "process")} options={FMEA_KINDS} clearable={false} sort={false} disabled={!!existing} hint={existing ? "Fixed once the FMEA is started" : undefined} />
+        <ComboField label="Kind" required value={kind} onChange={(v) => { setKind(v ?? "process"); setBaseId(null); }} options={FMEA_KINDS} clearable={false} sort={false} disabled={!!existing} hint={existing ? "Fixed once the FMEA is started" : undefined} />
+        {!existing && (
+          <ComboField
+            label="Start from an FMEA in force"
+            value={baseId}
+            onChange={setBaseId}
+            options={baseOptions}
+            placeholder="Start empty"
+            hint="Copies its analysis as a starting point. Yours is then its own: changes do not travel either way."
+            clearable
+          />
+        )}
         <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} placeholder="e.g. Machining of the bracket" />
         <TextAreaField label="Scope and intended use" value={scopeText} onChange={(e) => setScopeText(e.target.value)} maxLength={2000} rows={3} hint="What is analysed, and what it is for" />
         <div className="grid gap-3 sm:grid-cols-2">

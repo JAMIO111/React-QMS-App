@@ -4,23 +4,23 @@ import { CheckIcon, LinkIcon, PencilIcon, SendIcon, Undo2Icon, UsersIcon, XIcon 
 import CTAButton from "@/components/CTAButton";
 import { useFmeaMutation, useFmeaRevision } from "../../hooks/useFmea";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { changesSince } from "../../lib/editConflicts";
+import { withVersion } from "../../lib/editConflicts";
 import { fmeaPath, formatDay, kindLabel, linkKindLabel, linkPath, linkWords, revisionName, revisionPill, revisionStatusLabel, roleLabel } from "../../lib/fmea";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
+import AnalysisEditor from "./AnalysisEditor";
 import { ApproveDialog, ApproverDialog, LinksDialog, ReasonDialog, TeamDialog } from "./FmeaDialogs";
 
 /** The wording of a draft: what changed and why. Saved as the person leaves the box. */
 const SummaryCard = ({ revision, required }) => {
   const mutation = useFmeaMutation();
-  const [opened] = useState(revision);
   const [text, setText] = useState(revision.changeSummary ?? "");
   const save = () => {
     const next = text.trim() || null;
     if (next === (revision.changeSummary ?? null)) return;
-    mutation.mutate({ action: "updateRevision", id: revision.id, body: changesSince(opened, { changeSummary: next }) });
+    mutation.mutate({ action: "updateRevision", id: revision.id, body: withVersion(revision, { changeSummary: next }) });
   };
   return (
     <MenuCard title="What changed and why" subtitle={required ? "Needed before it can be submitted: this revision follows one that has been in force." : "Optional for a first revision."}>
@@ -128,9 +128,7 @@ const RevisionPage = () => {
           </ul>
         </Callout>
       )}
-      <Callout tone="neutral" title="The analysis comes next">
-        This revision holds the team, what it covers and who approves it. The structure, failure modes and ratings are added in the next steps of the FMEA module.
-      </Callout>
+      <AnalysisEditor revision={revision} />
 
       <MenuCard
         title="The team"

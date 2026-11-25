@@ -118,3 +118,65 @@ export const teamProblem = (rows) => {
 
 export const fmeaPath = (id) => `/FMEA/${id}`;
 export const revisionPath = (fmeaId, revisionId) => `/FMEA/${fmeaId}/revisions/${revisionId}`;
+
+// ---- the analysis (FM3) ---------------------------------------------------------------------------------------
+
+export const ITEM_KINDS = {
+  system: "System",
+  subsystem: "Sub-system",
+  component: "Component",
+  item: "Process item",
+  step: "Process step",
+  element: "Work element",
+};
+export const itemKindLabel = (kind) => ITEM_KINDS[kind] ?? kind;
+/** What may sit directly under an item of each kind (design: system > sub-system > component; process: item > step > work element). */
+export const CHILD_KINDS = { system: ["subsystem", "component"], subsystem: ["component"], component: [], item: ["step"], step: ["element"], element: [] };
+/** What may be added at the top of an FMEA of a kind. */
+export const topKinds = (fmeaKind) => (fmeaKind === "design" ? ["system"] : ["item"]);
+
+export const ELEMENT_TYPES = [
+  { value: "man", label: "Man (people)" },
+  { value: "machine", label: "Machine" },
+  { value: "material", label: "Material" },
+  { value: "method", label: "Method" },
+  { value: "measurement", label: "Measurement" },
+  { value: "environment", label: "Environment" },
+];
+export const elementTypeLabel = (type) => ELEMENT_TYPES.find((t) => t.value === type)?.label ?? type;
+
+export const EFFECT_LEVELS = [
+  { value: "own_plant", label: "Our own plant" },
+  { value: "next_plant", label: "The next plant or the customer" },
+  { value: "end_user", label: "The end user" },
+];
+export const effectLevelLabel = (level) => EFFECT_LEVELS.find((l) => l.value === level)?.label ?? level;
+
+export const SPECIAL_CLASSES = [
+  { value: "critical", label: "Critical" },
+  { value: "significant", label: "Significant" },
+];
+export const specialClassLabel = (value) => SPECIAL_CLASSES.find((c) => c.value === value)?.label ?? value;
+
+export const PRIORITY = {
+  high: { label: "High", tone: "error" },
+  medium: { label: "Medium", tone: "warning" },
+  low: { label: "Low", tone: "success" },
+};
+export const priorityLabel = (priority) => PRIORITY[priority]?.label ?? "Not rated";
+export const priorityPill = (priority) => TONE_CLASS[PRIORITY[priority]?.tone ?? "neutral"];
+
+/** Choices for a 1 to 10 rating from a scale of ten `{ label, criteria? }`: "7 · High", with the criteria as the hint. */
+export const ratingOptions = (levels = []) => levels.map((l, i) => ({ value: String(i + 1), label: `${i + 1} · ${l.label}`, hint: l.criteria }));
+/** "7 · High" for a rating on a scale, or a dash when it is not rated. */
+export const ratingWords = (levels, n) => (n == null ? "—" : `${n}${levels?.[n - 1]?.label ? ` · ${levels[n - 1].label}` : ""}`);
+export const toLevel = (value) => (value === "" || value == null ? null : Number(value));
+
+/** What the model says about a rating, in a sentence: "RPN: high from 200, medium from 100; severity 9 or more always needs attention". */
+export const modelWords = (model) =>
+  model.method === "ap"
+    ? `Action priority grid; severity ${model.severityFloor} or more always needs attention`
+    : `RPN: high from ${model.rpnHighFrom}, medium from ${model.rpnMediumFrom}; severity ${model.severityFloor} or more always needs attention`;
+
+/** The worst severity among a failure mode's effects, or null when none is rated. */
+export const worstSeverity = (effects) => effects.reduce((m, e) => (e.severity != null && (m == null || e.severity > m) ? e.severity : m), null);

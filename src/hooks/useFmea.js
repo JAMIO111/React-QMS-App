@@ -16,12 +16,12 @@ const qs = (params) => {
 };
 
 /** The register: filters and paging are the server's. */
-export const useFmeas = (params) => {
+export const useFmeas = (params, { enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
     queryKey: key(organisationId, "list", params),
     queryFn: () => apiFetch(`/fmeas?${qs(params)}`, { organisationId }),
-    enabled: !!organisationId,
+    enabled: !!organisationId && enabled,
     placeholderData: keepPreviousData,
     retry: false,
   });
@@ -132,6 +132,59 @@ export const useFmeaMutation = () => {
     },
     // The guessed commands show at once; a refusal puts the record back and says why in a toast.
     ...commandGuessHandlers({ queryClient, prefix: key(organisationId), guess: guessFmea, guessed: FMEA_GUESSED, showToast: toast?.showToast }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/**
+ * One command on the analysis of a draft revision: { action, id, body } where `id` is what the command acts on (the revision to add an item to, the item to
+ * add a function to, the node to change or remove). The database scores the causes, so the screen waits for the answer, which is the whole revision.
+ */
+export const useFmeaNodeMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      const call = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
+      switch (action) {
+        case "addItem":
+          return call(`/fmea-revisions/${id}/items`);
+        case "updateItem":
+          return call(`/fmea-items/${id}`, "PATCH");
+        case "removeItem":
+          return call(`/fmea-items/${id}`, "DELETE");
+        case "addFunction":
+          return call(`/fmea-items/${id}/functions`);
+        case "updateFunction":
+          return call(`/fmea-functions/${id}`, "PATCH");
+        case "removeFunction":
+          return call(`/fmea-functions/${id}`, "DELETE");
+        case "addFailureMode":
+          return call(`/fmea-functions/${id}/failure-modes`);
+        case "updateFailureMode":
+          return call(`/fmea-failure-modes/${id}`, "PATCH");
+        case "removeFailureMode":
+          return call(`/fmea-failure-modes/${id}`, "DELETE");
+        case "addEffect":
+          return call(`/fmea-failure-modes/${id}/effects`);
+        case "updateEffect":
+          return call(`/fmea-effects/${id}`, "PATCH");
+        case "removeEffect":
+          return call(`/fmea-effects/${id}`, "DELETE");
+        case "addCause":
+          return call(`/fmea-failure-modes/${id}/causes`);
+        case "updateCause":
+          return call(`/fmea-causes/${id}`, "PATCH");
+        case "removeCause":
+          return call(`/fmea-causes/${id}`, "DELETE");
+        case "useLatestModel":
+          return call(`/fmea-revisions/${id}/use-latest-model`);
+        default:
+          throw new Error(`Unknown action ${action}`);
+      }
+    },
+    // The answer is the whole revision: put it where the page reads it at once, then refresh the rest.
+    onSuccess: (revision) => queryClient.setQueryData(key(organisationId, "revision", revision.id), revision),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };

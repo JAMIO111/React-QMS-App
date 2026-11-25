@@ -17,11 +17,15 @@ export class NotificationsService {
   list(ctx: RequestContext, unreadOnly: boolean, limit: number): Promise<{ data: NotificationItem[]; unread: number }> {
     return this.database.asUser(ctx, async (db) => {
       const org = ctx.organisationId;
+      // The visible set is worked out once; the page and the unread count are both read from it.
       const rows = (await db.execute<Row>(sql`
-        select * from app.visible_notifications(${org}::uuid)
-        where (${unreadOnly} = false or read_at is null)
-        order by created_at desc limit ${limit}`)).rows;
-      const unread = (await db.execute<Row>(sql`select count(*)::int as n from app.visible_notifications(${org}::uuid) where read_at is null`)).rows[0];
+        with v as materialized (select * from app.visible_notifications(${org}::uuid))
+        select v.*, (select count(*)::int from v where read_at is null) as unread_total
+          from v
+         where (${unreadOnly} = false or read_at is null)
+         order by created_at desc limit ${limit}`)).rows;
+      // No rows means nothing unread is visible either (an unread-only page with any unread notice is never empty).
+      const unread = { n: rows.length ? rows[0].unread_total : 0 };
       return {
         data: rows.map((r) => ({
           id: r.id as string,

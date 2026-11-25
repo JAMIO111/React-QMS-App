@@ -9,18 +9,11 @@
 const B = require('./bodies.cjs');
 const { sleep, rng } = require('./stats.cjs');
 
-const POLLS = [
-  '/notifications?limit=100',
-  '/workflow-tasks/mine?status=open',
-  '/my-documents/count',
-  '/quality-alerts/mine/count',
-  '/risk-work/count',
-  '/changes/mine/count',
-  '/fmea-actions/mine?status=open',
-  '/management-review-actions/mine?status=open',
-  '/capa-actions/mine?status=open',
-];
-const POLL_EVERY_SEC = 300;
+// What the app really does since the badges were combined: one request a minute carries every menu number and the bell's count. The notification list
+// is fetched only when someone opens the pane (a small share of the time, below), not by polling.
+const POLLS = ['/badges'];
+const POLL_EVERY_SEC = 60;
+const OPEN_PANE_CHANCE = 0.02;
 
 const range = () => ({ from: B.day(90), to: B.day(0) });
 const qs = (o) => '?' + new URLSearchParams(o).toString();
@@ -127,6 +120,7 @@ async function runDay(o) {
         if (Date.now() >= nextPoll) {
           nextPoll = Date.now() + (POLL_EVERY_SEC * 1000) / T;
           for (const path of POLLS) await u.get(path, { label: `poll:${path.split('?')[0]}`, expect: [403] });
+          if (rr.chance(OPEN_PANE_CHANCE)) await u.get('/notifications?limit=100', { label: 'page:notifications' });
         }
         if (mix.run) await mix.run(u, rr, () => jitter(rr, mix.think), (counter += 1));
         else {

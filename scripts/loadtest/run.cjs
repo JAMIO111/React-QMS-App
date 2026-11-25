@@ -116,6 +116,38 @@ async function main() {
     if (phase === 'seed') return;
     if (!state.seeded) throw new Error('Nothing was seeded: run with LOADTEST_PHASE=seed first, or all');
 
+    // 3b. The same screens, one at a time, with nobody else on the machine: what each costs by itself. The day below then shows what contention adds.
+    const idleApi = client({ base, secret: jwtSecret, orgId: state.orgId });
+    const owner = state.people.find((p) => p.role === 'owner');
+    const day = (back) => new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
+    const span = `?from=${day(90)}&to=${day(0)}`;
+    const idlePaths = [
+      ['badges', '/badges'],
+      ['notifications', '/notifications?limit=100'],
+      ['home dashboard', '/home-dashboard'],
+      ['NC dashboard', `/ncr-dashboard${span}`],
+      ['process control dashboard', `/process-control-dashboard${span}`],
+      ['supplier dashboard', `/supplier-quality/dashboard${span}`],
+      ['NC register', '/ncrs?page=1&pageSize=25'],
+      ['inspection register', '/inspections?page=1&pageSize=25'],
+      ['purchase orders (all)', '/purchase-orders?status=all&page=1&pageSize=25'],
+      ['parts search', '/parts?q=1&pageSize=25'],
+    ];
+    state.idle = [];
+    for (const [name, url] of idlePaths) {
+      const times = [];
+      let status = 0;
+      for (let i = 0; i < 4; i += 1) {
+        const r = await idleApi.as(owner.id).get(url, { expect: [400, 403, 404, 409, 422] });
+        status = r.status;
+        if (i > 0) times.push(r.ms); // the first call warms the connection and the plan cache
+      }
+      times.sort((a, b) => a - b);
+      state.idle.push({ name, url, status, ms: Math.round(times[Math.floor(times.length / 2)]) });
+    }
+    await save();
+    log('idle timings (median of 3, nobody else on the machine): ' + state.idle.map((r) => `${r.name} ${r.ms} ms${r.status === 200 ? '' : ` (${r.status})`}`).join('; '));
+
     // 4. The day.
     const recorder = new Recorder();
     recorder.measuring = false;
@@ -160,7 +192,10 @@ async function main() {
     ];
     const slow = await rep.slowStatements(admin);
     const md = rep.render({ meta, seedReport: state.seedReport, summaryRows: rows, verdict, sampler: sampler.summary(), slow, notes });
-    fs.writeFileSync(path.join(out, 'report.md'), md);
+    const idleMd = state.idle?.length
+      ? ['', '## Each screen on its own (before the day started)', '', 'Median of three calls with nobody else on the machine. Compare with the day table: the difference is contention.', '', '| screen | status | ms |', '|---|---:|---:|', ...state.idle.map((r) => `| ${r.name} | ${r.status} | ${r.ms} |`), ''].join('\n')
+      : '';
+    fs.writeFileSync(path.join(out, 'report.md'), md + idleMd);
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify({ meta, verdict, rows, sampler: sampler.summary(), seedReport: state.seedReport, samples: sampler.rows }, null, 1));
     log(`${verdict.ok ? 'PASS' : 'FAIL'}: ${verdict.total} requests, ${verdict.bad} failed. Report: ${path.join(out, 'report.md')}`);
     if (!verdict.ok) exitCode = 1;

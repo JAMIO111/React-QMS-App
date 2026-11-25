@@ -5,7 +5,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { ApproveBody, ApproverBody, CommentBody, CreateFmeaBody, FmeaListQuery, LinksBody, ReasonBody, TeamBody, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { ApproveBody, ApproverBody, CommentBody, CreateFmeaBody, FmeaListQuery, LinksBody, ReasonBody, ReviewBody, StartRevisionBody, TeamBody, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
 import { FmeaService } from './fmea.service';
 
 const READ = 'fmea.read';
@@ -62,9 +62,19 @@ export class FmeaController {
   @Post('fmeas/:id/revisions')
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
-  @ApiCreatedResponse({ description: 'Starts a new draft revision from the one in force (team and scope copied)' })
-  startRevision(@Ctx() ctx: RequestContext, @Param('id') id: string) {
-    return this.service.startRevision(ctx, parse(Uuid, id));
+  @ApiBody({ schema: openApiSchema(StartRevisionBody), required: false })
+  @ApiCreatedResponse({ description: 'Starts a new draft revision from the one in force (team, scope and analysis copied); `adopt: true` also takes in the finished actions' })
+  startRevision(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.startRevision(ctx, parse(Uuid, id), parse(StartRevisionBody, body ?? {}).adopt === true);
+  }
+
+  @Post('fmeas/:id/reviews')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReviewBody) })
+  @ApiCreatedResponse({ description: 'Records the periodic review of an FMEA in force: no change needed (with a note), or a revision started' })
+  review(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.review(ctx, parse(Uuid, id), parse(ReviewBody, body));
   }
 
   @Post('fmeas/:id/withdraw')

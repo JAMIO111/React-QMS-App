@@ -316,6 +316,13 @@ BEGIN
       'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
   -- FMEA (FM3): one item with a function, a failure mode, an effect and a rated cause on that draft.
   PERFORM pg_temp.build_fmea_net(r.id) FROM public.fmea_revisions r JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA';
+  -- FMEA (FM4): an action on that cause and a periodic review (written straight in: the sweep only needs a row in each table).
+  PERFORM app.add_fmea_action(c.id, jsonb_build_object('kind', 'prevention', 'description', 'Sweep FMEA action', 'ownerUserId', '50000000-0000-0000-0000-0000000000a1', 'dueOn', (current_date + 30)::text))
+     FROM public.fmea_causes c JOIN public.fmea_revisions r ON r.id = c.revision_id JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA' LIMIT 1;
+  PERFORM set_config('role', 'postgres', true);
+  INSERT INTO public.fmea_reviews (organisation_id, fmea_id, revision_id, outcome, note)
+    SELECT f.organisation_id, f.id, r.id, 'no_change', 'Sweep review' FROM public.fmeas f JOIN public.fmea_revisions r ON r.fmea_id = f.id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA';
+  PERFORM set_config('role', 'authenticated', true);
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

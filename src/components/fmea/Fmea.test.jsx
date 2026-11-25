@@ -16,6 +16,7 @@ import { apiFetch } from "../../lib/api-client";
 import FmeaPage from "./FmeaPage";
 import FmeaRegisterPage from "./FmeaRegisterPage";
 import RevisionPage from "./RevisionPage";
+import MyActionsPage from "./MyActionsPage";
 
 const summary = (over = {}) => ({
   id: "f1", number: "FMEA-001", kind: "process", title: "Machining of the bracket", scopeText: "Turning and drilling", status: "active", owner: { id: "u1", name: "Ada" }, customer: null,
@@ -24,7 +25,7 @@ const summary = (over = {}) => ({
 });
 const LEVELS = (word) => Array.from({ length: 10 }, (_, i) => ({ label: `${word} ${i + 1}` }));
 const MODEL = { id: "m1", version: 1, method: "rpn", rpnHighFrom: 200, rpnMediumFrom: 100, severityFloor: 9, scale: { severity: LEVELS("Sev"), occurrence: LEVELS("Occ"), detection: LEVELS("Det") }, latestVersion: 1, isLatest: true };
-const cause = (over = {}) => ({ id: "c1", text: "Tool wear", preventionControls: "Tool life counter", detectionControls: null, occurrence: 5, detection: 6, severityUsed: 8, rpn: 240, priority: "high", needsAttention: true, noActionReason: null, position: 1, fromBase: false, ...over });
+const cause = (over = {}) => ({ id: "c1", text: "Tool wear", preventionControls: "Tool life counter", detectionControls: null, occurrence: 5, detection: 6, severityUsed: 8, rpn: 240, priority: "high", needsAttention: true, noActionReason: null, position: 1, fromBase: false, actions: [], ...over });
 const NET = {
   items: [
     {
@@ -48,7 +49,7 @@ const NET = {
       ],
     },
   ],
-  counts: { items: 2, functions: 1, failureModes: 1, effects: 2, causes: 1, needAttention: 1, unrated: 0 },
+  counts: { items: 2, functions: 1, failureModes: 1, effects: 2, causes: 1, needAttention: 1, unrated: 0, openActions: 0, doneActions: 0, overdueActions: 0 },
 };
 const revision = (over = {}) => ({
   id: "r2", fmeaId: "f1", fmea: { id: "f1", number: "FMEA-001", kind: "process", title: "Machining of the bracket", status: "active" }, sequence: 2, letter: null, status: "draft",
@@ -57,7 +58,7 @@ const revision = (over = {}) => ({
   team: [{ id: "t1", kind: "member", personId: "u1", name: "Ada", jobTitle: null, role: "lead" }],
   links: [{ kind: "part", id: "p1", code: null, reference: "BR-1", name: "Bracket", readable: true }],
   net: NET, model: MODEL, base: null, rowVersion: "100",
-  problems: ["Say what changed and why", "Name the approver"], canEdit: true, canDecide: false, canRecall: false, createdAt: "2026-11-02T10:00:00Z", updatedAt: "2026-11-02T10:00:00Z", ...over,
+  problems: ["Say what changed and why", "Name the approver"], canEdit: true, canAct: true, canDecide: false, canRecall: false, createdAt: "2026-11-02T10:00:00Z", updatedAt: "2026-11-02T10:00:00Z", ...over,
 });
 
 const renderAt = (path, ui) => {
@@ -79,7 +80,7 @@ beforeEach(() => {
     if (path === "/fmeas" && opts?.method === "POST") return summary({ id: "f9", number: "FMEA-009" });
     if (path === "/fmea-people") return { data: [{ id: "u1", name: "Ada", canApprove: true }, { id: "u2", name: "Quinn", canApprove: true }] };
     if (path === "/employees/lookup") return { data: [] };
-    if (path === "/fmeas/f1") return { ...summary(), revisions: [{ id: "r1", sequence: 1, letter: "A", status: "effective", changeSummary: null, author: { id: "u1", name: "Ada" }, approver: null, effectiveFrom: "2026-11-01" }], inProgress: null, nextLetter: "B", canManage: true, canApprove: true, canStartRevision: true, canWithdraw: true };
+    if (path === "/fmeas/f1") return { ...summary(), revisions: [{ id: "r1", sequence: 1, letter: "A", status: "effective", changeSummary: null, author: { id: "u1", name: "Ada" }, approver: null, effectiveFrom: "2026-11-01" }], inProgress: null, nextLetter: "B", canManage: true, canApprove: true, canStartRevision: true, canWithdraw: true, adoptableActions: 0, reviews: [], canReview: true };
     if (path === "/fmea-revisions/r2" && !opts?.method) return current;
     if (path === "/fmea-revisions/r2/approver") {
       current = revision({ approver: { id: opts.body.approverId, name: "Quinn" }, problems: ["Say what changed and why"] });
@@ -98,6 +99,29 @@ beforeEach(() => {
       return current;
     }
     if (path === "/fmea-revisions/r2/approve") return revision({ status: "effective", letter: "B" });
+    if (path === "/fmea-causes/c1/actions") return revision();
+    if (path === "/fmea-actions/a1/complete") return { id: "a1", status: "done", evidenceNote: opts.body.note, revisedOccurrence: opts.body.revisedOccurrence ?? null, revisedRpn: 192, revisedPriority: "medium" };
+    if (path === "/fmea-actions/a1/reopen") return { id: "a1", status: "open", evidenceNote: null, revisedRpn: null };
+    if (path.startsWith("/fmea-actions/mine")) {
+      return {
+        data: [{ id: "a1", kind: "prevention", description: "Change the tool every 50 parts", dueOn: "2020-01-01", status: "open", fmeaId: "f1", fmeaNumber: "FMEA-001", fmeaTitle: "Machining of the bracket", fmeaKind: "process", revisionId: "r1", revisionLetter: "A", revisionStatus: "effective", causeText: "Tool wear", occurrence: 8, detection: 8, adopted: false }],
+        openCount: 1, overdueCount: 1,
+      };
+    }
+    if (path === "/fmea-model") return { version: 1, config: { scales: { process: { severity: LEVELS("Sev"), occurrence: LEVELS("Occ"), detection: LEVELS("Det") } } }, versions: [], canChange: false };
+    if (path === "/fmeas/f1/revisions") return { ...summary(), inProgress: { id: "r2", status: "draft", letter: null, sequence: 2 }, revisions: [], reviews: [] };
+    if (path === "/fmeas/f1/reviews") return { ...summary(), inProgress: null, revisions: [], reviews: [{ id: "v1", outcome: "no_change", note: opts.body.note, revisionLetter: "A", startedLetter: null, wasDueOn: null, nextReviewOn: "2028-01-01", by: { id: "u1", name: "Ada" }, at: "2026-11-25T10:00:00Z" }] };
+    if (path === "/fmea-revisions/r2/compare") {
+      return {
+        comparable: true, older: { id: "r1", letter: "A", sequence: 1 }, newer: { id: "r2", letter: null, sequence: 2 },
+        counts: { added: 1, removed: 0, changed: 1, same: 4 },
+        changes: [
+          { kind: "cause", change: "changed", rowId: "c1", label: "Tool wear", path: ["Bracket machining", "OP10 Turn", "Bore oversize"], fields: [{ field: "occurrence", from: 8, to: 3 }, { field: "priority", from: "high", to: "medium" }] },
+          { kind: "cause", change: "added", rowId: "c9", label: "Coolant dirty", path: ["Bracket machining", "OP10 Turn", "Bore oversize"], fields: [] },
+        ],
+      };
+    }
+    if (path === "/fmea-revisions/r2/base-changes") return { hasBase: false };
     return {};
   });
 });
@@ -255,6 +279,153 @@ describe("a revision", () => {
       const tree = await screen.findByRole("list", { name: "Structure" });
       expect(within(tree).queryByRole("button", { name: "Actions" })).toBeNull();
       expect(screen.queryByRole("button", { name: /^Add a process item/ })).toBeNull();
+    });
+  });
+});
+
+describe("actions, My actions, comparing and the review (FM4)", () => {
+  const open = () =>
+    renderAt("/FMEA/f1/revisions/r2", (
+      <Routes>
+        <Route path="/FMEA/:id/revisions/:revisionId" element={<RevisionPage />} />
+      </Routes>
+    ));
+  const action = (over = {}) => ({
+    id: "a1", causeId: "c1", revisionId: "r2", kind: "prevention", description: "Change the tool every 50 parts", owner: { kind: "member", id: "u2", name: "Quinn" }, dueOn: "2030-01-01", status: "open",
+    overdue: false, evidenceNote: null, doneAt: null, doneBy: null, revisedOccurrence: null, revisedDetection: null, revisedRpn: null, revisedPriority: null, revisedNeedsAttention: null,
+    cancelReason: null, adopted: false, carried: false, isMine: false, canComplete: true, canReopen: false, canEdit: true, createdAt: "2026-11-02T10:00:00Z", ...over,
+  });
+
+  it("gives an action to a cause with the owner and a due date ready, and sends it", async () => {
+    open();
+    const group = await screen.findByRole("group", { name: "Actions for Tool wear" });
+    await userEvent.click(within(group).getByRole("button", { name: "Add an action" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/^What is to be done/), "Change the tool every 50 parts");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /^Who does it/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Quinn/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add the action" }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        "/fmea-causes/c1/actions",
+        expect.objectContaining({ method: "POST", body: expect.objectContaining({ kind: "prevention", description: "Change the tool every 50 parts", ownerUserId: "u2", dueOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }) }),
+      ),
+    );
+  });
+
+  it("shows an action under its cause, and finishes it with what was found and the revised rating", async () => {
+    current = revision({ net: { ...NET, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], causes: [cause({ actions: [action()] })] }] }] }] }] } });
+    open();
+    const group = await screen.findByRole("group", { name: "Actions for Tool wear" });
+    expect(within(group).getByText("Change the tool every 50 parts")).toBeInTheDocument();
+    expect(within(group).getByText(/Quinn/)).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole("button", { name: "Finish" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Mark as done" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/^What was found/), "Tool changed every 50 parts for a month");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /^Occurrence now/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /^3 · Occ 3/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Mark as done" }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/fmea-actions/a1/complete", expect.objectContaining({ method: "POST", body: expect.objectContaining({ note: "Tool changed every 50 parts for a month", revisedOccurrence: 3 }) })),
+    );
+  });
+
+  it("shows a late action as late, and a finished one with what it comes to and a way to reopen it", async () => {
+    const done = action({ id: "a2", status: "done", evidenceNote: "Gauged for a month", revisedOccurrence: 3, revisedRpn: 192, revisedPriority: "medium", canComplete: false, canReopen: true, canEdit: false, doneBy: { id: "u2", name: "Quinn" }, doneAt: "2026-11-20T10:00:00Z" });
+    const late = action({ overdue: true, dueOn: "2020-01-01" });
+    current = revision({ net: { ...NET, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], causes: [cause({ actions: [late, done] })] }] }] }] }] } });
+    open();
+    const group = await screen.findByRole("group", { name: "Actions for Tool wear" });
+    expect(within(group).getByText(/Late: was due/)).toBeInTheDocument();
+    expect(within(group).getByText(/Gauged for a month/)).toBeInTheDocument();
+    expect(within(group).getByText(/O 5 → 3 · RPN 192 · Medium/)).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: "Reopen" })).toBeInTheDocument();
+  });
+
+  it("offers a reader no way to add, change or cancel an action", async () => {
+    held = ["fmea.read"];
+    current = revision({ canEdit: false, canAct: false, status: "effective", letter: "B", problems: [], net: { ...NET, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], causes: [cause({ actions: [action({ canEdit: false, canComplete: false })] })] }] }] }] }] } });
+    open();
+    const group = await screen.findByRole("group", { name: "Actions for Tool wear" });
+    expect(within(group).queryByRole("button", { name: "Add an action" })).toBeNull();
+    expect(within(group).queryByRole("button", { name: /Change the action/ })).toBeNull();
+    expect(within(group).queryByRole("button", { name: "Finish" })).toBeNull();
+  });
+
+  it("shows what changed since the last revision only when asked, field by field", async () => {
+    open();
+    await userEvent.click(await screen.findByRole("button", { name: "Show what changed" }));
+    const list = await screen.findByRole("list", { name: "Changes" });
+    expect(screen.getByLabelText("Comparison figures")).toHaveTextContent("1 added · 0 removed · 1 changed · 4 unchanged");
+    expect(within(list).getByText("Tool wear")).toBeInTheDocument();
+    expect(within(list).getByText(/Occurrence:/)).toHaveTextContent("Occurrence: 8 → 3");
+    expect(within(list).getByText(/Priority:/)).toHaveTextContent("Priority: High → Medium");
+    expect(within(list).getByText("Coolant dirty")).toBeInTheDocument();
+  });
+
+  it("tells a part FMEA that its base has moved on, and lists what changed there on request", async () => {
+    current = revision({ base: { fmeaId: "f0", number: "FMEA-000", title: "Generic machining", revisionId: "r0", letter: "A" } });
+    const base = { hasBase: true, readable: true, moved: true, base: { fmeaId: "f0", number: "FMEA-000", title: "Generic machining", copiedLetter: "A", currentLetter: "B" }, counts: { added: 0, removed: 0, changed: 1, same: 5 }, changes: [{ kind: "cause", change: "changed", rowId: "x", label: "Tool wear", path: ["Bracket"], fields: [{ field: "occurrence", from: 8, to: 4 }] }] };
+    const original = apiFetch.getMockImplementation();
+    apiFetch.mockImplementation(async (path, opts) => (path === "/fmea-revisions/r2/base-changes" ? base : original(path, opts)));
+    open();
+    expect(await screen.findByText("The base has moved on")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show what changed in the base" }));
+    expect(await screen.findByRole("list", { name: "Changes in the base" })).toHaveTextContent("Occurrence: 8 → 4");
+  });
+
+  describe("on the FMEA", () => {
+    const openFmea = () =>
+      renderAt("/FMEA/f1", (
+        <Routes>
+          <Route path="/FMEA/:id" element={<FmeaPage />} />
+          <Route path="/FMEA/:id/revisions/:revisionId" element={<div>the revision</div>} />
+        </Routes>
+      ));
+
+    it("asks whether to take the finished actions in when starting a revision, and sends the choice", async () => {
+      const original = apiFetch.getMockImplementation();
+      apiFetch.mockImplementation(async (path, opts) => (path === "/fmeas/f1" ? { ...(await original(path, opts)), adoptableActions: 2 } : original(path, opts)));
+      openFmea();
+      await userEvent.click(await screen.findByRole("button", { name: "Start a new revision" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent("2 finished actions have not been taken into the analysis yet");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Start the revision" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmeas/f1/revisions", expect.objectContaining({ method: "POST", body: { adopt: true } })));
+      expect(await screen.findByText("the revision")).toBeInTheDocument();
+    });
+
+    it("starts a revision at once when no finished action is waiting", async () => {
+      openFmea();
+      await userEvent.click(await screen.findByRole("button", { name: "Start a new revision" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmeas/f1/revisions", expect.objectContaining({ method: "POST" })));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("records a review with what was checked", async () => {
+      openFmea();
+      await userEvent.click(await screen.findByRole("button", { name: "Record a review" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByRole("button", { name: "Record the review" })).toBeDisabled();
+      await userEvent.type(within(dialog).getByLabelText(/^What you checked/), "Checked against this year's scrap data");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Record the review" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmeas/f1/reviews", expect.objectContaining({ method: "POST", body: { outcome: "no_change", note: "Checked against this year's scrap data" } })));
+    });
+  });
+
+  describe("My actions", () => {
+    it("lists the actions given to me, late ones flagged, and finishes one with the ratings of its scale", async () => {
+      renderAt("/FMEA/My-Actions", <MyActionsPage />);
+      const list = await screen.findByRole("list", { name: "My FMEA actions" });
+      expect(within(list).getByText("Change the tool every 50 parts")).toBeInTheDocument();
+      expect(within(list).getByRole("link", { name: /FMEA-001 · Machining of the bracket · rev A/ })).toHaveAttribute("href", "/FMEA/f1/revisions/r1");
+      expect(screen.getByText("1 action is late.")).toBeInTheDocument();
+      await userEvent.click(within(list).getByRole("button", { name: "Finish" }));
+      const dialog = await screen.findByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText(/^What was found/), "Done on both lathes");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Mark as done" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmea-actions/a1/complete", expect.objectContaining({ method: "POST", body: expect.objectContaining({ note: "Done on both lathes" }) })));
     });
   });
 });

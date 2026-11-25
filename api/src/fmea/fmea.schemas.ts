@@ -145,3 +145,37 @@ const causeFields = {
 };
 export const CreateCauseBody = z.object(causeFields).strict();
 export const UpdateCauseBody = z.object({ ...causeFields, text: causeFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
+
+// ---- FM4: actions, adopting, the periodic review, comparing -------------------------------------------------------------------
+
+export const ACTION_KINDS = ['prevention', 'detection'] as const;
+/** The person an action is given to: a member (sign-in) or an employee of the register, exactly one. */
+const actionFields = {
+  kind: z.enum(ACTION_KINDS),
+  description: z.string().trim().min(3).max(1000),
+  ownerUserId: z.string().uuid().optional(),
+  ownerEmployeeId: z.string().uuid().optional(),
+  dueOn: isoDay,
+};
+export const CreateActionBody = z.object(actionFields).strict();
+export type CreateActionBody = z.infer<typeof CreateActionBody>;
+export const UpdateActionBody = z.object({ ...actionFields, kind: actionFields.kind.optional(), description: actionFields.description.optional(), dueOn: actionFields.dueOn.optional() }).strict().refine(nothingToChange, 'Nothing to change');
+export type UpdateActionBody = z.infer<typeof UpdateActionBody>;
+export const CompleteActionBody = z
+  .object({ note: z.string().trim().min(3).max(1000), revisedOccurrence: level, revisedDetection: level })
+  .strict();
+export type CompleteActionBody = z.infer<typeof CompleteActionBody>;
+export const MyActionsQuery = z.object({ status: z.enum(['open', 'done', 'all']).default('open') }).strict();
+export type MyActionsQuery = z.infer<typeof MyActionsQuery>;
+
+/** Start a new revision; `adopt` takes the finished actions of the revision in force into it (their words into the controls, their revised ratings into the causes). */
+export const StartRevisionBody = z.object({ adopt: z.boolean().optional() }).strict();
+export type StartRevisionBody = z.infer<typeof StartRevisionBody>;
+
+export const ReviewBody = z
+  .object({ outcome: z.enum(['no_change', 'revision_started']), note: z.string().trim().max(1000).optional() })
+  .strict();
+export type ReviewBody = z.infer<typeof ReviewBody>;
+
+export const CompareQuery = z.object({ with: z.string().uuid().optional() }).strict();
+export type CompareQuery = z.infer<typeof CompareQuery>;

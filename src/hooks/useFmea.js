@@ -108,6 +108,8 @@ export const useFmeaMutation = () => {
           return send(`/fmeas/${id}/revisions`);
         case "withdraw":
           return send(`/fmeas/${id}/withdraw`);
+        case "review":
+          return send(`/fmeas/${id}/reviews`);
         case "updateRevision":
           return send(`/fmea-revisions/${id}`, "PATCH");
         case "setTeam":
@@ -230,4 +232,87 @@ export const useSaveFmeaModel = () => {
 export const useImportApGrid = () => {
   const { organisationId } = useOrganisation();
   return useMutation({ mutationFn: (csv) => apiFetch("/fmea-model/ap-import", { method: "POST", body: { csv }, organisationId }) });
+};
+
+// ---- actions, My actions, comparing (FM4) ------------------------------------------------------------------------
+
+/**
+ * One command on an action: { action, id, body } — add (`id` is the cause: the answer is the whole revision), update, complete, cancel or reopen (`id` is the action:
+ * the answer is the action, with the figures the database worked out, and is written into every cached copy). It waits for the server: the revised ratings are the
+ * database's to work out.
+ */
+export const useFmeaActionMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, id, body }) => {
+      const call = (path, method = "POST") => apiFetch(path, { method, body, organisationId });
+      switch (action) {
+        case "add":
+          return call(`/fmea-causes/${id}/actions`);
+        case "update":
+          return call(`/fmea-actions/${id}`, "PATCH");
+        case "complete":
+          return call(`/fmea-actions/${id}/complete`);
+        case "cancel":
+          return call(`/fmea-actions/${id}/cancel`);
+        case "reopen":
+          return call(`/fmea-actions/${id}/reopen`);
+        default:
+          throw new Error(`Unknown action ${action}`);
+      }
+    },
+    onSuccess: (answer, { action }) => {
+      if (action === "add") queryClient.setQueryData(key(organisationId, "revision", answer.id), answer);
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** The actions given to the caller (`status` open | done | all): `{ data, openCount, overdueCount }`. */
+export const useMyFmeaActions = (status = "open", { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "my-actions", status),
+    queryFn: () => apiFetch(`/fmea-actions/mine?${qs({ status })}`, { organisationId }),
+    enabled: !!organisationId && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
+/** The menu badge: how many actions are open and given to the caller. Polled every five minutes like the other badges. */
+export const useMyFmeaActionCount = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "my-actions-count"),
+    queryFn: () => apiFetch("/fmea-actions/mine?status=open", { organisationId }),
+    enabled: !!organisationId && enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+    select: (r) => ({ open: r.openCount, overdue: r.overdueCount, total: r.openCount }),
+  });
+};
+
+/** What changed since the revision before this one (or since `withId`). */
+export const useFmeaCompare = (id, withId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "compare", id, withId ?? null),
+    queryFn: () => apiFetch(`/fmea-revisions/${id}/compare${withId ? `?${qs({ with: withId })}` : ""}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** For an FMEA started from a base: what has changed in the base since it was copied. */
+export const useFmeaBaseChanges = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "base-changes", id),
+    queryFn: () => apiFetch(`/fmea-revisions/${id}/base-changes`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
 };

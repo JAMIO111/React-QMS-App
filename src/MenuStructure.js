@@ -166,7 +166,12 @@ export const menuStructure = [
     icon: ListTreeIcon,
     permission: "fmea.read",
     path: "/FMEA",
-    subMenu: [],
+    // badge: "my-fmea-actions" = open FMEA actions given to the signed-in person (see Navbar)
+    badge: "my-fmea-actions",
+    subMenu: [
+      { name: "FMEAs", path: "/FMEA", end: true },
+      { name: "My actions", path: "/FMEA/My-Actions", badge: "my-fmea-actions" },
+    ],
   },
   {
     name: "Management review",

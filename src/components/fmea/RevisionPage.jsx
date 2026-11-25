@@ -11,6 +11,7 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import AnalysisEditor from "./AnalysisEditor";
+import { BaseChangesCallout, CompareCard } from "./LifecyclePanels";
 import { ApproveDialog, ApproverDialog, LinksDialog, ReasonDialog, TeamDialog } from "./FmeaDialogs";
 
 /** The wording of a draft: what changed and why. Saved as the person leaves the box. */
@@ -128,7 +129,9 @@ const RevisionPage = () => {
           </ul>
         </Callout>
       )}
+      <BaseChangesCallout revision={revision} />
       <AnalysisEditor revision={revision} />
+      <CompareCard revision={revision} />
 
       <MenuCard
         title="The team"

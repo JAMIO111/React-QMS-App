@@ -94,6 +94,8 @@ import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
 import { ChangeController } from './change/change.controller';
 import { FmeaAnalysisController } from './fmea/fmea-analysis.controller';
+import { FmeaActionsController } from './fmea/fmea-actions.controller';
+import { FmeaActionsService } from './fmea/fmea-actions.service';
 import { FmeaAnalysisService } from './fmea/fmea-analysis.service';
 import { FmeaController } from './fmea/fmea.controller';
 import { FmeaModelController } from './fmea/fmea-model.controller';
@@ -320,6 +322,7 @@ export class AppModule implements NestModule {
         ChangeController,
         FmeaController,
         FmeaAnalysisController,
+        FmeaActionsController,
         FmeaModelController,
         RiskController,
         RiskDashboardController,
@@ -444,6 +447,7 @@ export class AppModule implements NestModule {
         ChangeService,
         FmeaService,
         FmeaAnalysisService,
+        FmeaActionsService,
         FmeaModelService,
         RiskService,
         RiskDashboardService,

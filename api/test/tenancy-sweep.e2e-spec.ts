@@ -675,6 +675,12 @@ const sampleBody = (op: Op): object | undefined =>
     'DELETE /api/v1/fmea-effects/{id}': undefined,
     'PATCH /api/v1/fmea-causes/{id}': { text: 'Hijacked' },
     'DELETE /api/v1/fmea-causes/{id}': undefined,
+    'POST /api/v1/fmea-causes/{id}/actions': { kind: 'prevention', description: 'Hijacked', ownerUserId: ids.ownerA, dueOn: '2030-01-01' },
+    'PATCH /api/v1/fmea-actions/{id}': { description: 'Hijacked' },
+    'POST /api/v1/fmea-actions/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/fmea-actions/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/fmea-actions/{id}/reopen': undefined,
+    'POST /api/v1/fmeas/{id}/reviews': { outcome: 'no_change', note: 'Hijacked' },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -1277,6 +1283,14 @@ const hasSample = (op: Op) =>
     'DELETE /api/v1/fmea-effects/{id}',
     'PATCH /api/v1/fmea-causes/{id}',
     'DELETE /api/v1/fmea-causes/{id}',
+    'POST /api/v1/fmea-causes/{id}/actions',
+    'PATCH /api/v1/fmea-actions/{id}',
+    'POST /api/v1/fmea-actions/{id}/complete',
+    'POST /api/v1/fmea-actions/{id}/cancel',
+    'POST /api/v1/fmea-actions/{id}/reopen',
+    'POST /api/v1/fmeas/{id}/reviews',
+    'GET /api/v1/fmea-revisions/{id}/compare',
+    'GET /api/v1/fmea-revisions/{id}/base-changes',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -1343,6 +1357,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/fmea-failure-modes/')) return a.fmeaMode;
   if (path.startsWith('/api/v1/fmea-effects/')) return a.fmeaEffect;
   if (path.startsWith('/api/v1/fmea-causes/')) return a.fmeaCause;
+  if (path.startsWith('/api/v1/fmea-actions/')) return a.fmeaAction;
   if (path.startsWith('/api/v1/fmeas/')) return a.fmea;
   if (path.startsWith('/api/v1/change-types/')) return a.changeType;
   if (path.startsWith('/api/v1/change-functions/')) return a.changeFunction;
@@ -1598,6 +1613,7 @@ beforeAll(async () => {
     a.fmeaMode = (await q1(`select app.save_fmea_failure_mode($1::uuid, null, '{"text":"Alpha mode"}'::jsonb) as id`, [a.fmeaFunction])).id;
     a.fmeaEffect = (await q1(`select app.save_fmea_effect($1::uuid, null, '{"level":"own_plant","text":"Alpha effect","severity":5}'::jsonb) as id`, [a.fmeaMode])).id;
     a.fmeaCause = (await q1(`select app.save_fmea_cause($1::uuid, null, '{"text":"Alpha cause","occurrence":3,"detection":3}'::jsonb) as id`, [a.fmeaMode])).id;
+    a.fmeaAction = (await q1(`select app.add_fmea_action($1::uuid, jsonb_build_object('kind', 'prevention', 'description', 'Alpha action', 'ownerUserId', $2::text, 'dueOn', (current_date + 30)::text)) as id`, [a.fmeaCause, ids.ownerA])).id;
     a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
     a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;

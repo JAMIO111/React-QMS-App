@@ -35,6 +35,8 @@ export function notificationLink(n) {
     case "change_requests":
     case "change_tasks":
       return d.change_id ? `/Change/${d.change_id}` : "/Change";
+    case "fmea_actions":
+      return "/FMEA/My-Actions";
     case "document_signoffs":
     case "document_recipients":
       return d.document_id && d.revision_id ? `/Documentation/Documents/${d.document_id}/revisions/${d.revision_id}` : "/Documentation/Documents";

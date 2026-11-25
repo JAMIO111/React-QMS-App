@@ -4,7 +4,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { ApproveBody, CreateFmeaBody, FmeaListQuery, LinkItem, TeamItem, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { ApproveBody, CreateFmeaBody, FmeaListQuery, LinkItem, ReviewBody, TeamItem, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -95,6 +95,52 @@ const toSummary = (r: Row) => ({
   createdAt: iso(r.created_at) as string,
   updatedAt: iso(r.updated_at) as string,
 });
+
+/** An action with the person it is given to, whether that is the caller, and whether it is late (as the caller's own day). */
+export const ACTION_SELECT = sql`
+  select a.*, (a.status = 'open' and a.due_on < current_date) as overdue,
+         (a.owner_user_id = auth.uid() or e.auth_id = auth.uid()) as is_mine,
+         coalesce(${sql.raw(personName('e'))}, ${sql.raw(personName('op'))}, 'Unnamed') as owner_name,
+         ${sql.raw(personName('dp'))} as done_by_name
+    from public.fmea_actions a
+    left join public."Employees" e on e.id = a.owner_employee_id and e.organisation_id = a.organisation_id
+    left join public.profiles op on op.id = a.owner_user_id
+    left join public.profiles dp on dp.id = a.done_by`;
+
+const num = (v: unknown) => (v == null ? null : Number(v));
+
+/** One action as the screens see it. `live` = its revision is a draft or in force; `canManage` = the caller manages FMEAs. */
+export const toAction = (a: Row, live: boolean, canManage: boolean) => {
+  const open = a.status === 'open';
+  return {
+    id: a.id as string,
+    causeId: a.cause_id as string,
+    revisionId: a.revision_id as string,
+    kind: a.kind as 'prevention' | 'detection',
+    description: a.description as string,
+    owner: { kind: (a.owner_employee_id ? 'employee' : 'member') as 'employee' | 'member', id: (a.owner_employee_id ?? a.owner_user_id) as string, name: a.owner_name as string },
+    dueOn: a.due_on as string,
+    status: a.status as 'open' | 'done' | 'cancelled',
+    overdue: Boolean(a.overdue),
+    evidenceNote: (a.evidence_note as string) ?? null,
+    doneAt: a.done_at ? iso(a.done_at) : null,
+    doneBy: person(a.done_by, a.done_by_name),
+    revisedOccurrence: num(a.revised_occurrence),
+    revisedDetection: num(a.revised_detection),
+    revisedRpn: num(a.revised_rpn),
+    revisedPriority: (a.revised_priority as 'high' | 'medium' | 'low' | null) ?? null,
+    revisedNeedsAttention: a.revised_needs_attention == null ? null : Boolean(a.revised_needs_attention),
+    cancelReason: (a.cancel_reason as string) ?? null,
+    adopted: a.adopted_in_revision_id != null,
+    carried: a.prev_row_id != null,
+    isMine: Boolean(a.is_mine),
+    /** The caller may finish it: a manager, or the person it is given to; while it is open on a draft or the revision in force. */
+    canComplete: live && open && (canManage || Boolean(a.is_mine)),
+    canReopen: live && a.status === 'done' && a.adopted_in_revision_id == null && (canManage || Boolean(a.is_mine)),
+    canEdit: live && open && canManage,
+    createdAt: iso(a.created_at) as string,
+  };
+};
 
 /** FMEA (FM1): the analysis record, its revisions, team and scope. Every write is a database function; reading is by RLS. */
 @Injectable()
@@ -191,6 +237,31 @@ export class FmeaService {
     }));
     const open = revisions.find((v) => ['draft', 'pending_approval', 'approved'].includes(v.status)) ?? null;
     const status = r.status as string;
+    const adoptable = r.current_revision_id
+      ? Number(
+          (
+            await db.execute<Row>(sql`select count(*)::int as n from public.fmea_actions
+                                       where revision_id = ${r.current_revision_id as string}::uuid and organisation_id = ${org}::uuid and status = 'done' and adopted_in_revision_id is null`)
+          ).rows[0].n,
+        )
+      : 0;
+    const reviews = (
+      await db.execute<Row>(sql`
+        select v.*, ${sql.raw(personName('pc'))} as by_name, rv.letter as revision_letter, sv.letter as started_letter
+          from public.fmea_reviews v join public.fmea_revisions rv on rv.id = v.revision_id left join public.fmea_revisions sv on sv.id = v.started_revision_id
+          left join public.profiles pc on pc.id = v.created_by
+         where v.fmea_id = ${id}::uuid and v.organisation_id = ${org}::uuid order by v.created_at desc limit 50`)
+    ).rows.map((v) => ({
+      id: v.id as string,
+      outcome: v.outcome as 'no_change' | 'revision_started',
+      note: (v.note as string) ?? null,
+      revisionLetter: (v.revision_letter as string) ?? null,
+      startedLetter: (v.started_letter as string) ?? null,
+      wasDueOn: (v.was_due_on as string) ?? null,
+      nextReviewOn: (v.next_review_on as string) ?? null,
+      by: person(v.created_by, v.by_name),
+      at: iso(v.created_at) as string,
+    }));
     return {
       ...toSummary(r),
       revisions,
@@ -201,6 +272,10 @@ export class FmeaService {
       baseFmeaId: (r.base_fmea_id as string) ?? null,
       canStartRevision: Boolean(can.manage) && ['active', 'withdrawn'].includes(status) && !open,
       canWithdraw: Boolean(can.approve) && status === 'active',
+      /** Finished actions on the revision in force that a new revision can take in (their words into the controls, their revised ratings into the causes). */
+      adoptableActions: adoptable,
+      reviews,
+      canReview: Boolean(can.manage) && status === 'active',
     };
   }
 
@@ -222,11 +297,16 @@ export class FmeaService {
     return this.fmeaCommand(ctx, id, sql`select app.update_fmea(${id}::uuid, ${json(body)}::jsonb)`);
   }
 
-  startRevision(ctx: RequestContext, id: string) {
+  startRevision(ctx: RequestContext, id: string, adopt = false) {
     return this.database.asUser(ctx, async (db) => {
-      await db.execute(sql`select app.start_fmea_revision(${id}::uuid)`);
+      await db.execute(sql`select app.start_fmea_revision(${id}::uuid, ${adopt})`);
       return this.fmea(db, ctx, id);
     });
+  }
+
+  /** The periodic review of an FMEA in force: "no change needed" (with a note) or "a revision is started". */
+  review(ctx: RequestContext, id: string, body: ReviewBody) {
+    return this.fmeaCommand(ctx, id, sql`select app.record_fmea_review(${id}::uuid, ${body.outcome}, ${body.note ?? null})`);
   }
 
   withdraw(ctx: RequestContext, id: string, reason: string) {
@@ -279,7 +359,7 @@ export class FmeaService {
       .map(toLink);
     const problems = ((await db.execute<Row>(sql`select app.fmea_revision_problems(${id}::uuid) as p`)).rows[0].p as string[] | null) ?? [];
     const status = r.status as string;
-    const [net, model, base] = await Promise.all([this.net(db, id, org), this.model(db, r.model_id as string, r.kind as string, org), this.base(db, r, org)]);
+    const [net, model, base] = await Promise.all([this.net(db, id, org, { status, canManage: Boolean(can.manage), me: (can.me as string) ?? null }), this.model(db, r.model_id as string, r.kind as string, org), this.base(db, r, org)]);
     const mine = r.approver_id != null && r.approver_id === can.me;
     return {
       id: r.id as string,
@@ -311,6 +391,8 @@ export class FmeaService {
       model,
       base,
       canEdit: Boolean(can.manage) && status === 'draft',
+      /** The caller may give actions to causes: a manager, on a draft or on the revision in force. */
+      canAct: Boolean(can.manage) && (status === 'draft' || status === 'effective'),
       /** The caller is the named approver, it is waiting, and nothing (the approve right, the preparer rule) stands in the way. */
       canDecide: mine && status === 'pending_approval' && Boolean(can.approve) && r.author_id !== can.me,
       canRecall: Boolean(can.manage) && status === 'pending_approval',
@@ -322,9 +404,9 @@ export class FmeaService {
   }
 
   /** The analysis of a revision as a tree: items (nested), each with its functions, failure modes, effects and causes. Read as the caller; five queries for any size. */
-  private async net(db: Db, revisionId: string, org: string) {
+  private async net(db: Db, revisionId: string, org: string, who: { status: string; canManage: boolean; me: string | null }) {
     const where = sql`revision_id = ${revisionId}::uuid and organisation_id = ${org}::uuid`;
-    const [items, functions, modes, effects, causes] = await Promise.all([
+    const [items, functions, modes, effects, causes, actions] = await Promise.all([
       db.execute<Row>(sql`select i.*, m.code as machine_code, m.name as machine_name, p.part_number, p.name as part_name from public.fmea_items i
                            left join public.machines m on m.id = i.machine_id left join public.parts p on p.id = i.part_id
                           where i.revision_id = ${revisionId}::uuid and i.organisation_id = ${org}::uuid order by i.position, i.created_at`),
@@ -332,6 +414,7 @@ export class FmeaService {
       db.execute<Row>(sql`select * from public.fmea_failure_modes where ${where} order by position, created_at`),
       db.execute<Row>(sql`select * from public.fmea_effects where ${where} order by position, created_at`),
       db.execute<Row>(sql`select * from public.fmea_causes where ${where} order by position, created_at`),
+      db.execute<Row>(sql`${ACTION_SELECT} where a.revision_id = ${revisionId}::uuid and a.organisation_id = ${org}::uuid order by a.due_on, a.created_at`),
     ]);
     const n = (v: unknown) => (v == null ? null : Number(v));
     const group = <T extends Row>(rows: T[], key: string) => {
@@ -343,11 +426,14 @@ export class FmeaService {
     const mByFn = group(modes.rows, 'function_id');
     const eByMode = group(effects.rows, 'failure_mode_id');
     const cByMode = group(causes.rows, 'failure_mode_id');
+    const aByCause = group(actions.rows, 'cause_id');
+    const live = who.status === 'draft' || who.status === 'effective';
     const cause = (c: Row) => ({
       id: c.id as string, text: c.text as string, preventionControls: (c.prevention_controls as string) ?? null, detectionControls: (c.detection_controls as string) ?? null,
       occurrence: n(c.occurrence), detection: n(c.detection), severityUsed: n(c.severity_used), rpn: n(c.rpn),
       priority: (c.priority as 'high' | 'medium' | 'low' | null) ?? null, needsAttention: c.needs_attention == null ? null : Boolean(c.needs_attention),
       noActionReason: (c.no_action_reason as string) ?? null, position: Number(c.position), fromBase: c.base_row_id != null,
+      actions: (aByCause.get(c.id as string) ?? []).map((a) => toAction(a, live, who.canManage)),
     });
     const mode = (m: Row) => ({
       id: m.id as string, text: m.text as string, specialClass: (m.special_class as 'critical' | 'significant' | null) ?? null, position: Number(m.position), fromBase: m.base_row_id != null,
@@ -384,7 +470,9 @@ export class FmeaService {
       (parent ? parent.children : roots).push(node);
     }
     const counts = { items: items.rows.length, functions: functions.rows.length, failureModes: modes.rows.length, effects: effects.rows.length, causes: causes.rows.length,
-      needAttention: causes.rows.filter((c) => c.needs_attention).length, unrated: causes.rows.filter((c) => c.rpn == null).length };
+      needAttention: causes.rows.filter((c) => c.needs_attention).length, unrated: causes.rows.filter((c) => c.rpn == null).length,
+      openActions: actions.rows.filter((a) => a.status === 'open').length, doneActions: actions.rows.filter((a) => a.status === 'done').length,
+      overdueActions: actions.rows.filter((a) => a.overdue).length };
     return { items: roots, counts };
   }
 

@@ -10,6 +10,7 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { FmeaDialog, ReasonDialog } from "./FmeaDialogs";
+import { ReviewsCard, StartRevisionDialog } from "./LifecyclePanels";
 
 const Fact = ({ label, children }) => (
   <div>
@@ -31,8 +32,9 @@ const FmeaPage = () => {
   if (query.isLoading) return <LoadingScreen />;
   if (query.error) return <ErrorNotice error={query.error} />;
 
-  const startRevision = () =>
-    mutation.mutate({ action: "startRevision", id: fmea.id }, { onSuccess: (updated) => updated?.inProgress && navigate(revisionPath(fmea.id, updated.inProgress.id)) });
+  const open = (updated) => updated?.inProgress && navigate(revisionPath(fmea.id, updated.inProgress.id));
+  // With finished actions waiting, the person chooses whether the new revision takes them in; without, it starts at once.
+  const startRevision = () => (fmea.adoptableActions > 0 ? setDialog("start") : mutation.mutate({ action: "startRevision", id: fmea.id }, { onSuccess: open }));
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-primary-bg p-4">
@@ -115,6 +117,9 @@ const FmeaPage = () => {
         </ul>
       </MenuCard>
 
+      <ReviewsCard fmea={fmea} onStarted={open} />
+
+      {dialog === "start" && <StartRevisionDialog fmea={fmea} onClose={() => setDialog(null)} onStarted={open} />}
       {dialog === "edit" && <FmeaDialog existing={fmea} onClose={() => setDialog(null)} />}
       {dialog === "withdraw" && (
         <ReasonDialog

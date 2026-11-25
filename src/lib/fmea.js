@@ -180,3 +180,57 @@ export const modelWords = (model) =>
 
 /** The worst severity among a failure mode's effects, or null when none is rated. */
 export const worstSeverity = (effects) => effects.reduce((m, e) => (e.severity != null && (m == null || e.severity > m) ? e.severity : m), null);
+
+// ---- actions, comparing and the review (FM4) ---------------------------------------------------------------------
+
+export const ACTION_KINDS = [
+  { value: "prevention", label: "Prevention", hint: "Stops the cause from happening (lowers occurrence)" },
+  { value: "detection", label: "Detection", hint: "Catches the cause or the failure sooner (lowers detection)" },
+];
+export const actionKindLabel = (kind) => ACTION_KINDS.find((k) => k.value === kind)?.label ?? kind;
+
+export const ACTION_STATUS = {
+  open: { label: "Open", tone: "info" },
+  done: { label: "Done", tone: "success" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
+export const actionStatusLabel = (status) => ACTION_STATUS[status]?.label ?? status;
+export const actionStatusPill = (status) => TONE_CLASS[ACTION_STATUS[status]?.tone ?? "neutral"];
+
+/** "Due 12 Jan 2026", or "Late: was due 12 Jan 2026" while it is open and past. */
+export const dueWords = (action) => (action.overdue ? `Late: was due ${formatDay(action.dueOn)}` : `Due ${formatDay(action.dueOn)}`);
+
+/** What a finished action says it comes to: "O 8 → 3 · RPN 192 · Medium", or just the findings when no ratings were given. */
+export const revisedWords = (action, cause) => {
+  const parts = [];
+  if (action.revisedOccurrence != null) parts.push(`O ${cause?.occurrence ?? "?"} → ${action.revisedOccurrence}`);
+  if (action.revisedDetection != null) parts.push(`D ${cause?.detection ?? "?"} → ${action.revisedDetection}`);
+  if (action.revisedRpn != null) parts.push(`RPN ${action.revisedRpn}`, priorityLabel(action.revisedPriority));
+  return parts.join(" · ");
+};
+
+/** The person an action is given to, as a combo value: "u:<id>" for a member, "e:<id>" for an employee. */
+export const actionOwnerValue = (owner) => (owner ? `${owner.kind === "employee" ? "e" : "u"}:${owner.id}` : "");
+export const actionOwnerBody = (value) => (value.startsWith("e:") ? { ownerEmployeeId: value.slice(2) } : { ownerUserId: value.slice(2) });
+
+/** The names the comparison uses for the fields a row can have. */
+export const FIELD_LABELS = {
+  name: "Name", elementType: "Type of work element", description: "Description", operationCode: "Operation code",
+  text: "Wording", requirement: "Requirement", characteristicKey: "Characteristic key", specialClass: "Special characteristic",
+  level: "Who sees it", severity: "Severity", preventionControls: "Prevention controls", detectionControls: "Detection controls",
+  occurrence: "Occurrence", detection: "Detection", severityUsed: "Severity used", rpn: "RPN", priority: "Priority", noActionReason: "Why nothing more is done",
+};
+export const fieldLabel = (field) => FIELD_LABELS[field] ?? field;
+const KIND_WORDS = { item: "Structure", function: "Function", failure_mode: "Failure mode", effect: "Effect", cause: "Cause" };
+export const compareKindLabel = (kind) => KIND_WORDS[kind] ?? kind;
+/** A value as it reads in a comparison: a dash for none, the choices in words. */
+export const compareValue = (field, value) => {
+  if (value == null || value === "") return "—";
+  if (field === "priority") return priorityLabel(value);
+  if (field === "level") return effectLevelLabel(value);
+  if (field === "elementType") return elementTypeLabel(value);
+  if (field === "specialClass") return specialClassLabel(value);
+  return String(value);
+};
+
+export const REVIEW_OUTCOME = { no_change: "No change needed", revision_started: "A revision was started" };

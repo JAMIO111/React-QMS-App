@@ -1,21 +1,72 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import CTAButton from "@/components/CTAButton";
-import { PencilIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from "@/components/icons";
+import { CheckIcon, PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "@/components/icons";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
-import { useFmeaNodeMutation } from "../../hooks/useFmea";
-import { CHILD_KINDS, elementTypeLabel, effectLevelLabel, fmeaPath, itemKindLabel, modelWords, priorityLabel, priorityPill, ratingWords, revisionPath, specialClassLabel, topKinds, worstSeverity } from "../../lib/fmea";
+import { useFmeaActionMutation, useFmeaNodeMutation } from "../../hooks/useFmea";
+import { actionKindLabel, actionStatusLabel, actionStatusPill, CHILD_KINDS, dueWords, elementTypeLabel, effectLevelLabel, fmeaPath, itemKindLabel, modelWords, priorityLabel, priorityPill, ratingWords, revisedWords, revisionPath, specialClassLabel, topKinds, worstSeverity } from "../../lib/fmea";
 import { FormError } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
 import RowActionsMenu from "../ui/RowActionsMenu";
+import { ActionDialog, CancelActionDialog, CompleteActionDialog } from "./ActionDialogs";
 import { CauseDialog, EffectDialog, FailureModeDialog, FunctionDialog, ItemDialog } from "./AnalysisDialogs";
 
 const Pill = ({ className = "", children }) => <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>{children}</span>;
 const FromBase = () => <Pill className="bg-secondary-bg text-secondary-text">From the base</Pill>;
 
 /** One cause: its controls, the ratings and what the database worked out from them. */
-const CauseRow = ({ cause, scale, severityUsed, menu }) => (
+const ActionLine = ({ action, cause, onComplete, onEdit, onCancel, onReopen, busy }) => (
+  <li className="rounded-lg border border-border-color bg-secondary-bg px-3 py-2 text-sm">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-primary-text">
+          <Pill className="mr-2 bg-brand-primary/15 text-brand-primary">{actionKindLabel(action.kind)}</Pill>
+          {action.description}
+          {action.carried && <span className="ml-2 text-xs text-secondary-text">carried on from the revision before</span>}
+          {action.adopted && <span className="ml-2 text-xs text-secondary-text">taken into a revision</span>}
+        </p>
+        <p className="text-xs text-secondary-text">
+          {action.owner.name}
+          {action.status === "open" && <> · <span className={action.overdue ? "font-medium text-error-color" : ""}>{dueWords(action)}</span></>}
+          {action.status === "done" && action.doneAt && <> · done {action.doneBy ? `by ${action.doneBy.name}` : ""}</>}
+        </p>
+        {action.status === "done" && (
+          <p className="text-xs text-secondary-text">
+            Found: <span className="text-primary-text">{action.evidenceNote}</span>
+            {revisedWords(action, cause) && <> · Comes to <span className="text-primary-text">{revisedWords(action, cause)}</span></>}
+          </p>
+        )}
+        {action.status === "cancelled" && <p className="text-xs text-secondary-text">Cancelled: {action.cancelReason}</p>}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Pill className={actionStatusPill(action.status)}>{actionStatusLabel(action.status)}</Pill>
+        {action.canComplete && (
+          <CTAButton type="success" icon={CheckIcon} onClick={onComplete}>
+            Finish
+          </CTAButton>
+        )}
+        {action.canReopen && (
+          <CTAButton type="neutral" icon={RotateCcwIcon} loading={busy} onClick={onReopen}>
+            Reopen
+          </CTAButton>
+        )}
+        {action.canEdit && (
+          <>
+            <CTAButton type="secondary" icon={PencilIcon} aria-label={`Change the action: ${action.description}`} onClick={onEdit}>
+              Change
+            </CTAButton>
+            <CTAButton type="neutral" icon={XIcon} aria-label={`Cancel the action: ${action.description}`} onClick={onCancel}>
+              Cancel
+            </CTAButton>
+          </>
+        )}
+      </div>
+    </div>
+  </li>
+);
+
+const CauseRow = ({ cause, scale, severityUsed, menu, actions }) => (
   <li className="rounded-xl border border-border-color bg-primary-bg px-3 py-2 text-sm">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="min-w-0">
@@ -63,6 +114,7 @@ const CauseRow = ({ cause, scale, severityUsed, menu }) => (
         </div>
       )}
     </dl>
+    {actions}
   </li>
 );
 
@@ -71,8 +123,9 @@ const CauseRow = ({ cause, scale, severityUsed, menu }) => (
  * changed through the server, which answers with the whole revision (scores included), so nothing here works a rating out.
  */
 const AnalysisEditor = ({ revision }) => {
-  const { net, model, base, canEdit, fmea } = revision;
+  const { net, model, base, canEdit, canAct, fmea } = revision;
   const mutation = useFmeaNodeMutation();
+  const actionMutation = useFmeaActionMutation();
   const confirm = useConfirm();
   const [dialog, setDialog] = useState(null);
   const close = () => setDialog(null);
@@ -145,6 +198,35 @@ const AnalysisEditor = ({ revision }) => {
                     { label: "Change", icon: PencilIcon, onSelect: () => setDialog({ type: "cause", mode: m, existing: c }) },
                     { label: "Remove", icon: Trash2Icon, tone: "danger", onSelect: () => removeNode("removeCause", c.id, "Remove this cause?", "It is taken out of the analysis.") },
                   ])}
+                  actions={
+                    (c.actions.length > 0 || canAct) && (
+                      <div className="mt-2 flex flex-col gap-2" role="group" aria-label={`Actions for ${c.text}`}>
+                        {c.actions.length > 0 && (
+                          <ul className="flex flex-col gap-2">
+                            {c.actions.map((a) => (
+                              <ActionLine
+                                key={a.id}
+                                action={a}
+                                cause={c}
+                                busy={actionMutation.isPending && actionMutation.variables?.id === a.id}
+                                onComplete={() => setDialog({ type: "complete", action: a, cause: c })}
+                                onEdit={() => setDialog({ type: "action", cause: c, existing: a })}
+                                onCancel={() => setDialog({ type: "cancelAction", action: a })}
+                                onReopen={() => actionMutation.mutate({ action: "reopen", id: a.id })}
+                              />
+                            ))}
+                          </ul>
+                        )}
+                        {canAct && (
+                          <div>
+                            <CTAButton type="secondary" icon={PlusIcon} onClick={() => setDialog({ type: "action", cause: c })}>
+                              Add an action
+                            </CTAButton>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
                 />
               ))}
             </ul>
@@ -254,9 +336,9 @@ const AnalysisEditor = ({ revision }) => {
         )}
         <p className="text-sm text-secondary-text" aria-label="Analysis figures">
           {counts.items} {counts.items === 1 ? "item" : "items"} · {counts.failureModes} failure {counts.failureModes === 1 ? "mode" : "modes"} · {counts.causes} {counts.causes === 1 ? "cause" : "causes"} ·{" "}
-          {counts.needAttention} {counts.needAttention === 1 ? "needs" : "need"} attention · {counts.unrated} not rated
+          {counts.needAttention} {counts.needAttention === 1 ? "needs" : "need"} attention · {counts.unrated} not rated · {counts.openActions} open {counts.openActions === 1 ? "action" : "actions"}{counts.overdueActions > 0 ? ` (${counts.overdueActions} late)` : ""}
         </p>
-        <FormError error={mutation.error} />
+        <FormError error={mutation.error ?? actionMutation.error} />
         {net.items.length === 0 ? (
           <p className="text-sm text-secondary-text">Nothing yet.{canEdit ? ` Start with a ${itemKindLabel(tops[0]).toLowerCase()}.` : ""}</p>
         ) : (
@@ -269,6 +351,9 @@ const AnalysisEditor = ({ revision }) => {
       {dialog?.type === "function" && <FunctionDialog item={dialog.item} existing={dialog.existing} onClose={close} />}
       {dialog?.type === "mode" && <FailureModeDialog fn={dialog.fn} existing={dialog.existing} onClose={close} />}
       {dialog?.type === "effect" && <EffectDialog mode={dialog.mode} existing={dialog.existing} scale={scale} onClose={close} />}
+      {dialog?.type === "action" && <ActionDialog cause={dialog.cause} existing={dialog.existing} onClose={close} />}
+      {dialog?.type === "complete" && <CompleteActionDialog action={dialog.action} cause={dialog.cause} scale={scale} onClose={close} />}
+      {dialog?.type === "cancelAction" && <CancelActionDialog action={dialog.action} onClose={close} />}
       {dialog?.type === "cause" && <CauseDialog mode={dialog.mode} existing={dialog.existing} scale={scale} onClose={close} />}
     </MenuCard>
   );

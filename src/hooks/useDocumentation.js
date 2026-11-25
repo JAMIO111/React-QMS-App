@@ -45,7 +45,7 @@ export const useMyAlerts = () => {
   });
 };
 
-/** Just the numbers for the menu badge; checked again every few minutes (there is no push). */
+/** Just the numbers (the menu badge comes from `useBadges`, which asks once a minute; there is no push). */
 export const useMyAlertCount = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
@@ -53,7 +53,6 @@ export const useMyAlertCount = ({ enabled = true } = {}) => {
     queryFn: () => apiFetch("/quality-alerts/mine/count", { organisationId }),
     enabled: !!organisationId && enabled,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     retry: false,
   });
 };

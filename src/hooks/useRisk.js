@@ -74,7 +74,7 @@ export const useMyRiskWork = () => {
   });
 };
 
-/** Counts for the menu badge (polled every five minutes, like the other badges). */
+/** Counts of what needs me now (the menu badge comes from `useBadges`). */
 export const useMyRiskCount = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
@@ -82,7 +82,6 @@ export const useMyRiskCount = ({ enabled = true } = {}) => {
     queryFn: () => apiFetch("/risk-work/count", { organisationId }),
     enabled: !!organisationId && enabled,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     retry: false,
   });
 };

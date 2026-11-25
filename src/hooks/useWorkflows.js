@@ -15,7 +15,6 @@ export const useMyTasks = (status = "open", { enabled = true } = {}) => {
     queryFn: () => apiFetch(`/workflow-tasks/mine?status=${status}`, { organisationId }),
     enabled: !!organisationId && enabled,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     retry: false,
   });
 };

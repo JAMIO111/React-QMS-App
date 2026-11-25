@@ -25,7 +25,7 @@ export const useHomeAttention = () => {
 
 /**
  * Everything the home page reports: a card per area with what needs attention there, the totals, and the person's own to-dos.
- * The areas come from one request; the to-dos are the counts the side menu's badges already keep, so they cost nothing more.
+ * The areas come from one request; the to-dos come from the per-page counts (fetched once, not polled: the side menu badges use `useBadges`).
  */
 export const useHomeDashboard = () => {
   const { can, isLoading: permissionsLoading } = usePermissions();

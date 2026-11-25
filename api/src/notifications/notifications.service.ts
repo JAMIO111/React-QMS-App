@@ -40,6 +40,14 @@ export class NotificationsService {
     });
   }
 
+  /** Just the unread count (the menu bell polls this, and fetches the list only when it changes or the pane opens). */
+  unreadCount(ctx: RequestContext): Promise<number> {
+    return this.database.asUser(ctx, async (db) => {
+      const r = (await db.execute<Row>(sql`select count(*)::int as n from app.visible_notifications(${ctx.organisationId}::uuid) where read_at is null`)).rows[0];
+      return Number(r.n);
+    });
+  }
+
   async markRead(ctx: RequestContext, body: MarkReadBody): Promise<void> {
     await this.database.asUser(ctx, (db) =>
       body.all

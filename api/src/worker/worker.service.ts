@@ -99,6 +99,7 @@ export class WorkerService {
         agentNoncesCleared: Number((await c.query('select app.system_purge_agent_nonces() as n')).rows[0].n),
         agentDiagnosticsCleared: Number((await c.query('select app.system_purge_agent_diagnostics() as n')).rows[0].n),
         ssoSignInsCleared: Number((await c.query('select app.system_purge_sso_sign_ins() as n')).rows[0].n),
+        cronHistoryCleared: Number((await c.query('select app.system_purge_cron_history() as n')).rows[0].n),
       }),
       correlationId,
       'worker',

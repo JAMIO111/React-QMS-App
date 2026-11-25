@@ -59,3 +59,13 @@ Background: `docs/capacity-assessment.md`.
 1. **Polling:** option A (60 s) or B (2 min)? Add the idle slow-down (C)?
 2. **Time zone fix:** go ahead, and include the cron / worker-tick purge?
 3. **Policy scope:** Tier 1 only, Tier 1 and 2, or inspection-only until the load test shows what hurts?
+
+## Decisions taken and what was built (2026-11-25)
+
+Owner's answers: **polling option A**, **time zone fix plus purge**, **policy scope Tier 1 and Tier 2** (21 policies, listed above).
+
+- **Polling (A):** one `GET /badges` (counts only, includes the unread-notification count), polled every 60 s by `useBadges`; the eight five-minute `refetchInterval`s are gone and the notification list loads only when the pane opens or the bell's number changes while it is open. Each figure comes from the same service method as the page behind it; `badges.e2e-spec.ts` compares them. Known difference: acknowledging an alert (and similar) no longer decrements the menu badge before the server answers; the badge follows when the one request is refetched after the action.
+- **Time zones and purge:** `app.valid_time_zone` replaces the `pg_timezone_names` lookup. A correction to section 2: `app.worker_ticks` already had a seven-day purge in `app.system_worker_end`; only `cron.job_run_details` had none, and `app.system_purge_cron_history()` now keeps seven days of it, called from worker housekeeping.
+- **Policies:** each of the 21 policies is `organisation_id IN (SELECT app.orgs_permitted(...)) OR (<old check>)` (`app.orgs_member()` for the three membership-only ones). The old check is kept as the fall-back for every one, including the organisation-wide ones, so nothing is widened and nothing is narrowed. The migration rewrites each policy from its live text and fails if any is in an unexpected shape.
+- **Checks run:** full SQL suite (191 files), API unit and e2e suites, frontend lint, tests and build. **Not run:** the load harness against these changes; the before/after for PO and NC list counts is still to be measured.
+- **Apply:** `supabase/migrations/20260449100000_efficiency_zones_purge_policies.sql`, then its history row. Push order does not matter much: the API without the migration only records a failed housekeeping step.

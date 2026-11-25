@@ -282,7 +282,7 @@ export const useMyFmeaActions = (status = "open", { enabled = true } = {}) => {
   });
 };
 
-/** The menu badge: how many actions are open and given to the caller. Polled every five minutes like the other badges. */
+/** How many actions are open and given to the caller (the menu badge comes from `useBadges`). */
 export const useMyFmeaActionCount = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
@@ -290,7 +290,6 @@ export const useMyFmeaActionCount = ({ enabled = true } = {}) => {
     queryFn: () => apiFetch("/fmea-actions/mine?status=open", { organisationId }),
     enabled: !!organisationId && enabled,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     retry: false,
     select: (r) => ({ open: r.openCount, overdue: r.overdueCount, total: r.openCount }),
   });

@@ -9,14 +9,7 @@ import {
 import NavItem from "./NavItem";
 import { menuStructure } from "../MenuStructure";
 import { useCanSee, useOrganisationLogo } from "../hooks/useQmsApi";
-import { useMyAlertCount } from "../hooks/useDocumentation";
-import { useMyDocumentCount } from "../hooks/useDocuments";
-import { useMyCapaActions } from "../hooks/useCapa";
-import { useMyRiskCount } from "../hooks/useRisk";
-import { useMyChangeCount } from "../hooks/useChange";
-import { useMyFmeaActionCount } from "../hooks/useFmea";
-import { useMyReviewActions } from "../hooks/useManagementReview";
-import { useMyTasks } from "../hooks/useWorkflows";
+import { useBadges } from "../hooks/useBadges";
 import { useModuleAccess } from "../hooks/useSubscription";
 import { useProductionSettings } from "../hooks/useProduction";
 import { subMenuVisible } from "../lib/production";
@@ -27,24 +20,18 @@ const Navbar = () => {
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
   const canSee = useCanSee();
   const productionSettings = useProductionSettings();
-  const myAlerts = useMyAlertCount({ enabled: canSee("documentation.read") });
-  const myActions = useMyCapaActions("open", { enabled: canSee("capa.read") });
-  const myDocuments = useMyDocumentCount({ enabled: canSee("documentation.read") });
-  const myRiskWork = useMyRiskCount({ enabled: canSee("risk.read") });
-  const myChanges = useMyChangeCount({ enabled: canSee("change.read") });
-  const myFmeaActions = useMyFmeaActionCount({ enabled: canSee("fmea.read") });
-  const myReviewActions = useMyReviewActions("open", { enabled: canSee("management_review.read") });
-  const myTasks = useMyTasks("open");
+  // One request, asked again once a minute, gives every badge; a number the person may not read is null (no badge).
+  const { data: counts } = useBadges();
   const badges = {
-    "my-tasks": myTasks.data?.openCount ?? 0,
-    "my-alerts": myAlerts.data?.unacknowledged ?? 0,
-    "my-documents": myDocuments.data?.total ?? 0,
-    documentation: (myAlerts.data?.unacknowledged ?? 0) + (myDocuments.data?.total ?? 0),
-    "my-actions": myActions.data?.openCount ?? 0,
-    "my-risk-work": myRiskWork.data?.total ?? 0,
-    "my-changes": myChanges.data?.total ?? 0,
-    "my-fmea-actions": myFmeaActions.data?.total ?? 0,
-    "my-review-actions": myReviewActions.data?.openCount ?? 0,
+    "my-tasks": counts?.tasks ?? 0,
+    "my-alerts": counts?.alerts ?? 0,
+    "my-documents": counts?.documents ?? 0,
+    documentation: (counts?.alerts ?? 0) + (counts?.documents ?? 0),
+    "my-actions": counts?.capaActions ?? 0,
+    "my-risk-work": counts?.riskWork ?? 0,
+    "my-changes": counts?.changes ?? 0,
+    "my-fmea-actions": counts?.fmeaActions ?? 0,
+    "my-review-actions": counts?.reviewActions ?? 0,
   };
   const hasModule = useModuleAccess();
   const { organisation } = useOrganisation();

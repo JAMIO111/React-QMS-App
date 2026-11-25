@@ -98,7 +98,7 @@ export const useMyChanges = ({ enabled = true } = {}) => {
   });
 };
 
-/** The menu badge (sign-offs waiting plus open tasks), polled every five minutes like the other badges. */
+/** Sign-offs waiting plus open tasks (the menu badge comes from `useBadges`). */
 export const useMyChangeCount = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
@@ -106,7 +106,6 @@ export const useMyChangeCount = ({ enabled = true } = {}) => {
     queryFn: () => apiFetch("/changes/mine/count", { organisationId }),
     enabled: !!organisationId && enabled,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     retry: false,
   });
 };

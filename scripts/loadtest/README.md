@@ -1,6 +1,6 @@
 # Load test harness
 
-Proves how Fortress behaves with a client's year of data and a working day of people, before a client does. **Built, not yet run.**
+Proves how Fortress behaves with a client's year of data and a working day of people, before a client does. **First smoke run done (see CLAUDE.md for what it found); the full `day` profile has not been run.**
 Background: what a load test is, and the numbers it is checked against, are in the capacity assessment given to the owner (to be saved as `docs/capacity-assessment.md`).
 
 ## What it does

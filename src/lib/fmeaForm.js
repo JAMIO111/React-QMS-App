@@ -1,5 +1,5 @@
 import { csvLine } from "./reportCsv";
-import { actionStatusLabel, effectLevelLabel, formatDay, kindLabel, linkWords, priorityLabel, revisionName, roleLabel, specialClassLabel } from "./fmea";
+import { actionStatusLabel, effectLevelLabel, formatDay, kindLabel, linkWords, priorityLabel, revisionName, revisionStatusLabel, roleLabel, specialClassLabel } from "./fmea";
 
 /**
  * The FMEA form sheet and its CSV (docs/fmea-plan.md FM6): the analysis of one revision laid out as one row for each cause, in the order of the net, the way a
@@ -13,12 +13,15 @@ export const actionLine = (action) =>
     .filter(Boolean)
     .join(" — ");
 
-/** What the actions that were finished say the ratings now come to: the latest finished action with revised figures, or null. */
-export const revisedOf = (actions) => {
+/**
+ * What the actions that were finished say the ratings now come to: the latest finished action with revised figures, or null. A rating the action did not change is
+ * the cause's own, so the sheet never shows a blank where the RPN was worked out from a number.
+ */
+export const revisedOf = (actions, cause) => {
   const done = (actions ?? []).filter((a) => a.status === "done" && a.revisedRpn != null);
   if (done.length === 0) return null;
   const last = [...done].sort((a, b) => String(a.doneAt ?? "").localeCompare(String(b.doneAt ?? ""))).at(-1);
-  return { occurrence: last.revisedOccurrence, detection: last.revisedDetection, rpn: last.revisedRpn, priority: last.revisedPriority };
+  return { occurrence: last.revisedOccurrence ?? cause?.occurrence ?? null, detection: last.revisedDetection ?? cause?.detection ?? null, rpn: last.revisedRpn, priority: last.revisedPriority };
 };
 
 /** The effects of a failure mode as lines: "End user: Leaks (S 8)". */
@@ -72,10 +75,10 @@ export const FORM_COLUMNS = [
   { key: "attention", label: "Needs attention", value: (r) => (r.cause?.needsAttention == null ? "" : r.cause.needsAttention ? "Yes" : "No") },
   { key: "noAction", label: "Why nothing more is done", value: (r) => r.cause?.noActionReason ?? "" },
   { key: "actions", label: "Actions", value: (r) => (r.cause?.actions ?? []).filter((a) => a.status !== "cancelled").map(actionLine).join("; ") },
-  { key: "revisedO", label: "Revised O", value: (r) => revisedOf(r.cause?.actions)?.occurrence ?? "" },
-  { key: "revisedD", label: "Revised D", value: (r) => revisedOf(r.cause?.actions)?.detection ?? "" },
-  { key: "revisedRpn", label: "Revised RPN", value: (r) => revisedOf(r.cause?.actions)?.rpn ?? "" },
-  { key: "revisedPriority", label: "Revised priority", value: (r) => (revisedOf(r.cause?.actions)?.priority ? priorityLabel(revisedOf(r.cause.actions).priority) : "") },
+  { key: "revisedO", label: "Revised O", value: (r) => revisedOf(r.cause?.actions, r.cause)?.occurrence ?? "" },
+  { key: "revisedD", label: "Revised D", value: (r) => revisedOf(r.cause?.actions, r.cause)?.detection ?? "" },
+  { key: "revisedRpn", label: "Revised RPN", value: (r) => revisedOf(r.cause?.actions, r.cause)?.rpn ?? "" },
+  { key: "revisedPriority", label: "Revised priority", value: (r) => (revisedOf(r.cause?.actions, r.cause)?.priority ? priorityLabel(revisedOf(r.cause.actions, r.cause).priority) : "") },
 ];
 
 /** The facts above the table, as `[label, text]` pairs: what it is, what it covers, who made it, what it was rated with. */
@@ -84,7 +87,7 @@ export const formFacts = (revision) =>
     ["FMEA", `${revision.fmea.number} ${revisionName(revision)}`],
     ["Title", revision.fmea.title],
     ["Kind", kindLabel(revision.fmea.kind)],
-    ["Status", revision.status],
+    ["Status", revisionStatusLabel(revision.status)],
     revision.effectiveFrom ? ["In force from", formatDay(revision.effectiveFrom)] : null,
     revision.fmea.scopeText ? ["Scope", revision.fmea.scopeText] : null,
     (revision.links ?? []).length ? ["Covers", revision.links.map(linkWords).join("; ")] : null,

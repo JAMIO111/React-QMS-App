@@ -63,6 +63,9 @@ describe("laying the analysis out as a form", () => {
 
   it("takes the revised figures from the latest finished action that has them", () => {
     expect(revisedOf([done, cancelled])).toEqual({ occurrence: 3, detection: 8, rpn: 192, priority: "medium" });
+    // an action that changed only the occurrence leaves the detection as the cause has it, never blank
+    const onlyO = { ...done, revisedDetection: null };
+    expect(revisedOf([onlyO], { occurrence: 8, detection: 8 })).toEqual({ occurrence: 3, detection: 8, rpn: 192, priority: "medium" });
     expect(revisedOf([cancelled])).toBeNull();
     expect(revisedOf(undefined)).toBeNull();
   });
@@ -117,6 +120,8 @@ describe("the form page", () => {
     expect(within(table).getByText("High")).toBeInTheDocument();
     expect(within(table).getByText("192 (O 3, D 8)")).toBeInTheDocument();
     expect(screen.queryByText(/not for use/i)).not.toBeInTheDocument();
+    // the status is in words, not the raw key
+    expect(screen.getByText("In force")).toBeInTheDocument();
   });
 
   it("says a draft is not in force, and offers the CSV", async () => {

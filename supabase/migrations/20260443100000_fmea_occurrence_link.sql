@@ -86,6 +86,9 @@ CREATE FUNCTION pg_temp.patch_once(p_fn regprocedure, p_marker text, p_old text,
 LANGUAGE plpgsql AS $$
 DECLARE v_def text := replace(pg_get_functiondef(p_fn), E'\r', ''); v_n integer;
 BEGIN
+  -- The SQL editor may save the pasted text with Windows line endings: take them out of what we look for and what we put in, as well as out of the live function.
+  p_old := replace(p_old, E'\r', '');
+  p_new := replace(p_new, E'\r', '');
   IF position(p_marker IN v_def) > 0 THEN RETURN; END IF;
   v_n := (length(v_def) - length(replace(v_def, p_old, ''))) / length(p_old);
   IF v_n <> 1 THEN RAISE EXCEPTION 'Expected to find % exactly once in %, found % times', p_old, p_fn, v_n; END IF;

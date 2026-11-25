@@ -11,6 +11,7 @@ import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import AnalysisEditor from "./AnalysisEditor";
+import { RaisedFrom } from "./RaisedFmeas";
 import CoverageCard from "./CoverageCard";
 import EvidenceCard from "./EvidenceCard";
 import { BaseChangesCallout, CompareCard } from "./LifecyclePanels";
@@ -65,6 +66,7 @@ const RevisionPage = () => {
             <span className="inline-flex rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium text-secondary-text">{kindLabel(revision.fmea.kind)}</span>
           </div>
           <p className="text-lg text-primary-text">{revision.fmea.title}</p>
+          <RaisedFrom origin={revision.origin} prefix="This revision was started because of" />
         </div>
         <div className="flex flex-wrap gap-2">
           {revision.canEdit && (

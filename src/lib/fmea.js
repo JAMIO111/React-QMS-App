@@ -302,7 +302,28 @@ export const registerModeOptions = (modes = [], current) => {
   return current && !options.some((o) => o.value === current.id) ? [...options, { value: current.id, label: `${current.name} (switched off)` }] : options;
 };
 
-const VIA_WORDS = { part: "this part", part_family: "its part family", machine: "this machine", control_plan: "this control plan" };
+const VIA_WORDS = { part: "this part", part_family: "its part family", machine: "this machine", control_plan: "this control plan", origin: "was raised from this" };
 /** "covers this part and its part family" */
 export const viaWords = (via = []) => via.map((v) => VIA_WORDS[v] ?? v).join(" and ");
 export const FMEA_THING = { part: "part", part_family: "part family", machine: "machine", control_plan: "control plan" };
+
+/** The records an FMEA can be raised from, in words ("a non-conformance"), and the page of each. */
+export const ORIGIN_WORDS = { ncr: "non-conformance", capa: "8D", audit_finding: "audit finding", supplier_scar: "corrective action request", change: "change" };
+export const originWords = (kind) => ORIGIN_WORDS[kind] ?? "record";
+export const originPath = (kind, id) => {
+  if (!id) return null;
+  switch (kind) {
+    case "ncr":
+      return `/Non-Conformance/Register/${id}`;
+    case "capa":
+      return `/CAPA/${id}`;
+    case "audit_finding":
+      return `/Audits/Findings/${id}`;
+    case "supplier_scar":
+      return `/Supplier-Quality/SCARs/${id}`;
+    case "change":
+      return `/Change/${id}`;
+    default:
+      return null;
+  }
+};

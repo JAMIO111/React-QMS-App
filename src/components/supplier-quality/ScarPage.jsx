@@ -15,6 +15,7 @@ import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
+import RaisedFmeas from "../fmea/RaisedFmeas";
 import { ErrorNotice } from "../master-data/shared";
 import { StagePill } from "../ncr/Pills";
 import { AcknowledgeDialog, ActionDialog, DecideExtensionDialog, EditScarDialog, ExtendDialog, ImplementationDialog, ItemDialog, LinkNcrDialog, ReasonCommandDialog, ResponseDialog, ReviewDialog, VerificationDialog } from "./ScarDialogs";
@@ -297,6 +298,8 @@ const ScarPage = () => {
           </ol>
         )}
       </MenuCard>
+
+      <RaisedFmeas kind="supplier_scar" id={s.id} title="FMEAs from this request" />
 
       <MenuCard title="Implementation" subtitle="The accepted fix being carried out. Whether it worked is checked below.">
         {s.implementations.length === 0 ? <p className="text-sm text-secondary-text">Nothing implemented yet.</p> : (

@@ -8,8 +8,8 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { makeIds, requireDb, seed, startApp, token } from './helpers';
 
-const ids = makeIds('a3f');
-const QM = 'a3f00000-0000-0000-0000-0000000000e1';
+const ids = makeIds('a3b');
+const QM = 'a3b00000-0000-0000-0000-0000000000e1';
 let app: INestApplication;
 let admin: Pool;
 const api = () => request(app.getHttpServer());

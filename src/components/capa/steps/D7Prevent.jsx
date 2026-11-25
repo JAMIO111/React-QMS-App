@@ -2,6 +2,7 @@ import ActionList from "../ActionList";
 import ReasonCard from "../ReasonCard";
 import LinkedRisks from "../../risk/LinkedRisks";
 import LinkedChanges from "../../change/LinkedChanges";
+import RaisedFmeas from "../../fmea/RaisedFmeas";
 
 /** D7: stop it happening elsewhere (preventive actions, similar parts and processes) and write down what was learned. */
 const D7Prevent = ({ capa, editable }) => (
@@ -14,6 +15,7 @@ const D7Prevent = ({ capa, editable }) => (
       subtitle="What the organisation should remember from this 8D" ariaLabel="Lessons learned" label="What was learned" required rows={4} saveLabel="Save lessons" />
     <LinkedRisks kind="capa" id={capa.id} title="Risks from this 8D" />
     <LinkedChanges kind="capa" id={capa.id} title="Changes from this 8D" />
+    <RaisedFmeas kind="capa" id={capa.id} title="FMEAs from this 8D" />
   </div>
 );
 

@@ -2,11 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { Row } from '../calibration/calibration.service';
 import type { RequestContext } from '../common/request-context';
-import { DatabaseService } from '../database/database.service';
+import { DatabaseService, Db } from '../database/database.service';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 
-export type LinkedKind = 'part' | 'part_family' | 'machine' | 'control_plan';
+export type LinkedKind = 'part' | 'part_family' | 'machine' | 'control_plan' | 'ncr' | 'capa' | 'audit_finding' | 'supplier_scar' | 'change';
+const ORIGIN_KINDS = ['ncr', 'capa', 'audit_finding', 'supplier_scar', 'change'];
 
 export interface LinkedFmea {
   id: string;
@@ -18,7 +19,9 @@ export interface LinkedFmea {
   nextReviewOn: string | null;
   reviewOverdue: boolean;
   /** How it covers the thing asked about: the part itself, its family, the machine or the control plan. */
-  via: ('part' | 'part_family' | 'machine' | 'control_plan')[];
+  via: ('part' | 'part_family' | 'machine' | 'control_plan' | 'origin')[];
+  /** For a record page: the FMEA as it stands (not only one in force), and whether it or one of its revisions was raised from this record. */
+  status?: string;
 }
 
 /**
@@ -33,6 +36,7 @@ export class FmeaLinkedService {
     const org = orgOf(ctx);
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.settle_fmeas(${org}::uuid)`);
+      if (ORIGIN_KINDS.includes(kind)) return this.raisedFrom(db, org, kind, id);
       const match =
         kind === 'part'
           ? sql`((l.kind = 'part' and l.part_id = ${id}::uuid)
@@ -66,5 +70,31 @@ export class FmeaLinkedService {
       const can = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'fmea.manage') as manage`)).rows[0];
       return { data, canRaise: can?.manage === true };
     });
+  }
+
+  /** The FMEAs (and the revisions of FMEAs) raised from one record, for the card on that record's page. Read as the caller. */
+  private async raisedFrom(db: Db, org: string, kind: string, id: string) {
+    const rows = await db.execute<Row>(sql`
+      select f.id, f.number, f.title, f.kind, f.status, f.current_revision_id as revision_id, r.letter, f.next_review_on::text as next_review_on,
+             (f.status = 'active' and f.next_review_on is not null and f.next_review_on < current_date) as overdue
+        from public.fmeas f left join public.fmea_revisions r on r.id = f.current_revision_id
+       where f.organisation_id = ${org}::uuid and f.status in ('draft', 'active')
+         and ((f.origin_kind = ${kind} and f.origin_id = ${id}::uuid)
+              or exists (select 1 from public.fmea_revisions v where v.fmea_id = f.id and v.origin_kind = ${kind} and v.origin_id = ${id}::uuid))
+       order by f.number`);
+    const data: LinkedFmea[] = rows.rows.map((r) => ({
+      id: r.id as string,
+      number: r.number as string,
+      title: r.title as string,
+      kind: r.kind as 'design' | 'process',
+      revisionId: (r.revision_id as string) ?? '',
+      letter: (r.letter as string) ?? null,
+      nextReviewOn: (r.next_review_on as string) ?? null,
+      reviewOverdue: r.overdue === true,
+      via: ['origin'],
+      status: r.status as string,
+    }));
+    const can = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'fmea.manage') as manage`)).rows[0];
+    return { data, canRaise: can?.manage === true };
   }
 }

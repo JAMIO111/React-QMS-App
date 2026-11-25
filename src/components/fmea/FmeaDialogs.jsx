@@ -8,10 +8,11 @@ import { useEmployees } from "../../hooks/useNcr";
 import { useFmeaMutation, useFmeaPeople, useFmeas } from "../../hooks/useFmea";
 import { useControlPlans, usePartFamilies } from "../../hooks/useProcessControl";
 import { changesSince } from "../../lib/editConflicts";
-import { FMEA_KINDS, LINK_KINDS, linkKindLabel, linksBody, linkWords, personValue, sameLink, TEAM_ROLES, teamBody, teamProblem } from "../../lib/fmea";
+import { FMEA_KINDS, LINK_KINDS, linkKindLabel, linksBody, linkWords, originWords, personValue, sameLink, TEAM_ROLES, teamBody, teamProblem } from "../../lib/fmea";
 import { todayIso } from "../../lib/localDate";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { MachinePicker, PartPicker, PartyPicker, RemoteComboBox } from "../ncr/Pickers";
+import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
@@ -29,15 +30,17 @@ const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
 );
 
 /** Start an FMEA, or edit the details of one: title, scope, customer, owner and how often it is reviewed. The kind is fixed once it is started. */
-export const FmeaDialog = ({ existing, onClose, onSaved }) => {
+export const FmeaDialog = ({ existing, draft, onClose, onSaved }) => {
   const mutation = useFmeaMutation();
   const people = useFmeaPeople();
   const { showToast } = useToast();
   // the FMEA as the dialog opened it: only what the person changes from it is sent, with its version (edit conflicts)
   const [opened] = useState(existing);
-  const [kind, setKind] = useState(existing?.kind ?? "process");
-  const [title, setTitle] = useState(existing?.title ?? "");
-  const [scopeText, setScopeText] = useState(existing?.scopeText ?? "");
+  const [kind, setKind] = useState(existing?.kind ?? draft?.kind ?? "process");
+  const [title, setTitle] = useState(existing?.title ?? draft?.title ?? "");
+  const [scopeText, setScopeText] = useState(existing?.scopeText ?? draft?.scopeText ?? "");
+  // raised from a record: what it names becomes the scope, and each can be taken off before saving
+  const [suggested, setSuggested] = useState(draft?.links ?? []);
   const [customer, setCustomer] = useState(existing?.customer ?? null);
   const [ownerId, setOwnerId] = useState(existing?.owner?.id ?? null);
   const [months, setMonths] = useState(existing?.reviewMonths ? String(existing.reviewMonths) : "");
@@ -61,7 +64,15 @@ export const FmeaDialog = ({ existing, onClose, onSaved }) => {
       return;
     }
     mutation.mutate(
-      { action: "create", body: { kind, ...body, ...(baseId ? { baseFmeaId: baseId } : {}) } },
+      {
+        action: "create",
+        body: {
+          kind,
+          ...body,
+          ...(baseId ? { baseFmeaId: baseId } : {}),
+          ...(draft ? { raisedFrom: { kind: draft.source.kind, id: draft.source.id }, links: suggested.map((l) => ({ kind: l.kind, id: l.id })) } : {}),
+        },
+      },
       {
         onSuccess: (fmea) => {
           onSaved?.(fmea);
@@ -75,6 +86,11 @@ export const FmeaDialog = ({ existing, onClose, onSaved }) => {
   return (
     <Dialog title={existing ? `Edit ${existing.number}` : "Start an FMEA"} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        {draft && (
+          <Callout tone="info" title={`Raised from ${originWords(draft.source.kind)} ${draft.source.reference}`}>
+            It starts with what that record says. You can change any of it, and the FMEA keeps a link back to the record.
+          </Callout>
+        )}
         <ComboField label="Kind" required value={kind} onChange={(v) => { setKind(v ?? "process"); setBaseId(null); }} options={FMEA_KINDS} clearable={false} sort={false} disabled={!!existing} hint={existing ? "Fixed once the FMEA is started" : undefined} />
         {!existing && (
           <ComboField
@@ -86,6 +102,21 @@ export const FmeaDialog = ({ existing, onClose, onSaved }) => {
             hint="Copies its analysis as a starting point. Yours is then its own: changes do not travel either way."
             clearable
           />
+        )}
+        {draft && suggested.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium text-primary-text">It will cover</p>
+            <ul aria-label="Suggested scope" className="flex flex-wrap gap-2">
+              {suggested.map((l) => (
+                <li key={`${l.kind}-${l.id}`} className="inline-flex items-center gap-1 rounded-full border border-border-color bg-secondary-bg px-3 py-1 text-sm text-primary-text">
+                  <span className="text-secondary-text">{l.kind === "part_family" ? "Part family" : l.kind.charAt(0).toUpperCase() + l.kind.slice(1)}:</span> {l.label}
+                  <button type="button" aria-label={`Remove ${l.label}`} className="ml-1 text-secondary-text hover:text-primary-text" onClick={() => setSuggested(suggested.filter((x) => x !== l))}>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <Field label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} placeholder="e.g. Machining of the bracket" />
         <TextAreaField label="Scope and intended use" value={scopeText} onChange={(e) => setScopeText(e.target.value)} maxLength={2000} rows={3} hint="What is analysed, and what it is for" />

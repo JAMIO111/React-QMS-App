@@ -389,3 +389,15 @@ export const useLinkedFmeas = (kind, id, { enabled = true } = {}) => {
     retry: false,
   });
 };
+
+/** What a non-conformance, 8D, audit finding, SCAR or change suggests for an FMEA raised from it (nothing is saved). */
+export const useFmeaDraft = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "fmea-draft", kind, id),
+    queryFn: () => apiFetch(`/fmea-draft?kind=${kind}&id=${id}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+    staleTime: 0,
+  });
+};

@@ -135,6 +135,44 @@ describe("the tasks card", () => {
     );
   });
 
+  it("points a task at a revision that already exists: the record first, then which of its revisions", async () => {
+    const before = apiFetch.getMockImplementation();
+    apiFetch.mockImplementation(async (path, ...rest) => {
+      if (path.startsWith("/parts") || path.startsWith("/control-plans?") || path.startsWith("/documents?")) return { data: [], page: 1, pageSize: 20, total: 0 };
+      if (path.startsWith("/fmeas?")) return { data: [{ id: "f1", number: "FMEA-001", title: "Machining the bracket", currentLetter: "A" }], page: 1, pageSize: 20, total: 1 };
+      if (path === "/fmeas/f1")
+        return {
+          id: "f1", number: "FMEA-001",
+          revisions: [
+            { id: "fr1", sequence: 1, letter: "A", status: "effective" },
+            { id: "fr2", sequence: 2, letter: null, status: "draft" },
+            { id: "fr0", sequence: 0, letter: null, status: "discarded" },
+          ],
+        };
+      return before(path, ...rest);
+    });
+    renderAt("/Change/c1", <ChangePage />, "/Change/:id");
+    const list = await screen.findByRole("list", { name: "Tasks" });
+    const row = within(list).getByText("Update the control plan").closest("li");
+    await userEvent.click(within(row).getByRole("button", { name: /Link a revision to task/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Link a revision" });
+    const submit = within(dialog).getByRole("button", { name: "Link the revision" });
+    expect(submit).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /What the task changes/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /^FMEA revision/ }));
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /^FMEA/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /FMEA-001 · Machining the bracket/ }));
+    await userEvent.click(await within(dialog).findByRole("combobox", { name: /Which revision/ }));
+    // a discarded revision is not offered; the one in force and the draft are
+    expect(await screen.findByRole("option", { name: /Rev A/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Draft 2/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Draft 0/ })).toBeNull();
+    await userEvent.click(screen.getByRole("option", { name: /Draft 2/ }));
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/change-tasks/t3/link", expect.objectContaining({ method: "PUT", body: { link: { kind: "fmea_revision", id: "fr2" } } })));
+  });
+
   it("offers no editing buttons to someone who may only finish their own task", async () => {
     current = { ...base, canManage: false, canAddTask: false, tasks: [{ ...base.tasks[2], canEdit: false, canCancel: false }] };
     renderAt("/Change/c1", <ChangePage />, "/Change/:id");

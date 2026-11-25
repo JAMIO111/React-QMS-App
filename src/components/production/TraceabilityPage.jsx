@@ -8,6 +8,7 @@ import { STAGES, formatDate, ncrPath } from "../../lib/ncr";
 import { LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, TRACE_TYPE, partLabel, tracePath } from "../../lib/production";
 import { formatDateTime } from "../../lib/processControl";
 import { changePath, formatDay, stageLabel, stagePill } from "../../lib/change";
+import { fmeaPath, kindLabel as fmeaKindLabel, revisionPath as fmeaRevisionPath } from "../../lib/fmea";
 import { ErrorNotice } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "../inspection/shared";
 import MenuCard from "../ui/MenuCard";
@@ -263,6 +264,42 @@ const Report = ({ type, id }) => {
                     <Td>{POSITION_WORDS[c.position] ?? "Not decided by a fixed point"}</Td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+        </MenuCard>
+      )}
+
+      {t.fmeas?.available && (
+        <MenuCard title="FMEAs" subtitle="The analyses that cover this part, and the revision of each that was in force on the day this record was created in Fortress">
+          {t.fmeas.data.length === 0 ? (
+            <p className="text-sm text-secondary-text">No FMEA covers this part.</p>
+          ) : (
+            <table className="w-full text-sm" aria-label="FMEAs">
+              <thead><tr className="text-left text-xs text-secondary-text"><Th>FMEA</Th><Th>Kind</Th><Th>In force when this was created</Th><Th>In force now</Th></tr></thead>
+              <tbody>
+                {t.fmeas.data.map((f) => {
+                  const show = (r) => (
+                    <Link className="text-link-color hover:underline" to={fmeaRevisionPath(f.id, r.id)}>
+                      Rev {r.letter ?? "?"}
+                      {r.effectiveFrom ? <span className="text-secondary-text"> · from {formatDay(r.effectiveFrom)}</span> : null}
+                    </Link>
+                  );
+                  return (
+                    <tr key={f.id} className="border-t border-border-color">
+                      <Td>
+                        <Link className="font-medium text-link-color hover:underline" to={fmeaPath(f.id)}>{f.number}</Link>
+                        <div className="text-xs text-secondary-text">{f.title}</div>
+                      </Td>
+                      <Td>{fmeaKindLabel(f.kind)}</Td>
+                      <Td>{f.then ? show(f.then) : <span className="text-secondary-text">None yet</span>}</Td>
+                      <Td>
+                        {f.now ? show(f.now) : <span className="text-secondary-text">Not in force</span>}
+                        {f.changedSince && f.then && f.now && <div className="text-xs text-warning-color">The analysis has changed since</div>}
+                      </Td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

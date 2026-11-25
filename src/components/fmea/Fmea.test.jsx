@@ -9,6 +9,7 @@ vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => (
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 let held = ["fmea.read", "fmea.manage"];
 vi.mock("../ncr/Pickers", () => ({ PartyPicker: () => null, PartPicker: () => null, MachinePicker: () => null, RemoteComboBox: () => null }));
+vi.mock("../../contexts/SearchProvider", () => ({ useGlobalSearch: () => ({ debouncedSearchTerm: "", setSearchTerm: vi.fn() }) }));
 vi.mock("../../contexts/ConfirmationModalProvider", () => ({ useConfirm: () => async () => true }));
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => held.includes(p), isLoading: false }) }));
 
@@ -95,6 +96,8 @@ beforeEach(() => {
   apiFetch.mockImplementation(async (path, opts) => {
     if (path.startsWith("/fmeas?")) return { data: [summary(), summary({ id: "f2", number: "FMEA-002", kind: "design", title: "Bracket design", status: "draft", currentLetter: null, waitingForMe: true })], page: 1, pageSize: 50, total: 2 };
     if (path === "/fmeas" && opts?.method === "POST") return summary({ id: "f9", number: "FMEA-009" });
+    if (path.startsWith("/saved-filters")) return { data: [], limit: 5 };
+    if (path.startsWith("/part-families")) return { data: [], nextCursor: null };
     if (path === "/fmea-people") return { data: [{ id: "u1", name: "Ada", canApprove: true }, { id: "u2", name: "Quinn", canApprove: true }] };
     if (path === "/employees/lookup") return { data: [] };
     if (path === "/fmeas/f1") return { ...summary(), revisions: [{ id: "r1", sequence: 1, letter: "A", status: "effective", changeSummary: null, author: { id: "u1", name: "Ada" }, approver: null, effectiveFrom: "2026-11-01" }], inProgress: null, nextLetter: "B", canManage: true, canApprove: true, canStartRevision: true, canWithdraw: true, adoptableActions: 0, reviews: [], canReview: true };
@@ -163,7 +166,7 @@ beforeEach(() => {
 describe("the register", () => {
   it("lists FMEAs with what they are, and flags the one waiting for the reader", async () => {
     renderAt("/FMEA", <FmeaRegisterPage />);
-    const table = await screen.findByRole("table", { name: "FMEAs" });
+    const table = await screen.findByRole("region", { name: "FMEAs" });
     expect(within(table).getByRole("link", { name: "FMEA-001" })).toHaveAttribute("href", "/FMEA/f1");
     expect(within(table).getByText(/^Rev A from/)).toBeInTheDocument();
     expect(within(table).getByText("Waiting for you")).toBeInTheDocument();
@@ -173,15 +176,16 @@ describe("the register", () => {
   it("offers Start an FMEA only to people who may prepare them, and sends the new FMEA", async () => {
     held = ["fmea.read"];
     const first = renderAt("/FMEA", <FmeaRegisterPage />);
-    await screen.findByRole("table", { name: "FMEAs" });
+    await screen.findByRole("region", { name: "FMEAs" });
     expect(screen.queryByRole("button", { name: "Start an FMEA" })).toBeNull();
     first.unmount();
 
     held = ["fmea.read", "fmea.manage"];
     renderAt("/FMEA", <FmeaRegisterPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Start an FMEA" }));
-    await userEvent.type(screen.getByLabelText(/Title/), "Casting of the housing");
-    await userEvent.click(screen.getByRole("button", { name: "Start the FMEA" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/Title/), "Casting of the housing");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start the FMEA" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmeas", expect.objectContaining({ method: "POST", body: expect.objectContaining({ kind: "process", title: "Casting of the housing" }) })));
   });
 });

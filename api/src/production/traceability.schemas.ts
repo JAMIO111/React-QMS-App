@@ -38,6 +38,22 @@ const TraceChange = z.object({
   position: z.enum(['at', 'before', 'after']).nullable(),
 });
 
+/**
+ * An FMEA that covers this subject's part (named on a part or its family): the revision that was in force on the day the subject was created in Fortress (`then`, null when none
+ * was yet), and the one in force now (`now`, null when the FMEA is no longer in force), so a lot made under rev A shows that the analysis is at rev B today.
+ */
+const TraceFmeaRevision = z.object({ id: Id, letter: z.string().nullable(), effectiveFrom: z.string().nullable() });
+const TraceFmea = z.object({
+  id: Id,
+  number: z.string(),
+  title: z.string(),
+  kind: z.enum(['design', 'process']),
+  then: TraceFmeaRevision.nullable(),
+  now: TraceFmeaRevision.nullable(),
+  /** The analysis has moved on since: the revision in force then is not the one in force now. */
+  changedSince: z.boolean(),
+});
+
 export const Traceability = z.object({
   subject: z.object({
     type: z.enum(SUBJECT_TYPES),
@@ -87,6 +103,7 @@ export const Traceability = z.object({
   }),
   ncrs: z.object({ available: z.boolean(), total: z.number(), data: z.array(TraceNcr) }),
   changes: z.object({ available: z.boolean(), data: z.array(TraceChange) }),
+  fmeas: z.object({ available: z.boolean(), data: z.array(TraceFmea) }),
   equipment: z.object({
     machines: z.array(z.object({ id: Id, code: z.string(), name: z.string(), inspections: z.number(), operations: z.number() })),
     gauges: z.array(z.object({ id: Id, assetNumber: z.string(), readings: z.number(), outOfCalibration: z.number(), lastUsed: dateTime })),

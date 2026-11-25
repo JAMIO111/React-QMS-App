@@ -136,6 +136,8 @@ describe('approval', () => {
     const list = (await api().get('/api/v1/fmeas').set(h).expect(200)).body;
     expect(list).toMatchObject({ page: 1, total: 1 });
     expect(list.data[0]).toMatchObject({ number: 'FMEA-001', status: 'active', currentLetter: 'A', teamCount: 2 });
+    // what it covers is written in the words of the records named, for the register (a part number, a plan or family code, an operation)
+    expect(typeof list.data[0].covers === 'string' || list.data[0].covers === null).toBe(true);
   });
 });
 
@@ -146,6 +148,8 @@ describe('the register', () => {
     expect((await api().get('/api/v1/fmeas?partId=00000000-0000-0000-0000-000000000001').set(h).expect(200)).body.total).toBe(0);
     expect((await api().get('/api/v1/fmeas?kind=design').set(h).expect(200)).body.total).toBe(0);
     expect((await api().get('/api/v1/fmeas?kind=process,design').set(h).expect(200)).body.total).toBe(1);
+    const covered = (await api().get(`/api/v1/fmeas?partId=${ctx.part}`).set(h).expect(200)).body.data[0];
+    expect(covered.covers).toContain('FM-P1');
     expect((await api().get('/api/v1/fmeas?q=FM-P1').set(h).expect(200)).body.total).toBe(1);
     expect((await api().get('/api/v1/fmeas?q=bracket').set(h).expect(200)).body.total).toBe(1);
     expect((await api().get('/api/v1/fmeas?q=nothing-like-this').set(h).expect(200)).body.total).toBe(0);

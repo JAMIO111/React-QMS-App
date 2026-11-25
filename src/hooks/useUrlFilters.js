@@ -74,6 +74,10 @@ export const useQualityAlertFilters = () => useUrlFilters(QUALITY_ALERT_FILTER_K
 export const CONTROL_PLAN_FILTER_KEYS = ["search", "status", "family", "owner", "active", "from", "to"];
 export const useControlPlanFilters = () => useUrlFilters(CONTROL_PLAN_FILTER_KEYS);
 
+/** FMEA register filters. `kind` and `status` are comma lists (empty status = drafts and those in force); `owner` and `waiting` are "me"; `overdue` is "true"; `part` and `family` are ids. */
+export const FMEA_FILTER_KEYS = ["search", "kind", "status", "owner", "waiting", "overdue", "part", "partLabel", "family"];
+export const useFmeaFilters = () => useUrlFilters(FMEA_FILTER_KEYS);
+
 /** Supplier register filters. Empty `active` = active suppliers only; `inactive` or `all` otherwise. Classifications are ids (comma list). */
 export const SUPPLIER_FILTER_KEYS = ["search", "status", "type", "classification", "risk", "active"];
 export const useSupplierFilters = () => useUrlFilters(SUPPLIER_FILTER_KEYS);

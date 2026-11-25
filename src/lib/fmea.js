@@ -41,6 +41,19 @@ export const revisionPill = (status) => TONE_CLASS[REVISION_STATUS[status]?.tone
 /** "A", or "draft 2" for a revision that has no letter yet. */
 export const revisionName = (revision) => (revision.letter ? `rev ${revision.letter}` : `draft ${revision.sequence}`);
 
+/** The saved filters' register, the words for its filters and what a saved filter contains as readable rows. */
+export const FMEA_SCOPE = "fmea_register";
+export const FMEA_FILTER_TITLES = { kind: "Kind", status: "Status", owner: "Owner", waiting: "Approval", overdue: "Review", part: "Part", family: "Part family", search: "Search" };
+export const describeFmeaFilter = (families = []) => (filters = {}) =>
+  Object.keys(FMEA_FILTER_TITLES)
+    .filter((k) => filters[k] !== undefined && String(filters[k]) !== "")
+    .map((k) => {
+      const parts = String(filters[k]).split(",");
+      const label = (v) =>
+        k === "kind" ? kindLabel(v) : k === "status" ? (v === "all" ? "All" : statusLabel(v)) : k === "owner" ? "Mine" : k === "waiting" ? "Waiting for me" : k === "overdue" ? "Overdue" : k === "family" ? (families.find((f) => f.id === v)?.code ?? v) : k === "part" ? (filters.partLabel || v) : v;
+      return { key: k, title: FMEA_FILTER_TITLES[k], value: parts.map(label).join(", ") };
+    });
+
 /** The register's status choices; "" is the default (drafts and those in force). */
 export const STATUS_OPTIONS = [
   { value: "", label: "Live" },

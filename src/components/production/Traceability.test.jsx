@@ -174,6 +174,40 @@ describe("traceability page", () => {
     expect(screen.queryByRole("table", { name: "Changes" })).toBeNull();
   });
 
+  it("shows the FMEAs that cover the part with the revision in force then and now, and says when the analysis has moved on", async () => {
+    result = trace({
+      fmeas: {
+        available: true,
+        data: [
+          { id: "f1", number: "FMEA-001", title: "Turning the rod", kind: "process", then: { id: "r1", letter: "A", effectiveFrom: "2026-06-01" }, now: { id: "r2", letter: "B", effectiveFrom: "2026-10-01" }, changedSince: true },
+          { id: "f2", number: "FMEA-002", title: "Rod design", kind: "design", then: null, now: { id: "r3", letter: "A", effectiveFrom: "2026-11-01" }, changedSince: true },
+          { id: "f3", number: "FMEA-003", title: "Old process", kind: "process", then: { id: "r4", letter: "A", effectiveFrom: "2026-01-01" }, now: null, changedSince: true },
+        ],
+      },
+    });
+    renderAt("/Production/Traceability?type=order&id=o1");
+    const table = await screen.findByRole("table", { name: "FMEAs" });
+    expect(within(table).getByRole("link", { name: "FMEA-001" })).toHaveAttribute("href", "/FMEA/f1");
+    const rows = within(table).getAllByRole("row");
+    expect(within(rows[1]).getByRole("link", { name: /Rev A/ })).toHaveAttribute("href", "/FMEA/f1/revisions/r1");
+    expect(within(rows[1]).getByRole("link", { name: /Rev B/ })).toHaveAttribute("href", "/FMEA/f1/revisions/r2");
+    expect(within(rows[1]).getByText("The analysis has changed since")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("None yet")).toBeInTheDocument();
+    expect(within(rows[3]).getByText("Not in force")).toBeInTheDocument();
+    expect(within(table).getAllByText("The analysis has changed since")).toHaveLength(1);
+  });
+
+  it("says no FMEA covers the part, and leaves the section out when the reader may not read FMEAs", async () => {
+    result = trace({ fmeas: { available: true, data: [] } });
+    const first = renderAt("/Production/Traceability?type=order&id=o1");
+    expect(await screen.findByText("No FMEA covers this part.")).toBeInTheDocument();
+    first.unmount();
+    result = trace({ fmeas: { available: false, data: [] } });
+    renderAt("/Production/Traceability?type=order&id=o1");
+    await screen.findByRole("heading", { name: "WO-154789" });
+    expect(screen.queryByRole("table", { name: "FMEAs" })).toBeNull();
+  });
+
   it("finds a number and opens its report", async () => {
     searchResult = [{ type: "lot", id: "l1", number: "LOT-1", status: "open", part: rod }];
     renderAt("/Production/Traceability");

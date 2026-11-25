@@ -44,6 +44,15 @@ describe('saved filters', () => {
     expect((await list(h)).data.map((f: { name: string }) => f.name)).toEqual(['Open majors', 'Customer complaints']);
   });
 
+  it('keeps one set of saved filters for each register, the FMEA register included', async () => {
+    const h = await as(ids.ownerA);
+    const made = await api().post('/api/v1/saved-filters').set(h).send({ scope: 'fmea_register', name: 'My overdue reviews', filters: { owner: 'me', overdue: 'true' } }).expect(201);
+    expect(made.body).toMatchObject({ scope: 'fmea_register', name: 'My overdue reviews', filters: { owner: 'me', overdue: 'true' } });
+    const fmea = (await api().get('/api/v1/saved-filters?scope=fmea_register').set(h).expect(200)).body;
+    expect(fmea.data.map((f: { name: string }) => f.name)).toEqual(['My overdue reviews']);
+    expect((await list(h)).data.map((f: { name: string }) => f.name)).not.toContain('My overdue reviews');
+  });
+
   it('refuse a bad name, a bad body and an unknown register', async () => {
     const h = await as(ids.ownerA);
     expect((await save('', {}, h)).status).toBe(400);

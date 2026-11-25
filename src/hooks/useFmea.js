@@ -367,3 +367,14 @@ export const usePlanFmeaCover = (planRevisionId, { enabled = true } = {}) => {
     retry: false,
   });
 };
+
+/** What the non-conformance register says about the failure modes of a revision (read on request: it counts non-conformances). */
+export const useOccurrenceEvidence = (revisionId, { enabled = true, days } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "occurrence-evidence", revisionId, days ?? "default"),
+    queryFn: () => apiFetch(`/fmea-revisions/${revisionId}/occurrence-evidence${days ? `?days=${days}` : ""}`, { organisationId }),
+    enabled: !!organisationId && !!revisionId && enabled,
+    retry: false,
+  });
+};

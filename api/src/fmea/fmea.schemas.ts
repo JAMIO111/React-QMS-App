@@ -126,7 +126,7 @@ const functionFields = { text: z.string().trim().min(1).max(1000), requirement: 
 export const CreateFunctionBody = z.object(functionFields).strict();
 export const UpdateFunctionBody = z.object({ ...functionFields, text: functionFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
 
-const modeFields = { text: z.string().trim().min(1).max(500), specialClass: z.enum(SPECIAL_CLASSES).nullable().optional(), position };
+const modeFields = { text: z.string().trim().min(1).max(500), specialClass: z.enum(SPECIAL_CLASSES).nullable().optional(), ncrFailureModeId: z.string().uuid().nullable().optional(), position };
 export const CreateFailureModeBody = z.object(modeFields).strict();
 export const UpdateFailureModeBody = z.object({ ...modeFields, text: modeFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
 
@@ -195,3 +195,6 @@ export const PlanCharacteristicsQuery = z
   .object({ q: z.string().trim().max(100).optional(), planId: z.string().uuid().optional(), causeId: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) })
   .strict();
 export type PlanCharacteristicsQuery = z.infer<typeof PlanCharacteristicsQuery>;
+
+/** FM5b: how far back the occurrence evidence looks (days). */
+export const OccurrenceEvidenceQuery = z.object({ days: z.coerce.number().int().min(30).max(1095).optional() }).strict();

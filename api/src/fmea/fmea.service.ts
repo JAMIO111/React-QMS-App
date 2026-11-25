@@ -446,7 +446,8 @@ export class FmeaService {
                            left join public.machines m on m.id = i.machine_id left join public.parts p on p.id = i.part_id
                           where i.revision_id = ${revisionId}::uuid and i.organisation_id = ${org}::uuid order by i.position, i.created_at`),
       db.execute<Row>(sql`select * from public.fmea_functions where ${where} order by position, created_at`),
-      db.execute<Row>(sql`select * from public.fmea_failure_modes where ${where} order by position, created_at`),
+      db.execute<Row>(sql`select m.*, c.name as nc_failure_mode_name from public.fmea_failure_modes m left join public.ncr_classifications c on c.id = m.ncr_failure_mode_id
+                           where m.revision_id = ${revisionId}::uuid and m.organisation_id = ${org}::uuid order by m.position, m.created_at`),
       db.execute<Row>(sql`select * from public.fmea_effects where ${where} order by position, created_at`),
       db.execute<Row>(sql`select * from public.fmea_causes where ${where} order by position, created_at`),
       db.execute<Row>(sql`${ACTION_SELECT} where a.revision_id = ${revisionId}::uuid and a.organisation_id = ${org}::uuid order by a.due_on, a.created_at`),
@@ -476,6 +477,8 @@ export class FmeaService {
     });
     const mode = (m: Row) => ({
       id: m.id as string, text: m.text as string, specialClass: (m.special_class as 'critical' | 'significant' | null) ?? null, position: Number(m.position), fromBase: m.base_row_id != null,
+      /** The failure mode of the non-conformance register this one is tied to (the living FMEA): null when it is tied to none. */
+      ncFailureMode: m.ncr_failure_mode_id ? { id: m.ncr_failure_mode_id as string, name: (m.nc_failure_mode_name as string) ?? '' } : null,
       effects: (eByMode.get(m.id as string) ?? []).map((e) => ({
         id: e.id as string, level: e.level as 'own_plant' | 'next_plant' | 'end_user', text: e.text as string, severity: n(e.severity), position: Number(e.position), fromBase: e.base_row_id != null,
       })),

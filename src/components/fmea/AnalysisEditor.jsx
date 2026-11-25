@@ -172,6 +172,7 @@ const AnalysisEditor = ({ revision }) => {
             {m.text} {m.specialClass && <Pill className="bg-warning-color/15 text-warning-color">{specialClassLabel(m.specialClass)}</Pill>} {m.fromBase && <FromBase />}
           </p>
           <p className="text-xs text-secondary-text">Worst severity among its effects: {ratingWords(scale?.severity, worstSeverity(m.effects))}</p>
+          {m.ncFailureMode && <p className="text-xs text-secondary-text">Tied to “{m.ncFailureMode.name}” in the non-conformance register</p>}
         </div>
         {actionsFor([
           { label: "Add an effect", icon: PlusIcon, onSelect: () => setDialog({ type: "effect", mode: m }) },

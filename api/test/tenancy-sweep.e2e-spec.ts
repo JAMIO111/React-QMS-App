@@ -1296,6 +1296,7 @@ const hasSample = (op: Op) =>
     'POST /api/v1/fmea-causes/{id}/carry-to-plan',
     'POST /api/v1/fmea-control-links/{id}/end',
     'GET /api/v1/fmea-revisions/{id}/control-coverage',
+    'GET /api/v1/fmea-revisions/{id}/occurrence-evidence',
     'GET /api/v1/control-plan-revisions/{id}/fmea-cover',
   ].includes(`${op.method} ${op.path}`);
 

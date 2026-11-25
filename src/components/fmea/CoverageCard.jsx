@@ -23,7 +23,7 @@ const CoverageCard = ({ revision }) => {
       title="Covered by the control plan?"
       subtitle="The causes that need attention, and whether a characteristic of the control plan in force checks each of them."
       action={
-        <button type="button" className="text-sm font-medium text-brand-primary hover:underline" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <button type="button" className="text-sm font-medium text-brand-primary hover:underline" aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} coverage`} onClick={() => setOpen((v) => !v)}>
           {open ? "Hide" : "Show"}
         </button>
       }

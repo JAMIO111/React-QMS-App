@@ -106,7 +106,7 @@ export class FmeaActionsService {
     const [items, fns, modes, effects, causes] = await Promise.all([
       query('fmea_items', 'name, element_type, description, operation_code', 'parent_id'),
       query('fmea_functions', 'text, requirement, characteristic_key', 'item_id'),
-      query('fmea_failure_modes', 'text, special_class', 'function_id'),
+      query('fmea_failure_modes', 'text, special_class, (select c.name from public.ncr_classifications c where c.id = ncr_failure_mode_id) as nc_failure_mode', 'function_id'),
       query('fmea_effects', 'level, text, severity', 'failure_mode_id'),
       query('fmea_causes', 'text, prevention_controls, detection_controls, occurrence, detection, severity_used, rpn, priority, no_action_reason', 'failure_mode_id'),
     ]);
@@ -118,7 +118,7 @@ export class FmeaActionsService {
     return [
       ...items.rows.map((r) => make('item', r, { name: s(r.name), elementType: s(r.element_type), description: s(r.description), operationCode: s(r.operation_code) })),
       ...fns.rows.map((r) => make('function', r, { text: s(r.text), requirement: s(r.requirement), characteristicKey: s(r.characteristic_key) })),
-      ...modes.rows.map((r) => make('failure_mode', r, { text: s(r.text), specialClass: s(r.special_class) })),
+      ...modes.rows.map((r) => make('failure_mode', r, { text: s(r.text), specialClass: s(r.special_class), ncFailureMode: s(r.nc_failure_mode) })),
       ...effects.rows.map((r) => make('effect', r, { level: s(r.level), text: s(r.text), severity: n(r.severity) })),
       ...causes.rows.map((r) =>
         make('cause', r, {

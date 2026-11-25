@@ -301,3 +301,8 @@ export const registerModeOptions = (modes = [], current) => {
   const options = modes.map((m) => ({ value: m.id, label: m.name }));
   return current && !options.some((o) => o.value === current.id) ? [...options, { value: current.id, label: `${current.name} (switched off)` }] : options;
 };
+
+const VIA_WORDS = { part: "this part", part_family: "its part family", machine: "this machine", control_plan: "this control plan" };
+/** "covers this part and its part family" */
+export const viaWords = (via = []) => via.map((v) => VIA_WORDS[v] ?? v).join(" and ");
+export const FMEA_THING = { part: "part", part_family: "part family", machine: "machine", control_plan: "control plan" };

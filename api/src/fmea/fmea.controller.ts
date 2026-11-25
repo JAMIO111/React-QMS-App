@@ -5,7 +5,8 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { ApproveBody, ApproverBody, CommentBody, CreateFmeaBody, FmeaListQuery, LinksBody, ReasonBody, ReviewBody, StartRevisionBody, TeamBody, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { ApproveBody, ApproverBody, CommentBody, CreateFmeaBody, FmeaListQuery, LinkedFmeaQuery, LinksBody, ReasonBody, ReviewBody, StartRevisionBody, TeamBody, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { FmeaLinkedService } from './fmea-linked.service';
 import { FmeaService } from './fmea.service';
 
 const READ = 'fmea.read';
@@ -17,7 +18,10 @@ const APPROVE = 'fmea.approve';
 @ApiBearerAuth()
 @Controller()
 export class FmeaController {
-  constructor(private readonly service: FmeaService) {}
+  constructor(
+    private readonly service: FmeaService,
+    private readonly linkedService: FmeaLinkedService,
+  ) {}
 
   @Get('fmeas')
   @OrganisationScoped(READ)
@@ -43,6 +47,14 @@ export class FmeaController {
   }
 
   @Versioned('fmeas')
+  @Get('fmeas/linked')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The FMEAs in force that cover a part (or its family), a part family, a machine or a control plan, for banners: `{ data, canRaise }`' })
+  linked(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(LinkedFmeaQuery, query);
+    return this.linkedService.linked(ctx, q.kind, q.id);
+  }
+
   @Get('fmeas/:id')
   @OrganisationScoped(READ)
   @ApiOkResponse({ description: 'An FMEA with its revisions' })

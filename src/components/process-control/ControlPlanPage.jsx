@@ -17,6 +17,7 @@ import { ActiveBadge, ErrorNotice, FormError, SelectField, TextAreaField } from 
 import ControlPlanHistory from "./ControlPlanHistory";
 import { PartPicker } from "../ncr/Pickers";
 import RequirementPreview from "./RequirementPreview";
+import LinkedFmeas from "../fmea/LinkedFmeas";
 import { formatDate, formatDateTime } from "../../lib/processControl";
 import { RevisionStatusPill } from "./shared";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -532,6 +533,7 @@ const ControlPlanPage = () => {
               Effective revision: <strong className="font-mono text-primary-text">{plan.effectiveRevision ?? "none"}</strong>
             </span>
           </div>
+          <LinkedFmeas kind="control_plan" id={plan.id} showWhenNone />
           <PlanDetails plan={plan} canManage={canManage} />
           <Scope plan={plan} canManage={canManage} />
           <Revisions plan={plan} canManage={canManage} canApprove={canApprove} />

@@ -1862,6 +1862,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/risk-score': '?likelihood=3&consequence=3',
       '/api/v1/integrations/reference-values': '?kind=part',
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
+      '/api/v1/fmeas/linked': `?kind=part&id=${b.part}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/changes/linked': `?kind=part&id=${b.part}`,
       '/api/v1/change-draft': `?kind=ncr&id=${b.ncr}`,

@@ -77,6 +77,9 @@ export type CommentBody = z.infer<typeof CommentBody>;
 export const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 export type ReasonBody = z.infer<typeof ReasonBody>;
 
+/** FM5c: the FMEAs in force that cover a part, part family, machine or control plan. */
+export const LinkedFmeaQuery = z.object({ kind: z.enum(['part', 'part_family', 'machine', 'control_plan']), id: z.string().uuid() }).strict();
+
 export const FmeaListQuery = z.object({
   q: z.string().trim().max(100).optional(),
   kind: csv(FMEA_KINDS),

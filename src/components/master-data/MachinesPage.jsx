@@ -8,6 +8,7 @@ import { usePermissions, useSites } from "../../hooks/useQmsApi";
 import { useMachines, useProcessControlMutation } from "../../hooks/useProcessControl";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import DocumentsInForce from "../documents/DocumentsInForce";
+import LinkedFmeas from "../fmea/LinkedFmeas";
 import LinkedRisks from "../risk/LinkedRisks";
 import { ActiveBadge, DataList, FormError, SearchBox, SelectField } from "./shared";
 import CTAButton from "@/components/CTAButton";
@@ -67,6 +68,7 @@ const MachineForm = ({ machine, onDone }) => {
     <form onSubmit={submit} className="flex flex-col gap-3">
       {machine && <ActiveAlertsBanner machineId={machine.id} />}
       {machine && <DocumentsInForce machineId={machine.id} />}
+      {machine && <LinkedFmeas kind="machine" id={machine.id} />}
       {machine && <LinkedRisks kind="machine" id={machine.id} plain />}
       {machine && <LinkedChanges kind="machine" id={machine.id} plain />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

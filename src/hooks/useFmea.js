@@ -378,3 +378,14 @@ export const useOccurrenceEvidence = (revisionId, { enabled = true, days } = {})
     retry: false,
   });
 };
+
+/** The FMEAs in force that cover a part (or its family), a part family, a machine or a control plan, for the banners on those pages. */
+export const useLinkedFmeas = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "fmeas-linked", kind, id),
+    queryFn: () => apiFetch(`/fmeas/linked?kind=${kind}&id=${id}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};

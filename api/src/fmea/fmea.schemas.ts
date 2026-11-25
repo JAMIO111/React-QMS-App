@@ -48,6 +48,12 @@ const fmeaFields = {
   ownerId: z.string().uuid().optional(),
   reviewMonths: z.number().int().min(1).max(120).nullable().optional(),
 };
+/** FM5c-2: the record an FMEA (or a revision) is raised from. Its kind is one of the five that can be a reason; the database says whether the caller may read it. */
+export const ORIGIN_KINDS = ['ncr', 'capa', 'audit_finding', 'supplier_scar', 'change'] as const;
+export const RaisedFrom = z.object({ kind: z.enum(ORIGIN_KINDS), id: z.string().uuid() }).strict();
+export type RaisedFrom = z.infer<typeof RaisedFrom>;
+export const FmeaDraftQuery = z.object({ kind: z.enum(ORIGIN_KINDS), id: z.string().uuid() }).strict();
+
 export const CreateFmeaBody = z
   .object({
     kind: z.enum(FMEA_KINDS),
@@ -56,6 +62,8 @@ export const CreateFmeaBody = z
     links: z.array(LinkItem).max(100).optional(),
     /** Start from an FMEA in force of the same kind: its analysis is copied (with provenance), never linked. */
     baseFmeaId: z.string().uuid().optional(),
+    /** The record this FMEA is raised from; kept on the FMEA and never changed. */
+    raisedFrom: RaisedFrom.optional(),
   })
   .strict();
 export type CreateFmeaBody = z.infer<typeof CreateFmeaBody>;
@@ -76,6 +84,9 @@ export const CommentBody = z.object({ comment: z.string().trim().min(3).max(2000
 export type CommentBody = z.infer<typeof CommentBody>;
 export const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 export type ReasonBody = z.infer<typeof ReasonBody>;
+
+/** FM5c: the FMEAs in force that cover a part, part family, machine or control plan. */
+export const LinkedFmeaQuery = z.object({ kind: z.enum(['part', 'part_family', 'machine', 'control_plan', 'capa_scope', ...ORIGIN_KINDS]), id: z.string().uuid() }).strict();
 
 export const FmeaListQuery = z.object({
   q: z.string().trim().max(100).optional(),
@@ -126,7 +137,7 @@ const functionFields = { text: z.string().trim().min(1).max(1000), requirement: 
 export const CreateFunctionBody = z.object(functionFields).strict();
 export const UpdateFunctionBody = z.object({ ...functionFields, text: functionFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
 
-const modeFields = { text: z.string().trim().min(1).max(500), specialClass: z.enum(SPECIAL_CLASSES).nullable().optional(), position };
+const modeFields = { text: z.string().trim().min(1).max(500), specialClass: z.enum(SPECIAL_CLASSES).nullable().optional(), ncrFailureModeId: z.string().uuid().nullable().optional(), position };
 export const CreateFailureModeBody = z.object(modeFields).strict();
 export const UpdateFailureModeBody = z.object({ ...modeFields, text: modeFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
 
@@ -169,7 +180,7 @@ export const MyActionsQuery = z.object({ status: z.enum(['open', 'done', 'all'])
 export type MyActionsQuery = z.infer<typeof MyActionsQuery>;
 
 /** Start a new revision; `adopt` takes the finished actions of the revision in force into it (their words into the controls, their revised ratings into the causes). */
-export const StartRevisionBody = z.object({ adopt: z.boolean().optional() }).strict();
+export const StartRevisionBody = z.object({ adopt: z.boolean().optional(), raisedFrom: RaisedFrom.optional() }).strict();
 export type StartRevisionBody = z.infer<typeof StartRevisionBody>;
 
 export const ReviewBody = z
@@ -195,3 +206,6 @@ export const PlanCharacteristicsQuery = z
   .object({ q: z.string().trim().max(100).optional(), planId: z.string().uuid().optional(), causeId: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) })
   .strict();
 export type PlanCharacteristicsQuery = z.infer<typeof PlanCharacteristicsQuery>;
+
+/** FM5b: how far back the occurrence evidence looks (days). */
+export const OccurrenceEvidenceQuery = z.object({ days: z.coerce.number().int().min(30).max(1095).optional() }).strict();

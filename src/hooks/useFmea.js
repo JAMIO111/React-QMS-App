@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -364,6 +365,53 @@ export const usePlanFmeaCover = (planRevisionId, { enabled = true } = {}) => {
     queryKey: key(organisationId, "plan-cover", planRevisionId),
     queryFn: () => apiFetch(`/control-plan-revisions/${planRevisionId}/fmea-cover`, { organisationId }),
     enabled: !!organisationId && !!planRevisionId && enabled,
+    retry: false,
+  });
+};
+
+/** What the non-conformance register says about the failure modes of a revision (read on request: it counts non-conformances). */
+export const useOccurrenceEvidence = (revisionId, { enabled = true, days } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "occurrence-evidence", revisionId, days ?? "default"),
+    queryFn: () => apiFetch(`/fmea-revisions/${revisionId}/occurrence-evidence${days ? `?days=${days}` : ""}`, { organisationId }),
+    enabled: !!organisationId && !!revisionId && enabled,
+    retry: false,
+  });
+};
+
+/** The FMEAs in force that cover a part (or its family), a part family, a machine or a control plan, for the banners on those pages. */
+export const useLinkedFmeas = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "fmeas-linked", kind, id),
+    queryFn: () => apiFetch(`/fmeas/linked?kind=${kind}&id=${id}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** What a non-conformance, 8D, audit finding, SCAR or change suggests for an FMEA raised from it (nothing is saved). */
+export const useFmeaDraft = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "fmea-draft", kind, id),
+    queryFn: () => apiFetch(`/fmea-draft?kind=${kind}&id=${id}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+    staleTime: 0,
+  });
+};
+
+/** The FMEA dashboard for a period (`period` from useDashboardPeriod): what needs attention and what is late as of today, and what moved in the period. */
+export const useFmeaDashboard = (period) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", period?.fromIso, period?.toIso),
+    queryFn: () => apiFetch(`/fmea-dashboard?${qs({ from: period.fromIso, to: period.toIso })}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
+    enabled: !!organisationId && !!period?.fromIso,
+    placeholderData: keepPreviousData,
     retry: false,
   });
 };

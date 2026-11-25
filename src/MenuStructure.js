@@ -169,7 +169,8 @@ export const menuStructure = [
     // badge: "my-fmea-actions" = open FMEA actions given to the signed-in person (see Navbar)
     badge: "my-fmea-actions",
     subMenu: [
-      { name: "FMEAs", path: "/FMEA", end: true },
+      { name: "Dashboard", path: "/FMEA", end: true },
+      { name: "FMEAs", path: "/FMEA/Register" },
       { name: "My actions", path: "/FMEA/My-Actions", badge: "my-fmea-actions" },
     ],
   },

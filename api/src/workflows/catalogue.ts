@@ -75,6 +75,11 @@ const CHANGE_FIELDS: TriggerField[] = [
   { key: 'review_result', label: 'Effectiveness check', type: 'enum', options: o(['effective', 'Effective'], ['not_effective', 'Not effective']) },
   { key: 'title', label: 'Title', type: 'text' },
 ];
+const FMEA_KIND = o(['design', 'Design FMEA'], ['process', 'Process FMEA']);
+const FMEA_FIELDS: TriggerField[] = [
+  { key: 'fmea_kind', label: 'Kind of FMEA', type: 'enum', options: FMEA_KIND },
+  { key: 'title', label: 'Title', type: 'text' },
+];
 export const TRIGGERS: Trigger[] = [
   { eventType: 'ncr.created', entityType: 'nonconformance', label: 'A non-conformance is raised', permission: 'ncr.read', fields: NC_FIELDS },
   {
@@ -355,6 +360,32 @@ export const TRIGGERS: Trigger[] = [
     fields: CHANGE_FIELDS,
   },
   {
+    eventType: 'fmea.approved',
+    entityType: 'fmea_revision',
+    label: 'An FMEA revision is approved',
+    permission: 'fmea.read',
+    fields: [
+      ...FMEA_FIELDS,
+      { key: 'revision_number', label: 'Revision number', type: 'number' },
+      { key: 'need_attention', label: 'Causes that need attention', type: 'number' },
+      { key: 'high_priority', label: 'Causes of high priority', type: 'number' },
+    ],
+  },
+  {
+    eventType: 'fmea.action_overdue',
+    entityType: 'fmea_action',
+    label: 'An FMEA action goes overdue',
+    permission: 'fmea.read',
+    fields: [...FMEA_FIELDS, { key: 'action_kind', label: 'Kind of action', type: 'enum', options: o(['prevention', 'Prevention'], ['detection', 'Detection']) }, { key: 'days_late', label: 'Days late', type: 'number' }],
+  },
+  {
+    eventType: 'fmea.review_due',
+    entityType: 'fmea',
+    label: 'An FMEA is due for its periodic review',
+    permission: 'fmea.read',
+    fields: [...FMEA_FIELDS, { key: 'days_overdue', label: 'Days past the review date', type: 'number' }],
+  },
+  {
     eventType: 'quality_alert.issued',
     entityType: 'quality_alert',
     label: 'A quality alert is issued',
@@ -408,6 +439,8 @@ export function workflowRecordPath(kind: unknown, id: unknown): string | null {
       return `/Calibration/Gauge-RR/${t}`;
     case 'change':
       return `/Change/${t}`;
+    case 'fmea':
+      return `/FMEA/${t}`;
     default:
       return null;
   }

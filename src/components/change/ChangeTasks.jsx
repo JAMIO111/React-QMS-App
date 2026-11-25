@@ -3,9 +3,12 @@ import { Link } from "react-router-dom";
 import CTAButton from "@/components/CTAButton";
 import { CheckIcon, PencilIcon, PlusIcon, RotateCcwIcon, XIcon } from "@/components/icons";
 import { useChangeAreas, useChangeMutation, useChangeSigners } from "../../hooks/useChange";
-import { useControlPlans } from "../../hooks/useProcessControl";
-import { useDocuments } from "../../hooks/useDocuments";
+import { useControlPlan, useControlPlans } from "../../hooks/useProcessControl";
+import { useDocument, useDocuments } from "../../hooks/useDocuments";
+import { useFmea, useFmeas } from "../../hooks/useFmea";
+import { usePart } from "../../hooks/useMasterData";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
+import { revisionLabel as partRevisionLabel } from "../../lib/partRevisions";
 import { formatDay, linkStateLabel, linkStatePill, REVISION_KINDS, reviewLabel, reviewPill, taskLabel, taskLinkKindLabel, taskLinkPath, taskPill } from "../../lib/change";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { PartPicker, RemoteComboBox } from "../ncr/Pickers";
@@ -94,13 +97,16 @@ const StartRevisionDialog = ({ task, onClose }) => {
   const [partId, setPartId] = useState(null);
   const [planId, setPlanId] = useState(null);
   const [documentId, setDocumentId] = useState(null);
+  const [fmeaId, setFmeaId] = useState(null);
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
   const [planQ, setPlanSearch] = useDebouncedSearch();
   const [docQ, setDocSearch] = useDebouncedSearch();
+  const [fmeaQ, setFmeaSearch] = useDebouncedSearch();
   const plans = useControlPlans({ q: planQ, pageSize: 20 });
   const documents = useDocuments({ q: docQ, status: "active", pageSize: 20 });
-  const ready = kind === "part" ? !!partId && code.trim() : kind === "control_plan" ? !!planId && code.trim() : !!documentId;
+  const fmeas = useFmeas({ q: fmeaQ, status: "active", pageSize: 20 }, { enabled: kind === "fmea" });
+  const ready = kind === "part" ? !!partId && code.trim() : kind === "control_plan" ? !!planId && code.trim() : kind === "fmea" ? !!fmeaId : !!documentId;
   const start = (e) => {
     e.preventDefault();
     if (!ready) return;
@@ -109,7 +115,9 @@ const StartRevisionDialog = ({ task, onClose }) => {
         ? { kind, partId, revision: code.trim(), changeSummary: note.trim() || null }
         : kind === "control_plan"
           ? { kind, planId, revisionCode: code.trim(), changeReason: note.trim() || null }
-          : { kind, documentId };
+          : kind === "fmea"
+            ? { kind, fmeaId }
+            : { kind, documentId };
     mutation.mutate({ action: "startRevision", id: task.id, body }, { onSuccess: onClose });
   };
   return (
@@ -142,11 +150,124 @@ const StartRevisionDialog = ({ task, onClose }) => {
             onSearch={setDocSearch}
           />
         )}
-        {kind !== "document" && <Field label="New revision letter or code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={10} required hint="For example B" />}
-        {kind !== "document" && <TextAreaField label={kind === "part" ? "What changes" : "Why it changes"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={2} />}
+        {kind === "fmea" && (
+          <RemoteComboBox
+            label="FMEA"
+            required
+            placeholder="Search an FMEA in force…"
+            value={fmeaId}
+            onChange={(id) => setFmeaId(id)}
+            items={(fmeas.data?.data ?? []).map((f) => ({ id: f.id, name: `${f.number} · ${f.title}`, hint: f.currentLetter ? `Rev ${f.currentLetter}` : undefined }))}
+            isFetching={fmeas.isFetching}
+            onSearch={setFmeaSearch}
+          />
+        )}
+        {kind !== "document" && kind !== "fmea" && <Field label="New revision letter or code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={10} required hint="For example B" />}
+        {kind !== "document" && kind !== "fmea" && <TextAreaField label={kind === "part" ? "What changes" : "Why it changes"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={2} />}
         {kind === "document" && <p className="text-sm text-secondary-text">The new draft starts as a copy of the revision in force, with its text and files.</p>}
+        {kind === "fmea" && <p className="text-sm text-secondary-text">The new draft starts as a copy of the revision in force: its team, scope and analysis. Say what changed on the revision.</p>}
         <FormError error={mutation.error} />
         <Buttons onClose={onClose} pending={mutation.isPending} disabled={!ready} label="Start the revision" />
+      </form>
+    </Dialog>
+  );
+};
+
+/** The kind of record a task points at, for each thing whose revision can be chosen. */
+const TASK_KIND_OF = { part: "part_revision", control_plan: "control_plan_revision", document: "document_revision", fmea: "fmea_revision" };
+const wordsOf = (status) => String(status ?? "").replaceAll("_", " ");
+
+/** The revisions of the chosen record that can still change what is in force (not discarded, withdrawn or replaced), with what each is called and where it stands. */
+const revisionOptions = (kind, record) => {
+  const rows = record?.revisions ?? [];
+  const live = (statuses) => rows.filter((r) => statuses.includes(r.status));
+  switch (kind) {
+    case "part":
+      return live(["draft", "released"]).map((r) => ({ value: r.id, label: `Rev ${partRevisionLabel(r)}`, hint: wordsOf(r.status) }));
+    case "control_plan":
+      return live(["draft", "pending_approval", "approved", "effective"]).map((r) => ({ value: r.id, label: `Rev ${r.revisionCode}`, hint: wordsOf(r.status) }));
+    case "document":
+      return live(["draft", "in_review", "awaiting_approval", "approved", "effective"]).map((r) => ({ value: r.id, label: r.letter ? `Rev ${r.letter}` : `Draft ${r.sequence}`, hint: wordsOf(r.status) }));
+    default:
+      return live(["draft", "pending_approval", "approved", "effective"]).map((r) => ({ value: r.id, label: r.letter ? `Rev ${r.letter}` : `Draft ${r.sequence}`, hint: wordsOf(r.status) }));
+  }
+};
+
+/**
+ * Point a task at a revision that already exists (a draft someone has started, or the one in force): choose the part, control plan, document or FMEA, then which of its
+ * revisions. The task then shows where that revision stands, and can be finished once it is in force. Nothing is made: Start a revision is for a new one.
+ */
+const LinkRevisionDialog = ({ task, onClose }) => {
+  const mutation = useChangeMutation();
+  const [kind, setKind] = useState("part");
+  const [recordId, setRecordId] = useState(null);
+  const [revisionId, setRevisionId] = useState(null);
+  const [planQ, setPlanSearch] = useDebouncedSearch();
+  const [docQ, setDocSearch] = useDebouncedSearch();
+  const [fmeaQ, setFmeaSearch] = useDebouncedSearch();
+  const plans = useControlPlans({ q: planQ, pageSize: 20 });
+  const documents = useDocuments({ q: docQ, status: "draft,active", pageSize: 20 });
+  const fmeas = useFmeas({ q: fmeaQ, status: "live", pageSize: 20 }, { enabled: kind === "fmea" });
+  const part = usePart(kind === "part" ? recordId : null);
+  const plan = useControlPlan(kind === "control_plan" ? recordId : null);
+  const document = useDocument(kind === "document" ? recordId : null);
+  const fmea = useFmea(kind === "fmea" ? recordId : null);
+  const record = { part: part.data, control_plan: plan.data, document: document.data, fmea: fmea.data }[kind];
+  const loading = !!recordId && { part, control_plan: plan, document, fmea }[kind].isLoading;
+  const options = revisionOptions(kind, record);
+  const change = (next) => {
+    setKind(next ?? "part");
+    setRecordId(null);
+    setRevisionId(null);
+  };
+  const pick = (id) => {
+    setRecordId(id);
+    setRevisionId(null);
+  };
+  const save = (e) => {
+    e.preventDefault();
+    if (!revisionId) return;
+    mutation.mutate({ action: "linkTask", id: task.id, body: { link: { kind: TASK_KIND_OF[kind], id: revisionId } } }, { onSuccess: onClose });
+  };
+  return (
+    <Dialog title="Link a revision" onClose={onClose}>
+      <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        <p className="text-sm text-secondary-text">Point this task at a revision that already exists. The task can be finished once that revision is in force.</p>
+        <ComboField label="What the task changes" required value={kind} onChange={change} options={REVISION_KINDS} sort={false} clearable={false} />
+        {kind === "part" && <PartPicker label="Part" value={recordId} onChange={(id) => pick(id)} required />}
+        {kind === "control_plan" && (
+          <RemoteComboBox label="Control plan" required placeholder="Search a control plan…" value={recordId} onChange={(id) => pick(id)} items={(plans.data?.data ?? []).map(planOption)} isFetching={plans.isFetching} onSearch={setPlanSearch} />
+        )}
+        {kind === "document" && (
+          <RemoteComboBox label="Document" required placeholder="Search a document…" value={recordId} onChange={(id) => pick(id)} items={(documents.data?.data ?? []).map(documentOption)} isFetching={documents.isFetching} onSearch={setDocSearch} />
+        )}
+        {kind === "fmea" && (
+          <RemoteComboBox
+            label="FMEA"
+            required
+            placeholder="Search an FMEA…"
+            value={recordId}
+            onChange={(id) => pick(id)}
+            items={(fmeas.data?.data ?? []).map((f) => ({ id: f.id, name: `${f.number} · ${f.title}`, hint: f.currentLetter ? `Rev ${f.currentLetter}` : "draft" }))}
+            isFetching={fmeas.isFetching}
+            onSearch={setFmeaSearch}
+          />
+        )}
+        {recordId && (
+          <ComboField
+            label="Which revision"
+            required
+            value={revisionId}
+            onChange={setRevisionId}
+            options={options}
+            sort={false}
+            placeholder={loading ? "Loading…" : options.length === 0 ? "No revision to choose" : "Choose a revision"}
+            disabled={loading || options.length === 0}
+            hint={!loading && options.length === 0 ? "It has no draft or revision in force. Use Start a revision to make one." : undefined}
+          />
+        )}
+        <FormError error={mutation.error} />
+        <Buttons onClose={onClose} pending={mutation.isPending} disabled={!revisionId} label="Link the revision" />
       </form>
     </Dialog>
   );
@@ -201,6 +322,11 @@ const TaskRow = ({ task, onDialog }) => (
         {task.canEdit && !task.link && (
           <CTAButton type="secondary" onClick={() => onDialog({ kind: "revision", task })}>
             Start a revision
+          </CTAButton>
+        )}
+        {task.canEdit && !task.link && (
+          <CTAButton type="secondary" onClick={() => onDialog({ kind: "linkRevision", task })} aria-label={`Link a revision to task: ${task.description}`}>
+            Link a revision
           </CTAButton>
         )}
         {task.canEdit && (
@@ -266,6 +392,7 @@ export const TasksCard = ({ change }) => {
       {dialog?.kind === "add" && <TaskDialog change={change} onClose={close} />}
       {dialog?.kind === "edit" && <TaskDialog change={change} existing={dialog.task} onClose={close} />}
       {dialog?.kind === "revision" && <StartRevisionDialog task={dialog.task} onClose={close} />}
+      {dialog?.kind === "linkRevision" && <LinkRevisionDialog task={dialog.task} onClose={close} />}
       {dialog?.kind === "complete" && (
         <NoteDialog
           title="Mark as done"

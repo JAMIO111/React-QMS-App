@@ -11,6 +11,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { FmeaDialog, ReasonDialog } from "./FmeaDialogs";
 import { ReviewsCard, StartRevisionDialog } from "./LifecyclePanels";
+import { RaisedFrom } from "./RaisedFmeas";
 
 const Fact = ({ label, children }) => (
   <div>
@@ -47,6 +48,7 @@ const FmeaPage = () => {
             {fmea.waitingForMe && <span className="inline-flex rounded-full bg-warning-color/15 px-2 py-0.5 text-xs font-medium text-warning-color">Waiting for you</span>}
           </div>
           <p className="text-lg text-primary-text">{fmea.title}</p>
+          <RaisedFrom origin={fmea.origin} />
         </div>
         <div className="flex flex-wrap gap-2">
           {fmea.inProgress && (

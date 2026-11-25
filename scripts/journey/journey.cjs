@@ -228,23 +228,27 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
     if (colinSeat.controller !== 2) throw new Error(`Colin was not given a Controller seat: ${JSON.stringify(colinSeat)}`);
   };
   await giveColinController();
-  await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
-  await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
-  await changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
-  await portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch });
-  await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
-  await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
-  await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
-  await gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner });
-  await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
-  await commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner });
-  await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
-  await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
-  await costImport({ page, stack, APP, orgName, see, shot, step, log });
-  await recordFilters({ page, stack, APP, orgName, see, shot, step, log });
-  await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
-  await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
-  await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  // JOURNEY_ONLY=fmea,riskAndReview runs only those steps after the set-up above (a way to iterate on one step without the whole journey).
+  const only = new Set((process.env.JOURNEY_ONLY || '').split(',').filter(Boolean));
+  const run = (name, fn) => (only.size === 0 || only.has(name) ? fn() : undefined);
+  await run('documentControl', () => documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch }));
+  await run('riskAndReview', () => riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch }));
+  await run('changeManagement', () => changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
+  await run('fmea', () => fmea({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
+  await run('portalChangeApproval', () => portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch }));
+  await run('workflowsAndReminders', () => workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
+  await run('newWorkflowTriggers', () => newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }));
+  await run('cmmImports', () => cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner }));
+  await run('gaugeRR', () => gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner }));
+  await run('editConflicts', () => editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
+  await run('commandPalette', () => commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner }));
+  await run('costCurrency', () => costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner }));
+  await run('legacyCalibrations', () => legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log }));
+  await run('costImport', () => costImport({ page, stack, APP, orgName, see, shot, step, log }));
+  await run('recordFilters', () => recordFilters({ page, stack, APP, orgName, see, shot, step, log }));
+  await run('networkRestrictions', () => networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
+  await run('connectorAgent', () => connectorAgent({ page, stack, APP, orgName, see, shot, step, log }));
+  await run('singleSignOn', () => singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
 };
 
 /** Calls the real API as a person (a token signed like the stand-in Supabase does), for set-up the browser steps do not cover. */
@@ -2012,6 +2016,143 @@ async function changeManagement({ browser, page, stack, APP, orgName, see, shot,
   if (!done || done.stage !== 'closed' || done.approved !== 2 || done.tasks_done !== 2 || done.review !== 'effective') throw new Error(`the change was not carried through: ${JSON.stringify(done)}`);
 }
 
+
+/**
+ * FMEA (docs/fmea-plan.md, FMX): a process FMEA for a part, built from the set-up a shop would have (the part's control plan in force and a failure mode in the
+ * non-conformance register). The owner submits it; Colin approves it; Colin finishes his action and the database works out the revised rating; the owner
+ * carries a control to the control plan, sees what has actually happened against the failure mode (a non-conformance), and prints the form. The dashboard and
+ * the home page say the same things the analysis does.
+ */
+async function fmea({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  step('set-up for the FMEA: a part with its control plan in force, a failure mode in the register and a non-conformance against it');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const { rows: [colin] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [colleague.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  // Colin approves FMEAs, so he holds the quality manager role (the document control step gives him it too; this keeps the step able to run on its own).
+  await stack.admin.query(
+    `insert into public.user_role_assignments (organisation_id, membership_id, role_id)
+     select $1, m.id, r.id from public.organisation_users m, public.roles r
+      where m.organisation_id = $1 and m.user_id = $2 and r.organisation_id = $1 and r.key = 'quality_manager'
+        and not exists (select 1 from public.user_role_assignments a where a.membership_id = m.id and a.role_id = r.id)`,
+    [org.id, colin.id],
+  );
+  const family = await api('POST', '/part-families', { code: 'FMX', name: 'FMEA brackets' });
+  const part = await api('POST', '/parts', { partNumber: 'FMX-100', name: 'FMEA bracket', partFamilyId: family.id, initialRevision: { revision: 'A' } });
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-FMX', title: 'FMEA brackets', partFamilyId: family.id });
+  const planRev = plan.revisions[0].id;
+  const planOps = await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-10', name: 'Boring' });
+  await api('POST', `/control-plan-revisions/${planRev}/characteristics`, {
+    operationId: planOps.operations[0].id, characteristicKey: 'BORE_BURR', name: 'No burr in the bore', dataType: 'attribute', sampling: [{ triggerType: 'first_off', sampleSize: 1 }],
+  });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const mode = await api('POST', '/ncr-classifications', { kind: 'failure_mode', code: 'BORE-BURR', name: 'Burr in the bore' });
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Burr in the bracket bore', partId: part.id, siteId: org.site, categoryId: product.id, failureModeId: mode.id });
+  await api('PATCH', `/ncrs/${ncr.id}`, { severity: 'minor', quantityAffected: 2, description: 'Burr left inside the bore after boring' });
+  await api('POST', `/ncrs/${ncr.id}/transitions`, { to: 'open' });
+
+  step('a process FMEA is started for the part: team, scope, one failure mode tied to the register, one cause that needs attention, an action for Colin');
+  const made = await api('POST', '/fmeas', { kind: 'process', title: 'Boring the bracket', scopeText: 'Boring the bracket on the turning centre' });
+  const fmeaId = made.id;
+  const revId = made.inProgress.id;
+  await api('PUT', `/fmea-revisions/${revId}/team`, { team: [{ userId: user.id, role: 'lead' }, { userId: colin.id, role: 'quality' }] });
+  await api('PUT', `/fmea-revisions/${revId}/links`, { links: [{ kind: 'part', id: part.id }, { kind: 'control_plan', id: plan.id }, { kind: 'operation_code', code: 'OP-10' }] });
+  await api('PUT', `/fmea-revisions/${revId}/approver`, { approverId: colin.id });
+  let rev = await api('POST', `/fmea-revisions/${revId}/items`, { kind: 'item', name: 'Bracket' });
+  rev = await api('POST', `/fmea-items/${rev.net.items[0].id}/functions`, { text: 'Hold the bore to size and clean' });
+  rev = await api('POST', `/fmea-functions/${rev.net.items[0].functions[0].id}/failure-modes`, { text: 'Burr left in the bore' });
+  const modeId = rev.net.items[0].functions[0].failureModes[0].id;
+  await api('PATCH', `/fmea-failure-modes/${modeId}`, { ncrFailureModeId: mode.id });
+  await api('POST', `/fmea-failure-modes/${modeId}/effects`, { level: 'end_user', text: 'The seal leaks', severity: 8 });
+  rev = await api('POST', `/fmea-failure-modes/${modeId}/causes`, { text: 'Boring bar worn', preventionControls: 'Change the boring bar every 100 parts', occurrence: 8, detection: 8 });
+  const cause = rev.net.items[0].functions[0].failureModes[0].causes[0];
+  if (cause.rpn !== 512 || cause.priority !== 'high') throw new Error(`the database should score S8 x O8 x D8 as 512, high: ${JSON.stringify(cause)}`);
+  const inThirty = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  await api('POST', `/fmea-causes/${cause.id}/actions`, { kind: 'detection', description: 'Gauge the bore at the first part of every batch', ownerUserId: colin.id, dueOn: inThirty });
+
+  step('the owner opens the revision, sees the analysis and what it still needs (nothing), and submits it for approval');
+  await page.goto(`${APP}/FMEA/${fmeaId}/revisions/${revId}`);
+  await see(page.getByRole('heading', { level: 1, name: /FMEA-\d+/ }));
+  await see(page.getByText('Boring bar worn'));
+  await see(page.getByText(/Tied to .*Burr in the bore/));
+  await shot(page, 'f0-fmea-draft');
+  await page.getByRole('button', { name: 'Submit for approval' }).click();
+  await see(page.getByText('Waiting for approval'));
+
+  step('Colin approves it from the revision page and the FMEA is in force');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colinPage = await ctx.newPage();
+  colinPage.setDefaultTimeout(15000);
+  watch(colinPage, 'colin');
+  await signIn(colinPage, APP, colleague.email);
+  await see(colinPage.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colinPage.goto(`${APP}/FMEA/${fmeaId}/revisions/${revId}`);
+  await colinPage.getByRole('button', { name: 'Approve', exact: true }).click();
+  const approve = colinPage.getByRole('dialog', { name: /^Approve FMEA-/ });
+  await approve.getByLabel('Comment').fill('The detection check is the right answer to a worn bar');
+  await approve.getByRole('button', { name: 'Approve', exact: true }).click();
+  await approve.waitFor({ state: 'hidden' });
+  await see(colinPage.getByText('In force'));
+  await shot(colinPage, 'f1-fmea-in-force');
+
+  step('Colin finds his action in My actions and finishes it, bringing the occurrence to 3: the database works out 192, medium');
+  await colinPage.goto(`${APP}/FMEA/My-Actions`);
+  const mine = colinPage.getByRole('list', { name: 'My FMEA actions' });
+  await see(mine.getByText(/Gauge the bore at the first part of every batch/));
+  await mine.getByRole('button', { name: 'Finish' }).click();
+  const finish = colinPage.getByRole('dialog', { name: 'Finish the action' });
+  await finish.getByLabel('What was found').fill('Gauged the first part of every batch for a month: no burr got past it');
+  await finish.getByRole('combobox', { name: /Occurrence now/ }).click();
+  await colinPage.getByRole('option', { name: /^3 · / }).click();
+  await finish.getByRole('button', { name: 'Mark as done' }).click();
+  await finish.waitFor({ state: 'hidden' });
+  const done = await stack.admin.query(`select revised_rpn, revised_priority, status from public.fmea_actions where cause_id = $1`, [cause.id]);
+  log(`action: ${JSON.stringify(done.rows[0])}`);
+  if (done.rows[0].status !== 'done' || done.rows[0].revised_rpn !== 192 || done.rows[0].revised_priority !== 'medium') throw new Error(`the revised figures were not worked out: ${JSON.stringify(done.rows[0])}`);
+  await ctx.close();
+
+  step('the owner carries the prevention control to the control plan; the coverage report says the cause is covered');
+  await page.goto(`${APP}/FMEA/${fmeaId}/revisions/${revId}`);
+  await see(page.getByText('Boring bar worn'));
+  await page.getByRole('button', { name: 'Carry to the control plan' }).first().click();
+  const carry = page.getByRole('dialog', { name: 'Carry a control to the control plan' });
+  await carry.getByRole('combobox', { name: /Control plan characteristic/ }).click();
+  await page.getByRole('option', { name: /BORE_BURR|No burr in the bore/ }).first().click();
+  await carry.getByRole('button', { name: 'Carry to the plan' }).click();
+  await carry.waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Show coverage' }).click();
+  await see(page.getByRole('list', { name: 'Causes that need attention' }).getByText(/Covered/i));
+  await shot(page, 'f2-fmea-covered');
+
+  step('the evidence card shows the non-conformance raised against the failure mode, and the form sheet prints and exports');
+  await page.getByRole('button', { name: 'Show evidence' }).click();
+  const evidence = page.getByRole('list', { name: 'Failure modes and what happened' });
+  await see(evidence.getByText(/Burr in the bore/));
+  await shot(page, 'f3-fmea-evidence');
+  await page.goto(`${APP}/FMEA/${fmeaId}/revisions/${revId}/report`);
+  const sheet = page.getByRole('table', { name: 'FMEA analysis' });
+  await see(sheet.getByText('Burr left in the bore'));
+  await see(sheet.getByText('Boring bar worn'));
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Export CSV/ }).click()]);
+  if (!/^FMEA-\d+-rev-A\.csv$/.test(download.suggestedFilename())) throw new Error(`the CSV was named ${download.suggestedFilename()}`);
+  await shot(page, 'f4-fmea-form');
+
+  step('the dashboard and the home page say what the analysis says');
+  await page.goto(`${APP}/FMEA`);
+  await see(page.getByRole('heading', { name: 'FMEA dashboard' }));
+  await see(page.getByRole('table', { name: 'Causes needing attention' }).getByText('Boring bar worn'));
+  await shot(page, 'f5-fmea-dashboard');
+  await page.goto(`${APP}/`);
+  await see(page.getByRole('region', { name: 'FMEA' }));
+  const dash = await api('GET', `/fmea-dashboard?from=${new Date(Date.now() - 89 * 86_400_000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`);
+  const home = await api('GET', '/home-dashboard');
+  log(`fmea: ${JSON.stringify(dash.kpis)} home ${JSON.stringify(home.fmea)}`);
+  if (dash.kpis.inForce !== 1 || dash.kpis.needAttention !== 1 || dash.kpis.openActions !== 0 || home.fmea.inForce !== 1) throw new Error('the dashboard and the home page do not agree with the analysis');
+}
 
 /**
  * The portal side of change management (CH6b): the owner opens the portal for a customer and invites one of its people; a change about the customer's

@@ -145,7 +145,8 @@ const TASK_SELECT = sql`
          su.code as su_code, su.name as su_name, su.approval_status as su_status,
          ir.name as ir_name, ir.status as ir_status,
          qa.reference as qa_reference, qa.title as qa_title, qa.status as qa_status,
-         rk.reference as rk_reference, rk.title as rk_title, rk.status as rk_status
+         rk.reference as rk_reference, rk.title as rk_title, rk.status as rk_status,
+         fr.status as fr_status, fr.letter as fr_letter, fr.fmea_id as fr_fmea_id, fm.number as fr_number, fm.title as fr_title
     from public.change_tasks t
     left join public.profiles po on po.id = t.owner_user_id
     left join public.profiles pd on pd.id = t.done_by
@@ -161,7 +162,9 @@ const TASK_SELECT = sql`
     left join public.suppliers su on su.id = t.supplier_id
     left join public.supplier_inspection_requirements ir on ir.id = t.inspection_requirement_id
     left join public.quality_alerts qa on qa.id = t.quality_alert_id
-    left join public.risks rk on rk.id = t.risk_id`;
+    left join public.risks rk on rk.id = t.risk_id
+    left join public.fmea_revisions fr on fr.id = t.fmea_revision_id
+    left join public.fmeas fm on fm.id = fr.fmea_id`;
 
 /** The record a task changes: what it is called, where it stands now (raw status and the worked-out state) and where to open it. */
 const toTaskLink = (r: Row) => {
@@ -190,6 +193,9 @@ const toTaskLink = (r: Row) => {
       return { ...base, id: r.inspection_requirement_id as string, readable: r.ir_name != null, label: (r.ir_name as string) ?? null, status: (r.ir_status as string) ?? null, parentId: null };
     case 'quality_alert':
       return { ...base, id: r.quality_alert_id as string, readable: r.qa_reference != null, label: r.qa_reference == null ? null : `${r.qa_reference} · ${r.qa_title}`, status: (r.qa_status as string) ?? null, parentId: null };
+    case 'fmea_revision':
+      return { ...base, id: r.fmea_revision_id as string, readable: r.fr_status != null, label: r.fr_status == null ? null : `${r.fr_number}${r.fr_letter ? ` rev ${r.fr_letter}` : ' (draft)'} · ${r.fr_title}`,
+               status: (r.fr_status as string) ?? null, parentId: (r.fr_fmea_id as string) ?? null };
     default:
       return { ...base, id: r.risk_id as string, readable: r.rk_reference != null, label: r.rk_reference == null ? null : `${r.rk_reference} · ${r.rk_title}`, status: (r.rk_status as string) ?? null, parentId: null };
   }
@@ -727,6 +733,11 @@ export class ChangeService {
           await db.execute<{ id: string }>(sql`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code, change_reason)
             values (${org}::uuid, ${body.planId}::uuid, ${body.revisionCode}, ${body.changeReason ?? null}) returning id`)
         ).rows[0].id;
+      } else if (body.kind === 'fmea') {
+        const fmea = (await db.execute<Row>(sql`select id from public.fmeas where id = ${body.fmeaId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+        if (!fmea) throw ApiError.notFound('fmea_not_found', 'FMEA not found');
+        linkKind = 'fmea_revision';
+        revisionId = (await db.execute<{ id: string }>(sql`select app.start_fmea_revision(${body.fmeaId}::uuid) as id`)).rows[0].id;
       } else {
         const doc = (await db.execute<Row>(sql`select id from public.documents where id = ${body.documentId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
         if (!doc) throw ApiError.notFound('document_not_found', 'Document not found');

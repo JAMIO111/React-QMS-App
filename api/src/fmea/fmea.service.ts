@@ -5,12 +5,31 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { linkState } from './fmea-coverage';
-import { ApproveBody, CreateFmeaBody, FmeaListQuery, LinkItem, ReviewBody, TeamItem, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { ApproveBody, CreateFmeaBody, FmeaListQuery, LinkItem, RaisedFrom, ReviewBody, TeamItem, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const likePattern = (term: string) => `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 const person = (id: unknown, name: unknown) => (id ? { id: id as string, name: (name as string) ?? 'Unknown' } : null);
 const json = (v: unknown) => JSON.stringify(v);
+
+/** What the record an FMEA was raised from looks like, read as the caller: a record they may not read still shows that it exists, but not what it is. */
+const ORIGIN_SOURCES: Record<string, string> = {
+  ncr: 'select id, reference, title from public.nonconformances where id = $ID and deleted_at is null',
+  capa: 'select id, reference, title from public.capas where id = $ID',
+  audit_finding: 'select id, reference, title from public.audit_findings where id = $ID',
+  supplier_scar: 'select id, reference, title from public.supplier_scars where id = $ID',
+  change: 'select id, reference, title from public.change_requests where id = $ID',
+};
+async function originOf(db: Db, org: string, kind: unknown, id: unknown) {
+  if (typeof kind !== 'string' || typeof id !== 'string') return null;
+  const source = ORIGIN_SOURCES[kind];
+  if (!source) return null;
+  const found = (await db.execute<Row>(sql`select * from (${sql.raw(source.replace('$ID', `'${id}'::uuid`))}) s`)).rows[0];
+  void org;
+  return found
+    ? { kind: kind as RaisedFrom['kind'], id, reference: found.reference as string, title: found.title as string, readable: true }
+    : { kind: kind as RaisedFrom['kind'], id, reference: null, title: null, readable: false };
+}
 
 const LINK_COLUMN: Record<string, string> = {
   part: 'part_id', part_family: 'part_family_id', control_plan: 'control_plan_id', machine: 'machine_id', supplier: 'supplier_id', customer: 'customer_id',
@@ -231,6 +250,29 @@ export class FmeaService {
     });
   }
 
+  /** What a record suggests for an FMEA raised from it (nothing is saved): the title, the scope and the parts, machines, suppliers and customers it names. */
+  draftFrom(ctx: RequestContext, kind: RaisedFrom['kind'], id: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const rows = (await db.execute<Row>(sql`select app.fmea_draft_from(${kind}, ${id}::uuid) as d`)).rows;
+      const d = rows[0].d as { kind: string; title: string; scopeText: string; links: { kind: string; id: string }[]; source: { kind: string; id: string; reference: string; title: string } };
+      const links = await this.labelLinks(db, orgOf(ctx), d.links);
+      return { ...d, links };
+    });
+  }
+
+  /** The suggested links with the words to show beside them (the code and name of each record). */
+  private async labelLinks(db: Db, org: string, links: { kind: string; id: string }[]) {
+    const out: { kind: string; id: string; label: string }[] = [];
+    for (const l of links) {
+      const table = { part: 'parts', machine: 'machines', supplier: 'suppliers', customer: 'customers' }[l.kind];
+      if (!table) continue;
+      const column = l.kind === 'part' ? sql`part_number || ' ' || name` : sql`coalesce(code || ' ', '') || name`;
+      const found = (await db.execute<Row>(sql`select ${column} as label from ${sql.raw(`public.${table}`)} where id = ${l.id}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+      out.push({ kind: l.kind, id: l.id, label: (found?.label as string) ?? l.kind });
+    }
+    return out;
+  }
+
   /** Members who may be named on a team or as approver. */
   people(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
@@ -305,6 +347,8 @@ export class FmeaService {
       canManage: Boolean(can.manage) && status !== 'discarded',
       canApprove: Boolean(can.approve),
       baseFmeaId: (r.base_fmea_id as string) ?? null,
+      /** The record this FMEA was raised from, if it was; never changes. */
+      origin: await originOf(db, org, r.origin_kind, r.origin_id),
       canStartRevision: Boolean(can.manage) && ['active', 'withdrawn'].includes(status) && !open,
       canWithdraw: Boolean(can.approve) && status === 'active',
       /** Finished actions on the revision in force that a new revision can take in (their words into the controls, their revised ratings into the causes). */
@@ -323,7 +367,9 @@ export class FmeaService {
 
   create(ctx: RequestContext, body: CreateFmeaBody) {
     return this.database.asUser(ctx, async (db) => {
-      const created = (await db.execute<Row>(sql`select app.create_fmea(${orgOf(ctx)}::uuid, ${json(body)}::jsonb) as id`)).rows[0];
+      const { raisedFrom, ...fields } = body;
+      const created = (await db.execute<Row>(sql`select app.create_fmea(${orgOf(ctx)}::uuid, ${json(fields)}::jsonb) as id`)).rows[0];
+      if (raisedFrom) await db.execute(sql`select app.set_fmea_origin('fmea', ${created.id as string}::uuid, ${raisedFrom.kind}, ${raisedFrom.id}::uuid)`);
       return this.fmea(db, ctx, created.id as string);
     });
   }
@@ -332,9 +378,10 @@ export class FmeaService {
     return this.fmeaCommand(ctx, id, sql`select app.update_fmea(${id}::uuid, ${json(body)}::jsonb)`);
   }
 
-  startRevision(ctx: RequestContext, id: string, adopt = false) {
+  startRevision(ctx: RequestContext, id: string, adopt = false, raisedFrom?: RaisedFrom) {
     return this.database.asUser(ctx, async (db) => {
-      await db.execute(sql`select app.start_fmea_revision(${id}::uuid, ${adopt})`);
+      const revision = (await db.execute<Row>(sql`select app.start_fmea_revision(${id}::uuid, ${adopt}) as id`)).rows[0];
+      if (raisedFrom) await db.execute(sql`select app.set_fmea_origin('revision', ${revision.id as string}::uuid, ${raisedFrom.kind}, ${raisedFrom.id}::uuid)`);
       return this.fmea(db, ctx, id);
     });
   }
@@ -425,6 +472,8 @@ export class FmeaService {
       net,
       model,
       base,
+      /** Why this revision was started, when it says. */
+      origin: await originOf(db, org, r.origin_kind, r.origin_id),
       canEdit: Boolean(can.manage) && status === 'draft',
       /** The caller may give actions to causes: a manager, on a draft or on the revision in force. */
       canAct: Boolean(can.manage) && (status === 'draft' || status === 'effective'),
@@ -446,7 +495,8 @@ export class FmeaService {
                            left join public.machines m on m.id = i.machine_id left join public.parts p on p.id = i.part_id
                           where i.revision_id = ${revisionId}::uuid and i.organisation_id = ${org}::uuid order by i.position, i.created_at`),
       db.execute<Row>(sql`select * from public.fmea_functions where ${where} order by position, created_at`),
-      db.execute<Row>(sql`select * from public.fmea_failure_modes where ${where} order by position, created_at`),
+      db.execute<Row>(sql`select m.*, c.name as nc_failure_mode_name from public.fmea_failure_modes m left join public.ncr_classifications c on c.id = m.ncr_failure_mode_id
+                           where m.revision_id = ${revisionId}::uuid and m.organisation_id = ${org}::uuid order by m.position, m.created_at`),
       db.execute<Row>(sql`select * from public.fmea_effects where ${where} order by position, created_at`),
       db.execute<Row>(sql`select * from public.fmea_causes where ${where} order by position, created_at`),
       db.execute<Row>(sql`${ACTION_SELECT} where a.revision_id = ${revisionId}::uuid and a.organisation_id = ${org}::uuid order by a.due_on, a.created_at`),
@@ -476,6 +526,8 @@ export class FmeaService {
     });
     const mode = (m: Row) => ({
       id: m.id as string, text: m.text as string, specialClass: (m.special_class as 'critical' | 'significant' | null) ?? null, position: Number(m.position), fromBase: m.base_row_id != null,
+      /** The failure mode of the non-conformance register this one is tied to (the living FMEA): null when it is tied to none. */
+      ncFailureMode: m.ncr_failure_mode_id ? { id: m.ncr_failure_mode_id as string, name: (m.nc_failure_mode_name as string) ?? '' } : null,
       effects: (eByMode.get(m.id as string) ?? []).map((e) => ({
         id: e.id as string, level: e.level as 'own_plant' | 'next_plant' | 'end_user', text: e.text as string, severity: n(e.severity), position: Number(e.position), fromBase: e.base_row_id != null,
       })),

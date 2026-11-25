@@ -8,8 +8,8 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { makeIds, requireDb, seed, startApp, token } from './helpers';
 
-const ids = makeIds('a3f');
-const QM = 'a3f00000-0000-0000-0000-0000000000e1';
+const ids = makeIds('a3b');
+const QM = 'a3b00000-0000-0000-0000-0000000000e1';
 let app: INestApplication;
 let admin: Pool;
 const api = () => request(app.getHttpServer());
@@ -40,7 +40,7 @@ const qa = async (text: string, params: unknown[] = []) => {
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
-  await seed(admin, ids, '-fl');
+  await seed(admin, ids, '-fcn');
   await admin.query(`insert into auth.users (id, email) values ($1, 'qm-fl@example.test')`, [QM]);
   const m = await admin.query(`insert into public.organisation_users (organisation_id, user_id, status, joined_at) values ($1, $2, 'active', now()) returning id`, [ids.orgA, QM]);
   await admin.query(`insert into public.user_role_assignments (organisation_id, membership_id, role_id) select $1, $2, id from public.roles where organisation_id = $1 and key = 'quality_manager'`, [ids.orgA, m.rows[0].id]);

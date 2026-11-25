@@ -79,6 +79,7 @@ import { useCustomFields } from "../../hooks/useCustomFields";
 import { withCustomValues } from "../../lib/customFields";
 import { withVersion } from "../../lib/editConflicts";
 import LinkedChanges from "../change/LinkedChanges";
+import RaisedFmeas from "../fmea/RaisedFmeas";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -611,6 +612,15 @@ const NcrPage = () => {
                   <SectionHeading id="ncr-changes" title="Changes" />
                   <Card>
                     <LinkedChanges kind="ncr" id={ncr.id} plain title="Changes raised from this non-conformance" />
+                  </Card>
+                </>
+              )}
+
+              {can("fmea.read") && (
+                <>
+                  <SectionHeading id="ncr-fmeas" title="FMEAs" />
+                  <Card>
+                    <RaisedFmeas kind="ncr" id={ncr.id} plain title="FMEAs raised from this non-conformance" />
                   </Card>
                 </>
               )}

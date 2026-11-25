@@ -121,7 +121,7 @@ export const LinksDialog = ({ risk, onClose }) => {
           </ul>
         )}
         <div className="grid gap-3 rounded-xl border border-dashed border-border-color p-3 sm:grid-cols-[12rem_1fr]">
-          <ComboField label="Add a link to" value={kind} onChange={(v) => setKind(v ?? "part")} options={LINK_KINDS.map(({ value, label }) => ({ value, label }))} clearable={false} sort={false} />
+          <ComboField label="Add a link to" value={kind} onChange={(v) => setKind(v ?? "part")} options={LINK_KINDS.filter((k) => k.value !== "fmea_cause").map(({ value, label }) => ({ value, label }))} clearable={false} sort={false} />
           {kind === "operation_code" ? (
             <div className="flex items-end gap-2">
               <Field label="Operation code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={40} className="flex-1" />

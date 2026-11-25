@@ -216,7 +216,7 @@ export const actionOwnerBody = (value) => (value.startsWith("e:") ? { ownerEmplo
 /** The names the comparison uses for the fields a row can have. */
 export const FIELD_LABELS = {
   name: "Name", elementType: "Type of work element", description: "Description", operationCode: "Operation code",
-  text: "Wording", requirement: "Requirement", characteristicKey: "Characteristic key", specialClass: "Special characteristic",
+  text: "Wording", requirement: "Requirement", characteristicKey: "Characteristic key", specialClass: "Special characteristic", ncFailureMode: "Register failure mode",
   level: "Who sees it", severity: "Severity", preventionControls: "Prevention controls", detectionControls: "Detection controls",
   occurrence: "Occurrence", detection: "Detection", severityUsed: "Severity used", rpn: "RPN", priority: "Priority", noActionReason: "Why nothing more is done",
 };
@@ -276,3 +276,54 @@ export const planCharacteristicOptions = (items = []) =>
 
 /** The two controls a cause can carry (only the ones it holds), as choices. */
 export const carriableKinds = (cause) => CONTROL_KINDS.filter((k) => (k.value === "prevention" ? cause.preventionControls : cause.detectionControls));
+
+/** Occurrence evidence (the living FMEA): what the non-conformance register says about each failure mode. */
+export const EVIDENCE_FLAG = {
+  untied: { label: "Not tied to the register", pill: "bg-secondary-bg text-secondary-text" },
+  none_seen: { label: "None raised", pill: "bg-success-color/15 text-success-color" },
+  seen: { label: "Raised", pill: "bg-warning-color/15 text-warning-color" },
+  seen_but_rated_low: { label: "Look again at the occurrence", pill: "bg-error-color/15 text-error-color" },
+};
+export const evidenceFlagLabel = (flag) => EVIDENCE_FLAG[flag]?.label ?? flag;
+export const evidenceFlagPill = (flag) => EVIDENCE_FLAG[flag]?.pill ?? "";
+
+/** "3 non-conformances in the last year on this FMEA's scope (4 in all)" */
+export const evidenceCountWords = (mode, days = 365) => {
+  if (!mode.tied) return "Tie it to a failure mode of the register to see what has happened.";
+  const n = mode.count ?? 0;
+  const period = days === 365 ? "the last year" : `the last ${days} days`;
+  const base = `${n} non-conformance${n === 1 ? "" : "s"} in ${period}`;
+  return mode.inScope != null && mode.total != null && mode.total !== mode.inScope ? `${base} on this FMEA's scope (${mode.total} in all)` : base;
+};
+
+/** The failure mode choices of the register for a combo, keeping one that has since been switched off so it still shows. */
+export const registerModeOptions = (modes = [], current) => {
+  const options = modes.map((m) => ({ value: m.id, label: m.name }));
+  return current && !options.some((o) => o.value === current.id) ? [...options, { value: current.id, label: `${current.name} (switched off)` }] : options;
+};
+
+const VIA_WORDS = { part: "this part", part_family: "its part family", machine: "this machine", control_plan: "this control plan", origin: "was raised from this" };
+/** "covers this part and its part family" */
+export const viaWords = (via = []) => via.map((v) => VIA_WORDS[v] ?? v).join(" and ");
+export const FMEA_THING = { part: "part", part_family: "part family", machine: "machine", control_plan: "control plan" };
+
+/** The records an FMEA can be raised from, in words ("a non-conformance"), and the page of each. */
+export const ORIGIN_WORDS = { ncr: "non-conformance", capa: "8D", audit_finding: "audit finding", supplier_scar: "corrective action request", change: "change" };
+export const originWords = (kind) => ORIGIN_WORDS[kind] ?? "record";
+export const originPath = (kind, id) => {
+  if (!id) return null;
+  switch (kind) {
+    case "ncr":
+      return `/Non-Conformance/Register/${id}`;
+    case "capa":
+      return `/CAPA/${id}`;
+    case "audit_finding":
+      return `/Audits/Findings/${id}`;
+    case "supplier_scar":
+      return `/Supplier-Quality/SCARs/${id}`;
+    case "change":
+      return `/Change/${id}`;
+    default:
+      return null;
+  }
+};

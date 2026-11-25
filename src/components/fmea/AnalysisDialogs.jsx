@@ -1,7 +1,8 @@
 import { useState } from "react";
 import CTAButton from "@/components/CTAButton";
 import { useFmeaNodeMutation } from "../../hooks/useFmea";
-import { EFFECT_LEVELS, ELEMENT_TYPES, itemKindLabel, ratingOptions, SPECIAL_CLASSES, toLevel } from "../../lib/fmea";
+import { useClassifications } from "../../hooks/useNcr";
+import { EFFECT_LEVELS, ELEMENT_TYPES, itemKindLabel, ratingOptions, registerModeOptions, SPECIAL_CLASSES, toLevel } from "../../lib/fmea";
 import { FormError, TextAreaField } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
@@ -99,21 +100,32 @@ export const FunctionDialog = ({ item, existing, onClose }) => (
   />
 );
 
-export const FailureModeDialog = ({ fn, existing, onClose }) => (
-  <NodeDialog
-    title={existing ? "Change the failure mode" : "Add a failure mode"}
-    intro={fn ? `How “${fn.text}” could go wrong.` : undefined}
-    fields={[
-      { name: "text", label: "Failure mode", type: "area", required: true, max: 500, rows: 2, hint: "e.g. Bore oversize" },
-      { name: "specialClass", label: "Special characteristic", type: "combo", options: SPECIAL_CLASSES, hint: "Mark it when the customer or your own rules call it critical or significant" },
-    ]}
-    initial={existing ?? {}}
-    action={existing ? "updateFailureMode" : "addFailureMode"}
-    id={existing ? existing.id : fn.id}
-    button={existing ? "Save" : "Add"}
-    onClose={onClose}
-  />
-);
+export const FailureModeDialog = ({ fn, existing, onClose }) => {
+  const register = useClassifications();
+  return (
+    <NodeDialog
+      title={existing ? "Change the failure mode" : "Add a failure mode"}
+      intro={fn ? `How “${fn.text}” could go wrong.` : undefined}
+      fields={[
+        { name: "text", label: "Failure mode", type: "area", required: true, max: 500, rows: 2, hint: "e.g. Bore oversize" },
+        { name: "specialClass", label: "Special characteristic", type: "combo", options: SPECIAL_CLASSES, hint: "Mark it when the customer or your own rules call it critical or significant" },
+        {
+          name: "ncrFailureModeId",
+          label: "Failure mode in the non-conformance register",
+          type: "combo",
+          options: registerModeOptions(register.data?.failureModes, existing?.ncFailureMode),
+          placeholder: register.isLoading ? "Loading…" : "Not tied",
+          hint: "Tie it to what the register calls this failure, to see how many non-conformances have been raised against it",
+        },
+      ]}
+      initial={existing ? { ...existing, ncrFailureModeId: existing.ncFailureMode?.id ?? "" } : {}}
+      action={existing ? "updateFailureMode" : "addFailureMode"}
+      id={existing ? existing.id : fn.id}
+      button={existing ? "Save" : "Add"}
+      onClose={onClose}
+    />
+  );
+};
 
 export const EffectDialog = ({ mode, existing, scale, onClose }) => (
   <NodeDialog

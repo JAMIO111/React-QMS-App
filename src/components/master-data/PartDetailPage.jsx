@@ -15,6 +15,7 @@ import { usePartFamilies } from "../../hooks/useProcessControl";
 import SpecValues from "./SpecValues";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import DocumentsInForce from "../documents/DocumentsInForce";
+import LinkedFmeas from "../fmea/LinkedFmeas";
 
 import PartCustomers from "./PartCustomers";
 import { CorrectDialog, CorrectionImpactCard, ReleaseCorrectionDialog } from "./RevisionCorrection";
@@ -316,6 +317,7 @@ const PartDetailPage = () => {
           </div>
           <ActiveAlertsBanner partId={part.id} />
           <DocumentsInForce partId={part.id} />
+          <LinkedFmeas kind="part" id={part.id} showWhenNone />
           <PartDetails part={part} canManage={canManage} />
           <CustomFieldsCard entityType="part" record={part} editable={canManage} />
           <LinkedChanges kind="part" id={part.id} />

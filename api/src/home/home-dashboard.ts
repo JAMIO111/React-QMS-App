@@ -10,6 +10,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema } from '../common/validation';
 import { CELLS, EXPIRING as COMPETENCE_EXPIRING } from '../competence/competence-dashboard';
 import { DatabaseService } from '../database/database.service';
+import { FMEA_ACTIONS_OVERDUE, FMEA_AWAITING, FMEA_CAUSES_IN_FORCE, FMEA_IN_FORCE, FMEA_REVIEWS_OVERDUE } from '../fmea/fmea-dashboard';
 import { dataQualityChecks } from '../master-data/master-data-dashboard';
 import { UNHANDLED_FAILURE } from '../process-control/process-control-dashboard';
 import { EXPIRY_WARNING_DAYS } from '../supplier-quality/expiry';
@@ -45,6 +46,7 @@ export const HomeDashboard = z.object({
     .nullable(),
   competence: z.object({ withGaps: count, gaps: count, expired: count, expiring30: count, neverAssessed: count }).nullable(),
   change: z.object({ open: count, signoffsWaiting: count, tasksOverdue: count, pastCutIn: count, customerWaiting: count }).nullable(),
+  fmea: z.object({ inForce: count, reviewsOverdue: count, awaitingApproval: count, overdueActions: count, highPriority: count }).nullable(),
   masterData: z.object({ checks: z.array(z.object({ key: z.string(), label: z.string(), kind: z.string(), count })) }).nullable(),
 });
 export type HomeDashboard = z.infer<typeof HomeDashboard>;
@@ -81,6 +83,7 @@ export class HomeDashboardService {
                app.has_permission(${org}::uuid, 'receiving.read') as receiving,
                app.has_permission(${org}::uuid, 'competence.read') as competence,
                app.has_permission(${org}::uuid, 'change.read') as change,
+               app.has_permission(${org}::uuid, 'fmea.read') as fmea,
                app.has_permission(${org}::uuid, 'master_data.read') as master_data`);
 
       const nc = async () => {
@@ -202,6 +205,18 @@ export class HomeDashboardService {
         return { open: n(open.n), signoffsWaiting: n(waiting.n), tasksOverdue: n(late.n), pastCutIn: n(cut.n), customerWaiting: n(customer.n) };
       };
 
+      // The same fragments as the FMEA dashboard, so the two cannot disagree.
+      const fmea = async () => {
+        await db.execute(sql`select app.settle_fmeas(${org}::uuid)`);
+        const r = await one(sql`
+          select (select count(*) from (${FMEA_IN_FORCE(org)}) f)::int as in_force,
+                 (select count(*) from (${FMEA_REVIEWS_OVERDUE(org)}) f)::int as reviews,
+                 (select count(*) from (${FMEA_AWAITING(org)}) r)::int as awaiting,
+                 (select count(*) from (${FMEA_ACTIONS_OVERDUE(org)}) a)::int as late,
+                 (select count(*) from (${FMEA_CAUSES_IN_FORCE(org)}) c where c.priority = 'high')::int as high`);
+        return { inForce: n(r.in_force), reviewsOverdue: n(r.reviews), awaitingApproval: n(r.awaiting), overdueActions: n(r.late), highPriority: n(r.high) };
+      };
+
       return {
         asOf: String(can.today),
         nc: can.nc ? await nc() : null,
@@ -213,6 +228,7 @@ export class HomeDashboardService {
         supplier: can.supplier ? await supplier() : null,
         competence: can.competence ? await competence() : null,
         change: can.change ? await change() : null,
+        fmea: can.fmea ? await fmea() : null,
         masterData: can.master_data ? { checks: await dataQualityChecks(many, org) } : null,
       };
     });

@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CheckIcon, LinkIcon, PencilIcon, SendIcon, Undo2Icon, UsersIcon, XIcon } from "@/components/icons";
+import { CheckIcon, FileTextIcon, LinkIcon, PencilIcon, SendIcon, Undo2Icon, UsersIcon, XIcon } from "@/components/icons";
 import CTAButton from "@/components/CTAButton";
 import { useFmeaMutation, useFmeaRevision } from "../../hooks/useFmea";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import { withVersion } from "../../lib/editConflicts";
-import { fmeaPath, formatDay, kindLabel, linkKindLabel, linkPath, linkWords, revisionName, revisionPill, revisionStatusLabel, roleLabel } from "../../lib/fmea";
+import { fmeaPath, formatDay, kindLabel, linkKindLabel, linkPath, linkWords, revisionName, revisionPill, revisionStatusLabel, revisionPath, roleLabel } from "../../lib/fmea";
 import { ErrorNotice, FormError, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import AnalysisEditor from "./AnalysisEditor";
+import { RaisedFrom } from "./RaisedFmeas";
 import CoverageCard from "./CoverageCard";
+import EvidenceCard from "./EvidenceCard";
 import { BaseChangesCallout, CompareCard } from "./LifecyclePanels";
 import { ApproveDialog, ApproverDialog, LinksDialog, ReasonDialog, TeamDialog } from "./FmeaDialogs";
 
@@ -64,6 +66,7 @@ const RevisionPage = () => {
             <span className="inline-flex rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium text-secondary-text">{kindLabel(revision.fmea.kind)}</span>
           </div>
           <p className="text-lg text-primary-text">{revision.fmea.title}</p>
+          <RaisedFrom origin={revision.origin} prefix="This revision was started because of" />
         </div>
         <div className="flex flex-wrap gap-2">
           {revision.canEdit && (
@@ -86,6 +89,9 @@ const RevisionPage = () => {
               Take back to draft
             </CTAButton>
           )}
+          <CTAButton to={`${revisionPath(revision.fmeaId, revision.id)}/report`} type="neutral" icon={FileTextIcon}>
+            Form
+          </CTAButton>
           {revision.canEdit && (
             <CTAButton type="danger" icon={XIcon} onClick={() => setDialog("discard")}>
               Discard draft
@@ -133,6 +139,7 @@ const RevisionPage = () => {
       <BaseChangesCallout revision={revision} />
       <AnalysisEditor revision={revision} />
       <CoverageCard revision={revision} />
+      <EvidenceCard revision={revision} scale={revision.model?.scale} />
       <CompareCard revision={revision} />
 
       <MenuCard

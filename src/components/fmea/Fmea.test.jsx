@@ -16,6 +16,7 @@ import { apiFetch } from "../../lib/api-client";
 import FmeaPage from "./FmeaPage";
 import FmeaRegisterPage from "./FmeaRegisterPage";
 import RevisionPage from "./RevisionPage";
+import { FailureModeDialog } from "./AnalysisDialogs";
 import MyActionsPage from "./MyActionsPage";
 
 const summary = (over = {}) => ({
@@ -72,11 +73,21 @@ const renderAt = (path, ui) => {
 
 let current;
 let coverageAnswer;
+let evidenceAnswer;
 beforeEach(() => {
   coverageAnswer = {
     revision: { id: "r2", fmeaId: "f1", number: "FMEA-001", title: "Machining of the bracket", letter: null, status: "draft" }, canReadPlans: true, canCarry: true,
     rows: [{ id: "c1", text: "Tool wear", failureMode: "Bore oversize", itemName: "OP10 Turn", priority: "high", severity: 8, rpn: 240, specialClass: "critical", status: "not_covered", links: [], why: "No control plan characteristic checks this: carry a control to one, or say why not." }],
     totals: { needingAttention: 1, covered: 0, unverified: 0, linkProblems: 0, notCovered: 1, coveredPercent: 0 },
+  };
+  evidenceAnswer = {
+    available: true, revision: { id: "r2", status: "draft", letter: null, fmeaId: "f1", number: "FMEA-001", title: "Machining of the bracket" }, days: 365, scoped: true,
+    modes: [
+      { id: "m1", text: "Bore oversize", itemName: "OP10 Turn", tied: true, ncFailureModeId: "nc1", ncFailureModeName: "Bore oversize", count: 3, total: 4, inScope: 3, latestOn: "2026-11-20", maxOccurrence: 2, flag: "seen_but_rated_low" },
+      { id: "m2", text: "Bore undersize", itemName: "OP10 Turn", tied: false, ncFailureModeId: null, ncFailureModeName: null, count: null, total: null, inScope: null, latestOn: null, maxOccurrence: null, flag: "untied" },
+    ],
+    notForeseen: { available: true, groups: [{ ncFailureModeId: "nc3", name: "Scratched", count: 2, latestOn: "2026-11-22", examples: [{ id: "n7", reference: "SNC-26-0007", title: "Scratch", detectedOn: "2026-11-22", ncFailureModeId: "nc3" }] }], unclassified: 1 },
+    totals: { failureModes: 2, tied: 1, withNonConformances: 1, toLookAt: 1 },
   };
   held = ["fmea.read", "fmea.manage"];
   apiFetch.mockReset();
@@ -140,6 +151,11 @@ beforeEach(() => {
     if (path === "/fmea-causes/c1/carry-to-plan") return revision();
     if (path === "/fmea-control-links/l1/end") return revision();
     if (path === "/fmea-revisions/r2/control-coverage") return coverageAnswer;
+    if (path.startsWith("/fmea-revisions/r2/occurrence-evidence")) return evidenceAnswer;
+    if (path.startsWith("/ncr-classifications")) {
+      return { data: [{ id: "nc1", kind: "failure_mode", name: "Bore oversize", active: true }, { id: "nc2", kind: "failure_mode", name: "Burr left", active: true }, { id: "nc9", kind: "category", name: "Product", active: true }] };
+    }
+    if (path === "/fmea-failure-modes/m1" && opts?.method === "PATCH") return revision();
     return {};
   });
 });
@@ -537,7 +553,7 @@ describe("controls carried to the control plan (FM5a)", () => {
     open();
     await screen.findByText("Tool wear");
     expect(apiFetch).not.toHaveBeenCalledWith("/fmea-revisions/r2/control-coverage", expect.anything());
-    await userEvent.click(screen.getByRole("button", { name: "Show" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show coverage" }));
     const list = await screen.findByRole("list", { name: "Causes that need attention" });
     expect(within(list).getByText("Not covered")).toBeInTheDocument();
     expect(within(list).getByText("High")).toBeInTheDocument();
@@ -552,7 +568,7 @@ describe("controls carried to the control plan (FM5a)", () => {
       totals: { needingAttention: 1, covered: 0, unverified: 1, linkProblems: 0, notCovered: 0, coveredPercent: 0 },
     };
     open();
-    await userEvent.click(await screen.findByRole("button", { name: "Show" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Show coverage" }));
     expect(await screen.findByText(/cannot be checked against them/)).toBeInTheDocument();
     expect(screen.getAllByText("Not checked")).toHaveLength(2);
   });
@@ -562,5 +578,88 @@ describe("controls carried to the control plan (FM5a)", () => {
     open();
     await screen.findByText("Tool wear");
     expect(screen.queryByText("Covered by the control plan?")).not.toBeInTheDocument();
+  });
+});
+
+describe("the living FMEA (FM5b)", () => {
+  const open = () =>
+    renderAt("/FMEA/f1/revisions/r2", (
+      <Routes>
+        <Route path="/FMEA/:id/revisions/:revisionId" element={<RevisionPage />} />
+      </Routes>
+    ));
+  const tied = { id: "m1", text: "Bore oversize", specialClass: null, ncFailureMode: { id: "nc1", name: "Bore oversize" } };
+
+  it("ties a failure mode to a failure mode of the register, offering only failure modes, and sends the id", async () => {
+    renderAt("/", <FailureModeDialog fn={{ id: "f1", text: "Turn the bore" }} existing={{ ...tied, ncFailureMode: null }} onClose={() => {}} />);
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Failure mode in the non-conformance register/ }));
+    expect(await screen.findByRole("option", { name: "Burr left" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Product" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: "Burr left" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmea-failure-modes/m1", expect.objectContaining({ method: "PATCH", body: expect.objectContaining({ ncrFailureModeId: "nc2" }) })));
+  });
+
+  it("clears the link with null, and keeps a register failure mode that has been switched off visible", async () => {
+    renderAt("/", <FailureModeDialog fn={{ id: "f1", text: "Turn the bore" }} existing={{ ...tied, ncFailureMode: { id: "gone", name: "Old failure" } }} onClose={() => {}} />);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("combobox", { name: /Failure mode in the non-conformance register/ })).toHaveValue("Old failure (switched off)");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Clear Failure mode in the non-conformance register/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/fmea-failure-modes/m1", expect.objectContaining({ body: expect.objectContaining({ ncrFailureModeId: null }) })));
+  });
+
+  it("says in the analysis which register failure mode a failure mode is tied to", async () => {
+    current = revision({ net: { ...NET, items: [{ ...NET.items[0], children: [{ ...NET.items[0].children[0], functions: [{ ...NET.items[0].children[0].functions[0], failureModes: [{ ...NET.items[0].children[0].functions[0].failureModes[0], ncFailureMode: { id: "nc1", name: "Bore oversize" } }] }] }] }] } });
+    open();
+    expect(await screen.findByText(/Tied to “Bore oversize” in the non-conformance register/)).toBeInTheDocument();
+  });
+
+  it("reads the evidence only when asked, then shows each failure mode beside its count and flags a low rating", async () => {
+    open();
+    await screen.findByText("Tool wear");
+    expect(apiFetch).not.toHaveBeenCalledWith(expect.stringContaining("occurrence-evidence"), expect.anything());
+    await userEvent.click(screen.getByRole("button", { name: "Show evidence" }));
+    const list = await screen.findByRole("list", { name: "Failure modes and what happened" });
+    expect(within(list).getByText(/3 non-conformances in the last year on this FMEA's scope \(4 in all\)/)).toBeInTheDocument();
+    expect(within(list).getByText("Look again at the occurrence")).toBeInTheDocument();
+    expect(within(list).getByText(/Tie it to a failure mode of the register/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Evidence figures")).toHaveTextContent("1 of 2 failure modes tied to the register · 1 with non-conformances · 1 to look at again");
+  });
+
+  it("lists what nobody foresaw with a link to each example, and the ones with no failure mode apart", async () => {
+    open();
+    await screen.findByText("Tool wear");
+    await userEvent.click(screen.getByRole("button", { name: "Show evidence" }));
+    const unforeseen = await screen.findByRole("list", { name: "Failures nobody foresaw" });
+    expect(within(unforeseen).getByText(/Scratched/)).toBeInTheDocument();
+    expect(within(unforeseen).getByRole("link", { name: "SNC-26-0007" })).toHaveAttribute("href", "/Non-Conformance/Register/n7");
+    expect(screen.getByText(/1 non-conformance has no failure mode in the register/)).toBeInTheDocument();
+  });
+
+  it("says why, rather than showing nothing, when there is no scope or the reader cannot see non-conformances", async () => {
+    evidenceAnswer = { ...evidenceAnswer, scoped: false, notForeseen: { available: false, reason: "Name a part, a part family or a machine in the FMEA's scope to see which non-conformances it did not foresee." } };
+    open();
+    await screen.findByText("Tool wear");
+    await userEvent.click(screen.getByRole("button", { name: "Show evidence" }));
+    expect(await screen.findByText(/Name a part, a part family or a machine/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Evidence figures")).toHaveTextContent("counted across the whole register");
+  });
+
+  it("tells a reader who cannot read non-conformances that the evidence is not available", async () => {
+    evidenceAnswer = { available: false, reason: "You cannot read non-conformances, so there is nothing to compare the analysis with.", revision: evidenceAnswer.revision, days: 365 };
+    open();
+    await screen.findByText("Tool wear");
+    await userEvent.click(screen.getByRole("button", { name: "Show evidence" }));
+    expect(await screen.findByText(/You cannot read non-conformances/)).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Failure modes and what happened" })).not.toBeInTheDocument();
+  });
+
+  it("shows no evidence card on a revision that is not live, or that has no failure modes yet", async () => {
+    current = revision({ status: "pending_approval" });
+    open();
+    await screen.findByText("Tool wear");
+    expect(screen.queryByText("What has actually happened?")).not.toBeInTheDocument();
   });
 });

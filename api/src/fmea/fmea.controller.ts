@@ -5,7 +5,8 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { ApproveBody, ApproverBody, CommentBody, CreateFmeaBody, FmeaListQuery, LinksBody, ReasonBody, ReviewBody, StartRevisionBody, TeamBody, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { FmeaDraftQuery, ApproveBody, ApproverBody, CommentBody, CreateFmeaBody, FmeaListQuery, LinkedFmeaQuery, LinksBody, ReasonBody, ReviewBody, StartRevisionBody, TeamBody, UpdateFmeaBody, UpdateRevisionBody } from './fmea.schemas';
+import { FmeaLinkedService } from './fmea-linked.service';
 import { FmeaService } from './fmea.service';
 
 const READ = 'fmea.read';
@@ -17,7 +18,10 @@ const APPROVE = 'fmea.approve';
 @ApiBearerAuth()
 @Controller()
 export class FmeaController {
-  constructor(private readonly service: FmeaService) {}
+  constructor(
+    private readonly service: FmeaService,
+    private readonly linkedService: FmeaLinkedService,
+  ) {}
 
   @Get('fmeas')
   @OrganisationScoped(READ)
@@ -33,6 +37,14 @@ export class FmeaController {
     return this.service.people(ctx);
   }
 
+  @Get('fmea-draft')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'What a non-conformance, 8D, audit finding, SCAR or change suggests for an FMEA raised from it: `{ kind, title, scopeText, links, source }`. Nothing is saved' })
+  draft(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(FmeaDraftQuery, query);
+    return this.service.draftFrom(ctx, q.kind, q.id);
+  }
+
   @Post('fmeas')
   @HttpCode(201)
   @OrganisationScoped(MANAGE)
@@ -40,6 +52,14 @@ export class FmeaController {
   @ApiCreatedResponse({ description: 'Starts an FMEA (FMEA-NNN) with its first draft revision, optionally with the team and what it covers' })
   create(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.create(ctx, parse(CreateFmeaBody, body));
+  }
+
+  @Get('fmeas/linked')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The FMEAs in force that cover a part (or its family), a part family, a machine or a control plan, for banners: `{ data, canRaise }`' })
+  linked(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(LinkedFmeaQuery, query);
+    return this.linkedService.linked(ctx, q.kind, q.id);
   }
 
   @Versioned('fmeas')
@@ -65,7 +85,8 @@ export class FmeaController {
   @ApiBody({ schema: openApiSchema(StartRevisionBody), required: false })
   @ApiCreatedResponse({ description: 'Starts a new draft revision from the one in force (team, scope and analysis copied); `adopt: true` also takes in the finished actions' })
   startRevision(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
-    return this.service.startRevision(ctx, parse(Uuid, id), parse(StartRevisionBody, body ?? {}).adopt === true);
+    const b = parse(StartRevisionBody, body ?? {});
+    return this.service.startRevision(ctx, parse(Uuid, id), b.adopt === true, b.raisedFrom);
   }
 
   @Post('fmeas/:id/reviews')

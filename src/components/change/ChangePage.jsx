@@ -13,6 +13,7 @@ import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { BoardCard, CustomerCard, CutInCard, ImpactCard } from "./ChangeAssessment";
 import { ReviewCard, TasksCard } from "./ChangeTasks";
+import RaisedFmeas from "../fmea/RaisedFmeas";
 import { CancelDialog, ChangeDialog, LinksDialog } from "./ChangeDialogs";
 
 const Fact = ({ label, children }) => (
@@ -267,6 +268,7 @@ const ChangePage = () => {
       <CutInCard change={change} />
       <CustomerCard change={change} />
       <ChangeFiles change={change} />
+      <RaisedFmeas kind="change" id={change.id} title="FMEAs raised from this change" />
 
       {dialog === "edit" && <ChangeDialog existing={change} onClose={() => setDialog(null)} />}
       {dialog === "links" && <LinksDialog change={change} onClose={() => setDialog(null)} />}

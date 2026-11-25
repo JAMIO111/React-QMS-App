@@ -7,6 +7,7 @@ import {
   GaugeIcon,
   GitPullRequestArrowIcon,
   GraduationCapIcon,
+  ListTreeIcon,
   TriangleAlertIcon,
   TruckIcon,
 } from "@/components/icons";
@@ -35,6 +36,7 @@ export const HOME_MODULES = [
   { key: "supplier", label: "Supplier quality", icon: TruckIcon, to: "/Supplier-Quality" },
   { key: "competence", label: "Competence", icon: GraduationCapIcon, to: "/Competence" },
   { key: "change", label: "Change", icon: GitPullRequestArrowIcon, to: "/Change" },
+  { key: "fmea", label: "FMEA", icon: ListTreeIcon, to: "/FMEA" },
   { key: "masterData", label: "Master data", icon: BoxesIcon, to: "/Master-Data" },
 ];
 
@@ -123,6 +125,15 @@ const READERS = {
       line("tasks", `Change ${plural(n(k.tasksOverdue), "task")} overdue`, k.tasksOverdue, "critical", "/Change/Mine"),
       line("signoffs", `${plural(n(k.signoffsWaiting), "Sign-off")} waiting at the board`, k.signoffsWaiting, "warning", "/Change/Register"),
       line("customer", `${plural(n(k.customerWaiting), "Change")} waiting for the customer`, k.customerWaiting, "warning", "/Change/Register"),
+    ],
+  }),
+  fmea: (k) => ({
+    headline: { value: n(k.inForce), label: `${plural(n(k.inForce), "FMEA")} in force` },
+    lines: [
+      line("overdue_actions", `FMEA ${plural(n(k.overdueActions), "action")} overdue`, k.overdueActions, "critical", "/FMEA/My-Actions"),
+      line("high", `${plural(n(k.highPriority), "Cause")} of high priority in the FMEAs in force`, k.highPriority, "warning", "/FMEA"),
+      line("reviews", `FMEA ${plural(n(k.reviewsOverdue), "review")} overdue`, k.reviewsOverdue, "warning", "/FMEA/Register"),
+      line("awaiting", `${plural(n(k.awaitingApproval), "FMEA revision")} waiting for approval`, k.awaitingApproval, "warning", "/FMEA/Register"),
     ],
   }),
   masterData: (k) => {

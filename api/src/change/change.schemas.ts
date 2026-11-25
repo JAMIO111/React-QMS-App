@@ -161,7 +161,7 @@ export { Attachment, CreateAttachmentBody, DeleteBody, DeletedQuery } from '../c
 
 // ---- tasks and closing (CH3) ----------------------------------------------------------------------------
 export const TASK_LINK_KINDS = [
-  'part_revision', 'control_plan_revision', 'document_revision', 'gauge_type', 'training_session', 'supplier', 'inspection_requirement', 'quality_alert', 'risk',
+  'part_revision', 'control_plan_revision', 'document_revision', 'gauge_type', 'training_session', 'supplier', 'inspection_requirement', 'quality_alert', 'risk', 'fmea_revision',
 ] as const;
 export const TASK_STATUSES = ['open', 'done', 'cancelled'] as const;
 
@@ -197,6 +197,7 @@ export const StartRevisionBody = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('part'), partId: z.string().uuid(), revision: z.string().trim().min(1).max(10), drawingRef: text(100), changeSummary: text(2000) }).strict(),
   z.object({ kind: z.literal('control_plan'), planId: z.string().uuid(), revisionCode: z.string().trim().min(1).max(10), changeReason: text(2000) }).strict(),
   z.object({ kind: z.literal('document'), documentId: z.string().uuid() }).strict(),
+  z.object({ kind: z.literal('fmea'), fmeaId: z.string().uuid() }).strict(),
 ]);
 export type StartRevisionBody = z.infer<typeof StartRevisionBody>;
 

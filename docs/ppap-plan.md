@@ -127,7 +127,7 @@ beyond the named signer and date, customer-specific form layouts, importing an o
 
 | # | Question | Default if not answered |
 |---|---|---|
-| Q1 | The level × element requirement matrix and the minimum Cpk values are **customer-specific** and the manual's own table is the publisher's: do you want to enter your own, or start from the neutral default (level 3 = every element, level 1 = PSW only)? | Neutral default, editable (PP5) |
-| Q2 | Are your customers mostly **automotive (AIAG)**, or also aerospace (AS9145 / FAI to AS9102)? FAI is a different, simpler record. | AIAG only; FAI is a later module |
-| Q3 | **Received** packages (suppliers submitting to you) at the same time, or after the submitted side is working? | After (PP5) |
-| Q4 | Should an unapproved PPAP ever **stop** a job or a shipment? | No (PP14, the same call as the change gate) |
+| Q1 | The level × element requirement matrix and the minimum Cpk values are **customer-specific** and the manual's own table is the publisher's: do you want to enter your own, or start from the neutral default (level 3 = every element, level 1 = PSW only)? | **Answered 2026-11-25: neutral default, editable (PP5).** |
+| Q2 | Are your customers mostly **automotive (AIAG)**, or also aerospace (AS9145 / FAI to AS9102)? FAI is a different, simpler record. | **Answered: AIAG only; FAI is a later module.** |
+| Q3 | **Received** packages (suppliers submitting to you) at the same time, or after the submitted side is working? | **Answered: after (PP5).** |
+| Q4 | Should an unapproved PPAP ever **stop** a job or a shipment? | **Answered: no (PP14, the same call as the change gate).** |

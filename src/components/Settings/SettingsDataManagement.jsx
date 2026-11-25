@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../hooks/useQmsApi";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
+import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, ListTreeIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
 import SlidingToggle from "../ui/SlidingToggle";
 
 const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
@@ -14,6 +14,7 @@ const SettingsCompetence = lazy(() => import("./SettingsCompetence"));
 const SettingsDocuments = lazy(() => import("./SettingsDocuments"));
 const SettingsRisk = lazy(() => import("./SettingsRisk"));
 const SettingsChange = lazy(() => import("./SettingsChange"));
+const SettingsFmea = lazy(() => import("./SettingsFmea"));
 const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
 
 /**
@@ -94,6 +95,15 @@ const DATA_TABS = [
     manage: "risk.manage",
     description: "The matrix risks are scored on (likelihood × consequence, with a band for each cell) and the categories of risk.",
     Component: SettingsRisk,
+  },
+  {
+    value: "fmea",
+    icon: ListTreeIcon,
+    label: "FMEA",
+    read: "fmea.read",
+    manage: "fmea.approve",
+    description: "How FMEAs are rated: the ten-level scales for severity, occurrence and detection, whether priority comes from the RPN or from your own action priority grid, and the versions of the model.",
+    Component: SettingsFmea,
   },
   {
     value: "change",

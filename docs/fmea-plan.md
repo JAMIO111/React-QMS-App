@@ -1,6 +1,6 @@
 # FMEA (design and process failure mode and effects analysis) — plan
 
-**Status:** planned 2026-11-24; decisions FM1–FM16 are **proposed** (the user asked for this module to be planned and built before PPAP; change any of them before the slice that uses it) ·
+**Status:** planned 2026-11-24; decisions FM1–FM16 proposed, **FM17 and the answers in §10 agreed 2026-11-25** (the user asked for this module to be planned and built before PPAP) ·
 **Menu name:** FMEA (`ListTreeIcon`, to be checked in `components/icons`) · **Slices:** FM1–FM6, FMX (exit check) · **Builds before:** `docs/ppap-plan.md`
 
 Per `docs/design-brief.md` §3.5 (preserve approval and revision history) and §6.5 (a change creates a new revision) and the Phase 4 pattern of one complete, tested
@@ -52,6 +52,7 @@ PLM-style product structure, an ERP sync.
 | FM14 | **Periodic review**: a review date per FMEA (default interval in the model, e.g. 12 months), `fmea_reviews` append-only (no change needed — with a note — or revision started). Overdue is worked out on read; reminders and a workflow trigger follow in FM6. |
 | FM15 | **Permissions and packages**: `fmea.read`, `fmea.manage`, `fmea.approve`; owner, admin, quality manager all three; quality engineer read + manage; inspector, viewer read. **Observer = view, Contributor = view, Controller = full** (like control plans; `features` rows tie every one, `app.unpriced_permissions()` is untouched). Errors `QM036` → `409 fmea_rule`; another organisation's id `P0002` → 404. |
 | FM16 | **Informs, never blocks**: a part or plan with no FMEA, or a stale one, shows a banner; nothing stops an inspection or a release. A gate like the change module's is not planned (the owner decided against the change gate for the same reason). |
+| FM17 | **Inheritance (agreed 2026-11-25; built in FM3).** An FMEA may be a **base** (a family or foundation FMEA linked to a part family, a machine, an operation or a control plan) that a **part's FMEA starts from**; an FMEA can equally be written **standalone, per part**, with no base. Inheritance is **copy with provenance, never a live reference**: `fmeas.base_fmea_id` (same kind; fixed once set) names the base, starting a child revision copies the base revision in force into the child's draft, and every copied row keeps `source_row_id` and the base revision it came from. The child may add, change or remove rows (a changed or removed inherited row says why, in words). When the base later gets a new revision the child page says "the base moved on" and lists the differences (rows added, changed or removed in the base since); **bringing them in is the preparer's deliberate edit in the next child revision**, so a frozen revision never changes under anyone. Information only; nothing blocks. |
 
 ## 3. Data model (tenant tables: `organisation_id`, composite FKs, RLS, audit trigger, **no table writes: SECURITY DEFINER functions only**; numbers by `app.pad_number`)
 
@@ -114,8 +115,8 @@ previous revision, **Print** (the handbook's form sheet; design and process vari
 | Slice | Content |
 |---|---|
 | **FM1** (built 2026-11-25, migration `20260438100000_fmea_foundation.sql`; see CLAUDE.md) | Foundation: permissions, packages and module row, `fmeas`, `fmea_revisions` and their lifecycle (submit / approve / send back / new revision / withdraw / settle), team, links, register, FMEA page shell with team and scope, menu, tests. The submit check has only the rules of what exists so far. |
-| **FM2** | Rating model: versions, scales, RPN and AP, AP import, `app.score_fmea`, preview, Settings tab; seeded neutral scales. |
-| **FM3** | The analysis: items, functions, failure modes, effects, causes, controls, ratings and the database's worked-out S / AP / RPN, special characteristics, the editor and the "still needed" list. |
+| **FM2** (built 2026-11-25, migration `20260439100000_fmea_rating_model.sql`; see CLAUDE.md) | Rating model: versions, scales, RPN and AP, AP import, `app.score_fmea`, preview, Settings tab; seeded neutral scales. |
+| **FM3** | The analysis (with FM17 inheritance: `base_fmea_id`, copy with provenance, the "base moved on" differences): items, functions, failure modes, effects, causes, controls, ratings and the database's worked-out S / AP / RPN, special characteristics, the editor and the "still needed" list. |
 | **FM4** | Optimisation: actions, owners, My actions, revised ratings, adopting actions into a new revision, compare, periodic review, notices. |
 | **FM5** | Links: carry to the control plan and the coverage report, occurrence evidence and "not foreseen", raise-from, risk link kind, change task kind, 8D D7 prompt, banners on part / plan pages. |
 | **FM6** | Outputs and signals: print form sheet, XLSX / CSV export, dashboard, reminders area, workflow triggers (`fmea.approved`, `fmea.action_overdue`, `fmea.review_due`), home page area, trace. |
@@ -129,7 +130,7 @@ handbook's numbers, because the handbook's grid is not in the product.**
 
 ## 9. Not built (stated so it is not assumed)
 
-A shipped failure mode or effect catalogue, automatic occurrence from SPC or NC data, an FMEA-MSR table, a foundation / family FMEA that **other FMEAs inherit from**, a customer-specific
+A shipped failure mode or effect catalogue, automatic occurrence from SPC or NC data, an FMEA-MSR table, live inheritance (a child that changes when its base changes; FM17 is copy with provenance), a customer-specific
 form template per OEM, supplier FMEAs submitted through the portal (PPAP slices), email to action owners (the notification path does it once the event exists), importing an existing
 FMEA from Excel (a later import kind through the existing import engine).
 
@@ -137,7 +138,7 @@ FMEA from Excel (a later import kind through the existing import engine).
 
 | # | Question | Default if not answered |
 |---|---|---|
-| Q1 | **The AIAG-VDA AP grid and the S / O / D wording are the publisher's.** Do you hold a licence and want to **import the grid and the scale text** from your own copy (CSV), or do you want the module to ship RPN only? I could not confirm the grid from a public source, so I have not written it in. | RPN with thresholds until an AP grid is imported (FM5) |
-| Q2 | One FMEA per **part**, or a **family / foundation** FMEA that a part's FMEA starts from? | Per part or family via links; no inheritance (§9) |
-| Q3 | Should the **preparer ever be allowed to approve** (a switch like the change module's self-approval)? | No; different person, always |
-| Q4 | Is **design** FMEA wanted now or only process? | Both, one engine (FM1) |
+| Q1 | **Answered: RPN with thresholds, import path kept.** **The AIAG-VDA AP grid and the S / O / D wording are the publisher's.** Do you hold a licence and want to **import the grid and the scale text** from your own copy (CSV), or do you want the module to ship RPN only? I could not confirm the grid from a public source, so I have not written it in. | RPN with thresholds until an AP grid is imported (FM5) |
+| Q2 | One FMEA per **part**, or a **family / foundation** FMEA that a part's FMEA starts from? | **Answered: inheritance from a base FMEA, with the option to write one per part (FM17).** |
+| Q3 | Should the **preparer ever be allowed to approve** (a switch like the change module's self-approval)? | **Answered: no; different person, always.** |
+| Q4 | Is **design** FMEA wanted now or only process? | **Answered: both, one engine (FM1).** |

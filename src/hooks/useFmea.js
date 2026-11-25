@@ -135,3 +135,46 @@ export const useFmeaMutation = () => {
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
 };
+
+// ---- the rating model (FM2) ----------------------------------------------------------------------------------
+
+/** The current rating model with its versions. It changes rarely, so it is kept for a few minutes. */
+export const useFmeaModel = () => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "model"),
+    queryFn: () => apiFetch("/fmea-model", { organisationId }),
+    enabled: !!organisationId,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
+};
+
+/** What S, O and D come to on a saved version of the model (the database works it out; nothing is saved). */
+export const useFmeaPreview = (body, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "model-preview", body),
+    queryFn: () => apiFetch("/fmea-model/preview", { method: "POST", body, organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+};
+
+/** A new version of the model, with a reason. It waits for the server's answer, which carries the new version. */
+export const useSaveFmeaModel = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch("/fmea-model", { method: "PUT", body, organisationId }),
+    onSuccess: (data) => queryClient.setQueryData(key(organisationId, "model"), data),
+    onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Reads an action priority grid from CSV text. Nothing is saved, so nothing else on screen needs refreshing. */
+export const useImportApGrid = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({ mutationFn: (csv) => apiFetch("/fmea-model/ap-import", { method: "POST", body: { csv }, organisationId }) });
+};

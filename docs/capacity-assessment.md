@@ -1,7 +1,7 @@
 # Capacity assessment: Fortress against Supabase and Vercel plan limits
 
 Written 2026-11-25 from the live project and the vendors' pages read that day. Prices and limits move: re-read the vendors' pages before buying. The load test harness that proves
-section "How to prove it properly" is `scripts/loadtest/` (built, not yet run; see its README). Item 1 under "What the live data says I should worry about" (the two slow SPC queries) is dealt with in `docs/capacity-assessment-followup.md` once measured.
+section "How to prove it properly" is `scripts/loadtest/` (built, not yet run; see its README). Item 1 under "What the live data says I should worry about" (the two slow SPC queries) is dealt with in "Follow-up: the slow SPC queries" at the end of this file.
 
 Each number is labelled as measured on your live project, read from the vendors' current pages, or my estimate.
 
@@ -104,3 +104,27 @@ Each number is labelled as measured on your live project, read from the vendors'
    - Do a restore rehearsal.
    - Set spend and usage alerts.
    - Check both vendors' usage dashboards after the run.
+
+## Follow-up: the slow SPC queries (2026-11-25)
+
+**What was wrong.** Measured on a local throwaway database (the real API, 12,000 readings from 300 inspections of 15 parts, 80% of them on 3 parts, run before and after):
+
+| | Before | After |
+|---|---:|---:|
+| SPC overview on the dashboard (40 charts evaluated) | 16,600 ms | 350 ms |
+| One SPC chart, 400 points | 1,150 ms | 25 ms |
+| Seeding 300 inspections (1,500 sample saves, each re-reading the history for alerts) | 736 s | 61 s |
+
+The cause was the same in both slow queries and in the alert reads: **row-level security checked the caller's permission once per row, per table.** The four inspection tables' read policies call `app.has_permission(organisation, 'inspection.read', <site>)`, a function that joins memberships, roles, two-factor, subscription and seat state, and the readings and samples first look up the record's site. A chart joins four such tables, so each reading cost about 2.8 ms; the overview's first query (`groups`) read every reading of 90 days through the same policies (4 s here, and proportional to the readings).
+
+**What changed (not yet applied live; pushing the API first is safe, it just stays slow until the migration runs).**
+1. Migration `20260448100000_inspection_read_fast_path.sql`: `app.orgs_permitted(permission)` lists the organisations where the caller holds a permission for the whole organisation; the four read policies became `organisation_id IN (that list) OR <the old per-row check>`. The list does not depend on the row, so it is worked out once per statement. A site-limited role falls through to exactly the old check, so nothing is widened. Test `supabase/tests/inspection_read_fast_path.test.sql`; the existing in-process inspection test covers the organisation-wide and Plant-B-only cases. After applying live, add the history row `insert into supabase_migrations.schema_migrations (version, name) values ('20260448100000','inspection_read_fast_path');`
+2. `SpcService.recentGroups` (the overview): the characteristics to evaluate are now found from the newest inspections (60 first, widening ×4 to 3,840 only while fewer than 40 are found) and the requirements they froze, with the readings only probed for existence, instead of aggregating every reading of the last 90 days. A characteristic whose only readings are in an inspection started more than 90 days ago (and not in progress) is no longer listed.
+
+**Still open.**
+- The same per-row pattern is in the read policies of most other tables (every `app.has_permission(... , <column>)` policy). The inspection tables were fixed first because the measurements are the big ones; NC, calibration and purchasing tables are the next candidates if a load test shows them slow.
+- The overview still evaluates up to 40 charts one after another (each reads its characteristic's history). Fast now, but it is the next thing to look at if histories get long.
+- `SpcService.characteristics()` (the picker on the SPC page) still aggregates all readings per characteristic.
+- Alert evaluation without a saved baseline still reads the characteristic's whole history on every save (much cheaper now, still linear).
+- Measured locally, on one machine, with 12,000 readings, not 3 million; the load test harness against a Micro and a Small instance is the proof.
+

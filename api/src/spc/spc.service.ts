@@ -14,6 +14,9 @@ import { applySubgroupSize, assemble, assembleDefects, assembleP, BASIS_TEXT, Ch
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
 const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const MAX_READINGS = 20000;
+/** How many of the newest inspections the overview looks at first, and the most it will widen to, when picking the characteristics to evaluate. */
+const RECENT_INSPECTIONS_START = 60;
+const RECENT_INSPECTIONS_MAX = 3840;
 /**
  * Alerts only need the points just recorded and the few before them: every Western Electric rule looks back at most 8 points, and with a saved
  * baseline the limits are fixed, so a point's signals depend on nothing else. Reading every stored reading on every save costs row-level security
@@ -233,18 +236,7 @@ export class SpcService {
       const empty: SpcOverview = { available: false, windowDays: opts.days, monitored: 0, withSignals: 0, withoutBaseline: 0, signalCount: 0, byRule: [], recent: [] };
       const allowed = await db.execute<Row>(sql`select app.has_permission(${orgOf(ctx)}::uuid, 'spc.read') as ok`);
       if (!allowed.rows[0]?.ok) return empty;
-      const groups = await db.execute<Row>(sql`
-        select r.part_id, p.part_number, p.name as part_name, q.characteristic_key, q.operation_code,
-               (array_agg(q.name order by m.measured_at desc))[1] as name, max(m.measured_at) as last_at
-        from public.inspection_measurements m
-        join public.inspection_records r on r.id = m.inspection_record_id
-        join public.parts p on p.id = r.part_id
-        join public.resolved_inspection_requirements q on q.id = m.requirement_id
-        where m.organisation_id = ${orgOf(ctx)}::uuid and q.spc_eligible
-          and ((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null) or (q.data_type = 'count' and m.value_count is not null))
-          and m.measured_at >= now() - interval '90 days'
-        group by r.part_id, p.part_number, p.name, q.characteristic_key, q.operation_code
-        order by max(m.measured_at) desc limit ${opts.maxCharts}`);
+      const groups = { rows: await this.recentGroups(db, ctx, opts.maxCharts) };
       const since = Date.now() - opts.days * 86_400_000;
       const byRule: Record<string, number> = {};
       const recent: SpcOverview['recent'] = [];
@@ -278,6 +270,53 @@ export class SpcService {
         recent: recent.slice(0, opts.maxRecent),
       };
     });
+  }
+
+  /**
+   * The characteristics to evaluate on the overview: those of the most recently started inspections (or any still in progress) that were measured in the
+   * last 90 days, newest first, at most `limit`. It looks at the newest inspections and the requirements they froze, never at the readings of the whole
+   * period: the readings are only probed for existence, one inspection and requirement at a time. It starts with a few dozen inspections and widens (×4,
+   * up to a few thousand) only while fewer than `limit` characteristics were found and there are more inspections to look at. A characteristic whose
+   * readings all belong to an inspection started over 90 days ago is not listed, which the dashboard's own window already implies.
+   */
+  private async recentGroups(db: Db, ctx: RequestContext, limit: number): Promise<Row[]> {
+    let take = RECENT_INSPECTIONS_START;
+    for (;;) {
+      const res = await db.execute<Row>(sql`
+        with recent as (
+          select r.id, r.part_id, r.started_at
+          from public.inspection_records r
+          where r.organisation_id = ${orgOf(ctx)}::uuid and (r.started_at >= now() - interval '90 days' or r.status = 'in_progress')
+          order by r.started_at desc, r.id
+          limit ${take}
+        )
+        select rc.part_id, p.part_number, p.name as part_name, q.characteristic_key, q.operation_code,
+               (array_agg(q.name order by rc.started_at desc))[1] as name, max(rc.started_at) as last_at,
+               (select count(*) from recent) as recent_count
+        from recent rc
+        join public.parts p on p.id = rc.part_id
+        join public.resolved_inspection_requirements q on q.inspection_record_id = rc.id
+        where q.organisation_id = ${orgOf(ctx)}::uuid and q.spc_eligible
+          and exists (
+            select 1 from public.inspection_measurements m
+            where m.inspection_record_id = rc.id and m.requirement_id = q.id
+              and ((q.data_type = 'variable' and m.value_numeric is not null) or (q.data_type = 'attribute' and m.value_pass is not null) or (q.data_type = 'count' and m.value_count is not null))
+              and m.measured_at >= now() - interval '90 days')
+        group by rc.part_id, p.part_number, p.name, q.characteristic_key, q.operation_code
+        order by max(rc.started_at) desc limit ${limit}`);
+      const sawAll = res.rows.length > 0 ? Number(res.rows[0].recent_count) < take : await this.fewerInspectionsThan(db, ctx, take);
+      if (res.rows.length >= limit || sawAll || take >= RECENT_INSPECTIONS_MAX) return res.rows;
+      take *= 4;
+    }
+  }
+
+  /** True when the organisation has fewer than `n` inspections inside the overview's window (so widening further would find nothing new). */
+  private async fewerInspectionsThan(db: Db, ctx: RequestContext, n: number): Promise<boolean> {
+    const r = await db.execute<Row>(sql`
+      select count(*) as c from (
+        select 1 from public.inspection_records r
+        where r.organisation_id = ${orgOf(ctx)}::uuid and (r.started_at >= now() - interval '90 days' or r.status = 'in_progress') limit ${n}) x`);
+    return Number(r.rows[0]?.c ?? 0) < n;
   }
 
   /**

@@ -31,6 +31,10 @@ export function notificationLink(n) {
       return "/Competence/Mine";
     case "document_change_requests":
       return d.document_id ? `/Documentation/Documents/${d.document_id}` : "/Documentation/Change-Requests";
+    case "change_signoffs":
+    case "change_requests":
+    case "change_tasks":
+      return d.change_id ? `/Change/${d.change_id}` : "/Change";
     case "document_signoffs":
     case "document_recipients":
       return d.document_id && d.revision_id ? `/Documentation/Documents/${d.document_id}/revisions/${d.revision_id}` : "/Documentation/Documents";
@@ -63,7 +67,9 @@ export function notificationLink(n) {
             ? `/Documentation/Documents/${d.record_id}`
             : d.record_kind === "quality_alert"
               ? `/Documentation/Quality-Alerts/${d.record_id}`
-              : ncrPath(d.record_id);
+              : d.record_kind === "change"
+                ? `/Change/${d.record_id}`
+                : ncrPath(d.record_id);
     case "reminder_digests":
       return "/Reminders";
     case "reminder_overdue_notices":

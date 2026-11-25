@@ -4,6 +4,7 @@ import { uploadFileToSupabase } from "../../api/supabaseApi";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import {
+  useFilterPreview,
   useIntegrationConnection,
   useIntegrationConnections,
   useIntegrationEntities,
@@ -33,6 +34,7 @@ import {
   rowsToFields,
 } from "../../lib/integrations";
 import { ADD_ONLY_KINDS, ADD_UPDATE_KINDS, MISSING_DATE_OPTIONS, defaultTemplate, fieldsForSettings, stepProblem, templateChanged, templateSettings } from "../../lib/importTemplates";
+import { cleanFilter, filterWords } from "../../lib/importFilters";
 import { formatDateTime } from "../../lib/processControl";
 import { CostCurrencyNotice } from "./CostImportParts";
 import { CheckIcon } from "@/components/icons";
@@ -45,6 +47,7 @@ import MenuCard from "../ui/MenuCard";
 import Switch from "../ui/Switch";
 import Field from "../ui/Field";
 import { ErrorNotice, TextAreaField } from "../master-data/shared";
+import FilterBuilder from "./FilterBuilder";
 import MappingStep from "./MappingStep";
 import ProviderLogo from "./ProviderLogo";
 import CTAButton from "@/components/CTAButton";
@@ -52,7 +55,8 @@ import CTAButton from "@/components/CTAButton";
 const STEPS = [
   { n: 1, label: "Choose records" },
   { n: 2, label: "Upload a file" },
-  { n: 3, label: "Map columns" },
+  { n: 3, label: "Filter records" },
+  { n: 4, label: "Map columns" },
 ];
 const ACCEPT = ".csv,.txt,.xlsx";
 export const KEY_GUESS = /^(id|code|number|no|ref|reference|key)$/i;
@@ -389,7 +393,7 @@ const CsvImportWizard = () => {
   const mapped = useMemo(() => new Set((allTemplates.data ?? []).map((t) => t.entityType)), [allTemplates.data]);
   const headers = file.data?.headers ?? [];
   const parsedOk = file.data?.status === "parsed";
-  const reachable = !entityType ? 1 : !parsedOk ? 2 : 3;
+  const reachable = !entityType ? 1 : !parsedOk ? 2 : 4;
   const step = Math.min(Number(params.get("step")) || 1, reachable);
 
   const [options, setOptions] = useState({ hasHeader: true, encoding: "auto", delimiter: "auto" });
@@ -417,9 +421,11 @@ const CsvImportWizard = () => {
   const fields = fieldsForSettings(entityType, catalogue?.fields ?? [], form?.settings);
   const body = form ? rowsToFields(rowsInUse(form.rows), fields) : null;
   const preview = useTemplatePreview(
-    form && parsedOk && step === 3 ? { entityType, fileId, keyField: form.keyField ?? "", fields: body, ...(entityType === "ncr_cost" ? { settings: templateSettings(entityType, form.settings) } : {}) } : null,
-    { enabled: step === 3 },
+    form && parsedOk && step === 4 ? { entityType, fileId, keyField: form.keyField ?? "", fields: body, ...(entityType === "ncr_cost" || cleanFilter(form.settings?.filters) ? { settings: templateSettings(entityType, form.settings) } : {}) } : null,
+    { enabled: step === 4 },
   );
+  // What the record filter does to the whole file, worked out by the server (step 3).
+  const filterPreview = useFilterPreview({ entityType, fileId, filter: form ? cleanFilter(form.settings?.filters) : undefined }, { enabled: step === 3 && parsedOk });
 
   useBreadcrumbNames([{ path: "/Settings/Integrations/csv", label: "CSV or Excel file" }]);
   if (connections.isLoading || entities.isLoading || (connId && connection.isLoading) || (fileId && file.isLoading)) return <LoadingScreen />;
@@ -536,8 +542,30 @@ const CsvImportWizard = () => {
           <ChooseFile connection={conn} fileId={fileId} onFile={(id) => set({ file: id }, true)} canUpload={canRun} options={options} setOptions={setOptions} />
         )}
 
-        {step === 3 && conn && catalogue && form && (
+        {step === 3 && conn && form && (
+          <MenuCard
+            title="Filter records"
+            subtitle="Choose which records of the file are read at all, before anything is mapped. Skip this to read every record. The filter is saved with the template, so a scheduled import uses it too.">
+            <FilterBuilder
+              columns={headers}
+              value={form.settings?.filters ?? null}
+              onChange={(f) => setForm({ ...form, settings: { ...form.settings, filters: f ?? undefined } })}
+              preview={filterPreview.data}
+              previewing={filterPreview.isFetching}
+              total={file.data?.rowCount}
+              readOnly={!canRun}
+              advanced={advanced}
+            />
+          </MenuCard>
+        )}
+
+        {step === 4 && conn && catalogue && form && (
           <>
+            {cleanFilter(form.settings?.filters) && (
+              <Callout tone="info" action={<button type="button" className="text-sm font-medium text-link-color hover:underline" onClick={() => set({ step: 3 })}>Change the filter</button>}>
+                {filterWords(form.settings.filters)}
+              </Callout>
+            )}
             <GaugeChecksNotice enabled={entityType === "gauge" && can("calibration.read")} />
             <MenuCard
               title="Template"
@@ -580,7 +608,8 @@ const CsvImportWizard = () => {
           <p className="text-sm text-secondary-text" role="status">
             {step === 1 && (entityType ? `${ENTITY_LABELS[entityType]} chosen` : "Choose what the file holds")}
             {step === 2 && (parsedOk ? `${file.data.rowCount} rows ready to map` : "Upload a file to continue")}
-            {step === 3 && form && (missing > 0
+            {step === 3 && (cleanFilter(form?.settings?.filters) ? (filterPreview.data?.problems?.length ? <span className="font-medium text-error-color">This filter cannot be used yet</span> : filterPreview.data ? `${filterPreview.data.kept} of ${filterPreview.data.scanned} records kept` : "Checking the filter…") : "No filter: every record is read")}
+            {step === 4 && form && (missing > 0
               ? <span className="font-medium text-error-color">{missing === 1 ? "1 required field is not matched" : `${missing} required fields are not matched`}</span>
               : disabledReason
                 ? <span className="font-medium text-error-color">{disabledReason}</span>
@@ -596,7 +625,8 @@ const CsvImportWizard = () => {
               <CTAButton type="main" size="md" disabled={!entityType || creating || (!conn && !canManage)} loading={creating} onClick={next1}>{creating ? "Starting…" : "Next"}</CTAButton>
             )}
             {step === 2 && <CTAButton type="main" size="md" disabled={!parsedOk} onClick={() => set({ step: 3 })}>Next</CTAButton>}
-            {step === 3 && canRun && (
+            {step === 3 && <CTAButton type="main" size="md" disabled={!form || !!filterPreview.data?.problems?.length} onClick={() => set({ step: 4 })}>Next</CTAButton>}
+            {step === 4 && canRun && (
               <>
                 <CTAButton type="secondary" size="md" disabled={busy || missing > 0 || !!disabledReason} loading={busy} onClick={() => start("preview")}>Preview</CTAButton>
                 <CTAButton type="main" size="md" disabled={busy || missing > 0 || !!disabledReason || !importable || !writable} loading={busy} onClick={() => start("full")}>

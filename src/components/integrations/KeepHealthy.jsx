@@ -16,6 +16,7 @@ import {
 import { usePermissions } from "../../hooks/useQmsApi";
 import { describeApiError } from "../../lib/api-client";
 import { fieldsOwnedBySource } from "../../lib/importLocks";
+import { leftOutShare } from "../../lib/importFilters";
 import { ENTITY_LABELS, HEALTH_STATES, MISSING_OPTIONS, recordPath, scheduleLabel, scheduleOptions } from "../../lib/integrations";
 import { formatDateTime } from "../../lib/processControl";
 import Callout from "../ui/Callout";
@@ -288,6 +289,8 @@ export const HealthCard = () => {
             r.missingWaiting ? `${r.missingWaiting} no longer in the source` : null,
             r.conflictsOpen ? `${r.conflictsOpen} value${r.conflictsOpen === 1 ? "" : "s"} to review` : null,
             r.failedInARow > 1 ? `failed ${r.failedInARow} times in a row` : null,
+            r.filterLeftOut === "all" ? `the filter left out every record read (${r.lastRun.recordsTotal})` : null,
+            r.filterLeftOut === "most" ? `the filter left out ${leftOutShare(r.lastRun.filtered, r.lastRun.recordsTotal)}% of the records read` : null,
             r.scheduleProblem,
             r.agent && !r.agent.online ? `connector agent ${r.agent.name} offline${r.agent.lastHeartbeatAt ? ` since ${formatDateTime(r.agent.lastHeartbeatAt)}` : ""}` : null,
           ].filter(Boolean);

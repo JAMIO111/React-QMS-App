@@ -59,7 +59,7 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT array_agg(record_id ORDER BY due_on) FROM app.my_reminders(org) WHERE area = 'risk_actions'), ARRAY[a_old, a_late, a_soon],
     'overdue and due within the window, not the one due in 20 days');
   PERFORM pg_temp.assert_eq((SELECT count(*) FILTER (WHERE overdue) FROM app.my_reminders(org)), 2::bigint, 'two of them overdue');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_reminder_areas(org)), 12::bigint, 'twelve areas, all on by default');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_reminder_areas(org)), (SELECT count(*) FROM app.reminder_areas()), 'every area, all on by default');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(cat);
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.my_reminders(org)), 0::bigint, 'nobody sees someone else''s work');

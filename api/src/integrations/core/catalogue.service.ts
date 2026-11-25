@@ -90,7 +90,7 @@ export function customField(d: CustomDefinition): CatalogueField {
     case 'choice':
       return { ...base, type: 'enum', options: d.options.map((o) => ({ value: o.key, label: o.label })) };
     case 'multi_choice':
-      return { ...base, maxLength: 2000, description: `Any of ${d.options.map((o) => o.label).join(', ')}, separated by commas` };
+      return { ...base, maxLength: 2000, multiple: true, options: d.options.map((o) => ({ value: o.key, label: o.label })), description: 'One or more of the list, separated by commas' };
     case 'person':
       return { ...base, maxLength: 320, description: 'The email address or full name of a member of the organisation' };
     default:

@@ -63,6 +63,41 @@ const LegacyCalibrations = () => {
   );
 };
 
+/** Change management: whether the person who raised a change may also sign it off (default off). */
+const ChangeSelfApproval = () => {
+  const { can } = usePermissions();
+  const org = useOrganisationDetails();
+  const update = useUpdateOrganisation();
+  const { showToast } = useToast();
+  const [optimistic, setOptimistic] = useState(null);
+  const on = optimistic ?? !!org.data?.settings?.changeAllowSelfApproval;
+  const toggle = () => {
+    const next = !on;
+    setOptimistic(next);
+    update.mutate(
+      { body: { settings: { changeAllowSelfApproval: next } }, reason: `Raiser may sign off their own change: ${next ? "on" : "off"}` },
+      { onError: (e) => showToast({ type: "error", title: "Not changed", message: describeApiError(e) }), onSettled: () => setOptimistic(null) },
+    );
+  };
+  return (
+    <MenuCard title="Change management" subtitle="Who may sign off a change.">
+      <div className="flex items-start justify-between gap-4">
+        <p id="change-self-approval" className="text-sm text-secondary-text">
+          Let the person who raised a change sign it off too. When this is off (the default) a change needs signers other than the person who raised it, which keeps the
+          agreement independent. Turn it on only if your people are few enough that this cannot be done; the record still shows who raised it and who signed.
+        </p>
+        <Switch
+          aria-label="Let the person who raised a change sign it off"
+          aria-describedby="change-self-approval"
+          checked={on}
+          disabled={!can("organisation.manage") || !org.data}
+          onChange={toggle}
+        />
+      </div>
+    </MenuCard>
+  );
+};
+
 const SettingsSystemPreferences = () => {
   const org = useOrganisationDetails();
   if (org.isLoading) return <LoadingScreen />;
@@ -75,6 +110,7 @@ const SettingsSystemPreferences = () => {
   return (
     <div className="flex flex-col gap-4 p-4">
       <LegacyCalibrations />
+      <ChangeSelfApproval />
     </div>
   );
 };

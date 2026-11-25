@@ -11,7 +11,7 @@ import request from 'supertest';
 import { configureApp } from '../src/app.factory';
 import { AppModule } from '../src/app.module';
 import { PermanentJobError, WorkerJobRegistry } from '../src/worker/job-registry';
-import { WorkerService } from '../src/worker/worker.service';
+import { WorkerService, slowStepsDue } from '../src/worker/worker.service';
 import { makeIds, requireDb, seed, testEnv, token } from './helpers';
 
 const ids = makeIds('e8');
@@ -87,6 +87,28 @@ describe('the worker tick', () => {
     const res = (await api().get('/api/v1/internal/worker/tick?source=pg_cron').set(cron).expect(200)).body;
     expect(res).toMatchObject({ skipped: true, outcome: 'skipped', steps: [] });
     expect((await admin.query(`select outcome from app.worker_ticks where id = $1`, [res.tickId])).rows[0].outcome).toBe('skipped');
+  });
+});
+
+describe('quiet ticks', () => {
+  const names = (res: { steps: { name: string }[] }) => res.steps.map((s) => s.name);
+  const SLOW = ['quality-alerts', 'documents', 'reminders', 'scorecards', 'housekeeping', 'exchange-rates', 'sso-domains'];
+  const FAST = ['workflows', 'jobs', 'email', 'agent-imports', 'imports'];
+
+  it('a pg_cron tick between quarter-hours leaves out the date-driven steps and keeps the event-driven ones', async () => {
+    const res = await worker.tick({ source: 'pg_cron', budgetMs: 20_000, now: new Date('2026-11-24T07:07:00Z') });
+    expect(names(res)).toEqual(FAST);
+    expect(res.outcome).toBe('done');
+  });
+
+  it('the first tick of each quarter-hour runs everything, and any other source always does', async () => {
+    expect(names(await worker.tick({ source: 'pg_cron', budgetMs: 20_000, now: new Date('2026-11-24T07:15:00Z') }))).toEqual(expect.arrayContaining([...SLOW, ...FAST]));
+    expect(names(await worker.tick({ source: 'manual', budgetMs: 20_000, now: new Date('2026-11-24T07:07:00Z') }))).toEqual(expect.arrayContaining([...SLOW, ...FAST]));
+  });
+
+  it('knows which minutes are due, for any tick interval', () => {
+    expect([0, 5, 10, 15, 20, 45].map((m) => slowStepsDue(new Date(Date.UTC(2026, 10, 24, 7, m)), 5))).toEqual([true, false, false, true, false, true]);
+    expect([0, 1, 2, 3, 4, 5, 14].map((m) => slowStepsDue(new Date(Date.UTC(2026, 10, 24, 7, m)), 1))).toEqual([true, false, false, false, false, false, false]);
   });
 });
 

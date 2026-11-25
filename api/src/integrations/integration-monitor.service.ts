@@ -27,8 +27,12 @@ export class IntegrationMonitorService {
         const failing = (r.lastRun?.status === 'failed') || !!r.scheduleProblem || r.failedInARow > 0;
         // A scheduled database connection whose agent is offline cannot run: someone should look at the agent.
         const agentDown = !!r.agent && !r.agent.online && r.schedule !== 'manual';
-        const attention = agentDown || r.rowsNeedingAction > 0 || r.missingWaiting > 0 || r.conflictsOpen > 0 || r.lastRun?.status === 'partial' || (r.lastRun?.status === 'running' && !!r.lastRun.nextAttemptAt);
-        return { ...r, state: (failing ? 'failing' : attention ? 'attention' : 'ok') as Health['data'][number]['state'] };
+        // A filter that leaves out every record (or nearly every record) of a scheduled import is worth a look: it is usually a changed source or a mistyped rule.
+        const read = r.lastRun?.recordsTotal ?? 0;
+        const cut = r.lastRun?.filtered ?? 0;
+        const filterLeftOut = read > 0 && cut >= read ? 'all' : read >= 10 && cut / read >= 0.9 ? 'most' : null;
+        const attention = agentDown || !!filterLeftOut || r.rowsNeedingAction > 0 || r.missingWaiting > 0 || r.conflictsOpen > 0 || r.lastRun?.status === 'partial' || (r.lastRun?.status === 'running' && !!r.lastRun.nextAttemptAt);
+        return { ...r, filterLeftOut: filterLeftOut as 'all' | 'most' | null, state: (failing ? 'failing' : attention ? 'attention' : 'ok') as Health['data'][number]['state'] };
       });
       const counts = { ok: 0, attention: 0, failing: 0 };
       for (const r of data) counts[r.state] += 1;

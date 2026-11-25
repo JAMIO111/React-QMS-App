@@ -1,5 +1,7 @@
 import { useState } from "react";
 import ReferenceValuesDialog, { ReferenceCheckLine } from "./ReferenceValues";
+import ListValuesDialog, { ListCheckLine } from "./ListValues";
+import { isListField, listCheck } from "../../lib/listFields";
 import { ArrowRightIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CircleAlertIcon, CircleCheckIcon, MinusIcon } from "@/components/icons";
 import { DATE_FORMAT_OPTIONS, MATCH_OPTIONS, OWNERSHIP_HINTS, TRANSFORM_OPTIONS, matchHint, ownershipOptions, rowHasSource } from "../../lib/integrations";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -98,7 +100,7 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly, words }) => (
     {(field.description || field.options || fieldLimits(field)) && (
       <div className="flex flex-col gap-0.5 text-xs text-secondary-text">
         {field.description && <span>{field.description}</span>}
-        {field.options && <span>Accepted values: {field.options.map((o) => o.label).join(", ")}</span>}
+        {field.options && field.options.length <= 12 && <span>Accepted values: {field.options.map((o) => o.label).join(", ")}</span>}
         {fieldLimits(field) && <span>{fieldLimits(field)}</span>}
       </div>
     )}
@@ -162,12 +164,14 @@ const LegacySettings = ({ field, row, set, colOptions, readOnly, words }) => (
 );
 
 /** One Fortress field: where its value comes from, what the chosen record makes of it, and (opened) how it is cleaned. */
-const MappingRow = ({ field, row, onChange, colOptions, preview, references, sample, readOnly, advanced, updates, words }) => {
+const MappingRow = ({ field, row, onChange, colOptions, preview, previewRows, references, sample, readOnly, advanced, updates, words }) => {
   const [open, setOpen] = useState(false);
   const [listing, setListing] = useState(false);
   const set = (patch) => onChange({ ...row, ...patch });
   const matched = rowHasSource(row);
   const refCheck = field.ref ? references?.find((r) => r.target === field.key) ?? null : null;
+  const isList = isListField(field);
+  const listResult = isList && matched ? listCheck(field, previewRows) : null;
   const missing = field.required && !matched;
   // What the server makes of this field on the example row (T3): taken value, after each step, the imported value or the error.
   const p = preview?.fields?.find((f) => f.target === field.key) ?? null;
@@ -201,7 +205,7 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, references, sam
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium text-primary-text" data-required={field.required || undefined}>{field.label}</span>
             <span className="truncate text-xs text-secondary-text">
-              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, row.useFormula ? "formula" : row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null, row.steps?.length ? `${row.steps.length} step${row.steps.length === 1 ? "" : "s"}` : null, updates && row.ownership === "qms_wins" ? "Fortress wins" : null, updates && row.ownership === "manual_review" ? "changes reviewed" : null].filter(Boolean).join(" · ") || "text"}
+              {[field.custom ? "custom field" : null, TYPE_HINTS[field.type], field.ref ? "link to another record" : null, field.multiple ? "one or more of a list" : null, row.useFormula ? "formula" : row.transform !== "none" ? TRANSFORM_OPTIONS.find((t) => t.value === row.transform)?.label.toLowerCase() : null, row.steps?.length ? `${row.steps.length} step${row.steps.length === 1 ? "" : "s"}` : null, updates && row.ownership === "qms_wins" ? "Fortress wins" : null, updates && row.ownership === "manual_review" ? "changes reviewed" : null].filter(Boolean).join(" · ") || "text"}
             </span>
           </div>
         </div>
@@ -232,7 +236,9 @@ const MappingRow = ({ field, row, onChange, colOptions, preview, references, sam
         </div>
       </div>
       {field.ref && <ReferenceCheckLine field={field} check={refCheck} matched={matched} onOpen={() => setListing(true)} />}
-      {listing && <ReferenceValuesDialog field={field} check={refCheck} onClose={() => setListing(false)} />}
+      {listing && field.ref && <ReferenceValuesDialog field={field} check={refCheck} onClose={() => setListing(false)} />}
+      {isList && <ListCheckLine field={field} check={listResult} matched={matched} onOpen={() => setListing(true)} />}
+      {listing && isList && <ListValuesDialog field={field} check={listResult} onClose={() => setListing(false)} />}
       {open && (
         <div id={settingsId}>
           <RowSettings field={field} row={row} set={set} colOptions={colOptions} readOnly={readOnly} advanced={advanced} example={example} sample={sample} updates={updates} words={words} />
@@ -314,6 +320,7 @@ const MappingStep = ({ fields, columns, sample = [], preview = null, previewing 
             row={rows[i]}
             colOptions={colOptions}
             preview={here}
+            previewRows={previewRows}
             references={preview?.references}
             sample={values}
             readOnly={readOnly}

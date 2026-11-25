@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftIcon, PencilIcon, PlusIcon, Trash2Icon } from "@/components/icons";
 import Field from "../ui/Field";
@@ -7,6 +7,9 @@ import MenuCard from "../ui/MenuCard";
 import { useConfirm } from "../../contexts/ConfirmationModalProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
+import { useMsaCoverage } from "../../hooks/useMsa";
+import { worstCoverage } from "../../lib/msa";
+import { CoveragePill } from "../msa/CoverageView";
 import { useControlPlanRevision, useMachines, useProcessControlMutation, useRevisionComparison } from "../../hooks/useProcessControl";
 import { describeApiError } from "../../lib/api-client";
 import { CRITICALITY, REACTION_ACTIONS, REACTION_TRIGGERS, describeRequirement, describeSampling, describeSpc } from "../../lib/processControl";
@@ -18,6 +21,7 @@ import CTAButton from "@/components/CTAButton";
 import { useQuickSave } from "../../hooks/useQuickSave";
 import { addToList, changeRecord } from "../../lib/guessRequest";
 import { isPending, pendingId } from "../../lib/optimistic";
+import LinkedChanges from "../change/LinkedChanges";
 
 const th = "border-b border-border-color px-2 py-2 text-left font-normal text-secondary-text";
 const td = "border-b border-border-color px-2 py-2 align-top";
@@ -151,7 +155,7 @@ const Criticality = ({ value }) => {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${c.className}`}>{c.label}</span>;
 };
 
-const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCharacteristic }) => {
+const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCharacteristic, coverage }) => {
   const mutation = useProcessControlMutation();
   const confirm = useConfirm();
   const { showToast } = useToast();
@@ -211,6 +215,11 @@ const Operation = ({ operation, editable, onEdit, onAddCharacteristic, onEditCha
                     {ch.name}
                   </div>
                   <div className="font-mono text-xs text-secondary-text">{ch.characteristicKey}</div>
+                  {coverage?.get(`${operation.operationCode}:${ch.characteristicKey.toUpperCase()}`) && (
+                    <div className="mt-1 flex items-center gap-1 text-xs text-secondary-text">
+                      Gauge R&amp;R <CoveragePill state={coverage.get(`${operation.operationCode}:${ch.characteristicKey.toUpperCase()}`)} />
+                    </div>
+                  )}
                 </td>
                 <td className={`${td} tabular-nums`}>{describeRequirement(ch)}</td>
                 <td className={td}>{ch.appliesTo === "selected" ? ch.parts.map((p) => p.partNumber).join(", ") || <span className="text-error-color">No parts chosen</span> : "All parts"}</td>
@@ -318,6 +327,18 @@ const RevisionPage = () => {
   const [editingOperation, setEditingOperation] = useState(null); // null | "new" | operation
   const [editingCharacteristic, setEditingCharacteristic] = useState(null); // null | { characteristic?, operationId? }
   const [editingReactions, setEditingReactions] = useState(false);
+  // Gauge R&R badge on each critical or major characteristic of the revision in force: the worst state among the gauges it was measured with.
+  const showCoverage = can("calibration.read") && revision?.status === "effective";
+  const coverageQuery = useMsaCoverage({ controlPlanId: planId, state: "all" }, { enabled: !!showCoverage });
+  const coverage = useMemo(() => {
+    const rows = coverageQuery.data?.available ? coverageQuery.data.rows : [];
+    const by = new Map();
+    rows.forEach((r) => {
+      const k = `${r.characteristic.operationCode}:${r.characteristic.key.toUpperCase()}`;
+      by.set(k, [...(by.get(k) ?? []), r.state]);
+    });
+    return new Map([...by].map(([k, states]) => [k, worstCoverage(states)]));
+  }, [coverageQuery.data]);
   const count = revision?.operations.reduce((n, o) => n + o.characteristics.length, 0) ?? 0;
 
   return (
@@ -356,6 +377,7 @@ const RevisionPage = () => {
               onEdit={setEditingOperation}
               onAddCharacteristic={(op) => setEditingCharacteristic({ operationId: op.id })}
               onEditCharacteristic={(ch) => setEditingCharacteristic({ characteristic: ch })}
+              coverage={showCoverage ? coverage : undefined}
             />
           ))}
           {editable && (
@@ -388,6 +410,7 @@ const RevisionPage = () => {
           </MenuCard>
 
           <Comparison revision={revision} />
+          <LinkedChanges kind="control_plan_revision" id={revision.id} />
 
           {editingOperation && (
             <Dialog title={editingOperation === "new" ? "Add operation" : `Edit ${editingOperation.operationCode}`} onClose={() => setEditingOperation(null)}>

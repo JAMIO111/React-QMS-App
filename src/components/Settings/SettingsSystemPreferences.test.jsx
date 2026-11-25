@@ -44,4 +44,25 @@ describe("system preferences", () => {
     expect(sw).toBeChecked();
     expect(sw).toBeDisabled();
   });
+
+  it("offers whether the person who raised a change may sign it off, off by default, and saves it at once", async () => {
+    render(<SettingsSystemPreferences />);
+    const sw = screen.getByRole("switch", { name: "Let the person who raised a change sign it off" });
+    expect(sw).not.toBeChecked();
+    await userEvent.click(sw);
+    expect(updateMutate).toHaveBeenCalledWith(
+      { body: { settings: { changeAllowSelfApproval: true } }, reason: "Raiser may sign off their own change: on" },
+      expect.any(Object),
+    );
+    expect(sw).toBeChecked();
+  });
+
+  it("shows that switch as read-only without organisation.manage", () => {
+    details = { data: { settings: { changeAllowSelfApproval: true } }, isLoading: false, error: null };
+    permissions = [];
+    render(<SettingsSystemPreferences />);
+    const sw = screen.getByRole("switch", { name: "Let the person who raised a change sign it off" });
+    expect(sw).toBeChecked();
+    expect(sw).toBeDisabled();
+  });
 });

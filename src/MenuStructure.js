@@ -1,4 +1,4 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
   ListTodoIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
@@ -71,6 +71,7 @@ export const menuStructure = [
     subMenu: [
       { name: "Dashboard", path: "/Calibration", end: true },
       { name: "Gauges", path: "/Calibration/Gauges" },
+      { name: "Gauge R&R", path: "/Calibration/Gauge-RR" },
     ],
   },
   {
@@ -145,6 +146,19 @@ export const menuStructure = [
       { name: "Risk register", path: "/Risk/Register" },
       { name: "Heat map", path: "/Risk/Heat-map" },
       { name: "My risk work", path: "/Risk/My-Work", badge: "my-risk-work" },
+    ],
+  },
+  {
+    name: "Change",
+    icon: GitPullRequestArrowIcon,
+    permission: "change.read",
+    path: "/Change",
+    // badge: "my-changes" = sign-offs waiting for me + my open change tasks (see Navbar)
+    badge: "my-changes",
+    subMenu: [
+      { name: "Dashboard", path: "/Change", end: true },
+      { name: "Changes", path: "/Change/Register" },
+      { name: "My changes", path: "/Change/Mine", badge: "my-changes" },
     ],
   },
   {

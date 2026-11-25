@@ -79,6 +79,17 @@ export const ComplaintBody = z
   })
   .strict();
 
+export const ChangeRequestBody = z
+  .object({
+    title: z.string().trim().min(3).max(200),
+    description: z.string().trim().min(10).max(4000),
+    reason: z.string().trim().max(2000).nullish(),
+    partId: z.string().uuid().nullish(),
+    wantedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+    clientKey: z.string().min(8).max(80).nullish(),
+  })
+  .strict();
+
 export const ClosureRequestBody = z.object({ note: z.string().trim().max(500).nullish() }).strict();
 export const ClosureDecisionBody = z.object({ confirm: z.boolean(), note: z.string().trim().max(2000).nullish() }).strict();
 
@@ -92,4 +103,8 @@ export const LotEvidenceBody = z
     contentType: z.string().max(200).nullish(),
     sizeBytes: z.number().int().min(0).max(26_214_400),
   })
+  .strict();
+
+export const ChangeApprovalDecisionBody = z
+  .object({ approve: z.boolean(), note: z.string().trim().max(2000).nullish(), reference: z.string().trim().max(200).nullish() })
   .strict();

@@ -89,7 +89,7 @@ describe('GET/PATCH /me', () => {
       'Alpha Precision',
       'Beta Castings',
     ]);
-    for (const m of res.body.memberships) expect(m.permissions).toEqual(['audits.read', 'calibration.read', 'capa.read', 'documentation.read', 'inspection.read', 'master_data.read', 'ncr.read', 'process_control.read', 'production.read', 'receiving.read', 'risk.read', 'spc.read', 'supplier_quality.read']);
+    for (const m of res.body.memberships) expect(m.permissions).toEqual(['audits.read', 'calibration.read', 'capa.read', 'change.read', 'documentation.read', 'inspection.read', 'master_data.read', 'ncr.read', 'process_control.read', 'production.read', 'receiving.read', 'risk.read', 'spc.read', 'supplier_quality.read']);
   });
 
   it('hides organisations where membership is suspended', async () => {
@@ -144,7 +144,7 @@ describe('organisation scope', () => {
       status: 'active',
       legalName: null,
       country: null,
-      settings: { baseCurrency: 'GBP', vatRate: 0.2, ncrReferencePrefix: 'NCM', themeColour: 'purple', requireMfa: false, useLotsAndSerials: true, allowInlineOrders: false, requireProductionOrder: false, advancedImports: false, includeLegacyCalibrations: false, reminderTime: '07:00', timeZone: null, effectiveTimeZone: 'Europe/London', logoPath: null },
+      settings: { baseCurrency: 'GBP', vatRate: 0.2, ncrReferencePrefix: 'NCM', themeColour: 'purple', requireMfa: false, useLotsAndSerials: true, allowInlineOrders: false, requireProductionOrder: false, advancedImports: false, includeLegacyCalibrations: false, changeAllowSelfApproval: false, reminderTime: '07:00', timeZone: null, effectiveTimeZone: 'Europe/London', logoPath: null },
     });
   });
 

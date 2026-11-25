@@ -9,6 +9,8 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
   ControlPlanDetail,
+  CONTROL_PLAN_SORTS,
+  ControlPlanList,
   ControlPlanListQuery,
   ControlPlanSummary,
   CreateApplicabilityBody,
@@ -59,6 +61,22 @@ const listQueries = (extra: MethodDecorator[] = []): MethodDecorator => (target,
     ApiQuery({ name: 'q', required: false, schema: { type: 'string' } }),
     ApiQuery({ name: 'includeInactive', required: false, schema: { type: 'boolean', default: false } }),
     ...extra,
+  ].forEach((d) => d(target, key, desc));
+};
+
+const planListQueries = (): MethodDecorator => (target, key, desc) => {
+  [
+    ApiQuery({ name: 'q', required: false, schema: { type: 'string' } }),
+    ApiQuery({ name: 'partFamilyId', required: false, description: 'Comma-separated part family ids', schema: { type: 'string' } }),
+    ApiQuery({ name: 'status', required: false, description: 'Comma-separated: effective, no_effective, pending_approval, draft', schema: { type: 'string' } }),
+    ApiQuery({ name: 'owner', required: false, schema: { type: 'string', enum: ['me'] } }),
+    ApiQuery({ name: 'active', required: false, schema: { type: 'string', enum: ['active', 'inactive', 'all'] } }),
+    ApiQuery({ name: 'from', required: false, schema: { type: 'string', format: 'date' } }),
+    ApiQuery({ name: 'to', required: false, schema: { type: 'string', format: 'date' } }),
+    ApiQuery({ name: 'sort', required: false, schema: { type: 'string', enum: [...CONTROL_PLAN_SORTS] } }),
+    ApiQuery({ name: 'order', required: false, schema: { type: 'string', enum: ['asc', 'desc'] } }),
+    ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } }),
+    ApiQuery({ name: 'pageSize', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } }),
   ].forEach((d) => d(target, key, desc));
 };
 
@@ -196,11 +214,8 @@ export class ControlPlansController {
 
   @Get()
   @OrganisationScoped(PC_READ)
-  @listQueries([
-    ApiQuery({ name: 'partFamilyId', required: false, schema: { type: 'string', format: 'uuid' } }),
-    ApiQuery({ name: 'status', required: false, schema: { type: 'string', enum: ['effective', 'no_effective', 'pending_approval'] } }),
-  ])
-  @ApiOkResponse({ schema: openApiSchema(pageSchema(ControlPlanSummary)) })
+  @planListQueries()
+  @ApiOkResponse({ schema: openApiSchema(ControlPlanList) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.listPlans(ctx, parse(ControlPlanListQuery, query));
   }

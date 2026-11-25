@@ -84,13 +84,21 @@ import { StripeGateway, StripeSdkGateway } from './billing/stripe.gateway';
 import { BillingService } from './billing/billing.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { SavedFiltersController } from './saved-filters/saved-filters.controller';
+import { SearchController, SearchService } from './search/search.service';
+import { ReportKeyAuth } from './reporting/report-key-auth';
+import { ReportingController } from './reporting/reporting.controller';
+import { ReportingService } from './reporting/reporting.service';
 import { CustomFieldsController, CustomValuesController } from './custom-fields/custom-fields.controller';
 import { CompetenceController } from './competence/competence.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
+import { ChangeController } from './change/change.controller';
+import { ChangeService } from './change/change.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
 import { QualityObjectivesController } from './management-review/quality-objectives.controller';
+import { MsaController } from './msa/msa.controller';
+import { MsaService } from './msa/msa.service';
 import { QualityObjectivesService } from './management-review/quality-objectives.service';
 import { ManagementReviewsController } from './management-review/management-reviews.controller';
 import { ManagementReviewsService } from './management-review/management-reviews.service';
@@ -98,6 +106,7 @@ import { ReviewInputsService } from './management-review/review-inputs';
 import { RiskService } from './risk/risk.service';
 import { DocumentFileStore, SupabaseDocumentFileStore } from './documents/controlled-copy';
 import { DocumentsDashboardController, DocumentsDashboardService } from './documents/documents-dashboard';
+import { ChangeDashboardController, ChangeDashboardService } from './change/change-dashboard';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
 import { SupplierDashboardController, SupplierDashboardService } from './supplier-quality/supplier-dashboard';
 import { CompetencePeopleService } from './competence/competence-people.service';
@@ -292,16 +301,21 @@ export class AppModule implements NestModule {
         StripeWebhookController,
         NotificationsController,
         SavedFiltersController,
+        SearchController,
+        ReportingController,
         CustomFieldsController,
         CustomValuesController,
         SupplierQualityController,
         CompetenceController,
+        ChangeDashboardController,
         CompetenceDashboardController,
         SupplierDashboardController,
         DocumentsController,
+        ChangeController,
         RiskController,
         RiskDashboardController,
         QualityObjectivesController,
+        MsaController,
         ManagementReviewsController,
         DocumentsDashboardController,
         SupplierQualificationController,
@@ -406,17 +420,23 @@ export class AppModule implements NestModule {
         CostCurrencyService,
         NotificationsService,
         SavedFiltersService,
+        SearchService,
+        ReportingService,
+        ReportKeyAuth,
         CustomFieldsService,
         SupplierQualityService,
         CompetenceService,
         CompetencePeopleService,
+        ChangeDashboardService,
         CompetenceDashboardService,
         SupplierDashboardService,
         CompetenceTrainingService,
         DocumentsService,
+        ChangeService,
         RiskService,
         RiskDashboardService,
         QualityObjectivesService,
+        MsaService,
         ManagementReviewsService,
         ReviewInputsService,
         DocumentsDashboardService,

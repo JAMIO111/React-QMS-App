@@ -34,6 +34,8 @@ export const OrganisationResponse = z.object({
     advancedImports: z.boolean(),
     /** Legacy (imported) calibrations count in the calibration dashboard's period figures. */
     includeLegacyCalibrations: z.boolean(),
+    /** The person who raised a change may sign it off (change management, CH2). */
+    changeAllowSelfApproval: z.boolean(),
     /** When the daily reminders go out (HH:MM, WK2), in `timeZone`. */
     reminderTime: z.string(),
     /** The organisation's own time zone; null = its first site's. `effectiveTimeZone` is the one in use. */
@@ -82,6 +84,7 @@ export const UpdateOrganisationBody = z
         requireProductionOrder: z.boolean().optional(),
         advancedImports: z.boolean().optional(),
         includeLegacyCalibrations: z.boolean().optional(),
+        changeAllowSelfApproval: z.boolean().optional(),
         /** HH:MM, on a five-minute step. */
         reminderTime: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5][05]$/, 'Use HH:MM on a five-minute step').optional(),
         /** An IANA time zone (the database refuses an unknown one); null = the first site's. */

@@ -64,6 +64,6 @@ const toc = headings.filter((h) => h.depth === 2);
   .pn a span { font: 500 0.72rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue); }
   .pn a:hover { border-color: var(--blue); }
   .pn .n { text-align: right; }
-  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .toc { position: static; order: -1; } }
+  @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } .toc { position: static; order: -1; } }
   @media (max-width: 560px) { .pn { grid-template-columns: 1fr; } }
 </style>

@@ -277,6 +277,39 @@ BEGIN
   -- RK3: a link to a part.
   PERFORM app.set_risk_links(k.id, jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1))))
      FROM public.risks k WHERE k.organisation_id = a AND k.title = 'Sweep risk';
+  -- Change management (CH1): a change with its scope, and a file (the lists are seeded per organisation); written by the functions as the owner.
+  PERFORM app.create_change(a, jsonb_build_object('title', 'Sweep change', 'typeId', (SELECT id FROM public.change_types WHERE organisation_id = a AND key = 'process'),
+      'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
+  PERFORM app.add_change_attachment(k.id, a || '/change/' || k.id || '/sweep.pdf', 'sweep.pdf', 'application/pdf', 1)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  -- CH2: taken through assessment to the board, with the raiser allowed to sign (so there is a pending sign-off).
+  UPDATE public.organisation_settings SET change_allow_self_approval = true WHERE organisation_id = a;
+  PERFORM app.update_change(k.id, '{"description":"Sweep what","reason":"Sweep why"}'::jsonb), app.submit_change(k.id)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  PERFORM app.set_change_impact(i.change_id, i.area_id, 'not_affected', NULL) FROM public.change_impacts i JOIN public.change_requests k ON k.id = i.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  PERFORM app.set_change_board(k.id, jsonb_build_array(jsonb_build_object('functionId', (SELECT id FROM public.change_functions WHERE organisation_id = a AND key = 'quality'), 'signerId', '50000000-0000-0000-0000-0000000000a1')))
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  PERFORM app.set_change_customer_approval(k.id, 'not_needed'), app.send_change_to_board(k.id)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep change';
+  -- CH3: a second change approved by its signer (the owner, self-approval is on), a task on it, and the effectiveness check that closes it.
+  PERFORM app.create_change(a, jsonb_build_object('title', 'Sweep closed change', 'typeId', (SELECT id FROM public.change_types WHERE organisation_id = a AND key = 'process'),
+      'description', 'Sweep what', 'reason', 'Sweep why',
+      'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
+  PERFORM app.submit_change(k.id) FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.set_change_impact(i.change_id, i.area_id, 'not_affected', NULL) FROM public.change_impacts i JOIN public.change_requests k ON k.id = i.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.set_change_board(k.id, jsonb_build_array(jsonb_build_object('functionId', (SELECT id FROM public.change_functions WHERE organisation_id = a AND key = 'quality'), 'signerId', '50000000-0000-0000-0000-0000000000a1')))
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.set_change_customer_approval(k.id, 'not_needed'), app.send_change_to_board(k.id)
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.decide_change_signoff(s.id, true, NULL) FROM public.change_signoffs s JOIN public.change_requests k ON k.id = s.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.add_change_task(k.id, jsonb_build_object('description', 'Sweep task', 'ownerId', '50000000-0000-0000-0000-0000000000a1'))
+     FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.complete_change_task(t.id, NULL) FROM public.change_tasks t JOIN public.change_requests k ON k.id = t.change_id
+     WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  PERFORM app.record_change_review(k.id, true, 'Sweep effectiveness note') FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.
@@ -286,6 +319,16 @@ BEGIN
           app.add_management_review_action(m.id, jsonb_build_object('description', 'Sweep action', 'decisionId', app.add_management_review_decision(m.id, 'Sweep decision', 'other')))
      FROM public.management_reviews m WHERE m.organisation_id = a AND m.title = 'Sweep review';
   PERFORM pg_temp.logout();
+  -- Gauge R&R (MS2): a Type 1 study made, started and filled as owner A, then completed (the API login's job: the system function stands in for it).
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  PERFORM app.start_msa_collection(app.create_msa_study(a, jsonb_build_object('studyType', 'type1', 'gaugeId', (SELECT id FROM public.gauges WHERE organisation_id = a AND asset_number = 'SW-G1'),
+    'characteristicName', 'Sweep bore', 'nominal', 25, 'lowerLimit', 24.9, 'upperLimit', 25.1, 'referenceValue', '25.000', 'trialCount', 3)));
+  PERFORM app.record_msa_measurements(m.id, '[{"appraiser":1,"part":1,"trial":1,"value":"25.001"},{"appraiser":1,"part":1,"trial":2,"value":"25.002"},{"appraiser":1,"part":1,"trial":3,"value":"24.999"}]'::jsonb)
+    FROM public.msa_studies m WHERE m.organisation_id = a;
+  PERFORM pg_temp.logout();
+  PERFORM app.system_complete_msa_study(a, m.id, '50000000-0000-0000-0000-0000000000a1', 'accepted', 'Sweep conclusion', NULL,
+    '{"algorithm":"msa-1","criteria":"aiag-msa-4","verdict":{"band":"acceptable"}}'::jsonb, encode(sha256(convert_to(app.msa_data_canonical(m.id), 'UTF8')), 'hex'))
+    FROM public.msa_studies m WHERE m.organisation_id = a;
   -- Reminders (WK2): an area switched off, a digest and an overdue notice (seeded directly; only the worker writes the last two).
   INSERT INTO public.reminder_preferences (organisation_id, user_id, area, enabled) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'gauges', false);
   INSERT INTO public.reminder_digests (organisation_id, user_id, day, overdue, due_soon, summary, items)
@@ -480,10 +523,18 @@ BEGIN
   INSERT INTO public.portal_complaints (organisation_id, party_id, nonconformance_id, raised_by)
     SELECT a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), n.id, '50000000-0000-0000-0000-0000000000a1' FROM public.nonconformances n WHERE n.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_complaint', (SELECT id FROM public.portal_complaints WHERE organisation_id = a));
+  -- Change management (CH6a): a request sent from the portal (written by a function; seeded directly here).
+  INSERT INTO public.portal_change_requests (organisation_id, party_id, change_id, kind, raised_by)
+    SELECT a, (SELECT id FROM public.portal_parties WHERE organisation_id = a), x.id, 'customer_request', '50000000-0000-0000-0000-0000000000a1' FROM public.change_requests x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_change_request', (SELECT id FROM public.portal_change_requests WHERE organisation_id = a));
   -- External portal (PT5b): a request for a customer to confirm closure (written by a function; seeded directly here).
   INSERT INTO public.portal_closure_requests (organisation_id, share_id)
     SELECT a, x.id FROM public.portal_shares x WHERE x.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_closure_request', (SELECT id FROM public.portal_closure_requests WHERE organisation_id = a));
+  -- Change management (CH6b): a request for a customer to approve a change (written by a function; seeded directly here).
+  INSERT INTO public.portal_change_approvals (organisation_id, change_id, party_id)
+    SELECT a, x.id, (SELECT id FROM public.portal_parties WHERE organisation_id = a LIMIT 1) FROM public.change_requests x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_change_approval', (SELECT id FROM public.portal_change_approvals WHERE organisation_id = a));
   -- External portal (PT5c): a customer contact.
   INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
     SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;
@@ -529,6 +580,9 @@ BEGIN
   INSERT INTO public.integration_agent_jobs (organisation_id, agent_id, kind)
     SELECT a, id, 'ping' FROM public.integration_agents WHERE organisation_id = a;
   INSERT INTO sweep VALUES ('agent', (SELECT id FROM public.integration_agents WHERE organisation_id = a));
+  -- Reporting keys (RP1): seeded directly; people write through functions, the API login reads by hash.
+  INSERT INTO public.reporting_keys (organisation_id, user_id, name, key_prefix, key_hash, expires_at)
+    VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'Sweep key', 'abcd1234', encode(sha256(convert_to('sweep-report-key', 'UTF8')), 'hex'), now() + interval '30 days');
   INSERT INTO public.integration_agent_releases (version, platform, url, sha256, size_bytes, manifest, signature, key_id)
     SELECT '9.9.' || (SELECT count(*) FROM public.integration_agent_releases), 'win-x64', 'https://releases.example.com/agent.zip', repeat('a', 64), 1,
            '{}', repeat('A', 86) || '==', repeat('b', 16);

@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { REC_JOIN, STATE_SQL } from '../audits/audit-schedule.service';
 import { IN_USE } from '../calibration/calibration.service';
+import { CUSTOMER_WAITING, LATE_TASKS, OPEN_STAGES, PAST_CUT_IN, WAITING_SIGNOFFS } from '../change/change-dashboard';
 import { RUNNING } from '../capa/capa.service';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema } from '../common/validation';
@@ -43,6 +44,7 @@ export const HomeDashboard = z.object({
     })
     .nullable(),
   competence: z.object({ withGaps: count, gaps: count, expired: count, expiring30: count, neverAssessed: count }).nullable(),
+  change: z.object({ open: count, signoffsWaiting: count, tasksOverdue: count, pastCutIn: count, customerWaiting: count }).nullable(),
   masterData: z.object({ checks: z.array(z.object({ key: z.string(), label: z.string(), kind: z.string(), count })) }).nullable(),
 });
 export type HomeDashboard = z.infer<typeof HomeDashboard>;
@@ -78,6 +80,7 @@ export class HomeDashboardService {
                app.has_permission(${org}::uuid, 'supplier_quality.read') as supplier,
                app.has_permission(${org}::uuid, 'receiving.read') as receiving,
                app.has_permission(${org}::uuid, 'competence.read') as competence,
+               app.has_permission(${org}::uuid, 'change.read') as change,
                app.has_permission(${org}::uuid, 'master_data.read') as master_data`);
 
       const nc = async () => {
@@ -189,6 +192,16 @@ export class HomeDashboardService {
         return { withGaps: n(gaps.people), gaps: n(gaps.gaps), expired: n(exp.expired), expiring30: n(exp.d30), neverAssessed: n(people.never_assessed) };
       };
 
+      // The same lists as the changes dashboard (its exported fragments), so the two cannot disagree.
+      const change = async () => {
+        const open = await one(sql`select count(*)::int as n from public.change_requests c where c.organisation_id = ${org}::uuid and c.stage in ${OPEN_STAGES}`);
+        const waiting = await one(sql`select count(*)::int as n from (${WAITING_SIGNOFFS(org)}) w`);
+        const late = await one(sql`select count(*)::int as n from (${LATE_TASKS(org)}) l`);
+        const cut = await one(sql`select count(*)::int as n from (${PAST_CUT_IN(org)}) p`);
+        const customer = await one(sql`select count(*)::int as n from (${CUSTOMER_WAITING(org)}) w`);
+        return { open: n(open.n), signoffsWaiting: n(waiting.n), tasksOverdue: n(late.n), pastCutIn: n(cut.n), customerWaiting: n(customer.n) };
+      };
+
       return {
         asOf: String(can.today),
         nc: can.nc ? await nc() : null,
@@ -199,6 +212,7 @@ export class HomeDashboardService {
         documents: can.documents ? await documents() : null,
         supplier: can.supplier ? await supplier() : null,
         competence: can.competence ? await competence() : null,
+        change: can.change ? await change() : null,
         masterData: can.master_data ? { checks: await dataQualityChecks(many, org) } : null,
       };
     });

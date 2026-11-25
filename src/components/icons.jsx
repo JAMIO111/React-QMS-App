@@ -100,6 +100,8 @@ import {
   ClipboardList as LucideClipboardList,
   ChartNoAxesCombined as LucideChartNoAxesCombined,
   GraduationCap as LucideGraduationCap,
+  GitPullRequestArrow as LucideGitPullRequestArrow,
+  Send as LucideSend,
   ScanSearch as LucideScanSearch,
   Truck as LucideTruck,
   Factory as LucideFactory,
@@ -138,6 +140,8 @@ import {
   Target as LucideTarget,
   Sparkles as LucideSparkles,
   Clock as LucideClock,
+  Command as LucideCommand,
+  CornerDownLeft as LucideCornerDownLeft,
   Thermometer as LucideThermometer,
   Droplets as LucideDroplets,
   FlaskConical as LucideFlaskConical,
@@ -268,6 +272,8 @@ export const ChartNoAxesCombinedIcon = withDefaults(LucideChartNoAxesCombined);
 export const ScanSearchIcon = withDefaults(LucideScanSearch);
 export const TruckIcon = withDefaults(LucideTruck);
 export const GraduationCapIcon = withDefaults(LucideGraduationCap);
+export const GitPullRequestArrowIcon = withDefaults(LucideGitPullRequestArrow);
+export const SendIcon = withDefaults(LucideSend);
 export const FactoryIcon = withDefaults(LucideFactory);
 export const GlobeIcon = withDefaults(LucideGlobe);
 export const PhoneIcon = withDefaults(LucidePhone);
@@ -316,6 +322,8 @@ export const PresentationIcon = withDefaults(LucidePresentation);
 export const TargetIcon = withDefaults(LucideTarget);
 export const SparklesIcon = withDefaults(LucideSparkles);
 export const ClockIcon = withDefaults(LucideClock);
+export const CommandIcon = withDefaults(LucideCommand);
+export const CornerDownLeftIcon = withDefaults(LucideCornerDownLeft);
 export const ThermometerIcon = withDefaults(LucideThermometer);
 export const DropletsIcon = withDefaults(LucideDroplets);
 export const FlaskConicalIcon = withDefaults(LucideFlaskConical);

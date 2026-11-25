@@ -26,6 +26,11 @@ export type RunListQuery = z.infer<typeof RunListQuery>;
 
 export const RowListQuery = z.object({
   status: z.enum(ROW_STATUSES).optional(),
+  /** Only the records a filter left out (they are also `skipped`). */
+  filtered: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -52,6 +57,8 @@ const Counts = z.object({
   superseded: z.number().int(),
   /** Left alone by the import settings: already imported under "add new only", or not in Fortress under "update existing only". */
   skipped: z.number().int(),
+  /** Records a template's filter left out (they are also counted as skipped). */
+  filtered: z.number().int(),
   /** Values held for review (fields set to "Review" whose new value differs from Fortress's), IN5. */
   parked: z.number().int(),
 });
@@ -120,6 +127,8 @@ export const InboxRow = z.object({
   externalId: z.string().nullable(),
   sourceRow: z.number().int().nullable(),
   status: z.enum(ROW_STATUSES),
+  /** The record was left out by the template's record filter (the reason is in `errors`). */
+  filtered: z.boolean(),
   action: z.enum(['create', 'update']).nullable(),
   internalId: z.string().uuid().nullable(),
   errors: z.array(z.object({ field: z.string().nullable(), message: z.string() })),

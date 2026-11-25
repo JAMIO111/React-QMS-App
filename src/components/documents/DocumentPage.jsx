@@ -20,6 +20,7 @@ import MenuCard from "../ui/MenuCard";
 import { ReadersCard, SkillsCard } from "./ReadersPanels";
 import { ChangeRequestsCard, LinksCard, PeriodicReviewCard } from "./LifecyclePanels";
 import { changesSince } from "../../lib/editConflicts";
+import LinkedChanges from "../change/LinkedChanges";
 
 const Fact = ({ label, children }) => (
   <div className="flex flex-col">
@@ -241,6 +242,7 @@ const DocumentPage = () => {
         <LinksCard doc={doc} />
       </div>
       <ChangeRequestsCard doc={doc} />
+      <LinkedChanges kind="document" id={doc.id} />
       {doc.status === "active" && can("external_access.share") && <PortalShareCard kind="document" recordId={doc.id} />}
 
       <MenuCard

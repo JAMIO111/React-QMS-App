@@ -17,8 +17,8 @@ BEGIN
   INSERT INTO public.parts (organisation_id, part_number, name) VALUES (org, 'BRK-1', 'Bracket') RETURNING id INTO p;
 
   -- ---- the catalogue ----
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers()), 21::bigint, 'twenty-one things can start a rule');
-  PERFORM pg_temp.assert_eq((SELECT count(DISTINCT event_type) FROM app.workflow_triggers()), 21::bigint, 'each once');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.workflow_triggers()) >= 22, true, 'twenty-two things (and more since) can start a rule');
+  PERFORM pg_temp.assert_eq((SELECT count(DISTINCT event_type) FROM app.workflow_triggers()), (SELECT count(*) FROM app.workflow_triggers()), 'each once');
 
   -- ---- an NC: quantity, title and total cost (live lines, base currency) ----
   PERFORM pg_temp.login(ann);

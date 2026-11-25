@@ -26,6 +26,8 @@ export type ApiRequest = Request & {
   organisationId?: string;
   /** Set by PortalGuard on /portal routes: the external person's own access (docs/external-portal-plan.md). */
   portal?: PortalAccess;
+  /** Set by ReportKeyAuth when the caller used a reporting key (docs/reporting-api-plan.md): which key, and its organisation. */
+  reportKey?: { keyId: string; organisationId: string };
   /** Versions a save says it was based on ({ "<table>:<id>": version }), set by VersionInterceptor (docs/edit-conflicts-plan.md). */
   expectedVersions?: Record<string, string>;
 };

@@ -4,6 +4,7 @@ import { AuditsDashboardService } from '../audits/audits-dashboard';
 import { CalibrationDashboardService } from '../calibration/calibration-dashboard';
 import { personName, Row } from '../calibration/calibration.service';
 import type { RequestContext } from '../common/request-context';
+import { ChangeDashboardService } from '../change/change-dashboard';
 import { CompetenceDashboardService } from '../competence/competence-dashboard';
 import { DatabaseService } from '../database/database.service';
 import { NcrDashboardService } from '../ncr/ncr-dashboard';
@@ -38,7 +39,7 @@ type Gathered = { available: boolean; snapshot: Snapshot | null };
 
 /** Sections and what each needs to be read (organisation-wide unless `anyScope`). Commentary-only sections are not gathered. */
 export const DATA_SECTIONS = [
-  'previous_actions', 'customer_feedback', 'quality_objectives', 'process_performance', 'nonconformities', 'monitoring', 'audit_results', 'external_providers', 'resources', 'risks',
+  'previous_actions', 'customer_feedback', 'quality_objectives', 'process_performance', 'nonconformities', 'monitoring', 'audit_results', 'external_providers', 'resources', 'risks', 'changes',
 ] as const;
 export type DataSection = (typeof DATA_SECTIONS)[number];
 
@@ -62,6 +63,7 @@ export class ReviewInputsService {
     private readonly competence: CompetenceDashboardService,
     private readonly risks: RiskDashboardService,
     private readonly objectives: QualityObjectivesService,
+    private readonly changes: ChangeDashboardService,
   ) {}
 
   /** Which of these permissions the caller holds (organisation-wide, or at any site for the `anyScope` ones). */
@@ -69,7 +71,7 @@ export class ReviewInputsService {
     const org = ctx.organisationId!;
     const rows = await this.database.asUser(ctx, (db) =>
       db.execute<Row>(sql`
-        select p from unnest(${'{audits.read,supplier_quality.read,competence.read,risk.read,capa.read,management_review.read}'}::text[]) p where app.has_permission(${org}::uuid, p)
+        select p from unnest(${'{audits.read,supplier_quality.read,competence.read,risk.read,change.read,capa.read,management_review.read}'}::text[]) p where app.has_permission(${org}::uuid, p)
         union all
         select p from unnest(${'{ncr.read,calibration.read,process_control.read}'}::text[]) p where app.has_permission_somewhere(${org}::uuid, p)`),
     );
@@ -305,6 +307,34 @@ export class ReviewInputsService {
               lists: [
                 { title: 'By level', items: d.byBand.filter((b) => b.count > 0).map((b) => ({ label: b.band === 'unassessed' ? 'Not assessed' : b.band[0].toUpperCase() + b.band.slice(1), value: b.count })) },
                 { title: 'Highest risks', items: d.topRisks.map((r) => ({ label: `${r.reference} · ${r.title}`, value: r.score, note: `${r.band ?? 'not assessed'} · ${r.status}`, link: `/Risk/Register/${r.id}` })) },
+              ],
+            },
+          });
+          break;
+        }
+        case 'changes': {
+          if (!can.has('change.read')) {
+            out.set(section, none);
+            break;
+          }
+          const d = await this.changes.get(ctx, period);
+          const k = d.kpis;
+          out.set(section, {
+            available: true,
+            snapshot: {
+              figures: [
+                { label: 'Submitted in the period', value: k.submitted },
+                { label: 'Approved in the period', value: k.approved, note: `${k.daysToApprove == null ? 'no average yet' : `${k.daysToApprove} days on average from submission`}` },
+                { label: 'Closed in the period', value: k.closed, note: `${k.notEffective} found not effective` },
+                { label: 'Open now', value: k.open, note: `${k.expedited} expedited` },
+                { label: 'Past the cut-in point', value: k.pastCutIn },
+                { label: 'Tasks overdue', value: k.tasksOverdue },
+              ],
+              lists: [
+                { title: 'Open, by stage', items: counted(d.byStage.map((r) => ({ label: r.stage[0].toUpperCase() + r.stage.slice(1), count: r.count }))) },
+                { title: 'By type', items: counted(d.byType.map((r) => ({ label: r.type, count: r.count }))) },
+                { title: 'Past the cut-in point', items: d.pastCutInList.map((c) => ({ label: `${c.reference} · ${c.title}`, value: c.daysAgo, note: `cut in on ${c.cutInOn} · ${c.stage}`, link: `/Change/${c.changeId}` })) },
+                { title: 'Closed in the period', items: d.recentlyClosed.map((c) => ({ label: `${c.reference} · ${c.title}`, note: c.result ?? undefined, link: `/Change/${c.changeId}` })) },
               ],
             },
           });

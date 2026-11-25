@@ -1,5 +1,7 @@
 import { useId, useRef, useState } from "react";
 import { useFormulaCheck, useFormulaFunctions } from "../../hooks/useIntegrations";
+import HelpLink from "../ui/HelpLink";
+import { HELP_TOPICS } from "../../lib/help";
 import { insertAt, suggestionsFor, tokenAt } from "../../lib/importTemplates";
 
 /**
@@ -33,7 +35,10 @@ const FormulaEditor = ({ value, onChange, columns, sample, label = "Formula", re
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required>{label}</label>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <label htmlFor={id} className="text-sm font-medium text-secondary-text" data-required>{label}</label>
+        <HelpLink topic={HELP_TOPICS.importFormulas}>How to write a formula</HelpLink>
+      </div>
       <div className="relative">
         <textarea
           id={id}

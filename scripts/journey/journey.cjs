@@ -230,13 +230,18 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await giveColinController();
   await documentControl({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
   await riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch });
+  await changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch });
   await workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague });
   await cmmImports({ page, stack, APP, orgName, see, shot, step, log, owner });
+  await gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner });
   await editConflicts({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
+  await commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner });
   await costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner });
   await legacyCalibrations({ page, stack, APP, orgName, see, shot, step, log });
   await costImport({ page, stack, APP, orgName, see, shot, step, log });
+  await recordFilters({ page, stack, APP, orgName, see, shot, step, log });
   await networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
   await connectorAgent({ page, stack, APP, orgName, see, shot, step, log });
   await singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch });
@@ -1014,6 +1019,9 @@ async function importWithTemplate({ page, stack, APP, orgName, see, shot, step, 
   await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'machines.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await see(page.getByRole('table', { name: 'First rows' }));
   await page.getByRole('button', { name: 'Next' }).click();
+  // The filter step: no filter, so every record is read.
+  await see(page.getByText(/No filter: every record/));
+  await page.getByRole('button', { name: 'Next' }).click();
 
   const name = page.getByRole('listitem', { name: 'Name', exact: true });
   await see(name);
@@ -1048,6 +1056,75 @@ async function importWithTemplate({ page, stack, APP, orgName, see, shot, step, 
   await see(page.getByRole('button', { name: 'Version 1' }));
   await see(page.getByText('CONCAT([Name], " in ", [Area])'));
   await shot(page, '62-template-manager');
+}
+
+/**
+ * Record filters for imports (docs/import-filters-plan.md, F4): a file of four machines is imported through the wizard with a filter on Status. The filter
+ * step says how many records it keeps (and warns when it would keep nothing), the mapping step shows the filter in words, the import writes only the kept
+ * machines, and the run page says how many were filtered out and lists them with the reason. The filter is saved with the template.
+ */
+async function recordFilters({ page, stack, APP, orgName, see, shot, step, log }) {
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const site = (await stack.admin.query(`select code from public.sites where organisation_id = $1 order by created_at limit 1`, [org.id])).rows[0].code;
+
+  step('owner imports only the active machines of a file: a filter on Status');
+  await page.goto(`${APP}/Settings/Integrations`);
+  await page.getByRole('link', { name: /Import a file/ }).click();
+  await page.getByRole('button', { name: /^Machines/ }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByText('How to read the file'));
+  const csv = ['Code,Name,Site,Status', `FL-1,front lathe,${site},Active`, `FL-2,front mill,${site},Active`, `FL-3,old press,${site},Retired`, `FL-4,broken saw,${site},Scrapped`].join('\n');
+  await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'status-machines.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await see(page.getByRole('table', { name: 'First rows' }));
+  // Start a new mapping rather than the template an earlier import used (its fields name columns this file does not have).
+  const at = new URL(page.url());
+  at.searchParams.set('template', 'new');
+  at.searchParams.set('step', '3');
+  await page.goto(at.toString());
+
+  await see(page.getByText(/No filter: every record \(4\) is read/));
+  await page.getByRole('button', { name: 'Add a filter' }).click();
+  const rule = page.getByRole('listitem', { name: 'Rule 1' });
+  await rule.getByRole('combobox', { name: 'Column' }).click();
+  await page.getByRole('option', { name: /^Status/ }).click();
+  // A value no record has: the step warns that nothing would be read, and still lets the person carry on.
+  await rule.getByRole('textbox', { name: 'Value for rule 1' }).fill('Nothing');
+  await see(page.getByText('This filter keeps nothing'));
+  await rule.getByRole('textbox', { name: 'Value for rule 1' }).fill('Active');
+  await see(page.getByText('2 of 4 records kept').first());
+  await see(page.getByRole('table', { name: 'Some records that are skipped' }).getByText('Retired'));
+  await shot(page, '63-import-filter-step');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+
+  await see(page.getByText(/Read only the records where Status is "Active"/));
+  await see(page.getByRole('listitem', { name: 'Code', exact: true }));
+  await page.getByRole('button', { name: 'Import 4 rows' }).click();
+  const dialog = page.getByRole('dialog');
+  await see(dialog.getByLabel('Template name'));
+  await dialog.getByRole('button', { name: 'Save and import' }).click();
+  await page.waitForURL(/\/runs\//);
+
+  step('the run says how many records the filter left out, and lists them with the reason');
+  await see(page.getByText('50% left out by the filter'));
+  await page.getByRole('button', { name: /Filtered out/ }).click();
+  await see(page.getByRole('list', { name: 'Rows' }).getByText(/Filtered out: does not meet Status is "Active"/).first());
+  await shot(page, '64-import-filtered-run');
+  const made = (await stack.admin.query(`select code from public.machines where organisation_id = $1 and code like 'FL-%' order by code`, [org.id])).rows.map((r) => r.code);
+  log(`machines written by the filtered import: ${JSON.stringify(made)}`);
+  if (made.join(',') !== 'FL-1,FL-2') throw new Error(`the filter did not decide what was imported: ${JSON.stringify(made)}`);
+  const run = (await stack.admin.query(`select records_total, skipped, filtered, created from public.integration_sync_runs where organisation_id = $1 and entity_type = 'machine' order by requested_at desc limit 1`, [org.id])).rows[0];
+  if (Number(run.records_total) !== 4 || Number(run.filtered) !== 2 || Number(run.created) !== 2) throw new Error(`the run's counts are wrong: ${JSON.stringify(run)}`);
+
+  step('the filter is saved with the template');
+  const saved = (await stack.admin.query(
+    `select v.settings -> 'filters' as filters from public.integration_template_versions v join public.integration_templates t on t.id = v.template_id
+      where t.organisation_id = $1 and t.name = 'Machines from status-machines.csv' order by v.version desc limit 1`, [org.id])).rows[0];
+  // jsonb keeps its keys in its own order, so compare what the filter says rather than how it is written.
+  const f = saved?.filters;
+  const r0 = f?.rules?.[0];
+  if (!f || f.mode !== 'keep' || f.match !== 'all' || f.rules.length !== 1 || r0.column !== 'Status' || r0.test !== 'equals' || r0.value !== 'Active') {
+    throw new Error(`the template did not keep the filter: ${JSON.stringify(saved)}`);
+  }
 }
 
 /**
@@ -1662,6 +1739,8 @@ async function riskAndReview({ browser, page, stack, APP, orgName, see, shot, st
   await see(page.getByRole('heading', { name: 'Inputs' }));
   await see(page.getByRole('region', { name: 'Quality objectives' }).getByText(/Customer complaints answered/));
   await see(page.getByRole('region', { name: 'Effectiveness of actions on risks and opportunities' }).getByText('High or critical'));
+  // Changes to the quality management system (change management): its figures come from the changes dashboard, as the person.
+  await see(page.getByRole('region', { name: 'Changes to the quality management system' }));
   await shot(page, 'a5-review-inputs');
 
   step('the meeting: every section reviewed, Colin present, a decision and an action for Colin, then completed');
@@ -1723,9 +1802,332 @@ async function riskAndReview({ browser, page, stack, APP, orgName, see, shot, st
     [org.id, colleague.email],
   );
   log(`review: ${JSON.stringify(mr)}`);
-  if (!mr || mr.status !== 'completed' || mr.reviewed !== 12 || mr.action !== 'done' || mr.told !== 1) throw new Error(`the review was not held end to end: ${JSON.stringify(mr)}`);
+  if (!mr || mr.status !== 'completed' || mr.reviewed !== 13 || mr.action !== 'done' || mr.told !== 1) throw new Error(`the review was not held end to end: ${JSON.stringify(mr)}`);
 }
 
+
+/**
+ * Change management (docs/change-management-plan.md, CHX): the owner raises a change from a non-conformance (the NC kept as its origin), submits it, assesses
+ * every impact area, names a board (Colin signs for two functions), records the customer's answer and the cut-in point and sends it to the board; Colin
+ * approves from his own sign-in; the owner adds two tasks that each start a revision (a part revision and a control plan revision) and sees them "not in
+ * force yet"; once both are released the tasks are finished and the effectiveness check closes the change. Then the change notice, the Changes card on the NC
+ * and the dashboard show it. Its own part, plan and NC, so the other steps' records are untouched.
+ */
+async function changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  step('set-up for change management: a part with its drawing and control plan in force, and a non-conformance on it');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const family = await api('POST', '/part-families', { code: 'CHG', name: 'Change brackets' });
+  const part = await api('POST', '/parts', { partNumber: 'CHG-100', name: 'Change bracket', partFamilyId: family.id, initialRevision: { revision: 'A' } });
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-CHG', title: 'Change brackets', partFamilyId: family.id });
+  const planRev = plan.revisions[0].id;
+  const planOps = await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-10', name: 'Milling' });
+  await api('POST', `/control-plan-revisions/${planRev}/characteristics`, {
+    operationId: planOps.operations[0].id, characteristicKey: 'VISUAL', name: 'No burrs in the bore', dataType: 'attribute', sampling: [{ triggerType: 'first_off', sampleSize: 1 }],
+  });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Bracket bore burr', partId: part.id, siteId: org.site, categoryId: product.id });
+  await api('PATCH', `/ncrs/${ncr.id}`, { severity: 'minor', quantityAffected: 3, description: 'Burr left inside the bore after milling' });
+  await api('POST', `/ncrs/${ncr.id}/transitions`, { to: 'open' });
+  const { rows: [nc] } = await stack.admin.query(`select reference from public.nonconformances where id = $1`, [ncr.id]);
+
+  step('owner raises a change from the non-conformance and submits it for assessment');
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  const raiseCard = page.getByRole('region', { name: 'Changes raised from this non-conformance' });
+  await raiseCard.getByRole('button', { name: 'Raise a change' }).click();
+  const raise = page.getByRole('dialog', { name: `Raise a change from ${nc.reference}` });
+  await see(raise.getByLabel('Title'));
+  await raise.getByRole('combobox', { name: /Type of change/ }).click();
+  await page.getByRole('option', { name: /^Product design/ }).click();
+  await raise.getByLabel('What is changing').fill('Add a deburr callout to the bore on the drawing and a first-part burr check to the control plan');
+  await raise.getByLabel('Why').fill('Burrs found inside the bore on three brackets');
+  await raise.getByRole('button', { name: 'Raise change' }).click();
+  await page.waitForURL(/\/Change\/[0-9a-f-]{36}$/);
+  const changeUrl = page.url();
+  await see(page.getByText(new RegExp(`Raised from.*${nc.reference}`)));
+  await see(page.getByRole('list', { name: 'What it covers' }).getByText(/CHG-100/));
+  await shot(page, 'c0-change-draft');
+  await page.getByRole('button', { name: 'Submit for assessment' }).click();
+  await see(page.getByRole('list', { name: 'Impact assessment' }));
+
+  step('owner assesses every impact area (two affected, with how), records the customer and the cut-in point, and names the board');
+  const areas = page.getByRole('list', { name: 'Impact assessment' }).getByRole('listitem');
+  const areaCount = await areas.count();
+  if (areaCount !== 12) throw new Error(`expected the twelve impact areas, found ${areaCount}`);
+  for (let i = 0; i < areaCount; i++) {
+    const item = areas.nth(i);
+    const label = (await item.locator('.font-medium').first().innerText()).trim();
+    if (label === 'Design and drawing' || label === 'Process and control plan') {
+      await item.getByRole('button', { name: 'Affected', exact: true }).click();
+      const how = page.getByRole('dialog', { name: `${label}: how is it affected?` });
+      await how.getByLabel('How it is affected').fill(label === 'Design and drawing' ? 'The bore gets a deburr callout: drawing revision B' : 'A first-part burr check is added: control plan revision B');
+      await how.getByRole('button', { name: 'Save' }).click();
+    } else {
+      await item.getByRole('button', { name: 'Not affected', exact: true }).click();
+    }
+  }
+  await see(page.getByText('Every area is assessed.'));
+  await page.getByRole('region', { name: 'Customer approval' }).getByRole('button', { name: 'Record' }).click();
+  const customer = page.getByRole('dialog', { name: "The customer's approval" });
+  await customer.getByRole('combobox', { name: /Where it stands/ }).click();
+  await page.getByRole('option', { name: /^Not needed/ }).click();
+  await customer.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByRole('region', { name: 'Customer approval' }).getByText('Not needed'));
+  await page.getByRole('region', { name: 'Cut-in point' }).getByRole('button', { name: 'Set' }).click();
+  const cutIn = page.getByRole('dialog', { name: 'From when does it apply?' });
+  await cutIn.getByRole('combobox', { name: /Cut-in point/ }).click();
+  await page.getByRole('option', { name: /^From a date/ }).click();
+  await cutIn.getByRole('button', { name: /^Date\b/ }).click();
+  await page.getByRole('dialog', { name: 'Choose date' }).getByRole('button', { name: dayName(new Date()) }).click();
+  await cutIn.getByRole('button', { name: 'Save' }).click();
+  await see(page.getByRole('region', { name: 'Cut-in point' }).getByText(/^From /));
+  await page.getByRole('button', { name: 'Choose the board' }).click();
+  const board = page.getByRole('dialog', { name: 'Who signs this change off' });
+  for (const fn of ['Quality', 'Engineering']) {
+    await board.getByRole('checkbox', { name: new RegExp(`^${fn}$`) }).check();
+    await board.getByRole('combobox', { name: new RegExp(`Who signs for ${fn}`) }).click();
+    await page.getByRole('option', { name: /Colin Colleague/ }).click();
+  }
+  await board.getByRole('button', { name: 'Save the board' }).click();
+  await see(page.getByRole('list', { name: 'Board' }).getByText(/Quality/));
+  await shot(page, 'c1-change-assessed');
+
+  step('owner sends it to the board; Colin finds it in My changes and approves for both functions');
+  await page.getByRole('button', { name: 'Send to the board' }).click();
+  await see(page.getByText(/Waiting for 2 sign-off/));
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colin = await ctx.newPage();
+  colin.setDefaultTimeout(15000);
+  watch(colin, 'colin');
+  await signIn(colin, APP, colleague.email);
+  await see(colin.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colin.goto(`${APP}/Change/Mine`);
+  await see(colin.getByRole('list', { name: 'Sign-offs waiting for me' }).getByText(/Bracket bore burr/));
+  await colin.goto(changeUrl);
+  for (let i = 0; i < 2; i++) {
+    await colin.getByRole('button', { name: 'Approve', exact: true }).first().click();
+    const decide = colin.getByRole('dialog', { name: /^Approve for / });
+    await decide.getByLabel('Comment').fill(i === 0 ? 'The check is cheap and the burr is real' : 'The callout fits our process');
+    await decide.getByRole('button', { name: 'Approve', exact: true }).click();
+    await decide.waitFor({ state: 'hidden' });
+  }
+  await see(colin.getByText(/Add the tasks that carry it out/));
+  await shot(colin, 'c2-change-approved');
+  await ctx.close();
+
+  step('owner adds two tasks that each start a revision: both are "not in force yet", so neither can be finished');
+  await page.reload();
+  await see(page.getByText(/Add the tasks that carry it out/));
+  const addTask = async (what) => {
+    await page.getByRole('region', { name: 'Tasks' }).getByRole('button', { name: 'Add a task' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Add a task' });
+    await dlg.getByLabel('What has to be done').fill(what);
+    await dlg.getByRole('combobox', { name: /Who does it/ }).click();
+    await page.getByRole('option', { name: /Olivia Owner/ }).click();
+    await dlg.getByRole('button', { name: 'Add task' }).click();
+    await see(page.getByRole('list', { name: 'Tasks' }).getByText(what));
+  };
+  await addTask('Release drawing revision B with the bore deburr callout');
+  await addTask('Release control plan revision B with the first-part burr check');
+  const tasks = page.getByRole('list', { name: 'Tasks' });
+  await tasks.getByRole('listitem').filter({ hasText: 'drawing revision B' }).getByRole('button', { name: 'Start a revision' }).click();
+  let start = page.getByRole('dialog', { name: 'Start a revision for this task' });
+  await start.getByRole('combobox', { name: /Part/ }).click();
+  await page.getByRole('option', { name: /CHG-100/ }).click();
+  await start.getByLabel('New revision letter or code').fill('B');
+  await start.getByLabel('What changes').fill('Deburr callout on the bore');
+  await start.getByRole('button', { name: 'Start the revision' }).click();
+  await see(tasks.getByText(/CHG-100/).first());
+  await tasks.getByRole('listitem').filter({ hasText: 'control plan revision B' }).getByRole('button', { name: 'Start a revision' }).click();
+  start = page.getByRole('dialog', { name: 'Start a revision for this task' });
+  await start.getByRole('combobox', { name: /What to revise/ }).click();
+  await page.getByRole('option', { name: /^Control plan revision/ }).click();
+  await start.getByRole('combobox', { name: /Control plan/ }).click();
+  await page.getByRole('option', { name: /CP-CHG/ }).click();
+  await start.getByLabel('New revision letter or code').fill('B');
+  await start.getByLabel('Why it changes').fill('First-part burr check on the bore');
+  await start.getByRole('button', { name: 'Start the revision' }).click();
+  await see(tasks.getByText(/CP-CHG/).first());
+  await see(page.getByText('Not in force yet').first());
+  // A manager can try to finish it, but the database refuses while the revision is still a draft: the dialog says so and the task stays open.
+  await tasks.getByRole('button', { name: 'Done' }).first().click();
+  const tooSoon = page.getByRole('dialog', { name: 'Mark as done' });
+  await see(tooSoon.getByText(/has to be in force first/));
+  await tooSoon.getByRole('button', { name: 'Mark as done' }).click();
+  await see(tooSoon.getByText(/not in force yet/));
+  await tooSoon.getByRole('button', { name: 'Cancel' }).click();
+  await tooSoon.waitFor({ state: 'hidden' });
+  await shot(page, 'c3-change-tasks-not-in-force');
+
+  step('both revisions are released; the tasks show "In force" and are finished; the effectiveness check closes the change');
+  const { rows: [partRev] } = await stack.admin.query(`select id from public.part_revisions where part_id = $1 and revision = 'B'`, [part.id]);
+  await api('POST', `/part-revisions/${partRev.id}/release`);
+  const { rows: [cpRev] } = await stack.admin.query(`select id from public.control_plan_revisions where control_plan_id = $1 and revision_code = 'B'`, [plan.id]);
+  await api('POST', `/control-plan-revisions/${cpRev.id}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${cpRev.id}/transitions`, { action: 'approve' });
+  await page.reload();
+  await see(tasks.getByText('In force').first());
+  for (let i = 0; i < 2; i++) {
+    await tasks.getByRole('button', { name: 'Done' }).first().click();
+    const done = page.getByRole('dialog', { name: 'Mark as done' });
+    await done.getByLabel(/What was done/).fill(i === 0 ? 'Drawing revision B is released' : 'Control plan revision B is in force');
+    await done.getByRole('button', { name: 'Mark as done' }).click();
+    await done.waitFor({ state: 'hidden' });
+  }
+  await see(page.getByText(/Every task is done: check the change worked/));
+  await page.getByRole('button', { name: 'Record the check' }).click();
+  const check = page.getByRole('dialog', { name: 'Check the change worked' });
+  await check.getByRole('combobox', { name: /Did it work/ }).click();
+  await page.getByRole('option', { name: /^Yes, it is effective/ }).click();
+  await check.getByLabel('What did you check, and what did you find?').fill('No burrs on the first parts of the next three batches');
+  await check.getByRole('button', { name: 'Record the check' }).click();
+  await see(page.getByText(/^Closed /));
+  await shot(page, 'c4-change-closed');
+
+  step('the change notice, the Changes card on the non-conformance and the dashboard show it');
+  await page.goto(`${changeUrl}/notice`);
+  const notice = page.getByRole('article', { name: 'Change notice' });
+  await see(notice.getByText('Engineering change notice'));
+  await see(notice.getByText(/Bracket bore burr|deburr callout/i));
+  await page.goto(`${APP}/Non-Conformance/Register/${ncr.id}`);
+  await see(page.getByRole('region', { name: 'Changes raised from this non-conformance' }).getByRole('list', { name: 'Linked changes' }).getByText('Closed'));
+  await page.goto(`${APP}/Change`);
+  await see(page.getByRole('heading', { name: 'Change dashboard' }));
+  await see(page.getByRole('list', { name: 'Recently closed changes' }).getByText(/Bracket bore burr|deburr callout/i));
+  await shot(page, 'c5-change-dashboard');
+  const { rows: [done] } = await stack.admin.query(
+    `select c.stage, c.origin_kind,
+            (select count(*)::int from public.change_signoffs s where s.change_id = c.id and s.status = 'approved') as approved,
+            (select count(*)::int from public.change_tasks t where t.change_id = c.id and t.status = 'done' and t.link_kind in ('part_revision', 'control_plan_revision')) as tasks_done,
+            (select r.result from public.change_reviews r where r.change_id = c.id) as review
+       from public.change_requests c where c.organisation_id = $1 and c.origin_kind = 'ncr' and c.origin_id = $2`,
+    [org.id, ncr.id],
+  );
+  log(`change: ${JSON.stringify(done)}`);
+  if (!done || done.stage !== 'closed' || done.approved !== 2 || done.tasks_done !== 2 || done.review !== 'effective') throw new Error(`the change was not carried through: ${JSON.stringify(done)}`);
+}
+
+
+/**
+ * The portal side of change management (CH6b): the owner opens the portal for a customer and invites one of its people; a change about the customer's
+ * part is put to them from the change page; the customer signs up, accepts the invitation, sees it on their dashboard and says what they cannot accept;
+ * the owner sees the answer on the change, asks again, and the customer approves with their own reference. Nothing else about the change moves.
+ */
+async function portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch }) {
+  step('set-up for the portal: a customer who buys a part, the portal switched on for them, one of their people invited, and a change about the part under assessment');
+  const { rows: [org] } = await stack.admin.query(`select o.id from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const customerPerson = { first: 'Pat', surname: 'Customer', email: `pat.${RUN}@wayne-journey.test` };
+  const wayne = await api('POST', '/customers', { code: 'WAYNE', name: 'Wayne Ltd' });
+  const part = await api('POST', '/parts', { partNumber: 'PRT-200', name: 'Portal bracket', initialRevision: { revision: 'A' } });
+  await api('POST', `/parts/${part.id}/customers`, { customerId: wayne.id, customerPartNumber: 'W-77', isPrimary: true });
+  await api('PUT', '/external-access/settings', { enabled: true, requireMfa: false });
+  const parties = await api('PUT', '/external-access/parties', { kind: 'customer', partyId: wayne.id, enabled: true, contactName: 'Olivia in Quality' });
+  const party = parties.parties.find((p) => p.name === 'Wayne Ltd');
+  await api('POST', '/external-access/people', { partyId: party.partyId, email: customerPerson.email, role: 'admin' });
+  const types = await api('GET', '/change-types');
+  const typeId = types.data.find((t) => t.key === 'product_design').id;
+  const change = await api('POST', '/changes', {
+    title: 'Tighten the bracket bend radius', typeId, description: 'Reduce the bend radius on the bracket from 3 mm to 2 mm', reason: 'The customer asked for a tighter fit',
+    links: [{ kind: 'part', id: part.id }],
+  });
+  await api('POST', `/changes/${change.id}/submit`);
+  const { rows: [ecr] } = await stack.admin.query(`select reference from public.change_requests where id = $1`, [change.id]);
+
+  step('owner asks the customer to approve it in the portal');
+  await page.goto(`${APP}/Change/${change.id}`);
+  const card = page.getByRole('region', { name: 'Customer approval' });
+  await card.getByRole('button', { name: 'Ask the customer' }).click();
+  const ask = page.getByRole('dialog', { name: `Ask a customer to approve ${ecr.reference}` });
+  await ask.getByLabel('Message to them').fill('Please approve the tighter radius.');
+  await ask.getByRole('button', { name: 'Ask them' }).click();
+  await ask.waitFor({ state: 'hidden' });
+  await see(page.getByRole('list', { name: 'Requests to customers' }).getByText('Waiting for the customer'));
+  await see(card.getByText('Requested'));
+  await shot(page, 'p0-asked');
+
+  step('the customer signs up, accepts the invitation and finds the change waiting on their dashboard');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const customer = await ctx.newPage();
+  customer.setDefaultTimeout(15000);
+  watch(customer, 'customer');
+  await signUp(customer, APP, customerPerson);
+  await see(customer.getByText(/check your email/i).first());
+  await verify(stack, customerPerson.email);
+  await signIn(customer, APP, customerPerson.email);
+  await customer.waitForURL(/\/portal/);
+  await see(customer.getByRole('heading', { name: 'You have been invited' }));
+  await customer.getByRole('button', { name: 'Accept' }).click();
+  await see(customer.getByRole('heading', { level: 1, name: 'Wayne Ltd' }));
+  const waiting = customer.getByRole('list', { name: 'Changes waiting for your approval' });
+  await see(waiting.getByText('Waiting for your answer'));
+  await shot(customer, 'p1-customer-dashboard');
+
+  step('the customer reads it in their own terms (their part, their number, no internal detail) and says what they cannot accept');
+  await waiting.getByRole('link', { name: new RegExp(`${ecr.reference} · Tighten the bracket bend radius`) }).click();
+  await see(customer.getByRole('heading', { name: new RegExp(`${ecr.reference} · Tighten the bracket bend radius`) }));
+  await see(customer.getByText('Reduce the bend radius on the bracket from 3 mm to 2 mm'));
+  await see(customer.getByRole('list', { name: 'Parts' }).getByText(/PRT-200/));
+  await see(customer.getByText(/your number W-77/));
+  await see(customer.getByText('Please approve the tighter radius.'));
+  if (await customer.getByText(/\b(impact|board|tasks?)\b/i).count()) throw new Error('the customer was shown internal change detail');
+  await shot(customer, 'p2-customer-change');
+  await customer.getByRole('button', { name: 'I cannot accept it' }).click();
+  const no = customer.getByRole('dialog', { name: 'Say what you cannot accept' });
+  await no.getByLabel(/What you cannot accept/).fill('A 2 mm radius cracks on our press.');
+  await no.getByRole('button', { name: 'Send' }).click();
+  await no.waitFor({ state: 'hidden' });
+  const answer = customer.getByRole('region', { name: 'Your answer' });
+  await see(answer.getByText('Not approved'));
+  await see(answer.getByText('A 2 mm radius cracks on our press.'));
+  await shot(customer, 'p3-customer-declined');
+
+  step('the owner sees the no on the change (nothing else has moved), and asks again');
+  await page.reload();
+  const list = page.getByRole('list', { name: 'Requests to customers' });
+  await see(list.getByText('Not approved'));
+  await see(list.getByText(/They wrote: A 2 mm radius cracks on our press\./));
+  await see(page.getByRole('region', { name: 'Customer approval' }).getByText('Rejected'));
+  const stage = (await stack.admin.query(`select stage from public.change_requests where id = $1`, [change.id])).rows[0].stage;
+  if (stage !== 'assessment') throw new Error(`the customer's answer moved the change to ${stage}`);
+  await page.getByRole('region', { name: 'Customer approval' }).getByRole('button', { name: 'Ask the customer' }).click();
+  const again = page.getByRole('dialog', { name: `Ask a customer to approve ${ecr.reference}` });
+  await again.getByRole('button', { name: 'Ask them' }).click();
+  await again.waitFor({ state: 'hidden' });
+  await see(list.getByText('Waiting for the customer'));
+
+  step('the customer approves with their own reference, and the owner sees it on the change');
+  await customer.goto(`${APP}/portal`);
+  await customer.getByRole('list', { name: 'Changes waiting for your approval' }).getByRole('link', { name: new RegExp(ecr.reference) }).click();
+  await customer.getByRole('button', { name: 'Approve this change' }).click();
+  const yes = customer.getByRole('dialog', { name: 'Approve this change' });
+  await yes.getByLabel('Your own reference').fill('WAYNE-ECN-12');
+  await yes.getByRole('button', { name: 'Approve', exact: true }).click();
+  await yes.waitFor({ state: 'hidden' });
+  await see(customer.getByRole('region', { name: 'Your answer' }).getByText('WAYNE-ECN-12'));
+  await shot(customer, 'p4-customer-approved');
+  await page.reload();
+  await see(page.getByRole('list', { name: 'Requests to customers' }).getByText(/Their reference: WAYNE-ECN-12/));
+  await see(page.getByRole('region', { name: 'Customer approval' }).getByText('WAYNE-ECN-12'));
+  await shot(page, 'p5-owner-sees-approval');
+  await ctx.close();
+
+  const { rows: [done] } = await stack.admin.query(
+    `select c.stage, c.customer_approval, c.customer_reference,
+            (select string_agg(r.status, ',' order by r.requested_at) from public.portal_change_approvals r where r.change_id = c.id) as requests,
+            (select count(*)::int from public.portal_activity a where a.record_id = c.id and a.kind in ('change_approved', 'change_declined')) as told
+       from public.change_requests c where c.id = $1`, [change.id]);
+  log(`portal approval: ${JSON.stringify(done)}`);
+  if (done.stage !== 'assessment' || done.customer_approval !== 'approved' || done.customer_reference !== 'WAYNE-ECN-12' || done.requests !== 'rejected,approved' || done.told !== 2) {
+    throw new Error(`the customer's approval was not carried through: ${JSON.stringify(done)}`);
+  }
+}
 
 /**
  * The background worker and workflow rules (docs/workflow-engine-plan.md, WX): the owner writes a rule in Settings → Workflows ("when an inspection reading
@@ -2035,6 +2437,139 @@ async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, own
 }
 
 /**
+ * Gauge R&R (docs/gauge-rr-plan.md MS6): a critical characteristic is measured with a gauge nobody has studied, so coverage says "No study"; the owner plans a
+ * crossed study from that row (the gauge, part, characteristic and the plan's limits already in the form), starts collecting, pastes the twelve readings,
+ * completes it with a conclusion, reads the report with its data fingerprint, and coverage, the control plan page and the gauge page all say the gauge is covered.
+ */
+async function gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  step('set-up for Gauge R&R: a part whose critical diameter is measured with a micrometer that has no study');
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
+  const part = await api('POST', '/parts', { partNumber: 'JRN-300', name: 'Journey shaft', initialRevision: { revision: 'A' } });
+  const gauge = await api('POST', '/gauges', { assetNumber: 'GRR-J1', description: 'Journey micrometer', siteId: org.site });
+  await stack.admin.query(`update public.gauges set resolution = 0.001, unit_code = 'mm' where id = $1`, [gauge.id]);
+  const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-300', title: 'Journey shaft' });
+  await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });
+  const planRev = plan.revisions[0].id;
+  const op = (await api('POST', `/control-plan-revisions/${planRev}/operations`, { operationCode: 'OP-30', name: 'Grinding' })).operations[0].id;
+  await api('POST', `/control-plan-revisions/${planRev}/characteristics`, {
+    operationId: op, characteristicKey: 'SHAFT_OD', charNumber: '1', name: 'Shaft outer diameter', nominal: 25, lowerLimit: 24.95, upperLimit: 25.05, unitCode: 'mm',
+    criticality: 'critical', sampling: [{ triggerType: 'first_off', sampleSize: 1 }],
+  });
+  await api('PATCH', `/control-plan-revisions/${planRev}`, { changeReason: 'First release' });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'submit' });
+  await api('POST', `/control-plan-revisions/${planRev}/transitions`, { action: 'approve' });
+  const job = await api('POST', '/jobs', { machineId: machine.id, partId: part.id, operationCode: 'OP-30' });
+  const detail = await api('GET', `/inspections/${job.id}`);
+  const requirement = (detail.requirements ?? []).find((r) => r.characteristicKey === 'SHAFT_OD');
+  if (!requirement) throw new Error(`the job has no SHAFT_OD requirement: ${JSON.stringify(detail.requirements)}`);
+  await api('POST', `/inspections/${job.id}/samples`, { readings: [{ requirementId: requirement.id, valueNumeric: '25.001', gaugeId: gauge.id }] });
+
+  step('coverage says the micrometer has no study for the critical diameter');
+  await page.goto(`${APP}/Calibration/Gauge-RR?view=coverage`);
+  const table = page.getByRole('table', { name: 'Gauge R&R coverage' });
+  await see(table);
+  const row = table.getByRole('row').filter({ hasText: 'Shaft outer diameter' });
+  await see(row.getByText('No study'));
+  await see(row.getByRole('link', { name: 'GRR-J1' }));
+  await shot(page, '97-gauge-rr-coverage-no-study');
+
+  step('Plan a study from that row: the kind, gauge, characteristic and the plan\'s limits are already in the form');
+  await row.getByRole('button', { name: /Plan a study for Shaft outer diameter on GRR-J1/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Plan a measurement system study' });
+  await see(dialog);
+  await see(dialog.getByLabel(/^What is measured/));
+  const wanted = { 'What is measured': 'Shaft outer diameter', Gauge: 'GRR-J1 · Journey micrometer' };
+  for (const [label, value] of Object.entries(wanted)) {
+    const got = await dialog.getByLabel(new RegExp(`^${label}`)).first().inputValue();
+    if (got !== value) throw new Error(`${label} was ${JSON.stringify(got)}, not ${JSON.stringify(value)}: Plan a study did not carry the row over`);
+  }
+  for (const [label, value] of [['Lower limit', '24.95'], ['Upper limit', '25.05'], ['Nominal', '25'], ['Unit', 'mm']]) {
+    const got = await dialog.getByLabel(label, { exact: true }).inputValue();
+    if (got !== value) throw new Error(`${label} was ${JSON.stringify(got)}, not ${value}: the plan's limits did not carry over`);
+  }
+  await dialog.getByRole('spinbutton', { name: /^Parts/ }).fill('3');
+  await dialog.getByRole('spinbutton', { name: /^Appraisers/ }).fill('2');
+  await dialog.getByRole('spinbutton', { name: /^Trials/ }).fill('2');
+  await shot(page, '98-gauge-rr-plan-dialog');
+  await dialog.getByRole('button', { name: 'Plan the study' }).click();
+  await page.waitForURL(/\/Calibration\/Gauge-RR\/[0-9a-f-]{36}$/);
+  await see(page.getByText('Still a draft'));
+  const studyId = page.url().split('/').pop();
+  const drafted = (await stack.admin.query(`select status, study_type, characteristic_key, part_count, appraiser_count, trial_count, part_id is null as no_part from public.msa_studies where id = $1`, [studyId])).rows[0];
+  log(`gauge R&R study planned: ${JSON.stringify(drafted)}`);
+  if (drafted.status !== 'draft' || drafted.study_type !== 'grr_crossed' || drafted.characteristic_key !== 'SHAFT_OD' || drafted.part_count !== 3 || drafted.appraiser_count !== 2 || drafted.trial_count !== 2) {
+    throw new Error(`the study was not planned as asked: ${JSON.stringify(drafted)}`);
+  }
+
+  step('start collecting, paste the twelve readings and record them');
+  await page.getByRole('button', { name: 'Start collecting' }).click();
+  await page.getByRole('dialog', { name: 'Start collecting readings?' }).getByRole('button', { name: 'Start collecting' }).click();
+  await see(page.getByRole('button', { name: 'Paste readings' }));
+  await shot(page, '99-gauge-rr-run-sheet');
+  await page.getByRole('button', { name: 'Paste readings' }).click();
+  const paste = page.getByRole('dialog', { name: 'Paste readings' });
+  const sheet = [
+    'appraiser,part,trial,value',
+    '1,1,1,24.961', '1,1,2,24.962', '1,2,1,25.000', '1,2,2,25.001', '1,3,1,25.040', '1,3,2,25.039',
+    '2,1,1,24.962', '2,1,2,24.960', '2,2,1,25.001', '2,2,2,25.000', '2,3,1,25.041', '2,3,2,25.040',
+  ].join('\n');
+  await paste.getByLabel('Readings', { exact: true }).fill(sheet);
+  await paste.getByRole('button', { name: 'Check' }).click();
+  await see(paste.getByText('12 readings found and ready to record.'));
+  await paste.getByRole('button', { name: 'Record 12 readings' }).click();
+  await see(page.getByText(/12 of 12 readings entered/));
+  const stored = (await stack.admin.query(`select count(*)::int as n, count(value)::int as filled from public.msa_study_measurements where study_id = $1`, [studyId])).rows[0];
+  if (stored.n !== 12 || stored.filled !== 12) throw new Error(`the readings were not all stored: ${JSON.stringify(stored)}`);
+
+  step('complete the study with a conclusion; the result is frozen with its data fingerprint');
+  await page.getByRole('button', { name: 'Complete the study' }).click();
+  const complete = page.getByRole('dialog', { name: /^Complete MSA-/ });
+  await complete.getByRole('textbox', { name: /^Why/ }).fill('Acceptable for the 0.1 mm tolerance');
+  await complete.getByRole('button', { name: 'Complete the study' }).click();
+  await see(page.getByText('Completed', { exact: true }).first());
+  await see(page.getByRole('link', { name: 'Report' }));
+  const frozen = (await stack.admin.query(
+    `select s.status, s.conclusion, r.algorithm_version, r.verdict, length(r.data_hash) as hash_length
+       from public.msa_studies s join public.msa_study_results r on r.study_id = s.id where s.id = $1`, [studyId])).rows[0];
+  log(`gauge R&R result: ${JSON.stringify(frozen)}`);
+  if (frozen.status !== 'completed' || frozen.conclusion !== 'accepted' || frozen.algorithm_version !== 'msa-1' || frozen.hash_length !== 64) {
+    throw new Error(`the study was not completed and frozen as expected: ${JSON.stringify(frozen)}`);
+  }
+  if (frozen.verdict !== 'acceptable') throw new Error(`readings this close should be judged acceptable, not ${frozen.verdict}`);
+  await shot(page, '100-gauge-rr-completed');
+
+  step('the report says what the study was and that the stored readings still match the result');
+  await page.getByRole('link', { name: 'Report' }).click();
+  await page.waitForURL(/\/report$/);
+  await see(page.getByText(/MSA-\d{2}-\d{4}/).first());
+  await see(page.getByText(/fingerprint/i).first());
+  await shot(page, '101-gauge-rr-report');
+
+  step('coverage, the control plan and the gauge now show the gauge as covered');
+  await page.goto(`${APP}/Calibration/Gauge-RR?view=coverage&state=acceptable`);
+  const covered = page.getByRole('table', { name: 'Gauge R&R coverage' }).getByRole('row').filter({ hasText: 'Shaft outer diameter' });
+  await see(covered.getByText('Acceptable').first());
+  await see(covered.getByRole('link', { name: /^MSA-/ }));
+  await shot(page, '102-gauge-rr-coverage-acceptable');
+  await page.goto(`${APP}/Calibration/Gauge-RR?view=coverage`);
+  await see(page.getByRole('group', { name: 'Filter by state' }));
+  if (await page.getByRole('row').filter({ hasText: 'Shaft outer diameter' }).count() !== 0) throw new Error('a covered characteristic is still listed under "needs attention"');
+  await page.goto(`${APP}/Process-Control/Plans/${plan.id}/revisions/${planRev}`);
+  await see(page.getByRole('table', { name: 'Characteristics at OP-30' }));
+  await see(page.getByText('Gauge R&R', { exact: false }).first());
+  await see(page.getByText('Acceptable', { exact: true }).first());
+  await shot(page, '103-gauge-rr-plan-badge');
+  await page.goto(`${APP}/Calibration/Gauges/${gauge.id}`);
+  await see(page.getByRole('link', { name: /^MSA-\d{2}-\d{4}/ }).first());
+  await shot(page, '104-gauge-rr-gauge-card');
+  log('gauge R&R: planned from coverage, collected, completed, reported; coverage, plan and gauge agree');
+}
+
+/**
  * Organisation security (docs/security-plan.md SX): the owner, at the head office (203.0.113.10), approves that address, monitors, sees Colin's
  * request from home (198.51.100.200) recorded, then enforces; Colin is shown the blocked screen while the owner carries on; a platform operator
  * recovers access (back to monitor) and the owner switches restrictions off again. The API trusts one proxy hop, as on Vercel, so the address is
@@ -2107,6 +2642,54 @@ async function editConflicts({ browser, page, stack, APP, orgName, see, shot, st
   await ctx.close();
 }
 
+/** The header palette (docs/command-palette-plan.md): the closed bar filters the register, Ctrl+K opens the palette over it, finds a record, opens it, remembers it. */
+async function commandPalette({ page, stack, APP, orgName, see, shot, step, log, owner }) {
+  const { rows: [org] } = await stack.admin.query(`select o.id, (select id from public.sites where organisation_id = o.id limit 1) as site from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  const product = (await api('GET', '/ncr-classifications?kind=category')).data.find((c) => c.code === 'PRODUCT');
+  const ncr = await api('POST', '/ncrs', { source: 'internal', title: 'Zebra stripe on bracket', siteId: org.site, categoryId: product.id });
+
+  step('the closed bar filters the register on screen');
+  await page.goto(`${APP}/Non-Conformance/Register`);
+  const bar = page.locator('#Global\\ Search\\ Bar');
+  await see(bar);
+  await bar.fill('Zebra stripe');
+  await see(page.getByRole('row').filter({ hasText: ncr.reference }));
+  if ((await page.getByRole('dialog', { name: 'Command palette' }).count()) !== 0) throw new Error('typing in the bar must not open the palette');
+
+  step('Ctrl+K opens the palette empty; Esc brings the bar back with its filter');
+  await page.keyboard.press('Control+k');
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await see(palette);
+  const box = palette.getByRole('combobox', { name: /search pages, actions and records/i });
+  if ((await box.inputValue()) !== '') throw new Error('the palette must start empty');
+  // Screens opened earlier in the journey lead as Recently opened; the quick actions are always there.
+  await see(palette.getByRole('region', { name: 'Quick actions' }));
+  await shot(page, 'palette-empty');
+  await page.keyboard.press('Escape');
+  if ((await palette.count()) !== 0) throw new Error('Esc must close the palette');
+  if ((await bar.inputValue()) !== 'Zebra stripe') throw new Error("the bar's filter must be left alone");
+
+  step('the palette finds the record, opens it and remembers it');
+  await page.getByRole('button', { name: 'Open the command palette' }).click();
+  await box.fill('zebra stripe');
+  const found = page.getByRole('region', { name: 'Non-conformances' });
+  await see(found.getByRole('option', { name: new RegExp(ncr.reference) }));
+  await shot(page, 'palette-record');
+  await found.getByRole('option', { name: new RegExp(ncr.reference) }).click();
+  await see(page.getByRole('heading', { level: 1, name: ncr.reference }));
+  if ((await palette.count()) !== 0) throw new Error('choosing a result must close the palette');
+
+  step('the next time it opens, the record is in Recently opened, and a page is found by typing and Enter');
+  await page.keyboard.press('Control+k');
+  await see(palette.getByRole('region', { name: 'Recently opened' }).getByRole('option', { name: new RegExp(ncr.reference) }));
+  await box.fill('audit sched');
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/\/Audits\/Schedule/);
+  log('palette: filtered the register, found a record, opened it, remembered it, jumped to a page');
+}
+
 async function costCurrency({ page, stack, APP, orgName, see, shot, step, log, owner }) {
   step('a cost in another currency takes the published rate, then the person states the rate they really got');
   const { rows: [org] } = await stack.admin.query(
@@ -2175,6 +2758,8 @@ async function legacyCalibrations({ page, stack, APP, orgName, see, shot, step, 
   ].join('\n');
   await page.locator('[data-testid="file-input"]').setInputFiles({ name: 'calibrations.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await see(page.getByRole('table', { name: 'First rows' }));
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await see(page.getByText(/No filter: every record/));
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await see(page.getByRole('listitem', { name: 'Gauge', exact: true }));
   await shot(page, 'legacy-calibration-mapping');
@@ -2268,6 +2853,8 @@ async function costImport({ page, stack, APP, orgName, see, shot, step, log }) {
     await see(page.getByText('How to read the file'));
     await page.locator('[data-testid="file-input"]').setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(csv) });
     await see(page.getByRole('table', { name: 'First rows' }));
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await see(page.getByText(/No filter: every record/));
     await page.getByRole('button', { name: 'Next', exact: true }).click();
   };
 

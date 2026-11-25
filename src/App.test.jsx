@@ -22,6 +22,7 @@ const invalidateQueries = vi.fn();
 vi.mock("@tanstack/react-query", async (importOriginal) => ({ ...(await importOriginal()), useQueryClient: () => ({ invalidateQueries }) }));
 vi.mock("./components/onboarding/SeatWaiting", () => ({ default: ({ wait }) => <p>waiting for a seat in {wait.name}</p> }));
 vi.mock("./contexts/SearchProvider.jsx", () => ({ SearchProvider: ({ children }) => children }));
+vi.mock("./contexts/CommandPaletteProvider.jsx", () => ({ CommandPaletteProvider: ({ children }) => children }));
 vi.mock("./contexts/NotificationProvider", () => ({ NotificationProvider: ({ children }) => children }));
 vi.mock("./contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: org, error: null }) }));
 vi.mock("./hooks/useQmsApi", () => ({

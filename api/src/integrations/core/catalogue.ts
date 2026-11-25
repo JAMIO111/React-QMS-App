@@ -19,6 +19,8 @@ export interface CatalogueField {
   required?: boolean;
   maxLength?: number;
   options?: { value: string; label: string }[];
+  /** The value is one or more of `options`, separated by commas or semicolons (a custom "several choices" field; read as text, checked when imported). */
+  multiple?: boolean;
   description?: string;
   /** From the database's own CHECK constraints (core/column-rules.ts): a pattern the text must match, and numeric bounds. */
   pattern?: string;

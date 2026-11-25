@@ -38,8 +38,8 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT reference || '|' || title || '|' || status || '|' || (chair_user_id = ann)::text FROM public.management_reviews WHERE id = m),
                             'MR-' || to_char(current_date, 'YY') || '-01|H1 2026 management review|planned|true', 'numbered per year, chaired by whoever planned it');
   PERFORM pg_temp.assert_eq((SELECT string_agg(section, ',' ORDER BY position) FROM public.management_review_inputs WHERE review_id = m),
-    'previous_actions,context,customer_feedback,quality_objectives,process_performance,nonconformities,monitoring,audit_results,external_providers,resources,risks,improvement',
-    'the twelve input sections, in order');
+    'previous_actions,context,customer_feedback,quality_objectives,process_performance,nonconformities,monitoring,audit_results,external_providers,resources,risks,changes,improvement',
+    'the thirteen input sections, in order');
   PERFORM pg_temp.assert_eq(app.management_review_problems(m), ARRAY['Start the review'], 'nothing else is asked before it starts');
 
   -- Before it starts: nothing gathered, no decisions, no one present; the period can still move.
@@ -64,7 +64,7 @@ BEGIN
   r := pg_temp.fails(format($f$SELECT app.update_management_review(%L, jsonb_build_object('heldOn', (current_date + 2)::text))$f$, m));
   PERFORM pg_temp.assert_eq(left(r, 5), 'QM027', 'it was not held in the future');
   PERFORM pg_temp.assert_eq(app.management_review_problems(m),
-    ARRAY['12 input sections are not reviewed yet', 'Record who was present', 'Record a decision, or say why none was needed'], 'what is still needed');
+    ARRAY['13 input sections are not reviewed yet', 'Record who was present', 'Record a decision, or say why none was needed'], 'what is still needed');
 
   -- Gathering and reviewing.
   r := pg_temp.fails(format($f$SELECT app.set_management_review_snapshot(%L, 'context', true, '{}'::jsonb)$f$, m));

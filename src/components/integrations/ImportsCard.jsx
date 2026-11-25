@@ -123,7 +123,7 @@ const RunDialog = ({ connection, runs, onClose }) => {
           </p>
         )}
         {isFile && chosenFile && !templates.isLoading && !mapped && (
-          <Callout tone="warning" action={<Link to={wizardPath(connection.id, { entity: entityType, file: chosenFile, step: 3 })} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>
+          <Callout tone="warning" action={<Link to={wizardPath(connection.id, { entity: entityType, file: chosenFile, step: 4 })} className="text-sm font-medium text-link-color hover:underline">Map columns</Link>}>
             Map the file's columns to {ENTITY_LABELS[entityType]?.toLowerCase() ?? "these records"} first.
           </Callout>
         )}

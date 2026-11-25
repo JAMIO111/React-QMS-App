@@ -82,14 +82,30 @@ export type ReopenBody = z.infer<typeof ReopenBody>;
 export const ReasonBody = z.object({ reason: z.string().trim().min(1, 'Give a reason').max(2000) }).strict();
 export type ReasonBody = z.infer<typeof ReasonBody>;
 
+const csv = (allowed: readonly string[]) =>
+  z.string().refine((v) => v.split(',').every((x) => allowed.includes(x)), 'Use a comma-separated list of known values');
+
+export const ALERT_SORTS = ['reference', 'title', 'category', 'severity', 'status', 'effectiveDate', 'expiryDate', 'acknowledgeBy', 'issuedAt', 'updatedAt'] as const;
+
 export const ListQuery = z.object({
-  /** Latest revisions only unless 'all'; status narrows by lifecycle. */
-  status: z.enum([...STATUSES, 'all']).optional(),
+  /** Comma-separated lifecycle states. None (or `all`) = the newest revision of each alert; named states list every revision in them. */
+  status: csv([...STATUSES, 'all']).optional(),
   /** Active alerts past their acknowledge-by date with people who have not acknowledged (documentation.manage). */
   overdue: z.enum(['true', 'false']).optional(),
-  category: Category.optional(),
-  severity: Severity.optional(),
+  /** Comma-separated. */
+  category: csv(CATEGORIES).optional(),
+  severity: csv(SEVERITIES).optional(),
+  /** Effective date and expiry date between these dates, inclusive. */
+  from: DateOnly.optional(),
+  to: DateOnly.optional(),
+  expiresFrom: DateOnly.optional(),
+  expiresTo: DateOnly.optional(),
   q: z.string().trim().min(1).max(100).optional(),
+  sort: z.enum(ALERT_SORTS).default('reference'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().int().min(1).default(1),
+  /** `limit` is the older name for the page size. */
+  pageSize: z.coerce.number().int().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 export type ListQuery = z.infer<typeof ListQuery>;
@@ -166,7 +182,7 @@ export const AlertDetail = AlertSummary.extend({
 });
 export type AlertDetail = z.infer<typeof AlertDetail>;
 
-export const AlertList = z.object({ data: z.array(AlertSummary) });
+export const AlertList = z.object({ data: z.array(AlertSummary), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 
 export const AcknowledgeBody = z.object({ note: z.string().trim().max(2000).optional() }).strict();
 export type AcknowledgeBody = z.infer<typeof AcknowledgeBody>;

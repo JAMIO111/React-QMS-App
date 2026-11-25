@@ -51,6 +51,10 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return e && `/Risk/Register/${e}`;
     case 'management_review_actions':
       return '/Management-Review/My-Actions';
+    case 'change_signoffs':
+    case 'change_requests':
+    case 'change_tasks':
+      return id(d.change_id) ? `/Change/${id(d.change_id)}` : '/Change';
     case 'risk_actions':
       return id(d.risk_id) ? `/Risk/Register/${id(d.risk_id)}` : '/Risk/My-Work';
     case 'spc_alerts':
@@ -79,6 +83,7 @@ export function notificationPath(entityType: string, entityId: string, details: 
       if (d.record_kind === 'capa') return `/CAPA/${rid}/d0`;
       if (d.record_kind === 'document') return `/Documentation/Documents/${rid}`;
       if (d.record_kind === 'quality_alert') return `/Documentation/Quality-Alerts/${rid}`;
+      if (d.record_kind === 'change') return `/Change/${rid}`;
       return `/Non-Conformance/Register/${rid}`;
     }
     case 'reminder_digests':

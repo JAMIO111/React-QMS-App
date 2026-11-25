@@ -17,6 +17,7 @@ import { decisionCategoryLabel, formatDay, REVIEW_STATUS, reviewPath } from "../
 import { InputCard } from "./ReviewParts";
 import { ActionDialog, AttendeesDialog, DecisionDialog, PlanReviewDialog, TextDialog } from "./ReviewDialogs";
 import { tookTheirs, withVersion } from "../../lib/editConflicts";
+import { RaiseChangeButton } from "../change/LinkedChanges";
 
 const ATTENDANCE_WORDS = { invited: "Invited", present: "Present", apologies: "Apologies" };
 const ACTION_STATUS = { open: "Open", done: "Done", cancelled: "Cancelled" };
@@ -214,6 +215,7 @@ const ReviewPage = () => {
                     <span className="text-xs text-secondary-text">{decisionCategoryLabel(d.category)}</span>
                   </span>
                   {isPending(d.id) && <span className="text-xs text-secondary-text">Saving…</span>}
+                  {!isPending(d.id) && <RaiseChangeButton kind="management_review_decision" id={d.id} ariaLabel={`Raise a change from decision: ${d.description.slice(0, 60)}`} />}
                   {r.canHold && !isPending(d.id) && (
                     <span className="flex gap-2">
                       <CTAButton type="neutral" onClick={() => setDialog({ kind: "decision", decision: d })}>

@@ -101,6 +101,33 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/suppliers/{id}': { name: 'Hijacked' },
     'PATCH /api/v1/competence/categories/{id}': { label: 'Hijacked' },
     'PATCH /api/v1/risk-categories/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/change-types/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/change-functions/{id}': { label: 'Hijacked' },
+    'PATCH /api/v1/change-areas/{id}': { active: false },
+    'GET /api/v1/changes/{id}': undefined,
+    'PATCH /api/v1/changes/{id}': { title: 'Hijacked' },
+    'PUT /api/v1/changes/{id}/links': { links: [] },
+    'POST /api/v1/changes/{id}/cancel': { reason: 'Hijacked' },
+    'GET /api/v1/changes/{id}/attachments': undefined,
+    'POST /api/v1/changes/{id}/attachments': { storagePath: 'x', fileName: 'x.pdf', sizeBytes: 1 },
+    'POST /api/v1/change-attachments/{id}/delete': { reason: 'Hijacked' },
+    'POST /api/v1/change-attachments/{id}/restore': undefined,
+    'POST /api/v1/changes/{id}/submit': undefined,
+    'PUT /api/v1/changes/{id}/impacts': { areaId: '00000000-0000-0000-0000-0000000000aa', status: 'not_affected' },
+    'PUT /api/v1/changes/{id}/board': { board: [] },
+    'POST /api/v1/changes/{id}/send-to-board': undefined,
+    'POST /api/v1/changes/{id}/recall': { reason: 'Hijacked' },
+    'POST /api/v1/change-signoffs/{id}/decide': { approve: true, comment: 'Hijacked' },
+    'PUT /api/v1/changes/{id}/cut-in': { kind: 'none' },
+    'PUT /api/v1/changes/{id}/customer-approval': { status: 'not_needed' },
+    'POST /api/v1/changes/{id}/tasks': { description: 'Hijacked task', ownerId: '00000000-0000-0000-0000-0000000000aa' },
+    'POST /api/v1/changes/{id}/reviews': { effective: true, note: 'Hijacked' },
+    'PATCH /api/v1/change-tasks/{id}': { description: 'Hijacked task' },
+    'PUT /api/v1/change-tasks/{id}/link': { link: null },
+    'POST /api/v1/change-tasks/{id}/complete': { note: 'Hijacked' },
+    'POST /api/v1/change-tasks/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/change-tasks/{id}/reopen': { reason: 'Hijacked' },
+    'POST /api/v1/change-tasks/{id}/start-revision': { kind: 'document', documentId: '00000000-0000-0000-0000-0000000000aa' },
     'GET /api/v1/risks/{id}': undefined,
     'PATCH /api/v1/risks/{id}': { title: 'Hijacked' },
     'POST /api/v1/risks/{id}/assessments': { likelihood: 1, consequence: 1, rationale: 'Hijacked' },
@@ -124,6 +151,17 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/quality-objectives/{id}/retire': { reason: 'Hijacked' },
     'POST /api/v1/quality-objectives/{id}/reactivate': {},
     'POST /api/v1/quality-objectives/{id}/values': { periodStart: '2026-01-01', value: 1, note: 'Hijacked' },
+    'GET /api/v1/msa/studies/{id}': undefined,
+    'PATCH /api/v1/msa/studies/{id}': { characteristicName: 'Hijacked' },
+    'POST /api/v1/msa/studies/{id}/start': undefined,
+    'PUT /api/v1/msa/studies/{id}/measurements': { cells: [{ appraiser: 1, part: 1, trial: 1, value: 1 }] },
+    'POST /api/v1/msa/studies/{id}/measurements/parse': { text: 'value\n1' },
+    'GET /api/v1/msa/studies/{id}/analysis': undefined,
+    'POST /api/v1/msa/studies/{id}/complete': { conclusion: 'accepted', note: 'Hijacked' },
+    'POST /api/v1/msa/studies/{id}/cancel': { reason: 'Hijacked' },
+    'POST /api/v1/msa/studies/{id}/repeat': undefined,
+    'GET /api/v1/msa/studies/{id}/report': undefined,
+    'GET /api/v1/gauges/{id}/msa': undefined,
     'GET /api/v1/management-reviews/{id}': undefined,
     'PATCH /api/v1/management-reviews/{id}': { title: 'Hijacked' },
     'POST /api/v1/management-reviews/{id}/start': {},
@@ -528,6 +566,7 @@ const sampleBody = (op: Op): object | undefined =>
     'GET /api/v1/integrations/agents/{id}': undefined,
     'PATCH /api/v1/integrations/agents/{id}': { name: 'Hijacked' },
     'POST /api/v1/integrations/agents/{id}/revoke': { reason: 'Hijacked' },
+    'POST /api/v1/reporting/keys/{id}/revoke': { reason: 'Hijacked' },
     'POST /api/v1/integrations/agents/{id}/wake': undefined,
     'POST /api/v1/integrations/agents/{id}/ping': {},
     'POST /api/v1/integrations/agents/{id}/rotate-keys': {},
@@ -559,6 +598,11 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/customers/{id}/contacts': { name: 'Hijacked' },
     'POST /api/v1/external-access/shares/{id}/closures': { note: 'Hijacked' },
     'POST /api/v1/external-access/closure-requests/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/changes/{id}/customer-approvals': undefined,
+    'POST /api/v1/changes/{id}/customer-approvals': { partyId: '00000000-0000-0000-0000-0000000000aa', note: 'Hijacked' },
+    'POST /api/v1/change-customer-approvals/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/portal/change-approvals/{id}': undefined,
+    'POST /api/v1/portal/change-approvals/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/portal/closure-requests/{id}/decide': { confirm: true },
     'POST /api/v1/external-access/shares/{id}/comments': { body: 'Hijacked' },
     'POST /api/v1/external-access/comments/{id}/withdraw': undefined,
@@ -612,6 +656,33 @@ const hasSample = (op: Op) =>
     'POST /api/v1/members/{id}/departments',
     'PATCH /api/v1/competence/categories/{id}',
     'PATCH /api/v1/risk-categories/{id}',
+    'PATCH /api/v1/change-types/{id}',
+    'PATCH /api/v1/change-functions/{id}',
+    'PATCH /api/v1/change-areas/{id}',
+    'GET /api/v1/changes/{id}',
+    'PATCH /api/v1/changes/{id}',
+    'PUT /api/v1/changes/{id}/links',
+    'POST /api/v1/changes/{id}/cancel',
+    'GET /api/v1/changes/{id}/attachments',
+    'POST /api/v1/changes/{id}/attachments',
+    'POST /api/v1/change-attachments/{id}/delete',
+    'POST /api/v1/change-attachments/{id}/restore',
+    'POST /api/v1/changes/{id}/submit',
+    'PUT /api/v1/changes/{id}/impacts',
+    'PUT /api/v1/changes/{id}/board',
+    'POST /api/v1/changes/{id}/send-to-board',
+    'POST /api/v1/changes/{id}/recall',
+    'POST /api/v1/change-signoffs/{id}/decide',
+    'PUT /api/v1/changes/{id}/cut-in',
+    'PUT /api/v1/changes/{id}/customer-approval',
+    'POST /api/v1/changes/{id}/tasks',
+    'POST /api/v1/changes/{id}/reviews',
+    'PATCH /api/v1/change-tasks/{id}',
+    'PUT /api/v1/change-tasks/{id}/link',
+    'POST /api/v1/change-tasks/{id}/complete',
+    'POST /api/v1/change-tasks/{id}/cancel',
+    'POST /api/v1/change-tasks/{id}/reopen',
+    'POST /api/v1/change-tasks/{id}/start-revision',
     'GET /api/v1/risks/{id}',
     'PATCH /api/v1/risks/{id}',
     'POST /api/v1/risks/{id}/assessments',
@@ -635,6 +706,17 @@ const hasSample = (op: Op) =>
     'POST /api/v1/quality-objectives/{id}/retire',
     'POST /api/v1/quality-objectives/{id}/reactivate',
     'POST /api/v1/quality-objectives/{id}/values',
+    'GET /api/v1/msa/studies/{id}',
+    'PATCH /api/v1/msa/studies/{id}',
+    'POST /api/v1/msa/studies/{id}/start',
+    'PUT /api/v1/msa/studies/{id}/measurements',
+    'POST /api/v1/msa/studies/{id}/measurements/parse',
+    'GET /api/v1/msa/studies/{id}/analysis',
+    'POST /api/v1/msa/studies/{id}/complete',
+    'POST /api/v1/msa/studies/{id}/cancel',
+    'POST /api/v1/msa/studies/{id}/repeat',
+    'GET /api/v1/msa/studies/{id}/report',
+    'GET /api/v1/gauges/{id}/msa',
     'GET /api/v1/management-reviews/{id}',
     'PATCH /api/v1/management-reviews/{id}',
     'POST /api/v1/management-reviews/{id}/start',
@@ -1056,6 +1138,7 @@ const hasSample = (op: Op) =>
     'GET /api/v1/integrations/agents/{id}',
     'PATCH /api/v1/integrations/agents/{id}',
     'POST /api/v1/integrations/agents/{id}/revoke',
+    'POST /api/v1/reporting/keys/{id}/revoke',
     'POST /api/v1/integrations/agents/{id}/wake',
     'POST /api/v1/integrations/agents/{id}/ping',
     'POST /api/v1/integrations/agents/{id}/rotate-keys',
@@ -1087,6 +1170,11 @@ const hasSample = (op: Op) =>
     'POST /api/v1/customers/{id}/contacts',
     'POST /api/v1/external-access/shares/{id}/closures',
     'POST /api/v1/external-access/closure-requests/{id}/withdraw',
+    'GET /api/v1/changes/{id}/customer-approvals',
+    'POST /api/v1/changes/{id}/customer-approvals',
+    'POST /api/v1/change-customer-approvals/{id}/withdraw',
+    'GET /api/v1/portal/change-approvals/{id}',
+    'POST /api/v1/portal/change-approvals/{id}/decide',
     'POST /api/v1/portal/closure-requests/{id}/decide',
     'POST /api/v1/external-access/shares/{id}/comments',
     'POST /api/v1/external-access/comments/{id}/withdraw',
@@ -1144,6 +1232,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/external-access/comments/') || path.startsWith('/api/v1/portal/comments/')) return a.portalComment;
   if (path.startsWith('/api/v1/security/sso/domains/')) return a.ssoDomain;
   if (path.startsWith('/api/v1/integrations/agents/')) return a.agent;
+  if (path.startsWith('/api/v1/reporting/keys/')) return a.reportingKey;
   if (path.startsWith('/api/v1/integrations/agent-jobs/')) return a.agentJob;
   if (path.startsWith('/api/v1/integrations/agent-updates/')) return a.agentUpdate;
   if (path.startsWith('/api/v1/integrations/agent-registrations/')) return a.agentRegistration;
@@ -1188,11 +1277,20 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/change-types/')) return a.changeType;
+  if (path.startsWith('/api/v1/change-functions/')) return a.changeFunction;
+  if (path.startsWith('/api/v1/change-areas/')) return a.changeArea;
+  if (path.startsWith('/api/v1/change-attachments/')) return a.changeAttachment;
+  if (path.startsWith('/api/v1/change-customer-approvals/') || path.startsWith('/api/v1/portal/change-approvals/')) return a.portalChangeApproval;
+  if (path.startsWith('/api/v1/change-signoffs/')) return a.changeSignoff;
+  if (path.startsWith('/api/v1/change-tasks/')) return a.changeTask;
+  if (path.startsWith('/api/v1/changes/')) return a.change;
   if (path.startsWith('/api/v1/risk-categories/')) return a.riskCategory;
   if (path.startsWith('/api/v1/risks/')) return a.risk;
   if (path.startsWith('/api/v1/risk-actions/')) return a.riskAction;
   if (path.startsWith('/api/v1/risk-acceptances/')) return a.riskAcceptance;
   if (path.startsWith('/api/v1/quality-objectives/')) return a.qualityObjective;
+  if (path.startsWith('/api/v1/msa/studies/')) return a.msaStudy;
   if (path.startsWith('/api/v1/management-reviews/')) return a.managementReview;
   if (path.startsWith('/api/v1/management-review-inputs/')) return a.managementReviewInput;
   if (path.startsWith('/api/v1/management-review-decisions/')) return a.managementReviewDecision;
@@ -1404,6 +1502,7 @@ beforeAll(async () => {
     a.ssoDomain = (await q1(`select app.add_sso_domain($1, 'sweep-sso.test') as id`, [ids.orgA])).id;
     // Connector agents (AG1): an agent of A's with a job, and an unused registration (seeded directly: agents register through the API login).
     a.agent = (await admin.query(`insert into public.integration_agents (organisation_id, name) values ($1, 'Sweep agent') returning id`, [ids.orgA])).rows[0].id;
+    a.reportingKey = (await admin.query(`insert into public.reporting_keys (organisation_id, user_id, name, key_prefix, key_hash, expires_at) values ($1, $2, 'Sweep key', 'abcd1234', repeat('c', 64), now() + interval '30 days') returning id`, [ids.orgA, ids.ownerA])).rows[0].id;
     a.agentJob = (await admin.query(`insert into public.integration_agent_jobs (organisation_id, agent_id, kind) values ($1, $2, 'ping') returning id`, [ids.orgA, a.agent])).rows[0].id;
     // AG6b: a release (global) and a waiting update of A's agent to it.
     const sweepRelease = (await admin.query(`insert into public.integration_agent_releases (version, platform, url, sha256, size_bytes, manifest, signature, key_id)
@@ -1425,12 +1524,43 @@ beforeAll(async () => {
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
     a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
+    a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
+    a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
+    a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;
+    a.change = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha change', 'typeId', $2::text)) as id`, [ids.orgA, a.changeType])).id;
+    // CH6b: a request for a customer to approve a change (written by a function; seeded directly here, on a change of its own that the admin connection can see).
+    const sweepChange = (await admin.query(
+      `insert into public.change_requests (organisation_id, reference, title, type_id, raised_by) select $1, 'ECR-99-9999', 'Sweep portal change', id, $2 from public.change_types where organisation_id = $1 and key = 'process' returning id`,
+      [ids.orgA, ids.ownerA],
+    )).rows[0].id;
+    a.portalChangeApproval = (await admin.query(
+      `insert into public.portal_change_approvals (organisation_id, change_id, party_id) select $1, $2, party_id from public.external_access where id = $3 returning id`,
+      [ids.orgA, sweepChange, a.externalAccess],
+    )).rows[0].id;
+    a.changeAttachment = (await q1(`select app.add_change_attachment($2::uuid, $1::text || '/change/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.change])).id;
+    await admin.query(`update public.organisation_settings set change_allow_self_approval = true where organisation_id = $1`, [ids.orgA]);
+    const changeB = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha board change', 'typeId', $2::text, 'description', 'x', 'reason', 'y', 'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', $3::text)))) as id`, [ids.orgA, a.changeType, a.part])).id;
+    await q1(`select app.submit_change($1::uuid)`, [changeB]);
+    await q1(`select app.set_change_impact(i.change_id, i.area_id, 'not_affected', null) from public.change_impacts i where i.change_id = $1::uuid`, [changeB]);
+    await q1(`select app.set_change_board($1::uuid, jsonb_build_array(jsonb_build_object('functionId', $2::text, 'signerId', $3::text)))`, [changeB, a.changeFunction, ids.ownerA]);
+    await q1(`select app.set_change_customer_approval($1::uuid, 'not_needed')`, [changeB]);
+    await q1(`select app.send_change_to_board($1::uuid)`, [changeB]);
+    a.changeSignoff = (await q1(`select id from public.change_signoffs where change_id = $1`, [changeB])).id;
+    const changeC = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha approved change', 'typeId', $2::text, 'description', 'x', 'reason', 'y', 'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', $3::text)))) as id`, [ids.orgA, a.changeType, a.part])).id;
+    await q1(`select app.submit_change($1::uuid)`, [changeC]);
+    await q1(`select app.set_change_impact(i.change_id, i.area_id, 'not_affected', null) from public.change_impacts i where i.change_id = $1::uuid`, [changeC]);
+    await q1(`select app.set_change_board($1::uuid, jsonb_build_array(jsonb_build_object('functionId', $2::text, 'signerId', $3::text)))`, [changeC, a.changeFunction, ids.ownerA]);
+    await q1(`select app.set_change_customer_approval($1::uuid, 'not_needed')`, [changeC]);
+    await q1(`select app.send_change_to_board($1::uuid)`, [changeC]);
+    await q1(`select app.decide_change_signoff(s.id, true, null) from public.change_signoffs s where s.change_id = $1::uuid`, [changeC]);
+    a.changeTask = (await q1(`select app.add_change_task($1::uuid, jsonb_build_object('description', 'Alpha task', 'ownerId', $2::text)) as id`, [changeC, ids.ownerA])).id;
     a.riskCategory = (await q1(`select id from public.risk_categories where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.risk = (await q1(`select app.create_risk($1::uuid, jsonb_build_object('title', 'Alpha risk', 'categoryId', $2::text)) as id`, [ids.orgA, a.riskCategory])).id;
     await q1(`select app.assess_risk($1::uuid, 4, 4, 'Alpha rationale'), app.set_risk_treatment($1::uuid, 'accept', null)`, [a.risk]);
     a.riskAction = (await q1(`select app.add_risk_action($1::uuid, '{"description":"Alpha action"}'::jsonb) as id`, [a.risk])).id;
     a.riskAcceptance = (await q1(`select app.propose_risk_acceptance($1::uuid, 'Alpha acceptance rationale') as id`, [a.risk])).id;
     a.qualityObjective = (await q1(`select app.save_quality_objective($1::uuid, '{"title":"Alpha objective","target":95,"unit":"%"}'::jsonb) as id`, [ids.orgA])).id;
+    a.msaStudy = (await q1(`select app.create_msa_study($1::uuid, jsonb_build_object('studyType', 'type1', 'gaugeId', $2::text, 'characteristicName', 'Alpha bore', 'referenceValue', 25, 'trialCount', 5)) as id`, [ids.orgA, a.gauge])).id;
     a.managementReview = (await q1(`select app.plan_management_review($1::uuid, '{"title":"Alpha review","periodFrom":"2026-01-01","periodTo":"2026-06-30"}'::jsonb) as id`, [ids.orgA])).id;
     await q1(`select app.start_management_review($1::uuid)`, [a.managementReview]);
     a.managementReviewInput = (await q1(`select id from public.management_review_inputs where review_id = $1 and section = 'context'`, [a.managementReview])).id;
@@ -1619,7 +1749,8 @@ describe('tenancy sweep over every API route', () => {
   it('never includes another organisation’s identifiers in list responses', async () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
-    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview'];
+    // The reporting datasets take a dataset key in the path; their isolation (a key reads only its own organisation) is tested in reporting.e2e-spec.ts.
+    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview', '/api/v1/reporting/v1/{dataset}'];
     // The portal's own routes (external people only) answer an organisation owner 404 by design; external-portal.e2e-spec.ts covers them.
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path) && !o.path.startsWith('/api/v1/portal/'));
     const leaks: string[] = [];
@@ -1632,6 +1763,9 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/integrations/reference-values': '?kind=part',
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
+      '/api/v1/changes/linked': `?kind=part&id=${b.part}`,
+      '/api/v1/change-draft': `?kind=ncr&id=${b.ncr}`,
+      '/api/v1/changes-dashboard': '?from=2026-01-01&to=2026-12-31',
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/exchange-rates/preview': '?from=EUR&to=GBP&date=2026-01-02',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
@@ -1647,6 +1781,7 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/traceability': `?type=order&id=${b.productionOrder}`,
       '/api/v1/traceability/search': '?q=WO',
       '/api/v1/saved-filters': '?scope=ncr_register',
+      '/api/v1/search': '?q=00',
       '/api/v1/import-locks': `?entityType=part&recordId=${b.part}`,
       '/api/v1/custom-values': `?entityType=part&ids=${b.part}`,
       '/api/v1/goods-receipt-lines/lookup': `?supplierId=${b.supplier}`,

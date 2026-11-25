@@ -140,6 +140,19 @@ describe("what needs attention on the home page", () => {
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
+  it("shows the change area with its critical and waiting lines, each a link", async () => {
+    const all = sample()["/home-dashboard"];
+    answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf, change: { open: 5, signoffsWaiting: 2, tasksOverdue: 1, pastCutIn: 1, customerWaiting: 0 } };
+    renderIt();
+    const change = await screen.findByRole("region", { name: "Change" });
+    await waitFor(() => expect(change).toHaveTextContent("open changes"));
+    expect(change).toHaveTextContent("2 critical");
+    expect(change).toHaveTextContent("1 to watch");
+    expect(within(change).getByRole("link", { name: /Change task overdue/ })).toHaveAttribute("href", "/Change/Mine");
+    expect(within(change).getByRole("link", { name: /Sign-offs waiting at the board/ })).toHaveAttribute("href", "/Change/Register");
+    expect(change).not.toHaveTextContent("waiting for the customer");
+  });
+
   it("says so when everything is clear", async () => {
     const all = sample()["/home-dashboard"];
     answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf, competence: all.competence, audits: { ...all.audits, openFindings: 0 } };

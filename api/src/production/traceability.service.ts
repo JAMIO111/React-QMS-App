@@ -67,7 +67,8 @@ export class TraceabilityService {
       const mayNcr = can.rows[0].ncr === true;
       const mayCapa = can.rows[0].capa === true;
 
-      const [order, lots, serials, inspections, ncrs, machines, gauges] = await Promise.all([
+      const mayChange = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'change.read') as ok`)).rows[0].ok === true;
+      const [order, lots, serials, inspections, ncrs, machines, gauges, changes] = await Promise.all([
         orderId ? this.loadOrder(db, org, orderId) : Promise.resolve(null),
         this.loadLots(db, org, q.type, q.id, subject.lotId),
         this.loadSerials(db, org, q.type, q.id, orderId),
@@ -75,6 +76,7 @@ export class TraceabilityService {
         mayNcr ? this.loadNcrs(db, mayCapa, linked('n'), affected) : Promise.resolve(null),
         this.loadMachines(db, mayInspect, linked('i'), orderId),
         mayInspect ? this.loadGauges(db, linked('i')) : Promise.resolve([]),
+        mayChange ? this.loadChanges(db, org, q.type, q.id, subject) : Promise.resolve(null),
       ]);
 
       return {
@@ -85,8 +87,54 @@ export class TraceabilityService {
         inspections: inspections ?? { available: false, total: 0, passed: 0, failed: 0, inProgress: 0, data: [] },
         ncrs: ncrs ?? { available: false, total: 0, data: [] },
         equipment: { machines, gauges },
+        changes: changes ?? { available: false, data: [] },
       };
     });
+  }
+
+  /**
+   * Approved changes that touch this subject: they cover its part or its order, or their cut-in point is this order, lot or serial number (or one above it).
+   * `position` compares when the subject and the cut-in record were created in Fortress (a date cut-in is compared with the subject's day); recorded, never enforced.
+   */
+  private async loadChanges(db: Db, org: string, type: Kind, id: string, subject: { orderId: string | null; lotId: string | null; view: { part: { id: string } } }) {
+    const table = type === 'order' ? 'production_orders' : type === 'lot' ? 'lots' : 'serial_numbers';
+    const when = (await db.execute<Row>(sql`select created_at from public.${sql.raw(table)} where id = ${id}::uuid`)).rows[0]?.created_at;
+    const subjectTime = when ? new Date(when as string) : null;
+    const serialId = type === 'serial' ? id : null;
+    const rows = (
+      await db.execute<Row>(sql`
+        select c.id, c.reference, c.title, c.stage, c.cut_in_kind, c.cut_in_date, c.stock_action,
+               coalesce(co.order_number, cl.lot_number, cs.serial_number) as cut_label, coalesce(co.created_at, cl.created_at, cs.created_at) as cut_time,
+               (c.cut_in_order_id = ${subject.orderId}::uuid or c.cut_in_lot_id = ${subject.lotId}::uuid or c.cut_in_serial_id = ${serialId}::uuid) as is_cut
+          from public.change_requests c
+          left join public.production_orders co on co.id = c.cut_in_order_id
+          left join public.lots cl on cl.id = c.cut_in_lot_id
+          left join public.serial_numbers cs on cs.id = c.cut_in_serial_id
+         where c.organisation_id = ${org}::uuid and c.stage in ('approved', 'implementing', 'verifying', 'closed')
+           and (exists (select 1 from public.change_links l where l.change_id = c.id and (l.part_id = ${subject.view.part.id}::uuid or l.production_order_id = ${subject.orderId}::uuid))
+                or c.cut_in_order_id = ${subject.orderId}::uuid or c.cut_in_lot_id = ${subject.lotId}::uuid or c.cut_in_serial_id = ${serialId}::uuid)
+         order by c.approved_at desc nulls last, c.reference desc limit 20`)
+    ).rows;
+    return {
+      available: true,
+      data: rows.map((r) => {
+        const kind = r.cut_in_kind as 'none' | 'date' | 'order' | 'lot' | 'serial';
+        let position: 'at' | 'before' | 'after' | null = null;
+        if (kind !== 'none' && subjectTime) {
+          if (r.is_cut) position = 'at';
+          else if (kind === 'date' && r.cut_in_date) position = subjectTime.toISOString().slice(0, 10) < new Date(r.cut_in_date as string).toISOString().slice(0, 10) ? 'before' : 'after';
+          else if (r.cut_time) position = subjectTime < new Date(r.cut_time as string) ? 'before' : 'after';
+        }
+        return {
+          id: r.id as string,
+          reference: r.reference as string,
+          title: r.title as string,
+          stage: r.stage as string,
+          cutIn: { kind, label: (r.cut_label as string) ?? null, date: r.cut_in_date ? new Date(r.cut_in_date as string).toISOString().slice(0, 10) : null, stockAction: (r.stock_action as string) ?? null },
+          position,
+        };
+      }),
+    };
   }
 
   // ------------------------------------------------------------------------------------------------------------------------ subject

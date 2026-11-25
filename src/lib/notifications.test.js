@@ -8,6 +8,10 @@ describe("notificationLink", () => {
     expect(notificationLink({ entityType: "nonconformances", entityId: "1", details: { source: "supplier" } })).toBe("/Non-Conformance/Register/1");
     expect(notificationLink({ entityType: "competence_assessments", entityId: "a", details: {} })).toBe("/Competence/Mine");
     expect(notificationLink({ entityType: "network_policy_changes", entityId: "c", details: {} })).toBe("/Settings/Security");
+    expect(notificationLink({ entityType: "change_signoffs", entityId: "s", details: { change_id: "c1" } })).toBe("/Change/c1");
+    expect(notificationLink({ entityType: "change_requests", entityId: "c1", details: { change_id: "c1" } })).toBe("/Change/c1");
+    expect(notificationLink({ entityType: "change_signoffs", entityId: "s", details: {} })).toBe("/Change");
+    expect(notificationLink({ entityType: "change_tasks", entityId: "t", details: { change_id: "c1" } })).toBe("/Change/c1");
     expect(notificationLink({ entityType: "risks", entityId: "r", details: { risk_id: "r" } })).toBe("/Risk/Register/r");
     expect(notificationLink({ entityType: "management_review_actions", entityId: "a", details: { review_id: "m" } })).toBe("/Management-Review/My-Actions");
     expect(notificationLink({ entityType: "risk_actions", entityId: "x", details: { risk_id: "r" } })).toBe("/Risk/Register/r");
@@ -55,6 +59,7 @@ describe("import alerts and email choices", () => {
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "capa", record_id: rid } })).toBe(`/CAPA/${rid}/d0`);
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "document", record_id: rid } })).toBe(`/Documentation/Documents/${rid}`);
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "quality_alert", record_id: rid } })).toBe(`/Documentation/Quality-Alerts/${rid}`);
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "change", record_id: rid } })).toBe(`/Change/${rid}`);
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: {} })).toBe("/Settings/External-Access");
   });
 

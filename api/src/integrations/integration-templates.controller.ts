@@ -11,6 +11,8 @@ import {
   FormulaCheckResult,
   FunctionList,
   PreviewTemplateBody,
+  PreviewFilterBody,
+  FilterPreview,
   ReferenceValues,
   ReferenceValuesQuery,
   TemplatePreview,
@@ -62,6 +64,15 @@ export class IntegrationTemplatesController {
   @ApiOkResponse({ description: 'How the first rows of an uploaded file come out with an unsaved template (value taken, after each step, imported value, errors) and the column check. Writes nothing.', schema: openApiSchema(TemplatePreview) })
   preview(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.preview(ctx, parse(PreviewTemplateBody, body));
+  }
+
+  @Post('filter-preview')
+  @HttpCode(200)
+  @OrganisationScoped(RUN)
+  @ApiBody({ schema: openApiSchema(PreviewFilterBody) })
+  @ApiOkResponse({ description: 'What a record filter does to an uploaded file (every row) or to an API connection\'s sample: records kept, records left out, how many each rule matches, a few of each. Writes nothing.', schema: openApiSchema(FilterPreview) })
+  previewFilter(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.service.previewFilter(ctx, parse(PreviewFilterBody, body));
   }
 
   @Get(':id')

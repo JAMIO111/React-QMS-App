@@ -204,6 +204,48 @@ describe('revisions, withdrawal, discard and expiry', () => {
   });
 });
 
+describe('the register: paging, sorting and several values per filter', () => {
+  it('pages and sorts on the server and answers with the total', async () => {
+    const owner = await as(ids.ownerA);
+    const make = async (title: string, category: string, severity: string, effectiveDate?: string) =>
+      (await api().post('/api/v1/quality-alerts').set(owner).send({ title, category, severity, ...(effectiveDate ? { effectiveDate } : {}) }).expect(201)).body;
+    await make('Reg zinc flake', 'product', 'low', '2026-01-10');
+    await make('Reg bore chatter', 'process', 'critical', '2026-03-05');
+    await make('Reg wrong gloves', 'safety', 'high', '2026-02-01');
+    const get = async (query: string) => (await api().get(`/api/v1/quality-alerts?q=Reg&${query}`).set(owner).expect(200)).body;
+    const titles = (b: { data: { title: string }[] }) => b.data.map((a) => a.title);
+
+    const all = await get('');
+    expect(all).toMatchObject({ page: 1, pageSize: 100, total: 3 });
+    expect(titles(all)).toEqual(['Reg wrong gloves', 'Reg bore chatter', 'Reg zinc flake']); // newest number first
+
+    expect(titles(await get('sort=severity&order=desc'))).toEqual(['Reg bore chatter', 'Reg wrong gloves', 'Reg zinc flake']);
+    expect(titles(await get('sort=severity&order=asc'))).toEqual(['Reg zinc flake', 'Reg wrong gloves', 'Reg bore chatter']);
+    expect(titles(await get('sort=title&order=asc'))).toEqual(['Reg bore chatter', 'Reg wrong gloves', 'Reg zinc flake']);
+    expect(titles(await get('sort=effectiveDate&order=asc'))).toEqual(['Reg zinc flake', 'Reg wrong gloves', 'Reg bore chatter']);
+    expect(titles(await get('sort=reference&order=asc'))).toEqual(['Reg zinc flake', 'Reg bore chatter', 'Reg wrong gloves']);
+
+    const page2 = await get('sort=title&order=asc&pageSize=2&page=2');
+    expect(page2).toMatchObject({ page: 2, pageSize: 2, total: 3 });
+    expect(titles(page2)).toEqual(['Reg zinc flake']);
+  });
+
+  it('takes a comma list for category, severity and status, and a date range on the effective date', async () => {
+    const owner = await as(ids.ownerA);
+    const get = async (query: string) => (await api().get(`/api/v1/quality-alerts?q=Reg&${query}`).set(owner).expect(200)).body;
+    const titles = (b: { data: { title: string }[] }) => b.data.map((a) => a.title).sort();
+    expect(titles(await get('category=product,safety'))).toEqual(['Reg wrong gloves', 'Reg zinc flake']);
+    expect(titles(await get('severity=critical,high'))).toEqual(['Reg bore chatter', 'Reg wrong gloves']);
+    expect(titles(await get('status=draft'))).toEqual(['Reg bore chatter', 'Reg wrong gloves', 'Reg zinc flake']);
+    expect(await get('status=active')).toMatchObject({ total: 0, data: [] });
+    expect(titles(await get('from=2026-01-15&to=2026-02-28'))).toEqual(['Reg wrong gloves']);
+    expect((await get('status=draft,all')).total).toBe(3);
+    await api().get('/api/v1/quality-alerts?category=product,bogus').set(owner).expect(400);
+    await api().get('/api/v1/quality-alerts?sort=nonsense').set(owner).expect(400);
+    await api().get('/api/v1/quality-alerts?from=yesterday').set(owner).expect(400);
+  });
+});
+
 describe('isolation', () => {
   it('another organisation sees and changes nothing', async () => {
     const other = await as(ids.ownerB, ids.orgB);

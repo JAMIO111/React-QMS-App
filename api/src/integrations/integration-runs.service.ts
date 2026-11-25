@@ -40,7 +40,7 @@ const toRun = (r: Row): z.infer<typeof Run> => ({
   finishedAt: iso(r.finished_at),
   counts: {
     total: Number(r.records_total), rejected: Number(r.rejected), unchanged: Number(r.unchanged), created: Number(r.created), updated: Number(r.updated),
-    failed: Number(r.failed), superseded: Number(r.superseded), skipped: Number(r.skipped ?? 0), parked: Number(r.parked ?? 0),
+    failed: Number(r.failed), superseded: Number(r.superseded), skipped: Number(r.skipped ?? 0), filtered: Number(r.filtered ?? 0), parked: Number(r.parked ?? 0),
   },
   attempts: Number(r.attempts),
   nextAttemptAt: ['queued', 'running'].includes(r.status as string) && r.next_attempt_at && new Date(r.next_attempt_at as string) > new Date() ? iso(r.next_attempt_at) : null,
@@ -173,10 +173,16 @@ export class IntegrationRunsService {
       if (!exists.rows[0]) throw ApiError.notFound('run_not_found', 'Import not found');
       // The run's rows through app.integration_run_rows / _row_counts: one permission check and indexed reads, however large the import.
       const status = q.status ?? null;
-      const [rows, total] = await Promise.all([
-        db.execute<Row>(sql`select * from app.integration_run_rows(${runId}::uuid, ${status}::text, ${q.pageSize}::int, ${(q.page - 1) * q.pageSize}::int)`),
-        db.execute<{ n: number }>(sql`select coalesce(sum(n), 0)::int as n from app.integration_run_row_counts(${runId}::uuid) where ${status}::text is null or status = ${status}::text`),
-      ]);
+      // The records a filter left out have their own pair of functions, so a large run is never read through to find them.
+      const [rows, total] = q.filtered
+        ? await Promise.all([
+            db.execute<Row>(sql`select * from app.integration_run_filtered_rows(${runId}::uuid, ${q.pageSize}::int, ${(q.page - 1) * q.pageSize}::int)`),
+            db.execute<{ n: number }>(sql`select app.integration_run_filtered_count(${runId}::uuid) as n`),
+          ])
+        : await Promise.all([
+            db.execute<Row>(sql`select * from app.integration_run_rows(${runId}::uuid, ${status}::text, ${q.pageSize}::int, ${(q.page - 1) * q.pageSize}::int)`),
+            db.execute<{ n: number }>(sql`select coalesce(sum(n), 0)::int as n from app.integration_run_row_counts(${runId}::uuid) where ${status}::text is null or status = ${status}::text`),
+          ]);
       return {
         data: rows.rows.map((i) => ({
           id: i.id as string,
@@ -184,6 +190,7 @@ export class IntegrationRunsService {
           externalId: (i.external_id as string) ?? null,
           sourceRow: i.source_row === null ? null : Number(i.source_row),
           status: i.status as (typeof ROW_STATUSES)[number],
+          filtered: !!i.filtered,
           action: (i.action as 'create' | 'update') ?? null,
           internalId: (i.internal_id as string) ?? null,
           errors: ((i.errors as { field?: string | null; message: string }[]) ?? []).map((e) => ({ field: e.field ?? null, message: e.message })),

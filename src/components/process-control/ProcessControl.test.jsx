@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -21,6 +21,9 @@ vi.mock("../../hooks/useQmsApi", () => ({
   }),
   useMembers: () => ({ data: { data: [] } }),
 }));
+vi.mock("../../contexts/SearchProvider", () => ({
+  useGlobalSearch: () => ({ debouncedSearchTerm: "", setSearchTerm: vi.fn() }),
+}));
 vi.mock("../../contexts/ToastProvider", () => ({
   useToast: () => ({ showToast: vi.fn() }),
 }));
@@ -36,6 +39,7 @@ import PartFamilyPage from "../master-data/PartFamilyPage";
 import PartDetailPage from "../master-data/PartDetailPage";
 
 const page = (data, nextCursor = null) => ({ data, nextCursor });
+const paged = (data) => ({ data, page: 1, pageSize: 25, total: data.length });
 const person = { id: "u1", name: "Ada Owner" };
 const rev = (over) => ({
   id: "cr1",
@@ -67,6 +71,7 @@ const plan = (revisions) => ({
   effectiveRevision:
     revisions.find((r) => r.status === "effective")?.revisionCode ?? null,
   openRevision: null,
+  createdAt: "2026-11-01T10:00:00Z",
   updatedAt: "2026-11-04T10:00:00Z",
   applicability: [
     {
@@ -128,7 +133,7 @@ describe("Control plans register", () => {
   it("lists plans with effective and in-progress revisions", async () => {
     routeApi({
       "GET /part-families": page([]),
-      "GET /control-plans": page([
+      "GET /control-plans": paged([
         {
           ...plan([]),
           effectiveRevision: "B",
@@ -158,7 +163,7 @@ describe("Control plans register", () => {
           planCount: 0,
         },
       ]),
-      "GET /control-plans": page([]),
+      "GET /control-plans": paged([]),
       "POST /control-plans": (_p, opts) => ((body = opts.body), plan([rev()])),
       "GET /control-plans/cp1": plan([rev()]),
     });
@@ -198,13 +203,41 @@ describe("Control plans register", () => {
     permissions = ["process_control.read"];
     routeApi({
       "GET /part-families": page([]),
-      "GET /control-plans": page([]),
+      "GET /control-plans": paged([]),
     });
     renderAt("/Process-Control/Plans");
-    expect(
-      await screen.findByText("No control plans yet."),
-    ).toBeInTheDocument();
+    await screen.findByRole("region", { name: "Control plans" });
     expect(screen.queryByRole("button", { name: "New plan" })).toBeNull();
+  });
+  it("filters through the drawer and the URL, sends several states at once, and sorts on the server", async () => {
+    routeApi({
+      "GET /part-families": page([{ id: "f1", code: "HCR", name: "Rods", active: true, partCount: 2, planCount: 1 }]),
+      "GET /control-plans": paged([plan([])]),
+    });
+    renderAt("/Process-Control/Plans");
+    await screen.findByRole("link", { name: "CP-HCR-001" });
+    const lastPlansCall = () => apiFetch.mock.calls.filter(([p]) => p.startsWith("/control-plans")).at(-1)[0];
+    expect(lastPlansCall()).toMatch(/sort=planCode&order=asc&page=1&pageSize=25/);
+    expect(screen.getByText(/1 control plan \(active\)/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const pane = screen.getByRole("dialog", { name: "Filter control plans" });
+    await userEvent.click(within(pane).getByLabelText("Awaiting approval"));
+    await userEvent.click(within(pane).getByLabelText("Draft in progress"));
+    await userEvent.click(await within(pane).findByLabelText("HCR"));
+    await userEvent.click(within(pane).getByRole("button", { name: "Inactive" }));
+    await userEvent.click(within(pane).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(lastPlansCall()).toContain("status=pending_approval%2Cdraft"));
+    expect(lastPlansCall()).toContain("partFamilyId=f1");
+    expect(lastPlansCall()).toContain("active=inactive");
+    const chips = await screen.findByLabelText("Active filters");
+    expect(chips).toHaveTextContent("Revisions: Awaiting approval, Draft in progress");
+    expect(chips).toHaveTextContent("Family: HCR");
+
+    await userEvent.click(within(screen.getByRole("columnheader", { name: /Owner/ })).getByRole("button"));
+    await waitFor(() => expect(lastPlansCall()).toMatch(/sort=owner&order=asc/));
+    await userEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() => expect(lastPlansCall()).not.toContain("status="));
   });
 });
 
@@ -770,6 +803,51 @@ describe("Revision page", () => {
     expect(screen.getByText(/This revision is locked/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add operation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit OD" })).toBeNull();
+  });
+});
+
+describe("Revision page: Gauge R&R coverage", () => {
+  const coverageRow = (key, state, gauge = "CAL-001") => ({
+    plan: { id: "cp1" },
+    characteristic: { key, operationCode: "OP-020", name: key },
+    gauge: { id: `g-${gauge}`, assetNumber: gauge },
+    state,
+  });
+  const effective = () => ({
+    ...rev({ id: "cr2", revisionCode: "B", status: "effective" }),
+    plan: { id: "cp1", planCode: "CP-HCR-001", title: "Rods", active: true },
+    operations: [
+      {
+        id: "o1", operationCode: "OP-020", sequence: 20, name: "CNC turning", machine: null, workCentre: null, notes: null,
+        characteristics: [
+          { id: "c1", operationId: "o1", characteristicKey: "OD", sequence: 10, charNumber: null, name: "Outer diameter", dataType: "variable", valueSource: "plan", appliesTo: "all", nominal: 25, lowerLimit: 24.9, upperLimit: 25.1, unitCode: "mm", specKey: null, method: null, gaugeType: null, criticality: "critical", spcEligible: false, chartType: null, subgroupSize: null, decimals: 2, notes: null, parts: [], sampling: [], reactions: [] },
+          { id: "c2", operationId: "o1", characteristicKey: "LEN", sequence: 20, charNumber: null, name: "Length", dataType: "variable", valueSource: "plan", appliesTo: "all", nominal: 100, lowerLimit: 99, upperLimit: 101, unitCode: "mm", specKey: null, method: null, gaugeType: null, criticality: "minor", spcEligible: false, chartType: null, subgroupSize: null, decimals: 2, notes: null, parts: [], sampling: [], reactions: [] },
+        ],
+      },
+    ],
+    reactions: [],
+    scopeParts: [],
+  });
+
+  it("marks a critical characteristic with the worst state among its gauges, and leaves others unmarked", async () => {
+    permissions.push("calibration.read");
+    routeApi({
+      "GET /control-plan-revisions/cr2": effective(),
+      "GET /msa/coverage": { available: true, rows: [coverageRow("OD", "acceptable", "CAL-001"), coverageRow("OD", "expired", "CAL-002")], counts: {} },
+    });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    expect(await screen.findByText("Study expired")).toBeInTheDocument();
+    expect(screen.queryByText("Acceptable")).toBeNull();
+    expect(apiFetch.mock.calls.find(([path]) => path.startsWith("/msa/coverage"))[0]).toContain("controlPlanId=cp1");
+  });
+
+  it("asks nothing and shows nothing without permission to read calibrations", async () => {
+    routeApi({ "GET /control-plan-revisions/cr2": effective() });
+    renderAt("/Process-Control/Plans/cp1/revisions/cr2");
+    await screen.findByRole("table", { name: "Characteristics at OP-020" });
+    expect(apiFetch.mock.calls.some(([path]) => path.startsWith("/msa/coverage"))).toBe(false);
+    expect(screen.queryByText(/Gauge R&R/)).toBeNull();
   });
 });
 

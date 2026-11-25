@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -225,6 +225,33 @@ describe("answering an audit", () => {
     await userEvent.type(screen.getByLabelText("Note for question 4"), "Tidy otherwise");
     await userEvent.tab();
     await waitFor(() => expect(last("PUT /audit-records/r1/responses").body).toEqual({ questionId: "q4", answer: null, value: null, choice: null, note: "Tidy otherwise" }));
+  });
+
+  it("keeps what is being typed in a note when the save of the answer is confirmed and its placeholder id is replaced", async () => {
+    // The journey found this: choose Fail, start typing what was found, and the answer's real id arrives from the server a moment later. The words typed in
+    // between must stay, and must be saved when the box is left.
+    let release;
+    let stored = record();
+    routeApi({
+      "GET /audit-records/r1": () => stored,
+      "PUT /audit-records/r1/responses": () =>
+        new Promise((resolve) => {
+          release = () => {
+            stored = record({ questions: questions().map((q) => (q.id === "q2" ? answered(q, { answer: "fail", result: "fail" }) : q)) });
+            resolve(stored);
+          };
+        }),
+    });
+    renderAt("/Audits/Records/r1");
+    const group = await screen.findAllByRole("radiogroup", { name: "Answer to question 2" });
+    await userEvent.click(within(group[0]).getByRole("radio", { name: "Fail" }));
+    const found = await screen.findByLabelText("What was found, question 2");
+    await userEvent.type(found, "Oil under the bench");
+    await act(async () => release());
+    await waitFor(() => expect(sent("GET /audit-records/r1").length).toBeGreaterThan(1));
+    expect(screen.getByLabelText("What was found, question 2")).toHaveValue("Oil under the bench");
+    await userEvent.tab();
+    await waitFor(() => expect(last("PUT /audit-records/r1/responses")?.body).toMatchObject({ questionId: "q2", answer: "fail", note: "Oil under the bench" }));
   });
 
   it("lets the auditor tick what the audit was carried out on, one or several", async () => {

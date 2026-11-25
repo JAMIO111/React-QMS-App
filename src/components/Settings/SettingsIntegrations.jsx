@@ -1,4 +1,6 @@
 import { useState } from "react";
+import HelpLink from "../ui/HelpLink";
+import { HELP_TOPICS } from "../../lib/help";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRightIcon, XIcon } from "@/components/icons";
 import {
@@ -12,6 +14,7 @@ import {
 import ConnectionForm from "../integrations/ConnectionForm";
 import DatabaseConnectionDialog from "../integrations/database/DatabaseConnectionDialog";
 import { HealthCard } from "../integrations/KeepHealthy";
+import PowerBiCard from "../integrations/PowerBiCard";
 import { useAgents } from "../../hooks/useAgents";
 import { agentsPath } from "../../lib/agents";
 import Field from "../ui/Field";
@@ -128,7 +131,8 @@ const AdvancedImports = () => {
           When on, a field can be filled by a formula such as{" "}
           <span className="font-mono">CONCAT("M-", UPPER([Code]))</span>, and
           import templates can be renamed, duplicated, archived and their
-          earlier versions brought back.
+          earlier versions brought back.{" "}
+          <HelpLink topic={HELP_TOPICS.importFormulas}>The formula guide</HelpLink>
         </p>
         <Switch
           aria-label="Advanced imports"
@@ -336,6 +340,8 @@ const IntegrationsHome = () => {
       <AdvancedImports />
 
       <AllowedHosts />
+
+      <PowerBiCard />
 
       {recent.length > 0 && (
         <MenuCard

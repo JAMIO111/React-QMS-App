@@ -150,7 +150,8 @@ export function parseFormula(src: string): Node {
     return left;
   };
   const not = (): Node => {
-    if (isWord('NOT') && !(tokens[p + 1].kind === 'op' && tokens[p + 1].value === '(')) {
+    // NOT is always the operator (there is no NOT function), so NOT (a OR b) and NOT(a) both read as "the opposite of".
+    if (isWord('NOT')) {
       const t = next();
       enter(t.pos);
       const arg = not();

@@ -99,11 +99,15 @@ export class PortalService {
       const scars = (await this.scarRows(db, ctx)).map((r) => this.scarItem(r, counts));
       const pending = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_acknowledgements(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
       const closing = new Set((await db.execute<{ share_id: string }>(sql`select share_id from app.portal_pending_closures(${ctx.organisationId}::uuid)`)).rows.map((r) => r.share_id));
+      const approvals = ctx.portal?.partyKind === 'customer'
+        ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_change_approvals(${ctx.organisationId}::uuid) where can_decide`)).rows.length
+        : 0;
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
         access: mine,
         attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id) || closing.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id), needsClosure: closing.has(i.id) })),
         toConfirm: closing.size,
+        changesToApprove: approvals,
         toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
@@ -116,6 +120,12 @@ export class PortalService {
   private customerParty(ctx: RequestContext) {
     const party = ctx.portal;
     if (!party || party.partyKind !== 'customer') throw ApiError.notFound('complaints_unavailable', 'Complaints are raised by customers');
+    return party.partyId;
+  }
+
+  private anyParty(ctx: RequestContext) {
+    const party = ctx.portal;
+    if (!party) throw ApiError.notFound('change_requests_unavailable', 'Change requests are sent by customers and suppliers');
     return party.partyId;
   }
 
@@ -249,6 +259,81 @@ export class PortalService {
       return {
         data: r.rows.map((p) => ({ id: p.part_id as string, partNumber: p.part_number as string, name: p.part_name as string, customerPartNumber: (p.customer_part_number as string | null) ?? null })),
       };
+    });
+  }
+
+  /** The parts a customer or supplier may name in a change request: the ones we make for a customer, the ones a supplier supplies to us (CH6a). */
+  changeParts(ctx: RequestContext) {
+    const party = this.anyParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_change_parts(${ctx.organisationId}::uuid, ${party}::uuid)`);
+      return { data: r.rows.map((p) => ({ id: p.part_id as string, partNumber: p.part_number as string, name: p.part_name as string, theirPartNumber: (p.their_part_number as string | null) ?? null })) };
+    });
+  }
+
+  /** The party's own change requests (CH6a): a plain status from the change's stage, named fields only. */
+  listChangeRequests(ctx: RequestContext) {
+    const party = this.anyParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_change_requests(${ctx.organisationId}::uuid, ${party}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.request_id as string,
+          reference: c.reference as string,
+          kind: c.kind as 'customer_request' | 'supplier_notice',
+          title: c.title as string,
+          description: c.description as string,
+          status: c.status as 'received' | 'under_review' | 'accepted' | 'done' | 'declined' | 'cancelled',
+          raisedAt: iso(c.raised_at),
+          raisedByMe: Boolean(c.raised_by_me),
+          partNumber: (c.part_number as string | null) ?? null,
+          partName: (c.part_name as string | null) ?? null,
+          wantedOn: (c.wanted_on as string | null) ?? null,
+        })),
+      };
+    });
+  }
+
+  raiseChangeRequest(ctx: RequestContext, b: { title: string; description: string; reason?: string | null; partId?: string | null; wantedOn?: string | null; clientKey?: string | null }) {
+    const party = this.anyParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ r: { id: string; created: boolean } }>(
+        sql`select app.portal_raise_change(${ctx.organisationId}::uuid, ${party}::uuid, ${b.title}, ${b.description}, ${b.reason ?? null}, ${b.partId ?? null}::uuid, ${b.wantedOn ?? null}::date, ${b.clientKey ?? null}) as r`,
+      );
+      return r.rows[0].r;
+    });
+  }
+
+  /** The changes a customer has been asked to approve (CH6b): named fields only; a withdrawn request is not shown. */
+  listChangeApprovals(ctx: RequestContext) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_change_approvals(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.request_id as string,
+          reference: c.reference as string,
+          title: c.title as string,
+          status: c.status as 'pending' | 'approved' | 'rejected',
+          requestedAt: iso(c.requested_at),
+          decidedAt: iso(c.decided_at),
+          canDecide: Boolean(c.can_decide),
+        })),
+      };
+    });
+  }
+
+  getChangeApproval(ctx: RequestContext, id: string) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_change_approval(${id}::uuid) as r`)).rows[0].r);
+  }
+
+  /** The customer's answer: it is recorded on the change's own customer-approval record, and nothing else moves. */
+  decideChangeApproval(ctx: RequestContext, id: string, b: { approve: boolean; note?: string | null; reference?: string | null }) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_decide_change_approval(${id}::uuid, ${b.approve}, ${b.note ?? null}, ${b.reference ?? null})`);
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_change_approval(${id}::uuid) as r`)).rows[0].r;
     });
   }
 

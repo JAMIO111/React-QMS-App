@@ -97,10 +97,11 @@ const Question = ({ q, recordId, editable, save, canFinding, onFinding }) => {
   const r = q.response;
   const [value, setValue] = useState(r?.value ?? "");
   const [note, setNote] = useState(r?.note ?? "");
-  const [seen, setSeen] = useState({ id: r?.id, value: r?.value, note: r?.note });
-  // The answer on screen follows the server's (a refetch, or another person's change).
-  if (seen.id !== r?.id || seen.value !== r?.value || seen.note !== r?.note) {
-    setSeen({ id: r?.id, value: r?.value, note: r?.note });
+  const [seen, setSeen] = useState({ value: r?.value, note: r?.note });
+  // The answer on screen follows the server's (a refetch, or another person's change) when its words change. The id is left out on purpose: a saved
+  // answer swaps its placeholder id for the real one, which says nothing new and must not wipe what is being typed.
+  if (seen.value !== r?.value || seen.note !== r?.note) {
+    setSeen({ value: r?.value, note: r?.note });
     setValue(r?.value ?? "");
     setNote(r?.note ?? "");
   }

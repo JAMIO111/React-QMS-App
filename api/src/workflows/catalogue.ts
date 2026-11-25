@@ -61,6 +61,20 @@ const SCAR_STATUS = o(
 );
 const PLAN_STATUS = o(['draft', 'Draft'], ['pending_approval', 'Pending approval'], ['approved', 'Approved'], ['effective', 'Effective'], ['superseded', 'Superseded'], ['obsolete', 'Obsolete']);
 
+const CHANGE_STAGE_OPTIONS = o(
+  ['draft', 'Draft'], ['assessment', 'Assessment'], ['approval', 'At the board'], ['approved', 'Approved'], ['implementing', 'Implementing'], ['verifying', 'Verifying'],
+  ['closed', 'Closed'], ['rejected', 'Rejected'], ['cancelled', 'Cancelled'],
+);
+const CHANGE_FIELDS: TriggerField[] = [
+  { key: 'urgency', label: 'Urgency', type: 'enum', options: o(['normal', 'Normal'], ['expedited', 'Expedited']) },
+  { key: 'type_key', label: 'Type of change (key)', type: 'text' },
+  { key: 'customer_approval', label: 'Customer approval', type: 'enum', options: o(['not_needed', 'Not needed'], ['required', 'Required'], ['requested', 'Requested'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['waived', 'Waived']) },
+  { key: 'cut_in_kind', label: 'Cut-in point', type: 'enum', options: o(['none', 'None'], ['date', 'A date'], ['order', 'A production order'], ['lot', 'A lot'], ['serial', 'A serial number']) },
+  { key: 'from_stage', label: 'Stage before', type: 'enum', options: CHANGE_STAGE_OPTIONS },
+  { key: 'to_stage', label: 'Stage now', type: 'enum', options: CHANGE_STAGE_OPTIONS },
+  { key: 'review_result', label: 'Effectiveness check', type: 'enum', options: o(['effective', 'Effective'], ['not_effective', 'Not effective']) },
+  { key: 'title', label: 'Title', type: 'text' },
+];
 export const TRIGGERS: Trigger[] = [
   { eventType: 'ncr.created', entityType: 'nonconformance', label: 'A non-conformance is raised', permission: 'ncr.read', fields: NC_FIELDS },
   {
@@ -303,6 +317,44 @@ export const TRIGGERS: Trigger[] = [
     ],
   },
   {
+    eventType: 'msa.study.completed',
+    entityType: 'msa_study',
+    label: 'A Gauge R&R study is completed',
+    permission: 'calibration.read',
+    fields: [
+      { key: 'verdict', label: 'Result', type: 'ordered', options: o(['acceptable', 'Acceptable'], ['marginal', 'Marginal'], ['unacceptable', 'Not acceptable'], ['not_judged', 'Not judged']) },
+      { key: 'conclusion', label: 'Conclusion', type: 'enum', options: o(['accepted', 'Accepted'], ['accepted_with_conditions', 'Accepted with conditions'], ['not_accepted', 'Not accepted']) },
+      { key: 'study_type', label: 'Kind of study', type: 'enum', options: o(['grr_crossed', 'Gauge R&R (crossed)'], ['type1', 'Type 1 (bias and repeatability)'], ['attribute', 'Attribute agreement']) },
+      { key: 'pct_grr', label: 'Gauge R&R, % of study variation', type: 'number' },
+      { key: 'cgk', label: 'Cgk (Type 1)', type: 'number' },
+      { key: 'effectiveness', label: 'Effectiveness (attribute, 0 to 1)', type: 'number' },
+      { key: 'characteristic_key', label: 'Characteristic (key)', type: 'text' },
+      { key: 'part_id', label: 'Part', type: 'ref', ref: 'part' },
+      { key: 'site_id', label: 'Site', type: 'ref', ref: 'site' },
+    ],
+  },
+  {
+    eventType: 'change.submitted',
+    entityType: 'change_request',
+    label: 'A change is submitted for assessment',
+    permission: 'change.read',
+    fields: CHANGE_FIELDS,
+  },
+  {
+    eventType: 'change.approved',
+    entityType: 'change_request',
+    label: 'A change is approved',
+    permission: 'change.read',
+    fields: CHANGE_FIELDS,
+  },
+  {
+    eventType: 'change.closed',
+    entityType: 'change_request',
+    label: 'A change is closed',
+    permission: 'change.read',
+    fields: CHANGE_FIELDS,
+  },
+  {
     eventType: 'quality_alert.issued',
     entityType: 'quality_alert',
     label: 'A quality alert is issued',
@@ -352,6 +404,10 @@ export function workflowRecordPath(kind: unknown, id: unknown): string | null {
       return `/Risk/Register/${t}`;
     case 'quality_alert':
       return `/Documentation/Quality-Alerts/${t}`;
+    case 'msa_study':
+      return `/Calibration/Gauge-RR/${t}`;
+    case 'change':
+      return `/Change/${t}`;
     default:
       return null;
   }

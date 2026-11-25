@@ -66,6 +66,18 @@ export const useAuditScheduleFilters = () => useUrlFilters(AUDIT_SCHEDULE_FILTER
 export const CAPA_FILTER_KEYS = ["search", "stage", "source", "severity", "owner", "overdue", "from", "to"];
 export const useCapaFilters = () => useUrlFilters(CAPA_FILTER_KEYS);
 
+/** Quality alert register filters. Empty status = the newest revision of each alert; named states list every revision in them. */
+export const QUALITY_ALERT_FILTER_KEYS = ["search", "status", "category", "severity", "overdue", "from", "to", "expiresFrom", "expiresTo"];
+export const useQualityAlertFilters = () => useUrlFilters(QUALITY_ALERT_FILTER_KEYS);
+
+/** Control plan register filters. `status` and `family` are comma lists; no `active` = active plans only (`inactive` or `all` otherwise). */
+export const CONTROL_PLAN_FILTER_KEYS = ["search", "status", "family", "owner", "active", "from", "to"];
+export const useControlPlanFilters = () => useUrlFilters(CONTROL_PLAN_FILTER_KEYS);
+
 /** Supplier register filters. Empty `active` = active suppliers only; `inactive` or `all` otherwise. Classifications are ids (comma list). */
 export const SUPPLIER_FILTER_KEYS = ["search", "status", "type", "classification", "risk", "active"];
 export const useSupplierFilters = () => useUrlFilters(SUPPLIER_FILTER_KEYS);
+
+/** Measurement system study register filters. Empty `status` = every study but cancelled ones; `status`, `type`, `verdict` and `valid` are comma lists; `gauge` is a gauge id. */
+export const MSA_FILTER_KEYS = ["search", "status", "type", "verdict", "valid", "gauge"];
+export const useMsaFilters = () => useUrlFilters(MSA_FILTER_KEYS);

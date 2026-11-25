@@ -8,6 +8,7 @@ let home;
 let people;
 let shares;
 let scars = [];
+let approvals = [];
 const mutate = vi.fn();
 const signOut = vi.fn();
 
@@ -21,6 +22,7 @@ vi.mock("../../hooks/usePortal", () => ({
   usePortalFigures: () => ({ data: null, isLoading: true }),
   usePortalNcrs: () => ({ data: { data: [] }, isLoading: false }),
   usePortalCapas: () => ({ data: { data: [] }, isLoading: false }),
+  usePortalChangeApprovals: () => ({ data: { data: approvals }, isLoading: false }),
   usePortalMutation: () => ({ mutate, isPending: false, variables: null }),
 }));
 vi.mock("../../hooks/useSignOut", () => ({ default: () => [signOut, false] }));
@@ -51,6 +53,7 @@ beforeEach(() => {
   me = { profile: { email: "sam@acme.test" }, memberships: [], portal: [acme], portalInvitations: [] };
   home = { data: { access: acme, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
   shares = [];
+  approvals = [];
   people = [{ id: "x1", email: "sam@acme.test", name: "Sam Smith", role: "admin", status: "active", lastSignInAt: null }];
 });
 
@@ -66,19 +69,19 @@ describe("the supplier and customer portal", () => {
     expect(within(menu).queryByRole("link", { name: "Settings" })).toBeNull();
   });
 
-  it("a supplier's menu has corrective actions and not 8D reports, complaints or certificates; an admin also has Team", () => {
+  it("a supplier's menu has corrective actions and process changes and not 8D reports, complaints or certificates; an admin also has Team", () => {
     renderIt();
     const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
-    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Documents and alerts", "Team"]);
+    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Process changes", "Documents and alerts", "Team"]);
   });
 
-  it("a customer's menu has 8D reports, complaints and certificates, and no corrective actions; a member has no Team", () => {
+  it("a customer's menu has 8D reports, complaints, change requests and certificates, and no corrective actions; a member has no Team", () => {
     const customer = { ...acme, partyKind: "customer", partyName: "Wayne Ltd", role: "member" };
     me = { ...me, portal: [customer] };
     home = { data: { access: customer, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();
     const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
-    expect(names).toEqual(["Dashboard", "Non-conformances", "8D reports", "Complaints", "Documents and alerts", "Certificates and reports"]);
+    expect(names).toEqual(["Dashboard", "Non-conformances", "8D reports", "Complaints", "Change requests", "Documents and alerts", "Certificates and reports"]);
   });
 
   it("highlights only the page the person is on, so Dashboard is not lit on every page", () => {
@@ -218,5 +221,22 @@ describe("the supplier and customer portal", () => {
     home = { data: { access: acme, attention: [], shared: 3, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();
     expect(screen.getByText(/You have seen everything shared with you/)).toBeInTheDocument();
+  });
+
+  it("a customer sees the changes waiting for their approval on the dashboard", () => {
+    const customer = { ...acme, partyKind: "customer", partyName: "Wayne Ltd", role: "member" };
+    me = { ...me, portal: [customer] };
+    approvals = [{ id: "r1", reference: "ECR-26-0001", title: "Tighten the bend radius", status: "pending", requestedAt: "2026-11-20T10:00:00Z", decidedAt: null, canDecide: true }];
+    home = { data: { access: customer, attention: [], shared: 0, scarsAwaiting: [], scars: 0, changesToApprove: 1 }, isLoading: false, error: null };
+    renderIt();
+    const list = screen.getByRole("list", { name: "Changes waiting for your approval" });
+    expect(within(list).getByRole("link", { name: /ECR-26-0001 · Tighten the bend radius/ })).toHaveAttribute("href", "/portal/change-approvals/r1?org=o1");
+    expect(within(list).getByText("Waiting for your answer")).toBeInTheDocument();
+  });
+
+  it("a supplier is never shown changes to approve", () => {
+    approvals = [{ id: "r1", reference: "ECR-26-0001", title: "x", status: "pending", requestedAt: "2026-11-20T10:00:00Z", decidedAt: null, canDecide: true }];
+    renderIt();
+    expect(screen.queryByText("Changes waiting for your approval")).toBeNull();
   });
 });

@@ -38,6 +38,24 @@ export interface JobsResult {
 const MAX_BUDGET = 50_000;
 
 /**
+ * The steps that only have something to do when a date or a time of day arrives (an alert's expiry, a document's effective day, a reminder time, a
+ * scorecard period, clean-ups, exchange rates, the weekly DNS check). A tick that pg_cron starts runs them once every quarter of an hour; the steps
+ * that follow events (workflows, jobs, email, imports) run on every tick. Every one of them is safe to run more often (they all did, every minute),
+ * so a late or missed quarter-hour only delays them. Ticks from any other source (the daily Vercel cron, by hand, tests) run everything.
+ */
+const SLOW_STEPS = new Set(['quality-alerts', 'documents', 'reminders', 'scorecards', 'housekeeping', 'exchange-rates', 'sso-domains']);
+const SLOW_EVERY_MINUTES = 15;
+
+/** How often pg_cron calls the tick, in minutes (the schedule lives in the database; see supabase/runbooks/worker-schedule.sql). */
+const tickMinutes = () => {
+  const n = Number(process.env.WORKER_TICK_MINUTES);
+  return Number.isInteger(n) && n >= 1 && n <= SLOW_EVERY_MINUTES ? n : 5;
+};
+
+/** True when the slow steps are due in a tick that starts at `now`: the first tick of each quarter of an hour, whatever the tick interval. */
+export const slowStepsDue = (now: Date, intervalMinutes = tickMinutes()) => now.getUTCMinutes() % SLOW_EVERY_MINUTES < intervalMinutes;
+
+/**
  * The background worker (docs/workflow-engine-plan.md, WK1). Something calls `tick()` every minute: pg_cron in Supabase through pg_net (W1), or by hand.
  * One tick works at a time (a database lease); a tick that finds another still working is recorded as skipped and returns at once.
  *
@@ -87,7 +105,7 @@ export class WorkerService {
     );
   }
 
-  async tick(options: { source: TickSource; budgetMs?: number; correlationId?: string }): Promise<TickOutcome> {
+  async tick(options: { source: TickSource; budgetMs?: number; correlationId?: string; now?: Date }): Promise<TickOutcome> {
     const started = Date.now();
     const budget = Math.min(Math.max(options.budgetMs ?? 45_000, 1_000), MAX_BUDGET);
     const stopAt = started + budget;
@@ -103,7 +121,10 @@ export class WorkerService {
     if (!begun.acquired) return { tickId, skipped: true, outcome: 'skipped', ms: Date.now() - started, steps: [] };
 
     const steps: TickStep[] = [];
+    const slowDue = options.source !== 'pg_cron' || slowStepsDue(options.now ?? new Date());
     const step = async (name: string, work: () => Promise<unknown>, minimumMs = 1_000) => {
+      // A quiet tick leaves the slow steps out altogether: no database round trip, nothing recorded.
+      if (!slowDue && SLOW_STEPS.has(name)) return;
       if (left() < minimumMs) {
         steps.push({ name, ok: true, ms: 0, result: { skipped: 'out of time' } });
         return;

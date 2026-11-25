@@ -209,6 +209,7 @@ export const ControlPlanSummary = z.object({
   effectiveRevision: z.string().nullable(),
   /** The working copy (draft or under review), if any. */
   openRevision: z.object({ revisionCode: z.string(), status: PlanRevisionStatus }).nullable(),
+  createdAt: Iso,
   updatedAt: Iso,
 });
 export type ControlPlanSummary = z.infer<typeof ControlPlanSummary>;
@@ -220,12 +221,37 @@ export const ControlPlanDetail = ControlPlanSummary.extend({
 });
 export type ControlPlanDetail = z.infer<typeof ControlPlanDetail>;
 
-export const ControlPlanListQuery = ListQuery.extend({
+const csv = (allowed: readonly string[]) =>
+  z.string().refine((v) => v.split(',').every((x) => allowed.includes(x)), 'Use a comma-separated list of known values');
+const csvIds = z.string().refine((v) => v.split(',').every((x) => z.string().uuid().safeParse(x).success), 'Use a comma-separated list of ids');
+const DateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-11-30');
+
+export const PLAN_STATUS_FILTERS = ['effective', 'no_effective', 'pending_approval', 'draft'] as const;
+export const CONTROL_PLAN_SORTS = ['planCode', 'title', 'effectiveRevision', 'inProgress', 'owner', 'active', 'updatedAt', 'createdAt'] as const;
+
+export const ControlPlanListQuery = z.object({
+  /** Plan code, title, description, a family code or a part number in its scope. */
   q: Search,
-  partFamilyId: z.string().uuid().optional(),
-  status: z.enum(['effective', 'no_effective', 'pending_approval']).optional(),
+  /** Comma-separated part families the plan names. */
+  partFamilyId: csvIds.optional(),
+  /** Comma-separated, any of: `effective` (has an effective revision), `no_effective`, `pending_approval` and `draft` (the revision in progress is in that state). */
+  status: csv(PLAN_STATUS_FILTERS).optional(),
+  /** Only plans the signed-in person owns. */
+  owner: z.enum(['me']).optional(),
+  /** `active` (the default), `inactive` or `all`; `includeInactive=true` is the older way to say `all`. */
+  active: z.enum(['active', 'inactive', 'all']).optional(),
   includeInactive: booleanFlag,
+  /** Changed (the plan or any of its revisions) between these dates, inclusive. */
+  from: DateOnly.optional(),
+  to: DateOnly.optional(),
+  sort: z.enum(CONTROL_PLAN_SORTS).default('planCode'),
+  order: z.enum(['asc', 'desc']).default('asc'),
+  page: z.coerce.number().int().min(1).default(1),
+  /** `limit` is the older name for the page size. */
+  pageSize: z.coerce.number().int().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 });
+export const ControlPlanList = z.object({ data: z.array(ControlPlanSummary), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
 const planFields = {
   planCode: Code,
   title: z.string().trim().min(1).max(200),

@@ -9,6 +9,7 @@ import { ConnectorRegistry } from './connector.registry';
 import { CATALOGUE, catalogueForSettings } from './catalogue';
 import { CatalogueService } from './catalogue.service';
 import { EntityImporterRegistry, ImportContext, StagedRow } from './entity-importer';
+import { applyFilter, normaliseFilter, RecordFilter } from './filters';
 import { applyMapping, MappingSpec } from './mapping';
 import { resolveReferences } from './references';
 
@@ -131,10 +132,11 @@ export class SyncEngine {
       const importer = this.importers.get(lease.entityType);
       if (!importer && lease.kind !== 'preview') return await runError('mapping', `Importing ${lease.entityType.replace('_', ' ')} records is not available yet`, false);
       const fullCatalogue = await this.catalogues.get(lease.entityType, organisationId);
-      // A cost import whose template gives a line with no date the date its non-conformance was detected does not need the date in the file.
-      const catalogue = fullCatalogue && lease.entityType === 'ncr_cost'
-        ? catalogueForSettings(fullCatalogue, (await call((c) => c.query('select app.system_integration_run_settings($1::uuid, $2::uuid, $3::uuid) as s', [organisationId, runId, owner]))).rows[0].s as { missingDate?: string })
-        : fullCatalogue;
+      // The run's frozen settings (the template's): a cost import whose template gives a line with no date the date its non-conformance was detected does not need
+      // the date in the file, and a record filter says which source records are read at all.
+      const runSettings = (await call((c) => c.query('select app.system_integration_run_settings($1::uuid, $2::uuid, $3::uuid) as s', [organisationId, runId, owner]))).rows[0].s as { missingDate?: string; filters?: RecordFilter };
+      const catalogue = fullCatalogue && lease.entityType === 'ncr_cost' ? catalogueForSettings(fullCatalogue, runSettings) : fullCatalogue;
+      const filter = normaliseFilter(runSettings.filters);
       if (lease.mapping && !catalogue) return await runError('mapping', `There are no fields to map ${lease.entityType.replace('_', ' ')} records to yet`, false);
       if (!lease.mapping && !importer) return await runError('mapping', 'Map the source to Fortress fields before importing', false);
       const file = lease.file
@@ -181,14 +183,24 @@ export class SyncEngine {
             return await runError('transient', 'The source could not be read', true);
           }
           // With a mapping, each record is mapped and checked here: its identifier comes from the key column and any problem rejects the row when it is staged.
-          const records = page.records.map((r) => {
+          type Staged = { externalId: string | null; sourceRow: number | null; payload: Record<string, unknown>; canonical: Record<string, unknown> | null; errors: { field: string | null; message: string }[]; skip?: string; filtered?: boolean; sourceExternalId?: string | null };
+          const records = page.records.map((r): Staged => {
+            // The record filter (docs/import-filters-plan.md) looks at the raw source record before anything is mapped. A record it leaves out is staged as skipped and filtered,
+            // keeping the source's own identifier apart so that a record imported earlier and filtered out now is not called "no longer in the source"; one the filter cannot
+            // be worked out for (a formula that fails) is rejected with the reason rather than quietly dropped.
+            const verdict = filter ? applyFilter(filter, r.payload) : null;
+            const idOf = (): string | null => (lease.mapping && catalogue ? applyMapping(catalogue, lease.mapping, r.payload).externalId : importer!.externalIdOf(r.payload));
+            if (verdict && !verdict.keep && !verdict.error) {
+              return { externalId: null, sourceExternalId: idOf(), filtered: true, skip: verdict.reason, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: null, errors: [] };
+            }
+            const filterError = verdict?.error ? [{ field: null, message: verdict.error }] : [];
             if (lease.mapping && catalogue) {
               const mapped = applyMapping(catalogue, lease.mapping, r.payload);
               // A row the mapping marks "leave this row out" is staged as skipped, whatever else is wrong with it.
               const skip = mapped.canonical.leaveOut === true ? 'Left out by the mapping' : undefined;
-              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical as Record<string, unknown> | null, errors: mapped.errors, skip };
+              return { externalId: mapped.externalId, sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: mapped.canonical as Record<string, unknown> | null, errors: [...filterError, ...mapped.errors], skip };
             }
-            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload } as { externalId: string | null; sourceRow: number | null; payload: Record<string, unknown>; canonical: Record<string, unknown> | null; errors: { field: string | null; message: string }[]; skip?: string };
+            return { externalId: importer!.externalIdOf(r.payload), sourceRow: r.sourceRow ?? null, payload: r.payload, canonical: null, errors: filterError };
           });
           // Links to other records (D10) are resolved before staging, so a preview shows a row that cannot be linked as rejected, with the reason.
           if (lease.mapping && catalogue) {

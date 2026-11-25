@@ -134,6 +134,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'document_rule', pg.message ?? 'That document change is not allowed');
     case 'QM026': // risk register rules: the matrix, risks, assessments (messages are written for users)
       return new ApiError(409, 'risk_rule', pg.message ?? 'That risk change is not allowed');
+    case 'QM035': // change management rules: drafts, scope, files, cancelling (messages are written for users)
+      return new ApiError(409, 'change_rule', pg.message ?? 'That change is not allowed');
     case 'QM028': // workflow rules and tasks (messages are written for users)
       return new ApiError(409, 'workflow_rule', pg.message ?? 'That change is not allowed');
     case 'QM027': // management review rules: quality objectives and their values, reviews (messages are written for users)
@@ -153,6 +155,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       }
       return new ApiError(409, 'field_managed_by_import', pg.message ?? 'That field is managed by an import and cannot be changed here', details);
     }
+    case 'QM034': // measurement system analysis rules: studies, design, readings, completion (messages are written for users)
+      return new ApiError(409, 'msa_rule', pg.message ?? 'That change is not allowed for this study');
     case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)
       return new ApiError(409, 'edit_conflict', 'Someone else changed this since you opened it');
     case 'QM010': // notification type the caller cannot choose

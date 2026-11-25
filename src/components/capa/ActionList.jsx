@@ -13,6 +13,7 @@ import { formatDay } from "../../lib/qualityAlerts";
 import { FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import { changesSince, withVersion } from "../../lib/editConflicts";
+import { RaiseChangeButton } from "../change/LinkedChanges";
 
 /** The people an action can be assigned to: everyone still on the team. */
 const ownerOptions = (capa) => capa.team.filter((t) => !t.endedAt).map((t) => ({ id: t.id, name: t.name, hint: roleLabel(t.role) }));
@@ -127,6 +128,7 @@ export const ActionButtons = ({ action: a, rights, setDialog, mutation }) => {
       {a.status === "open" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Cancel: ${a.description}`} onClick={open("cancel")}>Cancel action</CTAButton>}
       {a.status === "done" && canWork && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
       {a.status === "cancelled" && rights.manage && rights.work && <CTAButton buttonType="button" type="neutral" size="md" aria-label={`Reopen: ${a.description}`} onClick={() => mutation.mutate({ action: "reopenAction", id: a.id })}>Reopen</CTAButton>}
+      {a.phase && a.phase !== "interim" && a.status !== "cancelled" && <RaiseChangeButton kind="capa_action" id={a.id} ariaLabel={`Raise a change from: ${a.description}`} />}
     </div>
   );
 };

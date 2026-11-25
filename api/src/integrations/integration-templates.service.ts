@@ -7,6 +7,7 @@ import type { RequestContext } from '../common/request-context';
 import { IntegrationsService } from './integrations.service';
 import { DatabaseService, Db } from '../database/database.service';
 import { CatalogueService } from './core/catalogue.service';
+import { applyFilter, describeFilter, describeRule, filterProblems, isActive, normaliseFilter, RecordFilter } from './core/filters';
 import { checkFormula, runFormula } from './core/formula';
 import { applyMapping, cell, fieldColumns, mappingProblems, rawValue } from './core/mapping';
 import { referenceProblem } from './core/references';
@@ -25,6 +26,8 @@ import {
   TemplateList,
   TemplateListQuery,
   TemplatePreview,
+  FilterPreview,
+  PreviewFilterBody,
   TemplateVersion,
   TemplateVersionList,
   UpdateTemplateBody,
@@ -74,6 +77,7 @@ const toVersion = (r: Row): TemplateVersion => {
       writeMode: (s.writeMode as string) ?? 'add_only',
       matchExisting: !!s.matchExisting,
       ...('costsOnClosed' in s ? { costsOnClosed: !!s.costsOnClosed, missingDate: s.missingDate === 'nc_detected' ? ('nc_detected' as const) : ('reject' as const) } : {}),
+      ...(s.filters ? { filters: s.filters as TemplateVersion['settings']['filters'] } : {}),
     },
     reason: (r.reason as string) ?? null,
     current: Number(r.version) === Number(r.current_version),
@@ -106,14 +110,18 @@ export class IntegrationTemplatesService {
     const catalogue = catalogueForSettings(full, b.settings);
     const columns = b.expectedColumns?.length ? b.expectedColumns : undefined;
     const problems = mappingProblems(catalogue, { keyField: b.keyField, fields: b.fields }, columns);
+    // A record filter is tidied (empty rules dropped; no rules and no formula means no filter) and checked against the source's columns and the formula language.
+    const filter = b.settings?.filters ? normaliseFilter(b.settings.filters as RecordFilter) : null;
+    if (filter) problems.push(...filterProblems(filter, columns));
     if (problems.length) throw new ApiError(409, 'integration_rule', problems[0], { problems });
+    const settings = b.settings ? { ...b.settings, filters: filter ?? undefined } : undefined;
     return JSON.stringify(
       clean({
         keyField: b.keyField,
         fields: b.fields.map((f) => clean(f as Record<string, unknown>)),
         sourceSettings: b.sourceSettings ? clean(b.sourceSettings) : undefined,
         expectedColumns: b.expectedColumns,
-        settings: b.settings ? clean(b.settings) : undefined,
+        settings: settings ? clean(settings) : undefined,
       }),
     );
   }
@@ -265,6 +273,9 @@ export class IntegrationTemplatesService {
     }
     // What each row makes of the mapping, once: the shown rows get their errors from it, and so do the link checks below.
     const outs = rows.map((r) => applyMapping(catalogue, spec, r.v));
+    // The template's record filter: a row it leaves out would not be imported, so it says why instead of showing the mapping's errors for it.
+    const filter = b.settings?.filters ? normaliseFilter(b.settings.filters as RecordFilter) : null;
+    const verdicts = rows.map((r) => (filter ? applyFilter(filter, r.v) : null));
     const references = await this.checkReferences(ctx, catalogue, b, byKey, connectionId, rows, outs);
     return {
       references,
@@ -279,7 +290,8 @@ export class IntegrationTemplatesService {
         return {
           row: r.r,
           externalId: out.externalId,
-          errors: out.errors,
+          filteredOut: verdicts[i] && !verdicts[i]!.keep ? (verdicts[i]!.error ?? verdicts[i]!.reason ?? null) : null,
+          errors: verdicts[i] && !verdicts[i]!.keep && !verdicts[i]!.error ? [] : out.errors,
           fields: b.fields.filter((m) => byKey.has(m.target)).map((m) => {
             const trail: string[] = [];
             const taken = rawValue(m, r.v, trail);
@@ -306,6 +318,78 @@ export class IntegrationTemplatesService {
          where c.file_id = ${fileId}::uuid and c.organisation_id = ${orgOf(ctx)}::uuid order by c.seq, (x.v ->> 'r')::int limit 1000`);
       return found.rows.map((r) => r.v);
     });
+  }
+
+  /**
+   * What a record filter does to the source (docs/import-filters-plan.md, F1): how many records it keeps and how many each rule matches, with a few records of each
+   * kind. A file is read in full (every parsed row); an API or a database gives only the sample it gives for mapping, and the answer says so. Writes nothing.
+   */
+  async previewFilter(ctx: RequestContext, b: PreviewFilterBody): Promise<FilterPreview> {
+    let headers: string[];
+    let rows: Array<{ r: number; v: Record<string, string> }>;
+    let complete: boolean;
+    if (b.connectionId) {
+      const sample = await this.sampleOf(ctx, b.connectionId, b.entityType);
+      headers = sample.headers;
+      rows = sample.rows;
+      complete = false;
+    } else {
+      const read = await this.database.asUser(ctx, async (db) => {
+        const f = await db.execute<Row>(sql`select headers, status from public.integration_files where id = ${b.fileId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+        if (!f.rows[0]) throw ApiError.notFound('file_not_found', 'File not found');
+        if (f.rows[0].status !== 'parsed') throw new ApiError(409, 'integration_rule', 'That file could not be read, or its rows have been cleared');
+        const chunks = await db.execute<{ rows: Array<{ r: number; v: Record<string, string> }> }>(sql`select c.rows from public.integration_file_chunks c where c.file_id = ${b.fileId}::uuid order by c.seq`);
+        return { headers: (f.rows[0].headers as string[]) ?? [], rows: chunks.rows.flatMap((c) => c.rows) };
+      });
+      headers = read.headers;
+      rows = read.rows;
+      complete = true;
+    }
+    const filter = normaliseFilter(b.filter as RecordFilter);
+    const problems = filter ? filterProblems(filter, headers) : [];
+    const empty: FilterPreview = {
+      columns: headers, scanned: rows.length, complete, kept: rows.length, leftOut: 0, rules: [], words: 'No filter: every record is read', problems, errors: { count: 0, first: null }, samples: { kept: [], leftOut: [] },
+    };
+    if (!filter || problems.length) return { ...empty, kept: problems.length ? 0 : rows.length };
+    const counts = filter.rules.map(() => 0);
+    const looksAt = new Set(filter.rules.map((r) => r.column));
+    const show = (r: { r: number; v: Record<string, string> }) => {
+      const cols = [...new Set([...looksAt, ...headers])].filter((c) => headers.includes(c)).slice(0, 12);
+      return { row: r.r, values: Object.fromEntries(cols.map((c) => [c, String(r.v[c] ?? '').slice(0, 100)])) };
+    };
+    let kept = 0;
+    let left = 0;
+    let errorCount = 0;
+    let firstError: string | null = null;
+    const sample = { kept: [] as ReturnType<typeof show>[], leftOut: [] as ReturnType<typeof show>[] };
+    for (const r of rows) {
+      const out = applyFilter(filter, r.v);
+      out.matched.forEach((m, i) => { if (m) counts[i] += 1; });
+      if (out.error) {
+        errorCount += 1;
+        firstError ??= out.error;
+        left += 1;
+        if (sample.leftOut.length < 5) sample.leftOut.push(show(r));
+      } else if (out.keep) {
+        kept += 1;
+        if (sample.kept.length < 5) sample.kept.push(show(r));
+      } else {
+        left += 1;
+        if (sample.leftOut.length < 5) sample.leftOut.push(show(r));
+      }
+    }
+    return {
+      columns: headers,
+      scanned: rows.length,
+      complete,
+      kept,
+      leftOut: left,
+      rules: filter.rules.map((rule, i) => ({ column: rule.column, words: describeRule(rule), matched: counts[i] })),
+      words: describeFilter(filter),
+      problems,
+      errors: { count: errorCount, first: firstError },
+      samples: sample,
+    };
   }
 
   /**

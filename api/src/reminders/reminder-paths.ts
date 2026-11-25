@@ -17,6 +17,9 @@ export const REMINDER_AREAS = [
   'document_reviews',
   'scars',
   'competence',
+  'msa_studies',
+  'change_tasks',
+  'change_signoffs',
 ] as const;
 export type ReminderArea = (typeof REMINDER_AREAS)[number];
 
@@ -46,6 +49,11 @@ export function reminderPath(area: unknown, targetId: unknown): string | null {
       return t ? `/Supplier-Quality/SCARs/${t}` : '/Supplier-Quality/SCARs';
     case 'competence':
       return '/Competence/Mine';
+    case 'msa_studies':
+      return t ? `/Calibration/Gauge-RR/${t}` : '/Calibration/Gauge-RR';
+    case 'change_tasks':
+    case 'change_signoffs':
+      return t ? `/Change/${t}` : '/Change/Mine';
     default:
       return null;
   }

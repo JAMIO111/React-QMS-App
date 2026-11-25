@@ -16,6 +16,7 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 import { useImportLocks } from "../../hooks/useImportLocks";
+import LinkedChanges from "../change/LinkedChanges";
 
 const MachineForm = ({ machine, onDone }) => {
   const mutation = useProcessControlMutation();
@@ -67,6 +68,7 @@ const MachineForm = ({ machine, onDone }) => {
       {machine && <ActiveAlertsBanner machineId={machine.id} />}
       {machine && <DocumentsInForce machineId={machine.id} />}
       {machine && <LinkedRisks kind="machine" id={machine.id} plain />}
+      {machine && <LinkedChanges kind="machine" id={machine.id} plain />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Code" value={form.code} onChange={set("code")} required maxLength={40} hint="e.g. LATHE-01" {...lock("code")} />
         <Field label="Name" value={form.name} onChange={set("name")} required maxLength={120} {...lock("name")} />

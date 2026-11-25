@@ -85,7 +85,7 @@ describe('reminders', () => {
   it('switches an area off and on again', async () => {
     const h = await as(ids.inspectorA);
     const areas = (await api().get('/api/v1/reminder-areas').set(h).expect(200)).body;
-    expect(areas.data).toHaveLength(12);
+    expect(areas.data).toHaveLength(15);
     expect(areas).toMatchObject({ reminderTime: '07:00', timeZone: 'Europe/London' });
     await api().put('/api/v1/reminder-areas').set(h).send({ area: 'nonsense', enabled: false }).expect(400);
     const off = (await api().put('/api/v1/reminder-areas').set(h).send({ area: 'risk_actions', enabled: false }).expect(200)).body;

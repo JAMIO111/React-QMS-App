@@ -19,6 +19,7 @@ describe('where an email links to', () => {
     expect(notificationPath('portal_activity', 'x', { record_kind: 'ncr', record_id: A })).toBe(`/Non-Conformance/Register/${A}`);
     expect(notificationPath('portal_activity', 'x', { record_kind: 'document', record_id: A })).toBe(`/Documentation/Documents/${A}`);
     expect(notificationPath('portal_activity', 'x', { record_kind: 'quality_alert', record_id: A })).toBe(`/Documentation/Quality-Alerts/${A}`);
+    expect(notificationPath('portal_activity', 'x', { record_kind: 'change', record_id: A })).toBe(`/Change/${A}`);
     expect(notificationPath('portal_activity', 'x', {})).toBe('/Settings/External-Access');
     expect(notificationPath('calibrations', A, { gauge_id: B })).toBe(`/Calibration/Gauges/${B}/calibrations/${A}`);
     expect(notificationPath('quality_alert_recipients', A, { alert_id: B })).toBe(`/Documentation/Quality-Alerts/${B}`);
@@ -30,6 +31,9 @@ describe('where an email links to', () => {
     expect(notificationPath('integration_alerts', A, { connection_id: A, run_id: B })).toBe(`/Settings/Integrations/${A}/runs/${B}`);
     expect(notificationPath('integration_alerts', A, {})).toBe('/Settings/Integrations');
     expect(notificationPath('network_policy_changes', A, {})).toBe('/Settings/Security');
+    expect(notificationPath('change_signoffs', A, { change_id: B })).toBe(`/Change/${B}`);
+    expect(notificationPath('change_requests', A, {})).toBe('/Change');
+    expect(notificationPath('change_tasks', A, { change_id: B })).toBe(`/Change/${B}`);
     expect(notificationPath('supplier_band_drops', A, { record_kind: 'supplier', record_id: B })).toBe(`/Suppliers/${B}?tab=performance`);
     expect(notificationPath('supplier_band_drops', A, { record_id: '../x' })).toBe('/Supplier-Quality/Watchlist');
     expect(notificationPath('something_else', A, {})).toBeNull();

@@ -20,8 +20,10 @@ export const HealthRow = z.object({
   /** A database connection's connector agent (AG4): whether it is online. Null for other connections. */
   agent: z.object({ id: z.string().uuid(), name: z.string(), online: z.boolean(), lastHeartbeatAt: Iso.nullable() }).nullable().optional(),
   lastRun: z
-    .object({ id: z.string().uuid(), kind: z.string(), trigger: z.string(), status: z.string(), requestedAt: Iso, finishedAt: Iso.nullable(), errorSummary: z.string().nullable(), nextAttemptAt: Iso.nullable() })
+    .object({ id: z.string().uuid(), kind: z.string(), trigger: z.string(), status: z.string(), requestedAt: Iso, finishedAt: Iso.nullable(), errorSummary: z.string().nullable(), nextAttemptAt: Iso.nullable(), recordsTotal: z.number().int().optional(), filtered: z.number().int().optional() })
     .nullable(),
+  /** What the template's record filter did to the last import: `all` = it left out every record read, `most` = at least 90% of 10 or more. Null = nothing to say. */
+  filterLeftOut: z.enum(['all', 'most']).nullable().optional(),
   lastSuccessAt: Iso.nullable(),
   failedInARow: z.number().int(),
   rowsNeedingAction: z.number().int(),

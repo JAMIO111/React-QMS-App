@@ -19,6 +19,7 @@ import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 import { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
+import LinkedChanges from "../change/LinkedChanges";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm font-normal text-primary-text focus:outline-none focus:border-brand-primary";
 
@@ -225,6 +226,7 @@ const AuditFindingPage = () => {
         <Evidence finding={f} editable={open && canPerform} />
       </MenuCard>
       <LinkedRisks kind="audit_finding" id={f.id} />
+      <LinkedChanges kind="audit_finding" id={f.id} />
 
       <MenuCard title="Non-conformance" subtitle="A finding classified as a non-conformity can be taken into the non-conformance workflow, once">
         {f.ncr ? (

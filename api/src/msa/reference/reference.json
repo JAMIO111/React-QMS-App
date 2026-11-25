@@ -1,0 +1,2674 @@
+{
+ "rangeConstants": {
+  "2": {
+   "d2": 1.1283791670955128,
+   "d3": 0.8525024664274217
+  },
+  "3": {
+   "d2": 1.6925687506432692,
+   "d3": 0.8883680040452046
+  },
+  "4": {
+   "d2": 2.058750746007929,
+   "d3": 0.8798082028249822
+  },
+  "5": {
+   "d2": 2.3259289472810396,
+   "d3": 0.8640819410995036
+  },
+  "6": {
+   "d2": 2.5344127212229433,
+   "d3": 0.8480396861174945
+  },
+  "7": {
+   "d2": 2.704356751213809,
+   "d3": 0.833205335622294
+  },
+  "8": {
+   "d2": 2.8472006120905564,
+   "d3": 0.819831489791941
+  },
+  "9": {
+   "d2": 2.970026324418475,
+   "d3": 0.8078342745533207
+  },
+  "10": {
+   "d2": 3.077505461670347,
+   "d3": 0.7970506735194074
+  },
+  "11": {
+   "d2": 3.1728727038160023,
+   "d3": 0.7873146205503249
+  },
+  "12": {
+   "d2": 3.2584552797438273,
+   "d3": 0.778478341203384
+  },
+  "13": {
+   "d2": 3.3359803540982584,
+   "d3": 0.7704162020637518
+  },
+  "14": {
+   "d2": 3.4067631081999594,
+   "d3": 0.7630230956247833
+  },
+  "15": {
+   "d2": 3.471826889882087,
+   "d3": 0.7562114297279311
+  },
+  "16": {
+   "d2": 3.531982786109599,
+   "d3": 0.7499080894098893
+  },
+  "17": {
+   "d2": 3.587883961765422,
+   "d3": 0.7440517839606859
+  },
+  "18": {
+   "d2": 3.6400637579375124,
+   "d3": 0.738590853378092
+  },
+  "19": {
+   "d2": 3.688963023207699,
+   "d3": 0.7334814955187935
+  },
+  "20": {
+   "d2": 3.734950119596714,
+   "d3": 0.7286863457071971
+  },
+  "21": {
+   "d2": 3.7783358298427245,
+   "d3": 0.7241733407173191
+  },
+  "22": {
+   "d2": 3.8193846433629606,
+   "d3": 0.719914808433988
+  },
+  "23": {
+   "d2": 3.8583234232852397,
+   "d3": 0.7158867354913488
+  },
+  "24": {
+   "d2": 3.8953481484516312,
+   "d3": 0.712068175147344
+  },
+  "25": {
+   "d2": 3.930629219507446,
+   "d3": 0.7084407658878827
+  }
+ },
+ "fSf": [
+  [
+   0.434,
+   18,
+   60,
+   0.9740208028890078
+  ],
+  [
+   3.5,
+   9,
+   18,
+   0.011372425817733657
+  ],
+  [
+   34.44,
+   2,
+   18,
+   7.033544438760917e-07
+  ],
+  [
+   213.5,
+   9,
+   18,
+   2.0101232816722778e-16
+  ],
+  [
+   1.0,
+   5,
+   5,
+   0.5
+  ],
+  [
+   0.01,
+   2,
+   30,
+   0.9900531324547684
+  ],
+  [
+   12.0,
+   1,
+   2,
+   0.07417990022744854
+  ],
+  [
+   2.2,
+   40,
+   90,
+   0.0010569581961871392
+  ],
+  [
+   50.0,
+   3,
+   120,
+   4.8804887885476305e-21
+  ],
+  [
+   0.9,
+   12,
+   12,
+   0.5709098651596936
+  ]
+ ],
+ "tTwoSided": [
+  [
+   0.0,
+   10,
+   1.0
+  ],
+  [
+   1.0,
+   4,
+   0.37390096630005887
+  ],
+  [
+   2.5,
+   24,
+   0.019654175116578784
+  ],
+  [
+   -2.5,
+   24,
+   0.019654175116578784
+  ],
+  [
+   3.9,
+   49,
+   0.00029291524587896826
+  ],
+  [
+   0.31,
+   7,
+   0.76558630701973
+  ],
+  [
+   6.0,
+   2,
+   0.02667147321542477
+  ],
+  [
+   1.96,
+   1000,
+   0.050273184955748736
+  ],
+  [
+   0.2,
+   99,
+   0.8418908333152769
+  ]
+ ],
+ "anovaCases": [
+  {
+   "name": "10x3x3, small appraiser effect, no interaction",
+   "cube": [
+    [
+     [
+      10.1723,
+      10.2969,
+      10.2616
+     ],
+     [
+      11.5406,
+      11.9126,
+      11.9929
+     ],
+     [
+      11.5911,
+      12.016,
+      11.9032
+     ],
+     [
+      9.9558,
+      9.9106,
+      10.0214
+     ],
+     [
+      9.7975,
+      10.1867,
+      10.1844
+     ],
+     [
+      9.458,
+      9.8809,
+      9.7614
+     ],
+     [
+      11.1746,
+      10.9305,
+      11.0147
+     ],
+     [
+      10.3985,
+      10.1547,
+      10.4497
+     ],
+     [
+      11.1922,
+      11.3117,
+      11.1088
+     ],
+     [
+      8.5768,
+      8.4806,
+      8.324
+     ]
+    ],
+    [
+     [
+      10.1399,
+      10.2655,
+      10.3717
+     ],
+     [
+      11.1569,
+      11.6482,
+      11.5646
+     ],
+     [
+      11.3043,
+      11.1218,
+      11.5745
+     ],
+     [
+      9.1622,
+      9.5279,
+      9.6749
+     ],
+     [
+      9.3282,
+      9.5876,
+      9.3863
+     ],
+     [
+      9.4446,
+      9.6986,
+      9.8005
+     ],
+     [
+      10.247,
+      10.4876,
+      10.7433
+     ],
+     [
+      10.2301,
+      9.9985,
+      9.765
+     ],
+     [
+      10.8569,
+      10.7941,
+      10.7567
+     ],
+     [
+      7.7969,
+      8.0213,
+      8.0054
+     ]
+    ],
+    [
+     [
+      10.1891,
+      10.1634,
+      9.9507
+     ],
+     [
+      11.5686,
+      11.9071,
+      11.6277
+     ],
+     [
+      11.2293,
+      11.7842,
+      11.6233
+     ],
+     [
+      10.0304,
+      9.6213,
+      9.5165
+     ],
+     [
+      9.5528,
+      10.1071,
+      10.3562
+     ],
+     [
+      9.4258,
+      9.4606,
+      9.7092
+     ],
+     [
+      10.6307,
+      10.7427,
+      10.7268
+     ],
+     [
+      10.1468,
+      10.3274,
+      10.1128
+     ],
+     [
+      11.1755,
+      10.9077,
+      11.0572
+     ],
+     [
+      7.7104,
+      7.848,
+      8.2972
+     ]
+    ]
+   ],
+   "anova": {
+    "part": {
+     "df": 9.0,
+     "ss": 89.69225785288874,
+     "f": 249.98822376594393,
+     "p": 4.0888719311384306e-44
+    },
+    "appraiser": {
+     "df": 2.0,
+     "ss": 2.215076310888984,
+     "f": 27.782146706355338,
+     "p": 2.8828859640189827e-09
+    },
+    "interaction": {
+     "df": 18.0,
+     "ss": 0.9662913957777823,
+     "f": 1.3466127147061362,
+     "p": 0.19329855605595675
+    },
+    "repeatability": {
+     "df": 60.0,
+     "ss": 2.3919062133333333
+    }
+   }
+  },
+  {
+   "name": "8x4x2, large interaction",
+   "cube": [
+    [
+     [
+      8.9035,
+      8.9063
+     ],
+     [
+      11.0434,
+      10.8125
+     ],
+     [
+      10.1129,
+      10.2478
+     ],
+     [
+      11.6998,
+      11.8227
+     ],
+     [
+      12.2655,
+      12.0369
+     ],
+     [
+      9.5164,
+      9.575
+     ],
+     [
+      9.4679,
+      9.4808
+     ],
+     [
+      9.1792,
+      9.3529
+     ]
+    ],
+    [
+     [
+      10.7154,
+      10.6878
+     ],
+     [
+      11.2296,
+      11.0029
+     ],
+     [
+      10.5098,
+      10.6105
+     ],
+     [
+      11.0106,
+      11.0257
+     ],
+     [
+      11.3247,
+      11.2726
+     ],
+     [
+      8.69,
+      8.7093
+     ],
+     [
+      9.4953,
+      9.6034
+     ],
+     [
+      8.7262,
+      8.5765
+     ]
+    ],
+    [
+     [
+      10.5383,
+      10.2821
+     ],
+     [
+      9.9055,
+      10.1173
+     ],
+     [
+      11.3288,
+      11.3381
+     ],
+     [
+      10.4309,
+      10.4597
+     ],
+     [
+      11.4061,
+      11.0218
+     ],
+     [
+      7.8672,
+      8.0456
+     ],
+     [
+      9.3694,
+      9.0531
+     ],
+     [
+      8.7001,
+      8.4583
+     ]
+    ],
+    [
+     [
+      10.2219,
+      10.2979
+     ],
+     [
+      10.9871,
+      10.6597
+     ],
+     [
+      11.0951,
+      10.9582
+     ],
+     [
+      11.8489,
+      11.9232
+     ],
+     [
+      11.6851,
+      11.9158
+     ],
+     [
+      8.6263,
+      8.4926
+     ],
+     [
+      10.0445,
+      10.0717
+     ],
+     [
+      8.7581,
+      8.9039
+     ]
+    ]
+   ],
+   "anova": {
+    "part": {
+     "df": 7.0,
+     "ss": 66.62496962984382,
+     "f": 639.7716806736947,
+     "p": 1.6156492799223013e-32
+    },
+    "appraiser": {
+     "df": 3.0,
+     "ss": 2.254884582968742,
+     "f": 50.52299536596166,
+     "p": 3.070264831559204e-12
+    },
+    "interaction": {
+     "df": 21.0,
+     "ss": 12.329367148281337,
+     "f": 39.46458305308639,
+     "p": 3.1516582931542294e-17
+    },
+    "repeatability": {
+     "df": 32.0,
+     "ss": 0.4760624750000001
+    }
+   }
+  },
+  {
+   "name": "5x2x4, tiny design",
+   "cube": [
+    [
+     [
+      10.9595,
+      12.0053,
+      11.4343,
+      11.9027
+     ],
+     [
+      7.6753,
+      8.1333,
+      8.0112,
+      7.6456
+     ],
+     [
+      11.2783,
+      10.549,
+      11.2116,
+      10.3899
+     ],
+     [
+      10.2188,
+      10.4353,
+      10.183,
+      10.0057
+     ],
+     [
+      10.8337,
+      10.9725,
+      11.3907,
+      11.3426
+     ]
+    ],
+    [
+     [
+      11.5531,
+      11.258,
+      11.834,
+      11.1968
+     ],
+     [
+      7.5968,
+      7.5356,
+      7.979,
+      7.8268
+     ],
+     [
+      11.1229,
+      11.0661,
+      10.781,
+      11.145
+     ],
+     [
+      10.6375,
+      10.2027,
+      10.4038,
+      10.176
+     ],
+     [
+      11.5275,
+      11.4189,
+      11.4817,
+      11.3235
+     ]
+    ]
+   ],
+   "anova": {
+    "part": {
+     "df": 4.0,
+     "ss": 72.76793239249993,
+     "f": 224.10144728469567,
+     "p": 7.006977941644078e-22
+    },
+    "appraiser": {
+     "df": 1.0,
+     "ss": 0.055383364000003085,
+     "f": 0.682250635400768,
+     "p": 0.41533358989116625
+    },
+    "interaction": {
+     "df": 4.0,
+     "ss": 0.2899497034999884,
+     "f": 0.892950315581771,
+     "p": 0.4802706383216153
+    },
+    "repeatability": {
+     "df": 30.0,
+     "ss": 2.4353233749999994
+    }
+   }
+  }
+ ],
+ "type1Cases": [
+  {
+   "values": [
+    25.0062,
+    25.0131,
+    24.9933,
+    25.0141,
+    25.0037,
+    24.9992,
+    24.9992,
+    24.9975,
+    25.0027,
+    25.009,
+    25.0075,
+    25.0078,
+    24.9938,
+    24.9946,
+    25.0133,
+    25.0098,
+    25.0171,
+    25.0113,
+    24.9979,
+    25.0117,
+    25.0078,
+    25.0053,
+    24.9991,
+    25.004,
+    25.0031,
+    25.0094,
+    25.0047,
+    25.0135,
+    24.9994,
+    25.0068,
+    25.007,
+    24.9988,
+    24.9969,
+    25.0101,
+    25.0071,
+    25.003,
+    25.0064,
+    24.9999,
+    25.0054,
+    25.0004,
+    25.0051,
+    25.0099,
+    25.002,
+    25.0091,
+    24.9978,
+    25.0023,
+    24.9958,
+    25.0034,
+    25.0045,
+    25.0028
+   ],
+   "reference": 25.0,
+   "lower": 24.9,
+   "upper": 25.1,
+   "k": 20,
+   "l": 6,
+   "mean": 25.004472,
+   "sd": 0.005726773497692919,
+   "bias": 0.0044719999999998095,
+   "t": 5.521750645001096,
+   "p": 1.2650553091996515e-06,
+   "cg": 1.1641226371799909,
+   "cgk": 0.9038248155065598
+  },
+  {
+   "values": [
+    10.022,
+    10.0259,
+    10.024,
+    10.0375,
+    10.0789,
+    10.018,
+    10.0689,
+    10.0752,
+    10.0429,
+    10.036,
+    10.0594,
+    10.0743,
+    10.0931,
+    10.0678,
+    10.0819,
+    10.041,
+    10.0325,
+    10.0156,
+    10.0269,
+    10.0427,
+    10.0539,
+    10.0237,
+    10.0663,
+    10.0479,
+    10.0372,
+    10.0347,
+    10.0904,
+    10.0534,
+    10.032,
+    10.0309
+   ],
+   "reference": 10.0,
+   "lower": 9.8,
+   "upper": 10.2,
+   "k": 20,
+   "l": 6,
+   "mean": 10.04783,
+   "sd": 0.022659049345490637,
+   "bias": 0.04782999999999937,
+   "t": 11.561636821575355,
+   "p": 2.225355878044187e-12,
+   "cg": 0.5884330419178307,
+   "cgk": -0.11518576795540858
+  },
+  {
+   "values": [
+    4.9955,
+    4.9922,
+    4.9894,
+    4.9668,
+    4.9943,
+    4.9687,
+    4.9991,
+    4.9961,
+    4.9983,
+    4.9983,
+    4.993,
+    4.9846,
+    4.9869,
+    5.0051,
+    4.9842,
+    4.9877,
+    4.9828,
+    4.9848,
+    4.9869,
+    4.9926,
+    4.9871,
+    4.9865,
+    4.9838,
+    4.9909,
+    4.9766
+   ],
+   "reference": 5.0,
+   "lower": 4.9,
+   "upper": 5.1,
+   "k": 20,
+   "l": 4,
+   "mean": 4.988488,
+   "sd": 0.00888806878161204,
+   "bias": -0.011511999999999745,
+   "t": -6.476097498151787,
+   "p": 1.0695850661055248e-06,
+   "cg": 1.1251038044044315,
+   "cgk": 0.4774940545892528
+  }
+ ],
+ "attributeCases": [
+  {
+   "standard": [
+    false,
+    true,
+    false,
+    true,
+    false,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    true,
+    false,
+    true,
+    false,
+    false,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    true,
+    false
+   ],
+   "ratings": [
+    [
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ]
+    ],
+    [
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      true
+     ]
+    ],
+    [
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ]
+    ]
+   ],
+   "appraisers": [
+    {
+     "withinMatched": 33,
+     "vsStandardMatched": 33,
+     "goodOpportunities": 63,
+     "goodRejected": 3,
+     "badOpportunities": 57,
+     "badAccepted": 4,
+     "effectiveness": 0.9416666666666667,
+     "miss": 0.07017543859649122,
+     "falseAlarm": 0.047619047619047616,
+     "kappaWithin": 0.7656249999999997,
+     "kappaVsStandard": 0.8828191254378673
+    },
+    {
+     "withinMatched": 31,
+     "vsStandardMatched": 31,
+     "goodOpportunities": 63,
+     "goodRejected": 5,
+     "badOpportunities": 57,
+     "badAccepted": 5,
+     "effectiveness": 0.9166666666666666,
+     "miss": 0.08771929824561403,
+     "falseAlarm": 0.07936507936507936,
+     "kappaWithin": 0.6992481203007519,
+     "kappaVsStandard": 0.8327676513723027
+    },
+    {
+     "withinMatched": 18,
+     "vsStandardMatched": 18,
+     "goodOpportunities": 63,
+     "goodRejected": 13,
+     "badOpportunities": 57,
+     "badAccepted": 15,
+     "effectiveness": 0.7666666666666667,
+     "miss": 0.2631578947368421,
+     "falseAlarm": 0.20634920634920634,
+     "kappaWithin": 0.26153846153846166,
+     "kappaVsStandard": 0.5308979519505835
+    }
+   ],
+   "betweenMatched": 10,
+   "allVsStandardMatched": 10,
+   "kappaBetween": 0.5452008928571427
+  },
+  {
+   "standard": [
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true
+   ],
+   "ratings": [
+    [
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ]
+    ],
+    [
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      false
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      true,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      false
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      true,
+      false
+     ],
+     [
+      false,
+      true
+     ],
+     [
+      true,
+      true
+     ],
+     [
+      false,
+      true
+     ]
+    ]
+   ],
+   "appraisers": [
+    {
+     "withinMatched": 29,
+     "vsStandardMatched": 29,
+     "goodOpportunities": 38,
+     "goodRejected": 0,
+     "badOpportunities": 22,
+     "badAccepted": 1,
+     "effectiveness": 0.9833333333333333,
+     "miss": 0.045454545454545456,
+     "falseAlarm": 0.0,
+     "kappaWithin": 0.9267399267399268,
+     "kappaVsStandard": 0.9633699633699634
+    },
+    {
+     "withinMatched": 19,
+     "vsStandardMatched": 11,
+     "goodOpportunities": 38,
+     "goodRejected": 16,
+     "badOpportunities": 22,
+     "badAccepted": 11,
+     "effectiveness": 0.55,
+     "miss": 0.5,
+     "falseAlarm": 0.42105263157894735,
+     "kappaWithin": 0.259259259259259,
+     "kappaVsStandard": 0.06397052177103325
+    }
+   ],
+   "betweenMatched": 11,
+   "allVsStandardMatched": 11,
+   "kappaBetween": 0.2361111111111108
+  },
+  {
+   "standard": [
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    true,
+    false,
+    false,
+    true,
+    false,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true
+   ],
+   "ratings": [
+    [
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ]
+    ],
+    [
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ]
+    ],
+    [
+     [
+      false,
+      false,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      false,
+      false
+     ],
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ]
+    ]
+   ],
+   "appraisers": [
+    {
+     "withinMatched": 50,
+     "vsStandardMatched": 50,
+     "goodOpportunities": 93,
+     "goodRejected": 0,
+     "badOpportunities": 57,
+     "badAccepted": 0,
+     "effectiveness": 1.0,
+     "miss": 0.0,
+     "falseAlarm": 0.0,
+     "kappaWithin": 1.0,
+     "kappaVsStandard": 1.0
+    },
+    {
+     "withinMatched": 42,
+     "vsStandardMatched": 42,
+     "goodOpportunities": 93,
+     "goodRejected": 5,
+     "badOpportunities": 57,
+     "badAccepted": 3,
+     "effectiveness": 0.9466666666666667,
+     "miss": 0.05263157894736842,
+     "falseAlarm": 0.053763440860215055,
+     "kappaWithin": 0.776494691748929,
+     "kappaVsStandard": 0.8873325787587247
+    },
+    {
+     "withinMatched": 37,
+     "vsStandardMatched": 37,
+     "goodOpportunities": 93,
+     "goodRejected": 8,
+     "badOpportunities": 57,
+     "badAccepted": 7,
+     "effectiveness": 0.9,
+     "miss": 0.12280701754385964,
+     "falseAlarm": 0.08602150537634409,
+     "kappaWithin": 0.6345577211394303,
+     "kappaVsStandard": 0.7855118280323198
+    }
+   ],
+   "betweenMatched": 33,
+   "allVsStandardMatched": 33,
+   "kappaBetween": 0.7985382308845576
+  }
+ ]
+}

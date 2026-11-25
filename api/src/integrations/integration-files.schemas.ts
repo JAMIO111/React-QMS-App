@@ -98,6 +98,8 @@ export const CatalogueResponse = z.object({
           required: z.boolean(),
           maxLength: z.number().int().nullable(),
           options: z.array(z.object({ value: z.string(), label: z.string() })).nullable(),
+          /** The value is one or more of `options`, separated by commas (a custom "several choices" field). */
+          multiple: z.boolean(),
           description: z.string().nullable(),
           /** A link to another record: what it points at, and whether it can be matched by the source's own id. */
           ref: z.object({ kind: z.string(), source: z.boolean() }).nullable(),

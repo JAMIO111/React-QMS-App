@@ -90,6 +90,9 @@ describe('importing custom fields', () => {
     expect(custom.map((f: { key: string }) => f.key)).toEqual(['cf_asset_tag', 'cf_criticality', 'cf_shifts', 'cf_owner', 'cf_power']);
     expect(custom[0]).toMatchObject({ label: 'Asset tag', required: true, type: 'text' });
     expect(custom[1]).toMatchObject({ type: 'enum', options: [{ value: 'high', label: 'High' }, { value: 'low', label: 'Low' }] });
+    // Several choices: read as text, with its list so the mapping editor can show it.
+    expect(custom[2]).toMatchObject({ type: 'text', multiple: true, options: [{ value: 'days', label: 'Days' }, { value: 'nights', label: 'Nights' }] });
+    expect(custom[1].multiple).toBe(false);
     expect(custom[4]).toMatchObject({ type: 'number' });
     expect(machine.fields.find((f: { key: string }) => f.key === 'code').custom).toBe(false);
   });

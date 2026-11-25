@@ -153,6 +153,19 @@ describe("what needs attention on the home page", () => {
     expect(change).not.toHaveTextContent("waiting for the customer");
   });
 
+  it("shows the FMEA area with its late actions and reviews, each a link", async () => {
+    const all = sample()["/home-dashboard"];
+    answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf, fmea: { inForce: 3, reviewsOverdue: 1, awaitingApproval: 2, overdueActions: 4, highPriority: 0 } };
+    renderIt();
+    const fmea = await screen.findByRole("region", { name: "FMEA" });
+    await waitFor(() => expect(fmea).toHaveTextContent("FMEAs in force"));
+    expect(fmea).toHaveTextContent("1 critical");
+    expect(fmea).toHaveTextContent("2 to watch");
+    expect(within(fmea).getByRole("link", { name: /FMEA actions overdue/ })).toHaveAttribute("href", "/FMEA/My-Actions");
+    expect(within(fmea).getByRole("link", { name: /FMEA review overdue/ })).toHaveAttribute("href", "/FMEA/Register");
+    expect(fmea).not.toHaveTextContent("of high priority");
+  });
+
   it("says so when everything is clear", async () => {
     const all = sample()["/home-dashboard"];
     answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf, competence: all.competence, audits: { ...all.audits, openFindings: 0 } };

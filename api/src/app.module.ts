@@ -102,6 +102,7 @@ import { FmeaEvidenceController } from './fmea/fmea-evidence.controller';
 import { FmeaEvidenceService } from './fmea/fmea-evidence.service';
 import { FmeaAnalysisService } from './fmea/fmea-analysis.service';
 import { FmeaController } from './fmea/fmea.controller';
+import { FmeaDashboardController, FmeaDashboardService } from './fmea/fmea-dashboard';
 import { FmeaLinkedService } from './fmea/fmea-linked.service';
 import { FmeaModelController } from './fmea/fmea-model.controller';
 import { FmeaModelService } from './fmea/fmea-model.service';
@@ -333,6 +334,7 @@ export class AppModule implements NestModule {
         FmeaModelController,
         RiskController,
         RiskDashboardController,
+        FmeaDashboardController,
         QualityObjectivesController,
         MsaController,
         ManagementReviewsController,
@@ -461,6 +463,7 @@ export class AppModule implements NestModule {
         FmeaModelService,
         RiskService,
         RiskDashboardService,
+        FmeaDashboardService,
         QualityObjectivesService,
         MsaService,
         ManagementReviewsService,

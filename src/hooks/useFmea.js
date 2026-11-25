@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -399,5 +400,18 @@ export const useFmeaDraft = (kind, id, { enabled = true } = {}) => {
     enabled: !!organisationId && !!id && enabled,
     retry: false,
     staleTime: 0,
+  });
+};
+
+/** The FMEA dashboard for a period (`period` from useDashboardPeriod): what needs attention and what is late as of today, and what moved in the period. */
+export const useFmeaDashboard = (period) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", period?.fromIso, period?.toIso),
+    queryFn: () => apiFetch(`/fmea-dashboard?${qs({ from: period.fromIso, to: period.toIso })}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
+    enabled: !!organisationId && !!period?.fromIso,
+    placeholderData: keepPreviousData,
+    retry: false,
   });
 };

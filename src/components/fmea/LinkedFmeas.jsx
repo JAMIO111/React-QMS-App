@@ -21,7 +21,7 @@ const LinkedFmeas = ({ kind, id, showWhenNone = false, className = "" }) => {
       <section aria-label="FMEA" className={`flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border-color bg-secondary-bg px-4 py-3 text-sm ${className}`}>
         <p className="text-secondary-text">No FMEA in force covers this {thing}.</p>
         {canRaise && (
-          <Link to="/FMEA" className="font-medium text-link-color hover:underline">
+          <Link to="/FMEA/Register" className="font-medium text-link-color hover:underline">
             Go to FMEAs
           </Link>
         )}

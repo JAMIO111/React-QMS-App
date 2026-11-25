@@ -50,7 +50,7 @@ describe("the FMEAs that cover a part, family, machine or plan (FM16)", () => {
     apiFetch.mockResolvedValue({ data: [], canRaise: true });
     show({ showWhenNone: true });
     expect(await screen.findByText("No FMEA in force covers this part.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Go to FMEAs" })).toHaveAttribute("href", "/FMEA");
+    expect(screen.getByRole("link", { name: "Go to FMEAs" })).toHaveAttribute("href", "/FMEA/Register");
   });
 
   it("offers no way to start one to someone who cannot", async () => {

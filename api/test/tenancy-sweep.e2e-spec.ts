@@ -645,6 +645,20 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/lots/{id}': { notes: 'Hijacked' },
     'GET /api/v1/serial-numbers/{id}': undefined,
     'PATCH /api/v1/serial-numbers/{id}': { notes: 'Hijacked' },
+    'GET /api/v1/fmeas/{id}': undefined,
+    'PATCH /api/v1/fmeas/{id}': { title: 'Hijacked' },
+    'POST /api/v1/fmeas/{id}/revisions': undefined,
+    'POST /api/v1/fmeas/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/fmea-revisions/{id}': undefined,
+    'PATCH /api/v1/fmea-revisions/{id}': { changeSummary: 'Hijacked' },
+    'PUT /api/v1/fmea-revisions/{id}/team': { team: [] },
+    'PUT /api/v1/fmea-revisions/{id}/links': { links: [] },
+    'PUT /api/v1/fmea-revisions/{id}/approver': { approverId: null },
+    'POST /api/v1/fmea-revisions/{id}/submit': undefined,
+    'POST /api/v1/fmea-revisions/{id}/approve': { effectiveFrom: '2030-01-01' },
+    'POST /api/v1/fmea-revisions/{id}/send-back': { comment: 'Hijacked' },
+    'POST /api/v1/fmea-revisions/{id}/recall': { reason: 'Hijacked' },
+    'POST /api/v1/fmea-revisions/{id}/discard': { reason: 'Hijacked' },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -1217,6 +1231,20 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/lots/{id}',
     'GET /api/v1/serial-numbers/{id}',
     'PATCH /api/v1/serial-numbers/{id}',
+    'GET /api/v1/fmeas/{id}',
+    'PATCH /api/v1/fmeas/{id}',
+    'POST /api/v1/fmeas/{id}/revisions',
+    'POST /api/v1/fmeas/{id}/withdraw',
+    'GET /api/v1/fmea-revisions/{id}',
+    'PATCH /api/v1/fmea-revisions/{id}',
+    'PUT /api/v1/fmea-revisions/{id}/team',
+    'PUT /api/v1/fmea-revisions/{id}/links',
+    'PUT /api/v1/fmea-revisions/{id}/approver',
+    'POST /api/v1/fmea-revisions/{id}/submit',
+    'POST /api/v1/fmea-revisions/{id}/approve',
+    'POST /api/v1/fmea-revisions/{id}/send-back',
+    'POST /api/v1/fmea-revisions/{id}/recall',
+    'POST /api/v1/fmea-revisions/{id}/discard',
   ].includes(`${op.method} ${op.path}`);
 
 /** Organisation A's record id for the resource a path refers to. */
@@ -1277,6 +1305,8 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/fmea-revisions/')) return a.fmeaRevision;
+  if (path.startsWith('/api/v1/fmeas/')) return a.fmea;
   if (path.startsWith('/api/v1/change-types/')) return a.changeType;
   if (path.startsWith('/api/v1/change-functions/')) return a.changeFunction;
   if (path.startsWith('/api/v1/change-areas/')) return a.changeArea;
@@ -1524,6 +1554,8 @@ beforeAll(async () => {
     a.capaAction = (await q1(`insert into public.capa_actions (organisation_id, capa_id, phase, description) values ($1, $2, 'interim', 'Alpha containment') returning id`, [ids.orgA, a.capa])).id;
     a.savedFilter = (await q1(`insert into public.saved_filters (organisation_id, user_id, scope, name, filters) values ($1, $2, 'ncr_register', 'Alpha filter', '{"stage":"open"}') returning id`, [ids.orgA, ids.ownerA])).id;
     a.competenceCategory = (await q1(`select id from public.competence_categories where organisation_id = $1 and key = 'inspection'`, [ids.orgA])).id;
+    a.fmea = (await q1(`select app.create_fmea($1::uuid, jsonb_build_object('kind', 'process', 'title', 'Alpha FMEA')) as id`, [ids.orgA])).id;
+    a.fmeaRevision = (await q1(`select id from public.fmea_revisions where fmea_id = $1`, [a.fmea])).id;
     a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
     a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;

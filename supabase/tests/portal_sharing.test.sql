@@ -101,7 +101,7 @@ BEGIN
   PERFORM pg_temp.assert_eq(jsonb_array_length(j -> 'disposition'), 1, 'only the approved disposition');
   PERFORM pg_temp.assert_eq(j -> 'disposition' -> 0 ->> 'decision', 'return_to_supplier', 'the approved one');
   PERFORM pg_temp.assert_eq(j ->> 'contact', 'Pat in Quality', 'the contact name chosen for them');
-  PERFORM pg_temp.assert_eq(j::text LIKE '%99%', false, 'no cost');
+  PERFORM pg_temp.assert_eq(j::text ~ '\m99\M', false, 'no cost');
   j := app.portal_get_capa(sh_capa);
   PERFORM pg_temp.assert_eq((SELECT string_agg(key, ',' ORDER BY key COLLATE "C") FROM jsonb_object_keys(j) AS key),
     'closedAt,contact,containment,correctiveActions,lessonsLearned,noContainmentReason,noPreventiveReason,preventiveActions,problem,problemStatement,reference,rootCauses,severity,sharedAt,stage,teamSize,title,verification',

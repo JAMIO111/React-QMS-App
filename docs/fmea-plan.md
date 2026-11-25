@@ -113,7 +113,7 @@ previous revision, **Print** (the handbook's form sheet; design and process vari
 
 | Slice | Content |
 |---|---|
-| **FM1** | Foundation: permissions, packages and module row, `fmeas`, `fmea_revisions` and their lifecycle (submit / approve / send back / new revision / withdraw / settle), team, links, register, FMEA page shell with team and scope, menu, tests. The submit check has only the rules of what exists so far. |
+| **FM1** (built 2026-11-25, migration `20260438100000_fmea_foundation.sql`; see CLAUDE.md) | Foundation: permissions, packages and module row, `fmeas`, `fmea_revisions` and their lifecycle (submit / approve / send back / new revision / withdraw / settle), team, links, register, FMEA page shell with team and scope, menu, tests. The submit check has only the rules of what exists so far. |
 | **FM2** | Rating model: versions, scales, RPN and AP, AP import, `app.score_fmea`, preview, Settings tab; seeded neutral scales. |
 | **FM3** | The analysis: items, functions, failure modes, effects, causes, controls, ratings and the database's worked-out S / AP / RPN, special characteristics, the editor and the "still needed" list. |
 | **FM4** | Optimisation: actions, owners, My actions, revised ratings, adopting actions into a new revision, compare, periodic review, notices. |

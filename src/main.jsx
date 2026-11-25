@@ -131,6 +131,9 @@ const ChangeRegisterPage = lazy(() => import("./components/change/ChangeRegister
 const ChangePage = lazy(() => import("./components/change/ChangePage.jsx"));
 const MyChangesPage = lazy(() => import("./components/change/MyChangesPage.jsx"));
 const ChangeNoticePage = lazy(() => import("./components/change/ChangeNoticePage.jsx"));
+const FmeaRegisterPage = lazy(() => import("./components/fmea/FmeaRegisterPage.jsx"));
+const FmeaPage = lazy(() => import("./components/fmea/FmeaPage.jsx"));
+const FmeaRevisionPage = lazy(() => import("./components/fmea/RevisionPage.jsx"));
 const RiskPage = lazy(() => import("./components/risk/RiskPage.jsx"));
 const RiskDashboard = lazy(() => import("./components/risk/RiskDashboard.jsx"));
 const RiskHeatMapPage = lazy(() => import("./components/risk/RiskHeatMapPage.jsx"));
@@ -369,6 +372,9 @@ const router = createBrowserRouter([
           { path: "Change/Mine", element: <MyChangesPage /> },
           { path: "Change/:id", element: <ChangePage /> },
           { path: "Change/:id/notice", element: <ChangeNoticePage /> },
+          { path: "FMEA", element: <FmeaRegisterPage /> },
+          { path: "FMEA/:id", element: <FmeaPage /> },
+          { path: "FMEA/:id/revisions/:revisionId", element: <FmeaRevisionPage /> },
           { path: "Risk/Register", element: <RiskRegisterPage /> },
           { path: "Risk/Register/:id", element: <RiskPage /> },
           { path: "Competence", element: <CompetenceDashboard /> },

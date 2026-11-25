@@ -310,6 +310,10 @@ BEGIN
   PERFORM app.complete_change_task(t.id, NULL) FROM public.change_tasks t JOIN public.change_requests k ON k.id = t.change_id
      WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
   PERFORM app.record_change_review(k.id, true, 'Sweep effectiveness note') FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  -- FMEA (FM1): a process FMEA with its draft revision, team and scope; written by the functions as the owner.
+  PERFORM app.create_fmea(a, jsonb_build_object('kind', 'process', 'title', 'Sweep FMEA',
+      'team', jsonb_build_array(jsonb_build_object('userId', '50000000-0000-0000-0000-0000000000a1', 'role', 'lead')),
+      'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

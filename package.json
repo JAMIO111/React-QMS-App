@@ -17,7 +17,7 @@
     "api:dev": "npm --workspace api run dev",
     "journey": "npm run api:build && DB_CHECK_SKIP_TESTS=1 DB_CHECK_COMMAND=\"node scripts/journey/run.cjs\" bash scripts/db-check.sh",
     "loadtest:check": "node --test \"scripts/loadtest/*.test.cjs\" && node scripts/loadtest/check-bodies.cjs",
-    "loadtest": "npm run api:build && npm run loadtest:check && DB_CHECK_SKIP_TESTS=1 DB_CHECK_PG_OPTIONS=\"-c shared_buffers=224MB -c work_mem=2184kB -c max_connections=60\" DB_CHECK_COMMAND=\"node scripts/loadtest/run.cjs\" bash scripts/db-check.sh"
+    "loadtest": "npm run api:build && npm run loadtest:check && DB_CHECK_SKIP_TESTS=1 DB_CHECK_FIXTURES=scripts/loadtest/no-fixtures DB_CHECK_PG_OPTIONS=\"-c shared_buffers=224MB -c work_mem=2184kB -c max_connections=60\" DB_CHECK_COMMAND=\"node scripts/loadtest/run.cjs\" bash scripts/db-check.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

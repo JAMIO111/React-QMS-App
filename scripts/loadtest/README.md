@@ -27,7 +27,7 @@ LOADTEST_REDATE=1 npm run loadtest          # the full profile: ~10 GB of disk, 
 
 `npm run loadtest` builds the API, runs the checks, then starts a throwaway Postgres through `scripts/db-check.sh` with Micro-like settings
 (`shared_buffers=224MB`, `max_connections=60`) and runs `run.cjs`. Output goes to `$LOADTEST_OUT` (default `/tmp/loadtest-<time>/`): `report.md`, `report.json`, `state.json`, `api.log`.
-A local database is deleted when the command ends, so seed and test run together. To seed once and test many times, use a **separate Supabase test project**:
+`db-check.sh` normally loads small test fixtures (a few organisations) after some migrations; `npm run loadtest` turns that off (`DB_CHECK_FIXTURES` points at a folder with none), because the guard refuses any organisation that is not load test data. A local database is deleted when the command ends, so seed and test run together. To seed once and test many times, use a **separate Supabase test project**:
 
 ```
 LOADTEST_DATABASE_URL=<qms_api login of the test project> LOADTEST_ADMIN_URL=<admin login of the test project> \

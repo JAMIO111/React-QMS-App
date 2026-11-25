@@ -314,6 +314,8 @@ BEGIN
   PERFORM app.create_fmea(a, jsonb_build_object('kind', 'process', 'title', 'Sweep FMEA',
       'team', jsonb_build_array(jsonb_build_object('userId', '50000000-0000-0000-0000-0000000000a1', 'role', 'lead')),
       'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
+  -- FMEA (FM3): one item with a function, a failure mode, an effect and a rated cause on that draft.
+  PERFORM pg_temp.build_fmea_net(r.id) FROM public.fmea_revisions r JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA';
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

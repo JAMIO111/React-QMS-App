@@ -48,7 +48,16 @@ const fmeaFields = {
   ownerId: z.string().uuid().optional(),
   reviewMonths: z.number().int().min(1).max(120).nullable().optional(),
 };
-export const CreateFmeaBody = z.object({ kind: z.enum(FMEA_KINDS), ...fmeaFields, team: z.array(TeamItem).max(50).optional(), links: z.array(LinkItem).max(100).optional() }).strict();
+export const CreateFmeaBody = z
+  .object({
+    kind: z.enum(FMEA_KINDS),
+    ...fmeaFields,
+    team: z.array(TeamItem).max(50).optional(),
+    links: z.array(LinkItem).max(100).optional(),
+    /** Start from an FMEA in force of the same kind: its analysis is copied (with provenance), never linked. */
+    baseFmeaId: z.string().uuid().optional(),
+  })
+  .strict();
 export type CreateFmeaBody = z.infer<typeof CreateFmeaBody>;
 export const UpdateFmeaBody = z
   .object({ ...fmeaFields, title: fmeaFields.title.optional() })
@@ -88,3 +97,51 @@ export const FmeaListQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type FmeaListQuery = z.infer<typeof FmeaListQuery>;
+
+// ---- the analysis net (FM3) ---------------------------------------------------------------------------
+const note = (max: number) => z.string().trim().max(max).nullable().optional();
+const position = z.number().int().min(0).max(100000).optional();
+const level = z.number().int().min(1).max(10).nullable().optional();
+export const ITEM_KINDS = ['system', 'subsystem', 'component', 'item', 'step', 'element'] as const;
+export const ELEMENT_TYPES = ['man', 'machine', 'material', 'method', 'measurement', 'environment'] as const;
+export const EFFECT_LEVELS = ['own_plant', 'next_plant', 'end_user'] as const;
+export const SPECIAL_CLASSES = ['critical', 'significant'] as const;
+
+const itemFields = {
+  name: z.string().trim().min(1).max(200),
+  elementType: z.enum(ELEMENT_TYPES).nullable().optional(),
+  description: note(1000),
+  operationCode: note(40),
+  machineId: z.string().uuid().nullable().optional(),
+  partId: z.string().uuid().nullable().optional(),
+  position,
+  parentId: z.string().uuid().nullable().optional(),
+};
+export const CreateItemBody = z.object({ kind: z.enum(ITEM_KINDS), ...itemFields }).strict();
+export type CreateItemBody = z.infer<typeof CreateItemBody>;
+export const UpdateItemBody = z.object({ ...itemFields, name: itemFields.name.optional() }).strict().refine(nothingToChange, 'Nothing to change');
+export type UpdateItemBody = z.infer<typeof UpdateItemBody>;
+
+const functionFields = { text: z.string().trim().min(1).max(1000), requirement: note(1000), characteristicKey: note(80), position };
+export const CreateFunctionBody = z.object(functionFields).strict();
+export const UpdateFunctionBody = z.object({ ...functionFields, text: functionFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
+
+const modeFields = { text: z.string().trim().min(1).max(500), specialClass: z.enum(SPECIAL_CLASSES).nullable().optional(), position };
+export const CreateFailureModeBody = z.object(modeFields).strict();
+export const UpdateFailureModeBody = z.object({ ...modeFields, text: modeFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
+
+const effectFields = { level: z.enum(EFFECT_LEVELS), text: z.string().trim().min(1).max(500), severity: level, position };
+export const CreateEffectBody = z.object(effectFields).strict();
+export const UpdateEffectBody = z.object({ ...effectFields, level: effectFields.level.optional(), text: effectFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');
+
+const causeFields = {
+  text: z.string().trim().min(1).max(500),
+  preventionControls: note(1000),
+  detectionControls: note(1000),
+  occurrence: level,
+  detection: level,
+  noActionReason: note(500),
+  position,
+};
+export const CreateCauseBody = z.object(causeFields).strict();
+export const UpdateCauseBody = z.object({ ...causeFields, text: causeFields.text.optional() }).strict().refine(nothingToChange, 'Nothing to change');

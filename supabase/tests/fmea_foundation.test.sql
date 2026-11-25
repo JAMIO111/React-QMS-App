@@ -89,12 +89,13 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.fmea_team_members WHERE revision_id = r1), 2::bigint, 'a refused team leaves the old one');
   PERFORM app.set_fmea_team(r1, jsonb_build_array(jsonb_build_object('userId', cat, 'role', 'lead'), jsonb_build_object('userId', fay, 'role', 'quality'), jsonb_build_object('employeeId', emp, 'role', 'process')));
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.fmea_team_members WHERE revision_id = r1), 3::bigint, 'the team is replaced as a whole');
+  PERFORM pg_temp.build_fmea_net(r1);
 
   -- ---- what a draft still needs ----
   v_problems := app.fmea_revision_problems(r1);
   PERFORM pg_temp.assert_eq(v_problems, ARRAY['Name the approver'], 'only the approver is missing');
   v_problems := app.fmea_revision_problems((SELECT id FROM public.fmea_revisions WHERE fmea_id = f2));
-  PERFORM pg_temp.assert_eq(cardinality(v_problems), 4, 'an empty FMEA lacks a lead, a team, a scope and an approver');
+  PERFORM pg_temp.assert_eq(cardinality(v_problems), 5, 'an empty FMEA lacks a lead, a team, a scope, a structure and an approver');
   r := pg_temp.fails(format('SELECT app.submit_fmea_revision(%L)', r1));
   PERFORM pg_temp.assert_eq(left(r, 5), 'QM036', 'it cannot be submitted while something is needed');
 

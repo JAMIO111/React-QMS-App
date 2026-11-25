@@ -17,6 +17,15 @@ const as = async (user: string, org = ids.orgA) => ({ Authorization: `Bearer ${a
 const today = () => new Date().toISOString().slice(0, 10);
 const ctx: Record<string, string> = {};
 
+/** The smallest analysis that lets a draft be submitted: one item, function, failure mode, effect and a rated, controlled cause. */
+async function buildNet(h: Record<string, string>, revision: string) {
+  const item = (await api().post(`/api/v1/fmea-revisions/${revision}/items`).set(h).send({ kind: 'item', name: 'Turning' }).expect(201)).body.net.items[0].id;
+  const fn = (await api().post(`/api/v1/fmea-items/${item}/functions`).set(h).send({ text: 'Turn the bore to size' }).expect(201)).body.net.items[0].functions[0].id;
+  const mode = (await api().post(`/api/v1/fmea-functions/${fn}/failure-modes`).set(h).send({ text: 'Bore oversize' }).expect(201)).body.net.items[0].functions[0].failureModes[0].id;
+  await api().post(`/api/v1/fmea-failure-modes/${mode}/effects`).set(h).send({ level: 'own_plant', text: 'Scrap', severity: 5 }).expect(201);
+  await api().post(`/api/v1/fmea-failure-modes/${mode}/causes`).set(h).send({ text: 'Tool wear', preventionControls: 'Tool life counter', occurrence: 3, detection: 3 }).expect(201);
+}
+
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
   await seed(admin, ids, '-fm');
@@ -81,7 +90,9 @@ describe('a draft revision', () => {
     await api().put(`/api/v1/fmea-revisions/${ctx.rev}/approver`).set(h).send({ approverId: ids.inspectorA }).expect(409);
     const ready = await api().put(`/api/v1/fmea-revisions/${ctx.rev}/approver`).set(h).send({ approverId: QM }).expect(200);
     expect(ready.body.approver).toMatchObject({ id: QM, name: 'Quinn Manager' });
-    expect(ready.body.problems).toEqual([]);
+    expect(ready.body.problems).toEqual(['Build the structure: add at least one item']);
+    await buildNet(h, ctx.rev);
+    expect((await api().get(`/api/v1/fmea-revisions/${ctx.rev}`).set(h).expect(200)).body.problems).toEqual([]);
   });
 
   it('refuses a stale save and keeps a current one', async () => {
@@ -157,6 +168,7 @@ describe('a new revision, withdrawing and discarding', () => {
     expect(rev.team).toHaveLength(2);
     expect(rev.links).toHaveLength(2);
     expect(rev.previousRevisionId).toBe(ctx.rev);
+    expect(rev.net.counts).toMatchObject({ items: 1, functions: 1, failureModes: 1, effects: 1, causes: 1 });
     expect(rev.problems).toEqual(expect.arrayContaining(['Say what changed and why', 'Name the approver']));
   });
 

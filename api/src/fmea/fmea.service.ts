@@ -198,6 +198,7 @@ export class FmeaService {
       nextLetter: (can.next_letter as string) ?? 'A',
       canManage: Boolean(can.manage) && status !== 'discarded',
       canApprove: Boolean(can.approve),
+      baseFmeaId: (r.base_fmea_id as string) ?? null,
       canStartRevision: Boolean(can.manage) && ['active', 'withdrawn'].includes(status) && !open,
       canWithdraw: Boolean(can.approve) && status === 'active',
     };
@@ -241,7 +242,7 @@ export class FmeaService {
 
   // ---- one revision ----------------------------------------------------------------------------------
 
-  private async revision(db: Db, ctx: RequestContext, id: string) {
+  async revision(db: Db, ctx: RequestContext, id: string) {
     const org = orgOf(ctx);
     const found = (
       await db.execute<Row>(sql`
@@ -278,6 +279,7 @@ export class FmeaService {
       .map(toLink);
     const problems = ((await db.execute<Row>(sql`select app.fmea_revision_problems(${id}::uuid) as p`)).rows[0].p as string[] | null) ?? [];
     const status = r.status as string;
+    const [net, model, base] = await Promise.all([this.net(db, id, org), this.model(db, r.model_id as string, r.kind as string, org), this.base(db, r, org)]);
     const mine = r.approver_id != null && r.approver_id === can.me;
     return {
       id: r.id as string,
@@ -305,6 +307,9 @@ export class FmeaService {
       team,
       links,
       problems,
+      net,
+      model,
+      base,
       canEdit: Boolean(can.manage) && status === 'draft',
       /** The caller is the named approver, it is waiting, and nothing (the approve right, the preparer rule) stands in the way. */
       canDecide: mine && status === 'pending_approval' && Boolean(can.approve) && r.author_id !== can.me,
@@ -312,6 +317,97 @@ export class FmeaService {
       createdAt: iso(r.created_at) as string,
       updatedAt: iso(r.updated_at) as string,
     };
+  }
+
+  /** The analysis of a revision as a tree: items (nested), each with its functions, failure modes, effects and causes. Read as the caller; five queries for any size. */
+  private async net(db: Db, revisionId: string, org: string) {
+    const where = sql`revision_id = ${revisionId}::uuid and organisation_id = ${org}::uuid`;
+    const [items, functions, modes, effects, causes] = await Promise.all([
+      db.execute<Row>(sql`select i.*, m.code as machine_code, m.name as machine_name, p.part_number, p.name as part_name from public.fmea_items i
+                           left join public.machines m on m.id = i.machine_id left join public.parts p on p.id = i.part_id
+                          where i.revision_id = ${revisionId}::uuid and i.organisation_id = ${org}::uuid order by i.position, i.created_at`),
+      db.execute<Row>(sql`select * from public.fmea_functions where ${where} order by position, created_at`),
+      db.execute<Row>(sql`select * from public.fmea_failure_modes where ${where} order by position, created_at`),
+      db.execute<Row>(sql`select * from public.fmea_effects where ${where} order by position, created_at`),
+      db.execute<Row>(sql`select * from public.fmea_causes where ${where} order by position, created_at`),
+    ]);
+    const n = (v: unknown) => (v == null ? null : Number(v));
+    const group = <T extends Row>(rows: T[], key: string) => {
+      const m = new Map<string, T[]>();
+      for (const r of rows) m.set(r[key] as string, [...(m.get(r[key] as string) ?? []), r]);
+      return m;
+    };
+    const fByItem = group(functions.rows, 'item_id');
+    const mByFn = group(modes.rows, 'function_id');
+    const eByMode = group(effects.rows, 'failure_mode_id');
+    const cByMode = group(causes.rows, 'failure_mode_id');
+    const cause = (c: Row) => ({
+      id: c.id as string, text: c.text as string, preventionControls: (c.prevention_controls as string) ?? null, detectionControls: (c.detection_controls as string) ?? null,
+      occurrence: n(c.occurrence), detection: n(c.detection), severityUsed: n(c.severity_used), rpn: n(c.rpn),
+      priority: (c.priority as 'high' | 'medium' | 'low' | null) ?? null, needsAttention: c.needs_attention == null ? null : Boolean(c.needs_attention),
+      noActionReason: (c.no_action_reason as string) ?? null, position: Number(c.position), fromBase: c.base_row_id != null,
+    });
+    const mode = (m: Row) => ({
+      id: m.id as string, text: m.text as string, specialClass: (m.special_class as 'critical' | 'significant' | null) ?? null, position: Number(m.position), fromBase: m.base_row_id != null,
+      effects: (eByMode.get(m.id as string) ?? []).map((e) => ({
+        id: e.id as string, level: e.level as 'own_plant' | 'next_plant' | 'end_user', text: e.text as string, severity: n(e.severity), position: Number(e.position), fromBase: e.base_row_id != null,
+      })),
+      causes: (cByMode.get(m.id as string) ?? []).map(cause),
+    });
+    const fn = (f: Row) => ({
+      id: f.id as string, text: f.text as string, requirement: (f.requirement as string) ?? null, characteristicKey: (f.characteristic_key as string) ?? null,
+      position: Number(f.position), fromBase: f.base_row_id != null, failureModes: (mByFn.get(f.id as string) ?? []).map(mode),
+    });
+    type Node = {
+      id: string; kind: string; elementType: string | null; name: string; description: string | null; operationCode: string | null;
+      machine: { id: string; code: string; name: string } | null; part: { id: string; partNumber: string; name: string } | null;
+      position: number; fromBase: boolean; functions: ReturnType<typeof fn>[]; children: Node[];
+    };
+    const nodes = new Map<string, Node>(
+      items.rows.map((i) => [
+        i.id as string,
+        {
+          id: i.id as string, kind: i.kind as string, elementType: (i.element_type as string) ?? null, name: i.name as string, description: (i.description as string) ?? null,
+          operationCode: (i.operation_code as string) ?? null,
+          machine: i.machine_id ? { id: i.machine_id as string, code: (i.machine_code as string) ?? '', name: (i.machine_name as string) ?? '' } : null,
+          part: i.part_id ? { id: i.part_id as string, partNumber: (i.part_number as string) ?? '', name: (i.part_name as string) ?? '' } : null,
+          position: Number(i.position), fromBase: i.base_row_id != null, functions: (fByItem.get(i.id as string) ?? []).map(fn), children: [],
+        },
+      ]),
+    );
+    const roots: Node[] = [];
+    for (const i of items.rows) {
+      const node = nodes.get(i.id as string)!;
+      const parent = i.parent_id ? nodes.get(i.parent_id as string) : undefined;
+      (parent ? parent.children : roots).push(node);
+    }
+    const counts = { items: items.rows.length, functions: functions.rows.length, failureModes: modes.rows.length, effects: effects.rows.length, causes: causes.rows.length,
+      needAttention: causes.rows.filter((c) => c.needs_attention).length, unrated: causes.rows.filter((c) => c.rpn == null).length };
+    return { items: roots, counts };
+  }
+
+  /** The rating model this revision is scored with (frozen on it), what S, O and D mean on it for this kind of FMEA, and whether a newer version exists. */
+  private async model(db: Db, modelId: string, kind: string, org: string) {
+    const m = (await db.execute<Row>(sql`select id, version, config from public.fmea_models where id = ${modelId}::uuid and organisation_id = ${org}::uuid`)).rows[0];
+    const latest = (await db.execute<Row>(sql`select id, version from public.fmea_models where organisation_id = ${org}::uuid and current`)).rows[0];
+    if (!m) return null;
+    const cfg = m.config as { method: 'rpn' | 'ap'; rpnHighFrom: number; rpnMediumFrom: number; severityFloor: number; scales: Record<string, unknown> };
+    return {
+      id: m.id as string, version: Number(m.version), method: cfg.method, rpnHighFrom: Number(cfg.rpnHighFrom), rpnMediumFrom: Number(cfg.rpnMediumFrom), severityFloor: Number(cfg.severityFloor),
+      scale: cfg.scales[kind] as { severity: { label: string; criteria?: string }[]; occurrence: { label: string; criteria?: string }[]; detection: { label: string; criteria?: string }[] },
+      latestVersion: latest ? Number(latest.version) : Number(m.version), isLatest: !latest || latest.id === m.id,
+    };
+  }
+
+  /** The FMEA this one started from, and the revision of it that was copied. A base the caller may not read has no name. */
+  private async base(db: Db, r: Row, org: string) {
+    if (!r.based_on_revision_id) return null;
+    const b = (
+      await db.execute<Row>(sql`
+        select f.id, f.number, f.title, v.letter, v.id as revision_id from public.fmea_revisions v join public.fmeas f on f.id = v.fmea_id
+         where v.id = ${r.based_on_revision_id as string}::uuid and v.organisation_id = ${org}::uuid`)
+    ).rows[0];
+    return b ? { fmeaId: b.id as string, number: b.number as string, title: b.title as string, revisionId: b.revision_id as string, letter: (b.letter as string) ?? null } : { fmeaId: null, number: null, title: null, revisionId: r.based_on_revision_id as string, letter: null };
   }
 
   async getRevision(ctx: RequestContext, id: string) {

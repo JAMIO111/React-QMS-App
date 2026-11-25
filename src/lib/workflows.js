@@ -38,6 +38,8 @@ export function workflowRecordPath(kind, id) {
       return `/Calibration/Gauge-RR/${id}`;
     case "change":
       return `/Change/${id}`;
+    case "fmea":
+      return `/FMEA/${id}`;
     default:
       return null;
   }
@@ -62,7 +64,7 @@ export function dueWords(dueOn) {
 /** The module a trigger belongs to, from the permission it needs (shown beside each trigger so the long list reads by area). */
 const AREAS = {
   ncr: "Non-conformance", inspection: "Inspection", spc: "Process control", process_control: "Process control", master_data: "Master data",
-  calibration: "Calibration", capa: "8D", audits: "Audits", supplier_quality: "Supplier quality", receiving: "Supplier quality", risk: "Risk", documentation: "Documentation",
+  calibration: "Calibration", capa: "8D", audits: "Audits", supplier_quality: "Supplier quality", receiving: "Supplier quality", risk: "Risk", documentation: "Documentation", fmea: "FMEA",
 };
 export const triggerArea = (trigger) => AREAS[String(trigger?.permission ?? "").split(".")[0]] ?? "";
 export const triggerOptions = (triggers) =>

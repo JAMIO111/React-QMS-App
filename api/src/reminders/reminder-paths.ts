@@ -20,6 +20,8 @@ export const REMINDER_AREAS = [
   'msa_studies',
   'change_tasks',
   'change_signoffs',
+  'fmea_actions',
+  'fmea_reviews',
 ] as const;
 export type ReminderArea = (typeof REMINDER_AREAS)[number];
 
@@ -54,6 +56,10 @@ export function reminderPath(area: unknown, targetId: unknown): string | null {
     case 'change_tasks':
     case 'change_signoffs':
       return t ? `/Change/${t}` : '/Change/Mine';
+    case 'fmea_actions':
+      return '/FMEA/My-Actions';
+    case 'fmea_reviews':
+      return t ? `/FMEA/${t}` : '/FMEA/Register';
     default:
       return null;
   }

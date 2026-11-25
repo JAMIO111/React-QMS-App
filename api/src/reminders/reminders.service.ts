@@ -74,9 +74,14 @@ export class RemindersService {
   }
 
   /** The worker's daily step: every organisation whose reminder time has come and has not run today. */
-  runDaily(correlationId: string): Promise<{ organisations: number; digests: number; overdueNotices: number }> {
+  runDaily(correlationId: string): Promise<{ organisations: number; digests: number; overdueNotices: number; fmeaEvents: { actionEvents: number; reviewEvents: number } }> {
     return this.database.asApi(
-      async (c) => (await c.query(`select app.system_run_reminders(200) as r`)).rows[0].r as { organisations: number; digests: number; overdueNotices: number },
+      async (c) => {
+        const reminders = (await c.query(`select app.system_run_reminders(200) as r`)).rows[0].r as { organisations: number; digests: number; overdueNotices: number };
+        // The FMEA dates a workflow rule can start from (an action gone overdue, a review reached): written once for each due date, whatever the reminder time.
+        const due = (await c.query(`select app.system_emit_fmea_due_events(200) as r`)).rows[0].r as { actionEvents: number; reviewEvents: number };
+        return { ...reminders, fmeaEvents: { actionEvents: due.actionEvents, reviewEvents: due.reviewEvents } };
+      },
       correlationId,
       'worker',
     );

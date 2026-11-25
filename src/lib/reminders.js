@@ -32,6 +32,10 @@ export function reminderPath(area, targetId) {
     case "change_tasks":
     case "change_signoffs":
       return t ? `/Change/${t}` : "/Change/Mine";
+    case "fmea_actions":
+      return "/FMEA/My-Actions";
+    case "fmea_reviews":
+      return t ? `/FMEA/${t}` : "/FMEA/Register";
     default:
       return null;
   }

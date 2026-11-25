@@ -1,4 +1,4 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ScanSearchIcon, ShieldAlertIcon,
+import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ListTreeIcon, ScanSearchIcon, ShieldAlertIcon,
   ListTodoIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
@@ -159,6 +159,18 @@ export const menuStructure = [
       { name: "Dashboard", path: "/Change", end: true },
       { name: "Changes", path: "/Change/Register" },
       { name: "My changes", path: "/Change/Mine", badge: "my-changes" },
+    ],
+  },
+  {
+    name: "FMEA",
+    icon: ListTreeIcon,
+    permission: "fmea.read",
+    path: "/FMEA",
+    // badge: "my-fmea-actions" = open FMEA actions given to the signed-in person (see Navbar)
+    badge: "my-fmea-actions",
+    subMenu: [
+      { name: "FMEAs", path: "/FMEA", end: true },
+      { name: "My actions", path: "/FMEA/My-Actions", badge: "my-fmea-actions" },
     ],
   },
   {

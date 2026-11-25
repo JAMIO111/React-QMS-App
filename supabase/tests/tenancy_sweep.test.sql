@@ -310,6 +310,24 @@ BEGIN
   PERFORM app.complete_change_task(t.id, NULL) FROM public.change_tasks t JOIN public.change_requests k ON k.id = t.change_id
      WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
   PERFORM app.record_change_review(k.id, true, 'Sweep effectiveness note') FROM public.change_requests k WHERE k.organisation_id = a AND k.title = 'Sweep closed change';
+  -- FMEA (FM1): a process FMEA with its draft revision, team and scope; written by the functions as the owner.
+  PERFORM app.create_fmea(a, jsonb_build_object('kind', 'process', 'title', 'Sweep FMEA',
+      'team', jsonb_build_array(jsonb_build_object('userId', '50000000-0000-0000-0000-0000000000a1', 'role', 'lead')),
+      'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', (SELECT id FROM public.parts WHERE organisation_id = a LIMIT 1)))));
+  -- FMEA (FM3): one item with a function, a failure mode, an effect and a rated cause on that draft.
+  PERFORM pg_temp.build_fmea_net(r.id) FROM public.fmea_revisions r JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA';
+  -- FMEA (FM4): an action on that cause and a periodic review (written straight in: the sweep only needs a row in each table).
+  PERFORM app.add_fmea_action(c.id, jsonb_build_object('kind', 'prevention', 'description', 'Sweep FMEA action', 'ownerUserId', '50000000-0000-0000-0000-0000000000a1', 'dueOn', (current_date + 30)::text))
+     FROM public.fmea_causes c JOIN public.fmea_revisions r ON r.id = c.revision_id JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA' LIMIT 1;
+  PERFORM set_config('role', 'postgres', true);
+  INSERT INTO public.fmea_reviews (organisation_id, fmea_id, revision_id, outcome, note)
+    SELECT f.organisation_id, f.id, r.id, 'no_change', 'Sweep review' FROM public.fmeas f JOIN public.fmea_revisions r ON r.fmea_id = f.id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA';
+  -- FMEA (FM5a): a control carried to a control plan characteristic (written straight in as well: the sweep only needs a row in the table).
+  INSERT INTO public.control_plans (organisation_id, plan_code, title) VALUES (a, 'SWEEP-FMEA-CP', 'Sweep FMEA plan');
+  INSERT INTO public.fmea_control_links (organisation_id, revision_id, cause_id, control_kind, control_plan_id, operation_code, characteristic_key)
+    SELECT c.organisation_id, c.revision_id, c.id, 'prevention', (SELECT id FROM public.control_plans WHERE organisation_id = a AND plan_code = 'SWEEP-FMEA-CP'), 'OP-10', 'OD'
+      FROM public.fmea_causes c JOIN public.fmea_revisions r ON r.id = c.revision_id JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA' LIMIT 1;
+  PERFORM set_config('role', 'authenticated', true);
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

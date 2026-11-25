@@ -93,6 +93,16 @@ import { CompetenceController } from './competence/competence.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
 import { ChangeController } from './change/change.controller';
+import { FmeaAnalysisController } from './fmea/fmea-analysis.controller';
+import { FmeaActionsController } from './fmea/fmea-actions.controller';
+import { FmeaActionsService } from './fmea/fmea-actions.service';
+import { FmeaControlsController } from './fmea/fmea-controls.controller';
+import { FmeaControlsService } from './fmea/fmea-controls.service';
+import { FmeaAnalysisService } from './fmea/fmea-analysis.service';
+import { FmeaController } from './fmea/fmea.controller';
+import { FmeaModelController } from './fmea/fmea-model.controller';
+import { FmeaModelService } from './fmea/fmea-model.service';
+import { FmeaService } from './fmea/fmea.service';
 import { ChangeService } from './change/change.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
@@ -312,6 +322,11 @@ export class AppModule implements NestModule {
         SupplierDashboardController,
         DocumentsController,
         ChangeController,
+        FmeaController,
+        FmeaAnalysisController,
+        FmeaActionsController,
+        FmeaControlsController,
+        FmeaModelController,
         RiskController,
         RiskDashboardController,
         QualityObjectivesController,
@@ -433,6 +448,11 @@ export class AppModule implements NestModule {
         CompetenceTrainingService,
         DocumentsService,
         ChangeService,
+        FmeaService,
+        FmeaAnalysisService,
+        FmeaActionsService,
+        FmeaControlsService,
+        FmeaModelService,
         RiskService,
         RiskDashboardService,
         QualityObjectivesService,

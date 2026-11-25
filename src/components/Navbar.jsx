@@ -14,6 +14,7 @@ import { useMyDocumentCount } from "../hooks/useDocuments";
 import { useMyCapaActions } from "../hooks/useCapa";
 import { useMyRiskCount } from "../hooks/useRisk";
 import { useMyChangeCount } from "../hooks/useChange";
+import { useMyFmeaActionCount } from "../hooks/useFmea";
 import { useMyReviewActions } from "../hooks/useManagementReview";
 import { useMyTasks } from "../hooks/useWorkflows";
 import { useModuleAccess } from "../hooks/useSubscription";
@@ -31,6 +32,7 @@ const Navbar = () => {
   const myDocuments = useMyDocumentCount({ enabled: canSee("documentation.read") });
   const myRiskWork = useMyRiskCount({ enabled: canSee("risk.read") });
   const myChanges = useMyChangeCount({ enabled: canSee("change.read") });
+  const myFmeaActions = useMyFmeaActionCount({ enabled: canSee("fmea.read") });
   const myReviewActions = useMyReviewActions("open", { enabled: canSee("management_review.read") });
   const myTasks = useMyTasks("open");
   const badges = {
@@ -41,6 +43,7 @@ const Navbar = () => {
     "my-actions": myActions.data?.openCount ?? 0,
     "my-risk-work": myRiskWork.data?.total ?? 0,
     "my-changes": myChanges.data?.total ?? 0,
+    "my-fmea-actions": myFmeaActions.data?.total ?? 0,
     "my-review-actions": myReviewActions.data?.openCount ?? 0,
   };
   const hasModule = useModuleAccess();

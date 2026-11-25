@@ -127,3 +127,16 @@ BEGIN
   ON CONFLICT (requested_on, base, quote) DO UPDATE SET rate = NULL, rate_date = NULL, supported = false, fetched_at = now();
   PERFORM set_config('role', v_role, true);
 END $$;
+
+-- A minimal valid FMEA analysis on a draft revision (one structure item, function, failure mode, effect of severity 5 and cause rated 3 and 3 with a control), written as the current
+-- user: the "still needed" list then asks for nothing from the analysis. Low priority, so no cause needs attention.
+CREATE FUNCTION pg_temp.build_fmea_net(p_revision uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_item uuid; v_fn uuid; v_mode uuid; v_kind text;
+BEGIN
+  SELECT f.kind INTO v_kind FROM public.fmea_revisions r JOIN public.fmeas f ON f.id = r.fmea_id WHERE r.id = p_revision;
+  v_item := app.save_fmea_item(p_revision, NULL, jsonb_build_object('kind', CASE v_kind WHEN 'design' THEN 'system' ELSE 'item' END, 'name', 'Test structure'));
+  v_fn := app.save_fmea_function(v_item, NULL, '{"text":"Test function"}'::jsonb);
+  v_mode := app.save_fmea_failure_mode(v_fn, NULL, '{"text":"Test failure mode"}'::jsonb);
+  PERFORM app.save_fmea_effect(v_mode, NULL, '{"level":"end_user","text":"Test effect","severity":5}'::jsonb);
+  PERFORM app.save_fmea_cause(v_mode, NULL, '{"text":"Test cause","preventionControls":"Test control","occurrence":3,"detection":3}'::jsonb);
+END $$;

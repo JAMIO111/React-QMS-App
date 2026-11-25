@@ -141,7 +141,7 @@ export class WorkerService {
     };
 
     await step('quality-alerts', () => this.cron.expireQualityAlerts(correlationId));
-    await step('documents', () => this.cron.settleDocuments(correlationId));
+    await step('documents', async () => ({ ...(await this.cron.settleDocuments(correlationId)), fmeas: (await this.cron.settleFmeas(correlationId)).settled }));
     await step('reminders', () => this.reminders.runDaily(correlationId), 3_000);
     await step('scorecards', () => this.scorecards.runSchedule(correlationId), 3_000);
     await step('workflows', () => this.workflows.consume(correlationId, Math.min(stopAt - 12_000, Date.now() + 10_000)), 3_000);

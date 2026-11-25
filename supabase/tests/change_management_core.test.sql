@@ -28,11 +28,11 @@ BEGIN
       FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id IN (bob, cat);
 
   -- ---- permissions and role defaults ----
-  PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY 1) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
+  PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY rp.permission_code) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
     WHERE r.organisation_id = org AND r.key = 'quality_manager' AND rp.permission_code LIKE 'change.%'), ARRAY['change.approve','change.manage','change.read'], 'a quality manager holds all three');
-  PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY 1) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
+  PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY rp.permission_code) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
     WHERE r.organisation_id = org AND r.key = 'viewer' AND rp.permission_code LIKE 'change.%'), ARRAY['change.read'], 'a viewer reads');
-  PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY 1) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
+  PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY rp.permission_code) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
     WHERE r.organisation_id = org AND r.key = 'inspector' AND rp.permission_code LIKE 'change.%'), ARRAY['change.read'], 'an inspector reads');
 
   -- ---- the seeded lists ----

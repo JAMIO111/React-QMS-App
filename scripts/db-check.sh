@@ -6,7 +6,9 @@
 #      DB_CHECK_EXTRA=<file.sql> (run after all migrations), DB_CHECK_SKIP_TESTS=1,
 #      DB_CHECK_ONLY="<substring>" (run only the SQL tests whose file name contains it),
 #      DB_CHECK_COMMAND="<cmd>" (run after migrations/tests with DATABASE_URL (qms_api login) and
-#      DATABASE_ADMIN_URL (superuser, for seeding) pointing at the throwaway cluster)
+#      DATABASE_ADMIN_URL (superuser, for seeding) pointing at the throwaway cluster),
+#      DB_CHECK_PG_OPTIONS="<postgres options>" (added to the server's start options, e.g. the load test's
+#      "-c shared_buffers=224MB -c max_connections=60" to behave like a small hosted instance)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -27,7 +29,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 "${RUNAS[@]}" "$PGBIN/initdb" -D "$TMP/data" -U postgres --auth=trust >/dev/null
-"${RUNAS[@]}" "$PGBIN/pg_ctl" -D "$TMP/data" -o "-p $PORT -k $TMP -c listen_addresses='${PGLISTEN_CHECK:-}'" -l "$TMP/log" -w start >/dev/null
+"${RUNAS[@]}" "$PGBIN/pg_ctl" -D "$TMP/data" -o "-p $PORT -k $TMP -c listen_addresses='${PGLISTEN_CHECK:-}' ${DB_CHECK_PG_OPTIONS:-}" -l "$TMP/log" -w start >/dev/null
 
 PSQL=(psql -X -q -v ON_ERROR_STOP=1 -h "$TMP" -p "$PORT" -U postgres -d postgres)
 "${PSQL[@]}" -f supabase/tests/supabase_stubs.sql

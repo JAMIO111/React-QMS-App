@@ -285,12 +285,12 @@ export const useMembers = ({ enabled = true } = {}) => {
   });
 };
 
-export const useRoles = () => {
+export const useRoles = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
     queryKey: orgKey(organisationId, "roles"),
     queryFn: () => apiFetch("/roles", { organisationId }),
-    enabled: !!organisationId,
+    enabled: !!organisationId && enabled,
     retry: false,
     staleTime: 1000 * 60 * 5,
   });

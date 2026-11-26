@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
@@ -26,6 +26,7 @@ vi.mock("../../hooks/useQmsApi", () => ({
   useMemberMutation: () => ({ mutate, isPending: false }),
 }));
 vi.mock("../../hooks/useSubscription", () => ({ useSubscriptionOverview: () => ({ data: overview }) }));
+vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
 vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 
 import TeamInvite from "./TeamInvite";
@@ -37,6 +38,7 @@ const addPeople = async (text) => {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   mutate.mockReset();
   showToast.mockReset();
   permissions = ["members.read", "members.manage", "subscription.seats"];
@@ -208,5 +210,53 @@ describe("inviting a team", () => {
       renderIt();
       expect(screen.queryByRole("list", { name: "Pending invitations" })).toBeNull();
     });
+  });
+});
+
+describe("planning the team before the plan is active", () => {
+  const renderDraft = () => render(<MemoryRouter><TeamInvite live={false} /></MemoryRouter>);
+
+  it("explains that nobody is emailed yet, offers the standard roles and sends nothing", async () => {
+    renderDraft();
+    expect(screen.getByText(/Plan your team now, invite them after you choose a plan/)).toBeInTheDocument();
+    await addPeople("a@example.com, b@example.com");
+    const role = screen.getByLabelText("Role for a@example.com");
+    expect(within(role).getAllByRole("option").map((o) => o.textContent)).toEqual(expect.arrayContaining(["Quality engineer", "Inspector", "Viewer"]));
+    await userEvent.selectOptions(role, "key:viewer");
+    expect(screen.queryByRole("button", { name: /Send \d invitation/ })).toBeNull();
+    expect(screen.getByText(/Nobody is emailed until your plan is active/)).toBeInTheDocument();
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("says how many seats the planned team needs, counting the owner's Controller seat", async () => {
+    renderDraft();
+    await addPeople("a@example.com, b@example.com");
+    await userEvent.selectOptions(screen.getByLabelText("Package for a@example.com"), "contributor");
+    await userEvent.selectOptions(screen.getByLabelText("Package for b@example.com"), "contributor");
+    const needs = screen.getByRole("group", { name: "Seats this team needs" });
+    expect(needs).toHaveTextContent("Controller: 1");
+    expect(needs).toHaveTextContent("Contributor: 2");
+  });
+
+  it("remembers the list when the page is left and opened again, and offers it ready to send once the plan is active", async () => {
+    const first = renderDraft();
+    await addPeople("a@example.com");
+    first.unmount();
+    renderDraft();
+    expect(screen.getByText("To invite (1)")).toBeInTheDocument();
+    cleanup();
+    renderIt(); // the plan is active now: the same list, ready to send, with the real roles
+    expect(screen.getByText("Your planned team is ready to send")).toBeInTheDocument();
+    expect(screen.getByText("To invite (1)")).toBeInTheDocument();
+  });
+
+  it("turns a planned standard role into the organisation's own role when invitations can be sent", async () => {
+    const first = renderDraft();
+    await addPeople("a@example.com");
+    await userEvent.selectOptions(screen.getByLabelText("Role for a@example.com"), "key:viewer");
+    await userEvent.selectOptions(screen.getByLabelText("Department for everyone"), "d-qa");
+    first.unmount();
+    renderIt();
+    expect(screen.getByLabelText("Role for a@example.com")).toHaveValue("r-viewer");
   });
 });

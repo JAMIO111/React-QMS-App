@@ -46,37 +46,25 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await page.getByLabel('Organisation name').fill(`Journey Works ${RUN}`);
   await page.getByRole('button', { name: 'Create organisation' }).click();
   await page.waitForURL(/\/setup/);
-  await see(page.getByRole('heading', { name: /plan and seats/i }));
-  await shot(page, '03-plan-step-locked');
+  // The wizard starts with the organisation itself: name, legal details, logo and colour on one page. The plan comes last.
+  await see(page.getByRole('heading', { name: /your organisation/i }).first());
+  await shot(page, '03-organisation');
 
-  step('owner buys seats at the (fake) Checkout');
-  await page.getByRole('button', { name: 'Add Contributor seat' }).click();
-  await page.getByRole('button', { name: 'Add Contributor seat' }).click();
-  await shot(page, '04-seats-chosen');
-  await page.getByRole('button', { name: 'Continue to secure checkout' }).click();
-  await see(page.getByText(/free trial until/i));
-  await shot(page, '05-subscribed');
-  const sub = (await stack.admin.query(`select s.status, (select sum(quantity) from public.organisation_subscription_items i where i.organisation_id = s.organisation_id) seats from public.organisation_subscriptions s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [`Journey Works ${RUN}`])).rows[0];
-  log(`subscription: ${JSON.stringify(sub)}`);
-  if (sub.status !== 'trialing' || Number(sub.seats) !== 3) throw new Error('the subscription was not recorded as expected');
-
-  step('owner walks the wizard: details, sites, security');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await see(page.getByRole('heading', { name: /organisation details/i }));
+  step('owner walks the wizard: organisation, sites, security, team (planned)');
   await page.getByLabel('Legal name').fill(`Journey Works ${RUN} Limited`);
-  await page.getByRole('button', { name: 'Save details' }).click();
   await shot(page, '06-details');
-  await page.getByRole('button', { name: /done, continue/i }).click();
-  await see(page.getByRole('heading', { name: /sites and departments/i }));
-  await page.getByRole('button', { name: /MAIN/ }).first().click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await see(page.getByRole('heading', { name: /sites and departments/i }).first());
+  // Departments are on the site's card with a visible button, nothing to open first.
+  await page.getByRole('button', { name: 'Add department' }).first().click();
   const addDepartment = page.getByRole('form', { name: 'Add department' });
   await addDepartment.getByLabel('Code').fill('QA');
   await addDepartment.getByLabel('Name').fill('Quality');
   await addDepartment.getByRole('button', { name: 'Add department' }).click();
-  await see(page.getByText('Quality', { exact: false }).filter({ hasText: 'QA' }));
+  await see(page.getByRole('list', { name: /Departments of/ }).getByText('Quality'));
   await shot(page, '07-sites');
   // The site pop-up: code, name, time zone, currency (the organisation's by default) and departments.
-  await page.getByRole('button', { name: 'Edit' }).first().click();
+  await page.getByRole('button', { name: 'Edit site' }).first().click();
   const siteDialog = page.getByRole('dialog', { name: /Edit site/ });
   await see(siteDialog.getByRole('combobox', { name: 'Currency' }));
   await see(siteDialog.getByRole('region', { name: 'Departments' }).getByText('Quality'));
@@ -86,10 +74,11 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await see(page.getByRole('heading', { name: /^security$/i }));
   await shot(page, '08-security');
   await page.getByRole('button', { name: 'Skip for now' }).click();
-  await see(page.getByRole('heading', { name: /your team/i }));
+  await see(page.getByRole('heading', { name: /your team/i }).first());
   await shot(page, '09-team');
 
-  step('owner invites a colleague');
+  step('owner plans a colleague before paying: nothing is sent yet');
+  await see(page.getByText(/plan your team now/i));
   await page.getByLabel('Email addresses').fill(colleague.email);
   await page.getByRole('button', { name: 'Add to the list' }).click();
   const everyone = page.getByRole('group', { name: 'Set for everyone' });
@@ -98,6 +87,31 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await everyone.getByLabel('Role for everyone').selectOption(inspector ? { label: inspector } : { index: 1 });
   await everyone.getByLabel('Department for everyone').selectOption({ index: 1 });
   await everyone.getByLabel('Package for everyone').selectOption({ label: 'Contributor' });
+  await see(page.getByRole('group', { name: 'Seats this team needs' }).getByText(/Contributor/));
+  await shot(page, '10-invite-planned');
+  if (await page.getByRole('button', { name: /send \d+ invitation/i }).count()) throw new Error('invitations must not be sendable before the plan is active');
+  await page.getByRole('button', { name: /done, continue/i }).click();
+  await see(page.getByRole('heading', { name: /plan and seats/i }).first());
+  await shot(page, '03b-plan-last');
+  const planned = (await stack.admin.query(`select count(*)::int n from public.organisation_users m join public.organisations o on o.id = m.organisation_id where o.name = $1 and m.status = 'invited'`, [`Journey Works ${RUN}`])).rows[0];
+  if (planned.n !== 0) throw new Error('the planned colleague was invited before the plan was active');
+
+  step('owner buys seats at the (fake) Checkout, starting from the planned team');
+  // The plan starts from the team that was planned: the owner's Controller seat and one Contributor. One more Contributor for later.
+  if ((await page.getByLabel('Contributor seats').textContent())?.trim() !== '1') throw new Error('the seat picker should start from the planned team');
+  await page.getByRole('button', { name: 'Add Contributor seat' }).click();
+  await shot(page, '04-seats-chosen');
+  await page.getByRole('button', { name: 'Continue to secure checkout' }).click();
+  await see(page.getByText(/free trial until/i));
+  await shot(page, '05-subscribed');
+  const sub = (await stack.admin.query(`select s.status, (select sum(quantity) from public.organisation_subscription_items i where i.organisation_id = s.organisation_id) seats from public.organisation_subscriptions s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [`Journey Works ${RUN}`])).rows[0];
+  log(`subscription: ${JSON.stringify(sub)}`);
+  if (sub.status !== 'trialing' || Number(sub.seats) !== 3) throw new Error('the subscription was not recorded as expected');
+
+  step('owner sends the planned invitation now the plan is active');
+  await see(page.getByText(/Your plan is active/));
+  await page.getByRole('link', { name: 'Send the invitations' }).click();
+  await see(page.getByText('Your planned team is ready to send'));
   await shot(page, '10-invite-ready');
   await page.getByRole('button', { name: /send 1 invitation/i }).click();
   await see(page.getByRole('list', { name: 'Results' }));
@@ -108,7 +122,10 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
 
   step('owner reviews and finishes');
   await page.getByRole('button', { name: /done, continue/i }).click();
-  await see(page.getByRole('heading', { name: /review and finish/i }));
+  await see(page.getByRole('heading', { name: /plan and seats/i }).first());
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await see(page.getByRole('heading', { name: /review and finish/i }).first());
+  await see(page.getByRole('heading', { name: /is ready to go/i }));
   await shot(page, '12-review');
   await page.getByRole('button', { name: 'Finish set-up' }).click();
   await page.waitForURL(/\/Dashboard/);

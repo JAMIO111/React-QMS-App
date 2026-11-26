@@ -8,7 +8,7 @@ let permissions;
 let wizard;
 const KEYS = ["organisation", "plan", "details", "sites", "security", "team", "review"];
 const steps = (statuses = {}) =>
-  KEYS.map((key) => ({ key, status: statuses[key] ?? (key === "organisation" || key === "sites" ? "done" : "pending"), required: key === "organisation" || key === "sites" || key === "plan", auto: false }));
+  KEYS.map((key) => ({ key, status: statuses[key] ?? (key === "organisation" || key === "sites" || key === "details" ? "done" : "pending"), required: key === "organisation" || key === "sites" || key === "plan", auto: false }));
 
 vi.mock("@/contexts/UserProvider", () => ({ useUser: () => ({ profile: { first_name: "Sam" } }) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: { id: "o1", name: "Acme Ltd" } }) }));
@@ -53,24 +53,24 @@ describe("the set-up progress card", () => {
     renderIt();
     const card = screen.getByRole("region", { name: "Set-up progress" });
     expect(within(card).getByRole("heading", { name: "Finish setting up Acme Ltd" })).toBeInTheDocument();
-    expect(card).toHaveTextContent("2 of 7 steps done");
-    expect(within(card).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "29");
-    expect(card).toHaveTextContent("Next: Plan and seats.");
+    expect(card).toHaveTextContent("2 of 6 steps done");
+    expect(within(card).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "33");
+    expect(card).toHaveTextContent("Next: Security.");
     expect(card).toHaveTextContent("Still needed before you can finish: Plan & seats.");
-    expect(within(card).getByRole("link", { name: "Continue set-up" })).toHaveAttribute("href", "/setup/plan");
+    expect(within(card).getByRole("link", { name: "Continue set-up" })).toHaveAttribute("href", "/setup/security");
   });
 
   it("links to every step, marks the current one and the finished ones, and notes skipped steps", () => {
-    wizard = { ...wizard, steps: steps({ plan: "done", details: "skipped" }), currentStep: "security" };
+    wizard = { ...wizard, steps: steps({ plan: "done", security: "skipped" }) };
     renderIt();
     const list = screen.getByRole("list", { name: "Set-up steps" });
-    expect(within(list).getAllByRole("link")).toHaveLength(7);
-    expect(within(list).getByRole("link", { name: /Security/ })).toHaveAttribute("aria-current", "step");
-    expect(within(list).getByRole("link", { name: /Security/ })).toHaveAttribute("href", "/setup/security");
-    expect(within(list).getByRole("link", { name: /Details/ })).toHaveTextContent("(skipped)");
+    expect(within(list).getAllByRole("link")).toHaveLength(6);
+    expect(within(list).getByRole("link", { name: /Your team/ })).toHaveAttribute("aria-current", "step");
+    expect(within(list).getByRole("link", { name: /Your team/ })).toHaveAttribute("href", "/setup/team");
+    expect(within(list).getByRole("link", { name: /Security/ })).toHaveTextContent("(skipped)");
     expect(within(within(list).getByRole("link", { name: /Plan & seats/ })).getByLabelText("Done")).toBeInTheDocument();
-    expect(within(within(list).getByRole("link", { name: /Security/ })).queryByLabelText("Done")).toBeNull();
-    expect(screen.getByRole("region", { name: "Set-up progress" })).toHaveTextContent("3 of 7 steps done");
+    expect(within(within(list).getByRole("link", { name: /Your team/ })).queryByLabelText("Done")).toBeNull();
+    expect(screen.getByRole("region", { name: "Set-up progress" })).toHaveTextContent("3 of 6 steps done");
   });
 
   it("says when everything required is done and only the review is left", () => {

@@ -9,13 +9,13 @@ import SitesManager from "../Settings/SitesManager";
 import ThemeColourPicker from "../Settings/ThemeColourPicker";
 import TwoFactorCard from "../Settings/TwoFactorCard";
 import { describeApiError } from "../../lib/api-client";
-import { countryOptions } from "../../lib/onboarding";
-import { useOrganisationDetails, usePermissions, useSites, useUpdateOrganisation } from "../../hooks/useQmsApi";
+import { countryOptions, loadTeamDraft, seatsForDraft } from "../../lib/onboarding";
+import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useStartCheckout, usePlanCatalogue, usePortalSession, useSubscriptionOverview } from "../../hooks/useSubscription";
 import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
-import { clearChoice, formatDate, loadChoice, money, saveChoice } from "../../lib/billing";
+import { DEFAULT_CHOICE, clearChoice, formatDate, hasSavedChoice, loadChoice, money, saveChoice } from "../../lib/billing";
 import CheckoutNotice from "../billing/CheckoutNotice";
 import SeatPicker from "../billing/SeatPicker";
 import TeamInvite from "./TeamInvite";
@@ -23,34 +23,51 @@ import { ErrorNotice, FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 
-/** Step 1: the organisation's name, and where the first site is. */
-export const OrganisationStep = () => {
+/**
+ * Step 1: everything about the organisation itself on one page: name (needed), legal name and country, logo and colour (all optional). The wizard's
+ * Continue saves what is typed (through `saveRef`) and marks the optional details as done.
+ */
+export const OrganisationStep = ({ saveRef }) => {
   const { data: org } = useOrganisationDetails();
-  const sites = useSites();
   const update = useUpdateOrganisation();
   const [name, setName] = useState(org?.name ?? "");
-  // Saved optimistically: while saving, and after a refusal (the name goes back), what was typed stays in the box.
+  const [legalName, setLegalName] = useState(org?.legalName ?? "");
+  const [country, setCountry] = useState(org?.country ?? null);
+  // Follow the saved values, but never overwrite what is being typed or what is still saving (the details go back only if the save is refused).
   const keepTyped = update.isPending || update.isError;
-  useEffect(() => {
-    if (!keepTyped) setName(org?.name ?? "");
-  }, [org?.name, keepTyped]);
-  const first = sites.data?.data?.[0] ?? sites.data?.items?.[0];
-  const dirty = org && name.trim() !== org.name;
+  const savedName = org?.name ?? "";
+  const savedLegalName = org?.legalName ?? "";
+  const savedCountry = org?.country ?? null;
+  useEffect(() => { if (!keepTyped) setName(savedName); }, [savedName, keepTyped]);
+  useEffect(() => { if (!keepTyped) setLegalName(savedLegalName); }, [savedLegalName, keepTyped]);
+  useEffect(() => { if (!keepTyped) setCountry(savedCountry); }, [savedCountry, keepTyped]);
+  const dirty = !!org && (name.trim() !== savedName || legalName.trim() !== savedLegalName || (country ?? null) !== savedCountry);
+  const nameOk = name.trim().length >= 2;
+  const save = () => {
+    if (!nameOk) return false;
+    if (dirty) update.mutate({ body: { name: name.trim(), legalName: legalName.trim() || null, country } });
+    return true;
+  };
+  if (saveRef) saveRef.current = save;
   return (
     <div className="flex flex-col gap-4">
-      <MenuCard as="form" aria-label="Organisation name" title="Name" subtitle="Shown in the app and on your reports" bodyClassName="flex flex-col gap-3"
-        onSubmit={(e) => { e.preventDefault(); if (dirty) update.mutate({ body: { name: name.trim() } }); }}>
+      <MenuCard as="form" aria-label="Organisation details" title="Name and legal details" subtitle="The name is shown in the app and on your reports. The legal name and country are used on documents and invoices." bodyClassName="flex flex-col gap-3"
+        onSubmit={(e) => { e.preventDefault(); save(); }}>
         <Field label="Organisation name" required minLength={2} maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Legal name" maxLength={200} value={legalName} onChange={(e) => setLegalName(e.target.value)} hint="e.g. Acme Fabrication Limited" />
+          <RHFComboBox label="Country" value={country} onChange={(v) => setCountry(v ?? null)} options={countryOptions()} placeholder="Choose a country" clearable />
+        </div>
         <FormError error={update.error} />
-        <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty}>Save name</CTAButton>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-secondary-text">{dirty ? "Not saved yet. Continue saves it for you." : "All changes saved."}</span>
+          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty || !nameOk}>Save details</CTAButton>
         </div>
       </MenuCard>
-      {first && (
-        <p className="text-sm text-secondary-text">
-          First site: <span className="text-primary-text">{first.name}</span> ({first.code}), time zone <span className="text-primary-text">{first.timezone}</span>. You can add sites and change this in the Sites step.
-        </p>
-      )}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <OrganisationLogo logoPath={org?.settings.logoPath ?? null} canManage />
+        <ThemeColourPicker value={org?.settings.themeColour ?? "purple"} canManage />
+      </div>
     </div>
   );
 };
@@ -100,7 +117,9 @@ export const PlanStep = ({ state }) => {
   const start = useStartCheckout();
   const portal = usePortalSession();
   const { showToast } = useToast();
-  const [choice, setChoice] = useState(() => loadChoice(organisationId));
+  // Start from the team that was planned (its seats, plus the owner's Controller seat), unless a choice was already made on the way to Stripe and back.
+  const [draft] = useState(() => loadTeamDraft(organisationId));
+  const [choice, setChoice] = useState(() => (!hasSavedChoice(organisationId) && draft.rows.length > 0 ? { ...DEFAULT_CHOICE, seats: seatsForDraft(draft.rows) } : loadChoice(organisationId)));
   const update = (next) => {
     setChoice(next);
     saveChoice(organisationId, next);
@@ -132,6 +151,11 @@ export const PlanStep = ({ state }) => {
   return (
     <div className="flex flex-col gap-4">
       <CheckoutNotice checkout={checkout} />
+      {open && draft.rows.length > 0 && (
+        <Callout tone="success" title="Your plan is active" action={<CTAButton to="/setup/team" type="main" size="md">Send the invitations</CTAButton>}>
+          {draft.rows.length} {draft.rows.length === 1 ? "person is" : "people are"} waiting to be invited. Check the list and send when you are ready.
+        </Callout>
+      )}
       {open && sub ? (
         <SubscriptionSummary overview={data} canManage={canManage} />
       ) : (
@@ -161,6 +185,9 @@ export const PlanStep = ({ state }) => {
               </>
             ) : (
               <>
+                {draft.rows.length > 0 && (
+                  <Callout tone="info">We have suggested seats for the {draft.rows.length} {draft.rows.length === 1 ? "person" : "people"} on your team plan, plus your own Controller seat. Change them freely.</Callout>
+                )}
                 <p>
                   Fortress QMS is priced per seat: Observer (read only), Contributor (record and complete work) and Controller (full functionality). You need at least one <strong>Controller</strong> seat, and you, the owner, take it.
                 </p>
@@ -186,44 +213,10 @@ export const PlanStep = ({ state }) => {
   );
 };
 
-/** Step 3: legal name, country, logo and colour. */
-export const DetailsStep = () => {
-  const { data: org } = useOrganisationDetails();
-  const update = useUpdateOrganisation();
-  const [legalName, setLegalName] = useState(org?.legalName ?? "");
-  const [country, setCountry] = useState(org?.country ?? null);
-  // Follow the saved values, but not the moment they first load as "nothing": that would wipe what the person has already started typing.
-  const savedLegalName = org?.legalName ?? "";
-  const savedCountry = org?.country ?? null;
-  // Saved optimistically: while saving, and after a refusal (the details go back), what was typed stays.
-  const keepTyped = update.isPending || update.isError;
-  useEffect(() => {
-    if (keepTyped) return;
-    setLegalName(savedLegalName);
-    setCountry(savedCountry);
-  }, [savedLegalName, savedCountry, keepTyped]);
-  const dirty = org && (legalName.trim() !== (org.legalName ?? "") || (country ?? null) !== (org.country ?? null));
-  return (
-    <div className="flex flex-col gap-4">
-      <MenuCard as="form" aria-label="Legal details" title="Legal details" subtitle="Used on documents and invoices" bodyClassName="flex flex-col gap-3 min-h-[16rem]"
-        onSubmit={(e) => { e.preventDefault(); if (dirty) update.mutate({ body: { legalName: legalName.trim() || null, country } }); }}>
-        <Field label="Legal name" maxLength={200} value={legalName} onChange={(e) => setLegalName(e.target.value)} hint="e.g. Acme Fabrication Limited" />
-        <RHFComboBox label="Country" value={country} onChange={(v) => setCountry(v ?? null)} options={countryOptions()} placeholder="Choose a country" clearable />
-        <FormError error={update.error} />
-        <div className="flex justify-end">
-          <CTAButton buttonType="submit" type="neutral" size="md" disabled={!dirty}>Save details</CTAButton>
-        </div>
-      </MenuCard>
-      <OrganisationLogo logoPath={org?.settings.logoPath ?? null} canManage />
-      <ThemeColourPicker value={org?.settings.themeColour ?? "purple"} canManage />
-    </div>
-  );
-};
-
-/** Step 4: sites and their departments (the same manager as Settings → Organisation). */
+/** Sites and their departments (the same manager as Settings → Organisation). */
 export const SitesStep = () => <SitesManager canManage />;
 
-/** Step 5: two-factor authentication for everyone, and for the owner. */
+/** Two-factor authentication for everyone, and for the owner. */
 export const SecurityStep = () => {
   const { data: org } = useOrganisationDetails();
   return (
@@ -234,27 +227,5 @@ export const SecurityStep = () => {
   );
 };
 
-/** Step 6: the team. Paste addresses, choose role, departments and package for each, see the seats left, send; the same tool as Settings → Users. */
-export const TeamStep = () => <TeamInvite />;
-
-const STATUS_TEXT = { done: "Done", skipped: "Skipped", pending: "Not done" };
-
-/** Step 7: what is set up, what is not, and finishing. */
-export const ReviewStep = ({ state, labelOf, error }) => (
-  <div className="flex flex-col gap-4">
-    <MenuCard title="Where things stand" subtitle={state.canFinish ? "Everything required is in place" : "Some required steps are still open"}>
-      <ul aria-label="Set-up summary" className="flex flex-col divide-y divide-border-color">
-        {state.steps.filter((s) => s.key !== "review").map((s) => (
-          <li key={s.key} className="flex items-center justify-between gap-3 py-2 text-sm">
-            <span className="text-primary-text">
-              {labelOf(s.key)}
-              {s.required && <span className="ml-2 text-xs text-secondary-text">required</span>}
-            </span>
-            <span className={s.status === "done" ? "text-success-color" : s.status === "skipped" ? "text-secondary-text" : s.required ? "font-medium text-error-color" : "text-secondary-text"}>{STATUS_TEXT[s.status]}</span>
-          </li>
-        ))}
-      </ul>
-    </MenuCard>
-    {error && <Callout tone="error" role="alert">{describeApiError(error)}</Callout>}
-  </div>
-);
+/** The team: before the plan is active a plan for who to invite (kept here, nobody is emailed); once it is active the invitations can be sent. */
+export const TeamStep = ({ state }) => <TeamInvite live={state.accessState === "open"} />;

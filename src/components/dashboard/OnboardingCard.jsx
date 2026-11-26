@@ -3,7 +3,7 @@ import { CheckIcon } from "@/components/icons";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useOrganisationAccess, usePermissions } from "../../hooks/useQmsApi";
 import { useOnboarding } from "../../hooks/useOnboarding";
-import { SETUP_STEPS, resumeSetup, setupStepOf } from "../../lib/onboarding";
+import { SETUP_STEPS, currentSetupStep, pageStatus, resumeSetup, setupStepOf } from "../../lib/onboarding";
 
 /**
  * Shown on the dashboard to people who can set the organisation up, until the set-up wizard is finished: how far along it is, what is still needed
@@ -18,12 +18,9 @@ const OnboardingCard = () => {
   const state = query.data;
   if (!show || !state || state.completedAt) return null;
 
-  const steps = SETUP_STEPS.map((def) => ({
-    ...def,
-    ...state.steps.find((s) => s.key === def.key),
-  }));
+  const steps = SETUP_STEPS.map((def) => ({ ...def, ...pageStatus(state, def.key) }));
   const done = steps.filter((s) => s.status === "done").length;
-  const next = setupStepOf(state.currentStep);
+  const next = setupStepOf(currentSetupStep(state));
   const needed = steps
     .filter((s) => s.required && s.status !== "done")
     .map((s) => s.label);

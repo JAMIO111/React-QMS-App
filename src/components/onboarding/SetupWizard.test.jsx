@@ -8,12 +8,15 @@ let state;
 let queryError = null;
 const loadedDetails = { name: "Acme Ltd", legalName: null, country: null, settings: { logoPath: null, themeColour: "purple", requireMfa: false } };
 let details = loadedDetails;
+let sites = [];
 const mutate = vi.fn();
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisation: { id: "org-1", name: "Acme Ltd" }, organisationId: "org-1" }) }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p), isLoading: false }),
   useOrganisationDetails: () => ({ data: details }),
-  useSites: () => ({ data: { data: [{ id: "s1", name: "Plant A", code: "PA", timezone: "Europe/London" }] } }),
+  useSites: () => ({ data: { data: sites } }),
+  useAllDepartments: () => ({ data: { data: [{ id: "d1", siteId: "s1", code: "QA", name: "Quality", active: true }] } }),
+  useMembers: () => ({ data: { data: [] } }),
   useUpdateOrganisation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 let overview;
@@ -40,6 +43,7 @@ vi.mock("../../hooks/useOnboarding", () => ({
   useOnboardingMutation: () => ({ mutate, isPending: false, error: null }),
 }));
 vi.mock("../Settings/SitesManager", () => ({ default: () => <p>sites manager</p> }));
+vi.mock("./TeamInvite", () => ({ default: ({ live }) => <p>team invite {String(live)}</p> }));
 vi.mock("../Settings/TwoFactorCard", () => ({ default: () => <p>two factor card</p> }));
 vi.mock("../Settings/RequireMfaSetting", () => ({ default: () => <p>require mfa setting</p> }));
 vi.mock("../Settings/OrganisationLogo", () => ({ default: () => <p>organisation logo</p> }));
@@ -77,47 +81,71 @@ beforeEach(() => {
   state = makeState();
   queryError = null;
   details = loadedDetails;
+  sites = [{ id: "s1", name: "Plant A", code: "PA", timezone: "Europe/London", active: true }];
+  localStorage.clear();
   resumeSetup();
 });
 
-describe("the details step", () => {
+describe("the organisation step", () => {
   it("keeps what is typed when the organisation's details arrive afterwards", async () => {
     details = undefined; // still loading
-    const view = renderAt("/setup/details");
+    const view = renderAt("/setup/organisation");
     await userEvent.type(screen.getByLabelText("Legal name"), "Acme Fabrication Limited");
     details = loadedDetails; // the saved values arrive: nothing saved yet
-    view.rerender(tree("/setup/details"));
+    view.rerender(tree("/setup/organisation"));
     expect(screen.getByLabelText("Legal name")).toHaveValue("Acme Fabrication Limited");
   });
 });
 
 describe("the set-up wizard", () => {
-  it("opens on the first step still to do and lists every step with whether it is required", () => {
+  it("opens on the organisation page for a new organisation, then on the first step still to do", () => {
+    const first = renderAt("/setup");
+    expect(screen.getByRole("region", { name: "Your organisation" })).toBeInTheDocument();
+    first.unmount();
+    state = makeState({}, { details: "done" });
     renderAt("/setup");
     expect(screen.getByRole("heading", { name: "Set up Acme Ltd" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Plan and seats" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Security" })).toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Set-up steps" });
-    expect(within(rail).getAllByRole("link")).toHaveLength(7);
-    expect(within(rail).getByRole("link", { name: /Plan & seats/ })).toHaveAttribute("aria-current", "step");
+    expect(within(rail).getAllByRole("link")).toHaveLength(6);
+    expect(within(rail).getByRole("link", { name: /Security/ })).toHaveAttribute("aria-current", "step");
     expect(within(rail).getAllByText("Required")).toHaveLength(2);
     expect(within(rail).getAllByText("Optional").length).toBeGreaterThan(0);
   });
 
-  it("marks details as done and moves to sites, or skips it", async () => {
+  it("the plan comes after the team, and the old details address leads to the organisation", () => {
     renderAt("/setup/details");
+    expect(screen.getByRole("region", { name: "Your organisation" })).toBeInTheDocument();
+    const rail = screen.getByRole("navigation", { name: "Set-up steps" });
+    expect(within(rail).getAllByRole("link").map((l) => l.textContent.replace(/(Required|Optional|Skipped|Final step)$/, "").replace(/^\d+/, ""))).toEqual(["Organisation", "Sites & departments", "Security", "Your team", "Plan & seats", "Review"]);
+  });
+
+  it("the organisation page holds the name, legal details, logo and colour, and Continue marks the optional details as done", async () => {
+    renderAt("/setup/organisation");
     expect(screen.getByLabelText("Legal name")).toBeInTheDocument();
     expect(screen.getByText("organisation logo")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Done, continue" }));
+    expect(screen.getByText("theme colour picker")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(mutate).toHaveBeenCalledWith({ action: "setStep", body: { step: "details", status: "done" } });
     // Optimistic: the wizard moves on without waiting for the server.
     expect(await screen.findByText("sites manager")).toBeInTheDocument();
   });
 
   it("skips a step and moves on at once", async () => {
-    renderAt("/setup/details");
+    renderAt("/setup/security");
     await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    expect(mutate).toHaveBeenLastCalledWith({ action: "setStep", body: { step: "details", status: "skipped" } });
-    expect(await screen.findByText("sites manager")).toBeInTheDocument();
+    expect(mutate).toHaveBeenLastCalledWith({ action: "setStep", body: { step: "security", status: "skipped" } });
+    expect(await screen.findByText(/team invite/)).toBeInTheDocument();
+  });
+
+  it("the team is planned before the plan is paid for, and sent once it is", () => {
+    state = makeState({ billingRequired: true, accessState: "needs_subscription", canFinish: false });
+    const first = renderAt("/setup/team");
+    expect(screen.getByText("team invite false")).toBeInTheDocument();
+    first.unmount();
+    state = makeState({ billingRequired: true, accessState: "open" });
+    renderAt("/setup/team");
+    expect(screen.getByText("team invite true")).toBeInTheDocument();
   });
 
   it("shows each step's own content", () => {
@@ -131,20 +159,19 @@ describe("the set-up wizard", () => {
     expect(screen.getByText("require mfa setting")).toBeInTheDocument();
   });
 
-  it("the organisation step shows the name and the first site", () => {
+  it("the organisation step shows the saved name", () => {
     renderAt("/setup/organisation");
     expect(screen.getByRole("textbox", { name: "Organisation name" })).toHaveValue("Acme Ltd");
-    expect(screen.getByText(/Europe\/London/)).toBeInTheDocument();
   });
 
   it("when a subscription is required, the later steps wait for the plan and the plan step cannot be passed", async () => {
     state = makeState({ billingRequired: true, accessState: "needs_subscription", canFinish: false });
-    renderAt("/setup/details");
+    renderAt("/setup/review");
     // Visiting a locked step lands on the plan.
     expect(await screen.findByRole("region", { name: "Plan and seats" })).toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Set-up steps" });
-    expect(within(rail).getAllByRole("link")).toHaveLength(2); // organisation and plan
-    expect(rail.querySelectorAll('[aria-disabled="true"]')).toHaveLength(5);
+    expect(within(rail).getAllByRole("link")).toHaveLength(5); // everything but the review is open while the plan is unpaid
+    expect(rail.querySelectorAll('[aria-disabled="true"]')).toHaveLength(1);
     expect(screen.getByText(/subscription must be active/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Continue to secure checkout" })).toBeEnabled();
@@ -162,7 +189,7 @@ describe("the set-up wizard", () => {
     expect(screen.getByText(/Free trial until 15 Jan 2026/)).toBeInTheDocument();
     expect(screen.getByText(/2 × Controller/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
-    expect(within(screen.getByRole("navigation", { name: "Set-up steps" })).getAllByRole("link")).toHaveLength(7);
+    expect(within(screen.getByRole("navigation", { name: "Set-up steps" })).getAllByRole("link")).toHaveLength(6);
     expect(screen.queryByRole("button", { name: "Continue to secure checkout" })).toBeNull();
   });
 
@@ -238,14 +265,25 @@ describe("the set-up wizard", () => {
     });
   });
 
-  it("the review lists what is done and what is not, and cannot finish while a required step is open", () => {
-    state = makeState({ canFinish: false }, { sites: "pending", details: "skipped" });
+  it("the review shows each area, says what is still needed, and cannot finish while a required step is open", () => {
+    sites = [];
+    state = makeState({ canFinish: false }, { organisation: "pending", sites: "pending", security: "skipped" });
     renderAt("/setup/review");
     const list = screen.getByRole("list", { name: "Set-up summary" });
+    for (const name of ["Organisation", "Sites and departments", "Security", "Your team", "Plan and seats", "What happens next"]) expect(within(list).getByRole("region", { name })).toBeInTheDocument();
     expect(within(list).getByText("Skipped")).toBeInTheDocument();
-    expect(within(list).getAllByText("Not done").length).toBeGreaterThan(0);
+    expect(within(list).getAllByText("Needs attention").length).toBeGreaterThan(0);
+    expect(within(screen.getByRole("list", { name: "Still needed" })).getByRole("link", { name: "Add a site" })).toHaveAttribute("href", "/setup/sites");
     expect(screen.getAllByText(/Some required steps are still open/).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Finish set-up/ })).toBeDisabled();
+  });
+
+  it("the review says when everything is ready, and shows the team that is waiting for the plan", () => {
+    localStorage.setItem("qms.teamDraft.org-1", JSON.stringify({ message: "", rows: [{ email: "a@x.com", roleId: "key:viewer", departmentIds: [], packageSlug: "contributor" }] }));
+    renderAt("/setup/review");
+    expect(screen.getByRole("heading", { name: /Acme Ltd is ready to go/ })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Your team" })).getByText(/planned/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Finish set-up/ })).toBeEnabled();
   });
 
   it("finishes the set-up and goes to the app", async () => {

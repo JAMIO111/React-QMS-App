@@ -258,7 +258,7 @@ const TeamInvite = ({ live = true }) => {
                   {p.label}: <strong>{seats.left(p.slug)}</strong> left of {seats.purchased(p.slug)}
                 </span>
               ))}
-              <Link to="/Settings/Subscription" className="text-link-color underline">Buy more seats</Link>
+              <Link to="/setup/plan" className="text-link-color underline">Buy more seats</Link>
             </div>
           )}
           {!live && (

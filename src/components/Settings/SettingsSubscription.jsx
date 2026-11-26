@@ -202,7 +202,8 @@ const Overview = ({ overview, canManage }) => {
   );
 };
 
-const PricingCards = ({ catalogue, overview, canManage }) => {
+/** Change the number of seats of each package (Stripe previews the price first). Also used by the set-up wizard's plan step. */
+export const PricingCards = ({ catalogue, overview, canManage }) => {
   const managed =
     overview.providerManaged &&
     overview.subscription?.billingProvider === "stripe";

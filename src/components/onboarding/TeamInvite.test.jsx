@@ -138,7 +138,7 @@ describe("inviting a team", () => {
       await userEvent.click(screen.getByRole("combobox", { name: "Package for c@example.com" }));
       expect(await screen.findByRole("option", { name: "Contributor (0 left)" })).toHaveAttribute("aria-disabled", "true");
       expect(screen.getByRole("option", { name: "Observer (0 left)" })).toHaveAttribute("aria-disabled", "true");
-      expect(screen.getByRole("link", { name: "Buy more seats" })).toHaveAttribute("href", "/Settings/Subscription");
+      expect(screen.getByRole("link", { name: "Buy more seats" })).toHaveAttribute("href", "/setup/plan");
     });
 
     it("cannot give more people a package than there are seats for: the last seat is taken and the option is switched off", async () => {

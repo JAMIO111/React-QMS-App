@@ -42,6 +42,7 @@ vi.mock("../../hooks/useOnboarding", () => ({
   useOnboarding: () => ({ data: state, isLoading: false, error: queryError }),
   useOnboardingMutation: () => ({ mutate, isPending: false, error: null }),
 }));
+vi.mock("../Settings/SettingsSubscription", () => ({ PricingCards: ({ canManage }) => <p>seat changer {String(canManage)}</p> }));
 vi.mock("../Settings/SitesManager", () => ({ default: () => <p>sites manager</p> }));
 vi.mock("./TeamInvite", () => ({ default: ({ live }) => <p>team invite {String(live)}</p> }));
 vi.mock("../Settings/TwoFactorCard", () => ({ default: () => <p>two factor card</p> }));
@@ -188,6 +189,8 @@ describe("the set-up wizard", () => {
     renderAt("/setup/plan");
     expect(screen.getByText(/Free trial until 15 Jan 2026/)).toBeInTheDocument();
     expect(screen.getByText(/2 × Controller/)).toBeInTheDocument();
+    // Once the plan is active the seats can still be changed from this step.
+    expect(screen.getByText(/seat changer/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
     expect(within(screen.getByRole("navigation", { name: "Set-up steps" })).getAllByRole("link")).toHaveLength(6);
     expect(screen.queryByRole("button", { name: "Continue to secure checkout" })).toBeNull();

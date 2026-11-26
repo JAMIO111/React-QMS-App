@@ -12,6 +12,7 @@ import { describeApiError } from "../../lib/api-client";
 import { countryOptions, loadTeamDraft, seatsForDraft } from "../../lib/onboarding";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
 import { useStartCheckout, usePlanCatalogue, usePortalSession, useSubscriptionOverview } from "../../hooks/useSubscription";
+import { PricingCards } from "../Settings/SettingsSubscription";
 import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
@@ -157,7 +158,10 @@ export const PlanStep = ({ state }) => {
         </Callout>
       )}
       {open && sub ? (
-        <SubscriptionSummary overview={data} canManage={canManage} />
+        <>
+          <SubscriptionSummary overview={data} canManage={canManage} />
+          <PricingCards catalogue={catalogue.data} overview={data} canManage={canManage} />
+        </>
       ) : (
         <MenuCard
           title={hasSubscription ? "Your subscription needs attention" : "Choose your seats"}

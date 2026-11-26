@@ -61,6 +61,7 @@ describe("import alerts and email choices", () => {
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "document", record_id: rid } })).toBe(`/Documentation/Documents/${rid}`);
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "quality_alert", record_id: rid } })).toBe(`/Documentation/Quality-Alerts/${rid}`);
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "change", record_id: rid } })).toBe(`/Change/${rid}`);
+    expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: { record_kind: "ppap", record_id: rid } })).toBe(`/PPAP/${rid}`);
     expect(notificationLink({ entityType: "portal_activity", entityId: "a", details: {} })).toBe("/Settings/External-Access");
   });
 

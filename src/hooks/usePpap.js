@@ -83,12 +83,27 @@ export const usePpapMutation = () => {
           return send(`/ppaps/${id}/resubmission`);
         case "review":
           return send(`/ppaps/${id}/reviews`);
+        case "askCustomer":
+          return send(`/ppaps/${id}/customer-requests`);
+        case "withdrawCustomerRequest":
+          return send(`/ppap-customer-requests/${id}/withdraw`);
         default:
           throw new Error(`Unknown action ${action}`);
       }
     },
     onSuccess: (submission) => submission?.id && queryClient.setQueryData(key(organisationId, "ppap", submission.id), submission),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** The requests put to the customer to answer a sent submission in the portal (PP4), and the customer it can be put to. */
+export const usePpapCustomerRequests = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "customer-requests", id),
+    queryFn: () => apiFetch(`/ppaps/${id}/customer-requests`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
   });
 };
 

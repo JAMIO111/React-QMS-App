@@ -20,6 +20,7 @@ describe('where an email links to', () => {
     expect(notificationPath('portal_activity', 'x', { record_kind: 'document', record_id: A })).toBe(`/Documentation/Documents/${A}`);
     expect(notificationPath('portal_activity', 'x', { record_kind: 'quality_alert', record_id: A })).toBe(`/Documentation/Quality-Alerts/${A}`);
     expect(notificationPath('portal_activity', 'x', { record_kind: 'change', record_id: A })).toBe(`/Change/${A}`);
+    expect(notificationPath('portal_activity', 'x', { record_kind: 'ppap', record_id: A })).toBe(`/PPAP/${A}`);
     expect(notificationPath('portal_activity', 'x', {})).toBe('/Settings/External-Access');
     expect(notificationPath('calibrations', A, { gauge_id: B })).toBe(`/Calibration/Gauges/${B}/calibrations/${A}`);
     expect(notificationPath('quality_alert_recipients', A, { alert_id: B })).toBe(`/Documentation/Quality-Alerts/${B}`);

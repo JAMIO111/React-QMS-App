@@ -4,6 +4,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { PortalMailer } from '../portal/portal-mailer.service';
 import { SpcService } from '../spc/spc.service';
 import { grrPercentOf, judgeCapability, judgeGrr, LinkKind, minimumsFor, StudyJudgement } from './ppap-links';
 import {
@@ -143,6 +144,7 @@ export class PpapService {
   constructor(
     private readonly database: DatabaseService,
     private readonly spc: SpcService,
+    private readonly portalMailer: PortalMailer,
   ) {}
 
   // ---- the register ---------------------------------------------------------------------------------
@@ -695,5 +697,65 @@ export class PpapService {
       await db.execute(sql`select app.set_ppap_customer_rules(${customerId}::uuid, ${json(body)}::jsonb)`);
       return this.rulesOf(db, ctx);
     });
+  }
+
+  // ---- putting a sent submission to the customer in the portal (PP4) ------------------------------
+
+  /** The requests put to the customer for one submission (who asked, what they answered), and whether it can be put to them now. */
+  customerRequests(ctx: RequestContext, id: string) {
+    return this.database.asUser(ctx, (db) => this.customerRequestsOf(db, id));
+  }
+
+  private async customerRequestsOf(db: Db, id: string) {
+    const requests = (await db.execute<{ r: unknown[] }>(sql`select app.ppap_customer_requests(${id}::uuid) as r`)).rows[0].r;
+    const party = (await db.execute<{ party_id: string; customer_id: string; party_name: string }>(sql`select * from app.ppap_customer_party(${id}::uuid)`)).rows[0];
+    return { data: requests, customer: party ? { partyId: party.party_id, customerId: party.customer_id, name: party.party_name } : null };
+  }
+
+  /** Staff ask the customer to answer (their people are emailed, best effort: a failed send never undoes the request). */
+  async askCustomer(ctx: RequestContext, id: string, note: string | null) {
+    const asked = await this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ id: string }>(sql`select app.request_ppap_customer_answer(${id}::uuid, ${note}) as id`);
+      return { requestId: r.rows[0].id, ...(await this.customerRequestsOf(db, id)) };
+    });
+    const email = await this.tellCustomer(ctx, asked.requestId, note);
+    return { data: asked.data, customer: asked.customer, email };
+  }
+
+  withdrawCustomerRequest(ctx: RequestContext, requestId: string, reason: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<{ submission_id: string }>(sql`select submission_id from public.portal_ppap_requests where id = ${requestId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows[0]) throw ApiError.notFound('request_not_found', 'That request was not found');
+      await db.execute(sql`select app.withdraw_ppap_customer_request(${requestId}::uuid, ${reason})`);
+      return this.customerRequestsOf(db, found.rows[0].submission_id);
+    });
+  }
+
+  private async tellCustomer(ctx: RequestContext, requestId: string, note: string | null) {
+    try {
+      const info = await this.database.asUser(ctx, async (db) => {
+        const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.ppap_request_recipients(${requestId}::uuid)`);
+        const rec = await db.execute<{ reference: string; part_number: string; org_name: string }>(
+          sql`select s.reference, p.part_number, o.name as org_name
+                from public.portal_ppap_requests r join public.ppap_submissions s on s.id = r.submission_id join public.parts p on p.id = s.part_id
+                join public.organisations o on o.id = r.organisation_id
+               where r.id = ${requestId}::uuid`,
+        );
+        return { people: people.rows, rec: rec.rows[0] };
+      });
+      if (!info.rec) return { attempted: 0, sent: 0 };
+      return await this.portalMailer.send({
+        to: info.people.map((p) => ({ email: p.email, name: p.name })),
+        subject: `${info.rec.org_name} asks for your answer on a part approval: ${info.rec.reference}`,
+        heading: 'Please answer a part approval submission',
+        paragraphs: [`${info.rec.org_name} has sent you part approval submission ${info.rec.reference} for ${info.rec.part_number}. Open it on your portal to approve it, approve it for now, or say what you cannot accept.`],
+        quote: note ? { text: note, by: info.rec.org_name } : undefined,
+        path: `/portal/ppaps/${requestId}?org=${orgOf(ctx)}`,
+        button: 'Open in the portal',
+        footerWho: info.rec.org_name,
+      });
+    } catch {
+      return { attempted: 0, sent: 0 };
+    }
   }
 }

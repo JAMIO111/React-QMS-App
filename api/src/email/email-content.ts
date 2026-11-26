@@ -86,6 +86,7 @@ export function notificationPath(entityType: string, entityId: string, details: 
       if (d.record_kind === 'document') return `/Documentation/Documents/${rid}`;
       if (d.record_kind === 'quality_alert') return `/Documentation/Quality-Alerts/${rid}`;
       if (d.record_kind === 'change') return `/Change/${rid}`;
+      if (d.record_kind === 'ppap') return `/PPAP/${rid}`;
       return `/Non-Conformance/Register/${rid}`;
     }
     case 'reminder_digests':

@@ -477,6 +477,38 @@ export const usePortalChangeApprovalMutation = (organisationId, id) => {
   });
 };
 
+/** The part approval submissions staff have asked a customer to answer, and one of them as the customer may see it (PP4). */
+export const usePortalPpaps = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "ppaps"),
+    queryFn: () => apiFetch("/portal/ppaps", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+export const usePortalPpap = (organisationId, id) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "ppap", id),
+    queryFn: () => apiFetch(`/portal/ppaps/${id}`, { organisationId }),
+    enabled: !!user && !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** The customer's answer waits for the server (it is final and recorded as the submission's decision); the answer replaces the cached request. */
+export const usePortalPpapMutation = (organisationId, id) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch(`/portal/ppaps/${id}/decide`, { method: "POST", body, organisationId }),
+    onSuccess: (data) => queryClient.setQueryData(portalKey(user?.id, organisationId, "ppap", id), data),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};
+
 /** One SCAR as the supplier sees it, with what they may do next. */
 export const usePortalScar = (organisationId, scarId) => {
   const { user } = useAuth();

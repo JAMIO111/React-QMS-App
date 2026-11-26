@@ -697,6 +697,11 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/ppaps/{id}/decisions': { kind: 'approved', decidedOn: '2026-01-01' },
     'POST /api/v1/ppaps/{id}/resubmission': {},
     'POST /api/v1/ppaps/{id}/reviews': { note: 'Hijacked' },
+    'GET /api/v1/ppaps/{id}/customer-requests': undefined,
+    'POST /api/v1/ppaps/{id}/customer-requests': { note: 'Hijacked' },
+    'POST /api/v1/ppap-customer-requests/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/portal/ppaps/{id}': undefined,
+    'POST /api/v1/portal/ppaps/{id}/decide': { kind: 'approved' },
     'PATCH /api/v1/ppap-elements/{id}': { note: 'Hijacked' },
     'POST /api/v1/ppap-elements/{id}/files': { storagePath: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
     'POST /api/v1/ppap-elements/{id}/links': { kind: 'part_revision', targetId: '00000000-0000-4000-8000-000000000001' },
@@ -1330,6 +1335,11 @@ const hasSample = (op: Op) =>
     'POST /api/v1/ppaps/{id}/decisions',
     'POST /api/v1/ppaps/{id}/resubmission',
     'POST /api/v1/ppaps/{id}/reviews',
+    'GET /api/v1/ppaps/{id}/customer-requests',
+    'POST /api/v1/ppaps/{id}/customer-requests',
+    'POST /api/v1/ppap-customer-requests/{id}/withdraw',
+    'GET /api/v1/portal/ppaps/{id}',
+    'POST /api/v1/portal/ppaps/{id}/decide',
     'PATCH /api/v1/ppap-elements/{id}',
     'POST /api/v1/ppap-elements/{id}/files',
     'POST /api/v1/ppap-elements/{id}/links',
@@ -1403,6 +1413,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/ppap-elements/')) return a.ppapElement;
   if (path.startsWith('/api/v1/ppap-evidence/')) return a.ppapEvidence;
   if (path.startsWith('/api/v1/ppap-customer-rules/')) return a.customer;
+  if (path.startsWith('/api/v1/ppap-customer-requests/') || path.startsWith('/api/v1/portal/ppaps/')) return a.portalPpapRequest;
   if (path.startsWith('/api/v1/ppaps/')) return a.ppap;
   if (path.startsWith('/api/v1/fmea-revisions/')) return a.fmeaRevision;
   if (path.startsWith('/api/v1/fmea-items/')) return a.fmeaItem;
@@ -1689,6 +1700,14 @@ beforeAll(async () => {
       `insert into public.portal_change_approvals (organisation_id, change_id, party_id) select $1, $2, party_id from public.external_access where id = $3 returning id`,
       [ids.orgA, sweepChange, a.externalAccess],
     )).rows[0].id;
+    // PP4: a request for a customer to answer a PPAP submission (written by a function; seeded directly here).
+    // (the table has no grants for people, so the insert is made as the connection's own role, then the person's role is put back)
+    await client.query('reset role');
+    a.portalPpapRequest = (await q1(
+      `insert into public.portal_ppap_requests (organisation_id, submission_id, party_id) select $1, $2, party_id from public.external_access where id = $3 returning id`,
+      [ids.orgA, a.ppap, a.externalAccess],
+    )).id;
+    await client.query('set local role authenticated');
     a.changeAttachment = (await q1(`select app.add_change_attachment($2::uuid, $1::text || '/change/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.change])).id;
     await admin.query(`update public.organisation_settings set change_allow_self_approval = true where organisation_id = $1`, [ids.orgA]);
     const changeB = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha board change', 'typeId', $2::text, 'description', 'x', 'reason', 'y', 'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', $3::text)))) as id`, [ids.orgA, a.changeType, a.part])).id;

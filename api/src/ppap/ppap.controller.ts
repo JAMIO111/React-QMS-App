@@ -5,7 +5,7 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, DecisionBody, LevelBody, PpapListQuery, PswBody, ReasonBody, ResubmitBody, ReviewBody, SaveRequirementsBody,
+  AddFileBody, AddLinkBody, AskCustomerBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, DecisionBody, LevelBody, PpapListQuery, PswBody, ReasonBody, ResubmitBody, ReviewBody, SaveRequirementsBody,
   SignPswBody, SubmitBody, UpdateElementBody, UpdatePpapBody, WaiveBody,
 } from './ppap.schemas';
 import { PpapService } from './ppap.service';
@@ -246,5 +246,29 @@ export class PpapController {
   @ApiOkResponse({ description: 'Removes evidence with a reason (it is kept, marked removed)' })
   removeEvidence(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.removeEvidence(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Get('ppaps/:id/customer-requests')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The requests put to the customer to answer this submission in the portal (who asked, what they answered), and the customer it can be put to' })
+  customerRequests(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.customerRequests(ctx, parse(Uuid, id));
+  }
+
+  @Post('ppaps/:id/customer-requests')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AskCustomerBody) })
+  @ApiOkResponse({ description: 'Asks the customer the submission was sent to to answer it in the portal (their people are emailed). Their answer is recorded as the submission\'s decision' })
+  askCustomer(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.askCustomer(ctx, parse(Uuid, id), parse(AskCustomerBody, body).note ?? null);
+  }
+
+  @Post('ppap-customer-requests/:id/withdraw')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'Withdraws a request that is still waiting for the customer (a reason is needed)' })
+  withdrawCustomerRequest(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.withdrawCustomerRequest(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
   }
 }

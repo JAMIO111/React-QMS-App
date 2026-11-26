@@ -108,3 +108,13 @@ export const LotEvidenceBody = z
 export const ChangeApprovalDecisionBody = z
   .object({ approve: z.boolean(), note: z.string().trim().max(2000).nullish(), reference: z.string().trim().max(200).nullish() })
   .strict();
+
+/** PP4: a customer's answer to a PPAP submission: approved, approved for now (with the day it runs to and its conditions) or rejected (with why). They decide today. */
+export const PpapDecisionBody = z
+  .object({
+    kind: z.enum(['approved', 'interim_approved', 'rejected']),
+    note: z.string().trim().max(2000).nullish(),
+    reference: z.string().trim().max(100).nullish(),
+    expiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date as yyyy-mm-dd').nullish(),
+  })
+  .strict();

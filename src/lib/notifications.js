@@ -71,7 +71,9 @@ export function notificationLink(n) {
               ? `/Documentation/Quality-Alerts/${d.record_id}`
               : d.record_kind === "change"
                 ? `/Change/${d.record_id}`
-                : ncrPath(d.record_id);
+                : d.record_kind === "ppap"
+                  ? `/PPAP/${d.record_id}`
+                  : ncrPath(d.record_id);
     case "reminder_digests":
       return "/Reminders";
     case "reminder_overdue_notices":

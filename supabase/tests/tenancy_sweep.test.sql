@@ -567,6 +567,10 @@ BEGIN
   INSERT INTO public.portal_change_approvals (organisation_id, change_id, party_id)
     SELECT a, x.id, (SELECT id FROM public.portal_parties WHERE organisation_id = a LIMIT 1) FROM public.change_requests x WHERE x.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_change_approval', (SELECT id FROM public.portal_change_approvals WHERE organisation_id = a));
+  -- PPAP (PP4): a request for a customer to answer a submission (written by a function; seeded directly here).
+  INSERT INTO public.portal_ppap_requests (organisation_id, submission_id, party_id)
+    SELECT a, x.id, (SELECT id FROM public.portal_parties WHERE organisation_id = a LIMIT 1) FROM public.ppap_submissions x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_ppap_request', (SELECT id FROM public.portal_ppap_requests WHERE organisation_id = a));
   -- External portal (PT5c): a customer contact.
   INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
     SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;

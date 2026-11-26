@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import FortressMark from "../../assets/fortress-qms.png";
-import { ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GitPullRequestArrowIcon, LayoutDashboardIcon, MessageSquarePlusIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, ShieldCheckIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
+import { BadgeCheckIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, GitPullRequestArrowIcon, LayoutDashboardIcon, MessageSquarePlusIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, ShieldCheckIcon, TriangleAlertIcon, UsersIcon } from "@/components/icons";
 import NavItem from "../NavItem";
 import { portalMenu } from "../../lib/portal";
 
@@ -12,6 +12,7 @@ const ICONS = {
   capa: ClipboardListIcon,
   complaint: MessageSquarePlusIcon,
   change: GitPullRequestArrowIcon,
+  ppap: BadgeCheckIcon,
   document: FileTextIcon,
   certificate: ShieldCheckIcon,
   team: UsersIcon,

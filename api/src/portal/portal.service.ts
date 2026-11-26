@@ -102,12 +102,16 @@ export class PortalService {
       const approvals = ctx.portal?.partyKind === 'customer'
         ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_change_approvals(${ctx.organisationId}::uuid) where can_decide`)).rows.length
         : 0;
+      const ppaps = ctx.portal?.partyKind === 'customer'
+        ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_ppaps(${ctx.organisationId}::uuid) where can_decide`)).rows.length
+        : 0;
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
         access: mine,
         attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id) || closing.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id), needsClosure: closing.has(i.id) })),
         toConfirm: closing.size,
         changesToApprove: approvals,
+        ppapsToAnswer: ppaps,
         toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
@@ -334,6 +338,43 @@ export class PortalService {
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.portal_decide_change_approval(${id}::uuid, ${b.approve}, ${b.note ?? null}, ${b.reference ?? null})`);
       return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_change_approval(${id}::uuid) as r`)).rows[0].r;
+    });
+  }
+
+  /** The part approval submissions a customer has been asked to answer (PP4): named fields only; a withdrawn request is not shown. */
+  listPpaps(ctx: RequestContext) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_ppaps(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.request_id as string,
+          reference: c.reference as string,
+          partNumber: c.part_number as string,
+          partName: c.part_name as string,
+          theirPartNumber: (c.their_part_number as string | null) ?? null,
+          level: Number(c.level),
+          status: c.status as 'pending' | 'answered',
+          submissionStatus: c.submission_status as string,
+          requestedAt: iso(c.requested_at),
+          answeredAt: iso(c.answered_at),
+          canDecide: Boolean(c.can_decide),
+        })),
+      };
+    });
+  }
+
+  getPpap(ctx: RequestContext, id: string) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap(${id}::uuid) as r`)).rows[0].r);
+  }
+
+  /** The customer's answer: recorded as the submission's decision, today, by the same rules staff use. */
+  decidePpap(ctx: RequestContext, id: string, b: { kind: 'approved' | 'interim_approved' | 'rejected'; note?: string | null; reference?: string | null; expiresOn?: string | null }) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_decide_ppap(${id}::uuid, ${b.kind}, ${b.note ?? null}, ${b.reference ?? null}, ${b.expiresOn ?? null}::date)`);
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap(${id}::uuid) as r`)).rows[0].r;
     });
   }
 

@@ -224,3 +224,7 @@ export const CustomerRulesBody = z
   })
   .strict();
 export type CustomerRulesBody = z.infer<typeof CustomerRulesBody>;
+
+/** PP4: staff put a sent submission to the customer for their answer in the portal. */
+export const AskCustomerBody = z.object({ note: z.string().trim().max(500).nullish() }).strict();
+export type AskCustomerBody = z.infer<typeof AskCustomerBody>;

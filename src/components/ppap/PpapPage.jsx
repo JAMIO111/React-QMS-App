@@ -14,6 +14,7 @@ import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { AddFileDialog, EditPpapDialog, LinkDialog, ReasonDialog } from "./PpapDialogs";
+import { CustomerAnswerCard } from "./PpapCustomer";
 import { DecisionsCard, PswCard, SubmitDialog } from "./PpapSubmission";
 
 const Fact = ({ label, children }) => (
@@ -333,6 +334,7 @@ const PpapPage = () => {
       </MenuCard>
 
       <PswCard ppap={ppap} />
+      <CustomerAnswerCard ppap={ppap} />
       <DecisionsCard ppap={ppap} />
 
       {dialog?.kind === "submit" && <SubmitDialog ppap={ppap} onClose={() => setDialog(null)} />}

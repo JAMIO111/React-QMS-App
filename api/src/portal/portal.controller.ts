@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, ChangeApprovalDecisionBody, ChangeRequestBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ChangeApprovalDecisionBody, ChangeRequestBody, ClosureDecisionBody, PpapDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -227,6 +227,29 @@ export class PortalController {
   @ApiOkResponse({ description: 'The customer approves the change, or says what they cannot accept (a note is then needed). Final. Recorded on the change; nothing else moves' })
   decideChangeApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.decideChangeApproval(ctx, Uuid.parse(id), parse(ChangeApprovalDecisionBody, body));
+  }
+
+  @Get('ppaps')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Part approval submissions staff have asked this customer to answer (customers only): reference, part, status, nothing else' })
+  ppaps(@Ctx() ctx: RequestContext) {
+    return this.service.listPpaps(ctx);
+  }
+
+  @Get('ppaps/:id')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'One request with the submission as the customer may see it: their part, the level, the elements by name, the signed warrant (named fields only)' })
+  ppap(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getPpap(ctx, Uuid.parse(id));
+  }
+
+  @Post('ppaps/:id/decide')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(PpapDecisionBody) })
+  @ApiOkResponse({ description: 'The customer approves the submission, approves it for now (the day it runs to and its conditions are needed) or rejects it (a reason is needed). Final. Recorded as the submission\'s decision, today' })
+  decidePpap(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decidePpap(ctx, Uuid.parse(id), parse(PpapDecisionBody, body));
   }
 
   @Get('change-request-parts')

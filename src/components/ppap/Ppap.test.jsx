@@ -249,6 +249,77 @@ describe("a PPAP submission", () => {
     );
   });
 
+  describe("putting it to the customer in the portal", () => {
+    const sent = { status: "submitted", editable: false, canSavePsw: false, canManage: true, submittedAt: "2026-11-20T09:00:00.000Z", psw: psw({ signature: signed, frozen: true }), decisions: [decision()] };
+    const acme = { partyId: "pt1", customerId: "c1", name: "Acme" };
+    const loadWith = (over, requests) =>
+      apiFetch.mockImplementation(async (path, opts) => {
+        if (path === "/ppaps/p1" && !opts?.method) return submission(over);
+        if (path === "/ppaps/p1/customer-requests" && !opts?.method) return requests;
+        return {};
+      });
+
+    it("asks the customer with a message, and says what they will see", async () => {
+      loadWith(sent, { data: [], customer: acme });
+      wrap(<PpapPage />, "/PPAP/p1");
+      await userEvent.click(await screen.findByRole("button", { name: "Ask the customer" }));
+      const dialog = await screen.findByRole("dialog", { name: /Ask Acme to answer PPAP-26-0001/ });
+      expect(within(dialog).getByText(/never the evidence behind them/)).toBeInTheDocument();
+      await userEvent.type(within(dialog).getByLabelText(/Message to them/), "Please approve it.");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Ask them" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/customer-requests", expect.objectContaining({ method: "POST", body: { note: "Please approve it." } })));
+    });
+
+    it("lists a waiting request with the staff's words, and withdraws it with a reason", async () => {
+      loadWith(sent, {
+        data: [{ id: "r1", partyId: "pt1", customer: "Acme", status: "pending", requestedAt: "2026-11-21T10:00:00Z", requestNote: "Please approve it.", requestedBy: "Eli Engineer" }],
+        customer: acme,
+      });
+      wrap(<PpapPage />, "/PPAP/p1");
+      const list = await screen.findByRole("list", { name: "Requests to the customer" });
+      expect(within(list).getByText("Waiting for your answer")).toBeInTheDocument();
+      expect(within(list).getByText(/You wrote: Please approve it./)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask the customer" })).toBeNull();
+      await userEvent.click(within(list).getByRole("button", { name: "Withdraw the request to Acme" }));
+      const dialog = await screen.findByRole("dialog", { name: "Withdraw this request" });
+      const send = within(dialog).getByRole("button", { name: "Withdraw" });
+      expect(send).toBeDisabled();
+      await userEvent.type(within(dialog).getByLabelText(/Why/), "Raised too early");
+      await userEvent.click(send);
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppap-customer-requests/r1/withdraw", expect.objectContaining({ method: "POST", body: { reason: "Raised too early" } })));
+    });
+
+    it("shows what the customer answered, in their own words", async () => {
+      loadWith(
+        { ...sent, status: "approved", decisions: [decision(), decision({ id: "d2", seq: 2, kind: "approved", decidedOn: "2026-11-22" })] },
+        {
+          data: [{ id: "r1", partyId: "pt1", customer: "Acme", status: "answered", decision: "approved", requestedAt: "2026-11-21T10:00:00Z", answeredAt: "2026-11-22T09:00:00Z", answeredBy: "Pat", decisionNote: "Fine after our trial.", customerReference: "ACME-9" }],
+          customer: acme,
+        },
+      );
+      wrap(<PpapPage />, "/PPAP/p1");
+      const list = await screen.findByRole("list", { name: "Requests to the customer" });
+      expect(within(list).getByText("Approved")).toBeInTheDocument();
+      expect(within(list).getByText(/They wrote: Fine after our trial./)).toBeInTheDocument();
+      expect(within(list).getByText(/Their reference: ACME-9/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask the customer" })).toBeNull();
+    });
+
+    it("says so when the customer is not set up for the portal, and offers nothing", async () => {
+      loadWith(sent, { data: [], customer: null });
+      wrap(<PpapPage />, "/PPAP/p1");
+      expect(await screen.findByText(/is not set up for the portal/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask the customer" })).toBeNull();
+    });
+
+    it("is not shown for a submission that has not been sent", async () => {
+      loadWith({ canManage: true }, { data: [], customer: acme });
+      wrap(<PpapPage />, "/PPAP/p1");
+      await screen.findByRole("heading", { name: "PPAP-26-0001" });
+      expect(screen.queryByText("Customer's answer in the portal")).toBeNull();
+    });
+  });
+
   it("says when an interim approval has run out, from the date and not from anything stored", async () => {
     load({
       status: "interim_approved", editable: false, canSavePsw: false, canRecordDecision: true, interimExpiresOn: "2026-11-01", interimExpired: true,

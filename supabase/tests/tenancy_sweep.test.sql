@@ -575,6 +575,16 @@ BEGIN
   INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
     SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('customer_contact', (SELECT id FROM public.customer_contacts WHERE organisation_id = a));
+  -- Shipping (SH1): a customer order and a shipment against it, of an existing lot (written by functions, so as the owner).
+  PERFORM pg_temp.login('50000000-0000-0000-0000-0000000000a1');
+  CREATE TEMP TABLE _sweep_co AS
+    SELECT app.create_customer_order((SELECT id FROM public.customers WHERE organisation_id = a LIMIT 1), 'SWEEP-CO-1', 'CUST-PO-1', current_date, NULL,
+      jsonb_build_array(jsonb_build_object('partId', (SELECT part_id FROM public.lots WHERE organisation_id = a LIMIT 1), 'quantity', 10, 'requestedOn', (current_date + 5)::text))) AS id;
+  PERFORM app.record_shipment((SELECT id FROM public.customers WHERE organisation_id = a LIMIT 1), (SELECT id FROM _sweep_co), NULL, current_date, 'SWEEP-DN-1', NULL,
+    jsonb_build_array(jsonb_build_object('orderLineId', (SELECT id FROM public.customer_order_lines WHERE customer_order_id = (SELECT id FROM _sweep_co) LIMIT 1), 'quantity', 4,
+                                         'lotId', (SELECT id FROM public.lots WHERE organisation_id = a LIMIT 1))), NULL);
+  DROP TABLE _sweep_co;
+  PERFORM pg_temp.logout();
   -- External portal (PT5f): a file on a lot shared with a customer (written by a function; seeded directly here).
   INSERT INTO public.lot_evidence_files (organisation_id, lot_id, customer_id, kind, storage_path, file_name, size_bytes)
     SELECT a, l.id, c.id, 'other', a::text || '/lot/' || l.id::text || '/sweep.pdf', 'sweep.pdf', 1

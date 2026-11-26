@@ -14,11 +14,12 @@
 -- The guard is a BEFORE INSERT trigger, so it holds whichever function or screen writes the row. The import itself is exempt through the transaction
 -- setting `app.source = 'integration'` it already sets; SQL run as the system or the operator is exempt because it is not an `authenticated` session.
 -- Error QM039 -> 409 record_managed_by_import.
+-- Needs 20260459100000_shipping.sql first (it guards customer_orders and shipments). Safe to run again.
 SET check_function_bodies = off;
 
 -- The rule, once. Returns the name of the connection that owns any of the kinds, or null. No permission check: callers are the guard trigger and the
 -- member-facing function below.
-CREATE FUNCTION app.import_owner(p_org uuid, p_kinds text[]) RETURNS text
+CREATE OR REPLACE FUNCTION app.import_owner(p_org uuid, p_kinds text[]) RETURNS text
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   SELECT min(c.name)
     FROM public.integration_import_settings st
@@ -30,7 +31,7 @@ REVOKE ALL ON FUNCTION app.import_owner(uuid, text[]) FROM PUBLIC, anon, authent
 
 -- What a screen asks: which areas an import owns right now, and by which connection. Only members who may read that area, and nothing for an area no
 -- import manages, so it reveals nothing about connections to people with no business seeing them.
-CREATE FUNCTION app.import_managed_areas(p_org uuid) RETURNS TABLE (area text, connection_name text)
+CREATE OR REPLACE FUNCTION app.import_managed_areas(p_org uuid) RETURNS TABLE (area text, connection_name text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE r record; v_name text;
 BEGIN
@@ -49,7 +50,7 @@ REVOKE ALL ON FUNCTION app.import_managed_areas(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION app.import_managed_areas(uuid) TO authenticated;
 
 -- The guard. TG_ARGV[0] = the kinds (comma separated), TG_ARGV[1] = what to call them in the message, TG_ARGV[2] = the area's key.
-CREATE FUNCTION app.import_owned_guard() RETURNS trigger
+CREATE OR REPLACE FUNCTION app.import_owned_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_name text;
 BEGIN
@@ -63,7 +64,11 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.import_owned_guard() FROM PUBLIC, anon, authenticated;
 
+DROP TRIGGER IF EXISTS import_owned_guard ON public.purchase_orders;
 CREATE TRIGGER import_owned_guard BEFORE INSERT ON public.purchase_orders FOR EACH ROW EXECUTE FUNCTION app.import_owned_guard('purchase_order', 'Purchase orders', 'purchase_orders');
+DROP TRIGGER IF EXISTS import_owned_guard ON public.goods_receipts;
 CREATE TRIGGER import_owned_guard BEFORE INSERT ON public.goods_receipts FOR EACH ROW EXECUTE FUNCTION app.import_owned_guard('goods_receipt,po_receipt_total', 'Deliveries', 'receipts');
+DROP TRIGGER IF EXISTS import_owned_guard ON public.customer_orders;
 CREATE TRIGGER import_owned_guard BEFORE INSERT ON public.customer_orders FOR EACH ROW EXECUTE FUNCTION app.import_owned_guard('customer_order', 'Customer orders', 'customer_orders');
+DROP TRIGGER IF EXISTS import_owned_guard ON public.shipments;
 CREATE TRIGGER import_owned_guard BEFORE INSERT ON public.shipments FOR EACH ROW EXECUTE FUNCTION app.import_owned_guard('shipment', 'Shipments', 'shipments');

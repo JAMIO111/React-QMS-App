@@ -67,6 +67,7 @@ describe("inviting a team", () => {
     for (const e of ["a@example.com", "b@example.com"]) {
       await choose(`Role for ${e}`, "Viewer");
       await choose(`Add a department for ${e}`, "PA · Quality");
+      await choose(`Package for ${e}`, /^Contributor/);
     }
     await userEvent.type(screen.getByLabelText("Message"), "Welcome to the team");
     await userEvent.click(screen.getByRole("button", { name: "Send 2 invitations" }));
@@ -75,8 +76,8 @@ describe("inviting a team", () => {
         action: "inviteMany",
         body: {
           invitations: [
-            { email: "a@example.com", roleId: "r-viewer", departmentIds: ["d-qa"], message: "Welcome to the team" },
-            { email: "b@example.com", roleId: "r-viewer", departmentIds: ["d-qa"], message: "Welcome to the team" },
+            { email: "a@example.com", roleId: "r-viewer", departmentIds: ["d-qa"], packageSlug: "contributor", message: "Welcome to the team" },
+            { email: "b@example.com", roleId: "r-viewer", departmentIds: ["d-qa"], packageSlug: "contributor", message: "Welcome to the team" },
           ],
         },
       },
@@ -108,6 +109,9 @@ describe("inviting a team", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("a@example.com: choose a department");
     expect(send).toBeDisabled();
     await choose("Add a department for a@example.com", "PA · Quality");
+    expect(screen.getByRole("alert")).toHaveTextContent("a@example.com: choose a package");
+    expect(send).toBeDisabled();
+    await choose("Package for a@example.com", /^Contributor/);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(send).toBeEnabled();
   });
@@ -116,6 +120,7 @@ describe("inviting a team", () => {
     renderIt();
     await addPeople("boss@example.com");
     await choose("Role for boss@example.com", "Owner");
+    await choose("Package for boss@example.com", /^Controller/);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("button", { name: "Send 1 invitation" })).toBeEnabled();
   });
@@ -168,7 +173,10 @@ describe("inviting a team", () => {
     it("lists the outcome for each person, removes those who were invited and keeps the rest to fix", async () => {
       renderIt();
       await addPeople("a@example.com b@example.com c@example.com");
-      for (const e of ["a@example.com", "b@example.com", "c@example.com"]) await choose(`Role for ${e}`, "Owner");
+      for (const e of ["a@example.com", "b@example.com", "c@example.com"]) {
+        await choose(`Role for ${e}`, "Owner");
+        await choose(`Package for ${e}`, e === "c@example.com" ? /^Controller/ : /^Contributor/);
+      }
       await userEvent.click(screen.getByRole("button", { name: "Send 3 invitations" }));
       mutate.mock.calls[0][1].onSuccess({
         invited: 2,
@@ -193,6 +201,7 @@ describe("inviting a team", () => {
       renderIt();
       await addPeople("a@example.com");
       await choose("Role for a@example.com", "Owner");
+      await choose("Package for a@example.com", /^Controller/);
       await userEvent.click(screen.getByRole("button", { name: "Send 1 invitation" }));
       mutate.mock.calls[0][1].onSuccess({ invited: 1, failed: 0, results: [{ email: "a@example.com", ok: true, emailOutcome: { sent: true, kind: "sign_in_link" } }] });
       expect(await screen.findByText(/emailed a sign-in link/)).toBeInTheDocument();
@@ -260,6 +269,8 @@ describe("planning the team before the plan is active", () => {
   it("remembers the list when the page is left and opened again, and offers it ready to send once the plan is active", async () => {
     const first = renderDraft();
     await addPeople("a@example.com");
+    await choose("Role for a@example.com", "Owner");
+    await choose("Package for a@example.com", /^Controller/);
     first.unmount();
     renderDraft();
     expect(screen.getByText("To invite (1)")).toBeInTheDocument();
@@ -267,6 +278,18 @@ describe("planning the team before the plan is active", () => {
     renderIt(); // the plan is active now: the same list, ready to send, with the real roles
     expect(screen.getByText("Your planned team is ready to send")).toBeInTheDocument();
     expect(screen.getByText("To invite (1)")).toBeInTheDocument();
+  });
+
+  it("does not say the planned team is ready while someone still has no role or package", async () => {
+    const first = renderDraft();
+    await addPeople("a@example.com, b@example.com");
+    await choose("Role for a@example.com", "Owner");
+    await choose("Package for a@example.com", /^Controller/);
+    first.unmount();
+    renderIt();
+    expect(screen.queryByText("Your planned team is ready to send")).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("b@example.com: choose a role");
+    expect(screen.getByRole("button", { name: "Send 2 invitations" })).toBeDisabled();
   });
 
   it("turns a planned standard role into the organisation's own role when invitations can be sent", async () => {

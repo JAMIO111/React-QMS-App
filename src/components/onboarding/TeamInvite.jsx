@@ -117,13 +117,15 @@ const TeamInvite = ({ live = true }) => {
     rows.forEach((r) => {
       if (!r.roleId) list.push(`${r.email}: choose a role`);
       else if (needsDepartment(r) && r.departmentIds.length === 0) list.push(`${r.email}: choose a department`);
+      // Where packages are enforced a member with no seat cannot use anything, so every person is given one.
+      else if (canGivePackages && !r.packageSlug) list.push(`${r.email}: choose a package`);
     });
     PACKAGES.forEach((p) => {
       if (live && seats.ready && seats.left(p.slug) < 0) list.push(`Not enough ${p.label} seats: ${-seats.left(p.slug)} more needed`);
     });
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, roleList, seats.ready, live]);
+  }, [rows, roleList, seats.ready, live, canGivePackages]);
 
   const send = () =>
     mutation.mutate(
@@ -156,7 +158,7 @@ const TeamInvite = ({ live = true }) => {
           Add the people you will need and what each will do. We keep the list, use it to suggest how many seats to buy, and let you send the invitations once your plan is active.
         </Callout>
       )}
-      {live && rows.length > 0 && !results && saved.rows.length > 0 && (
+      {live && rows.length > 0 && !results && saved.rows.length > 0 && problems.length === 0 && (
         <Callout tone="success" title="Your planned team is ready to send">Review the list below, then send the invitations.</Callout>
       )}
       <MenuCard title="Add people" subtitle="Paste email addresses: one per line, or separated by commas" bodyClassName="flex flex-col gap-3">
@@ -223,7 +225,7 @@ const TeamInvite = ({ live = true }) => {
                     </div>
                     {canGivePackages && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs text-secondary-text">Package</span>
+                        <span data-required className="text-xs text-secondary-text">Package</span>
                         <ComboField
                           ariaLabel={`Package for ${r.email}`}
                           value={r.packageSlug || null}
@@ -233,7 +235,8 @@ const TeamInvite = ({ live = true }) => {
                             label: live ? `${p.label} (${Math.max(0, seats.left(p.slug) + (r.packageSlug === p.slug ? 1 : 0))} left)` : p.label,
                             disabled: live && seats.left(p.slug) < 1 && r.packageSlug !== p.slug,
                           }))}
-                          placeholder="No package yet"
+                          placeholder="Choose a package"
+                          required
                         />
                       </div>
                     )}
@@ -269,7 +272,7 @@ const TeamInvite = ({ live = true }) => {
               ))}
             </div>
           )}
-          {!canGivePackages && <p className="text-xs text-secondary-text">You can invite people without a package; an owner or administrator can give them one afterwards.</p>}
+          {!canGivePackages && <p className="text-xs text-secondary-text">You can invite people without a package; an owner or administrator can give them one afterwards. Until then they can sign in but not use Fortress.</p>}
           {problems.length > 0 && (
             <ul role="alert" className="list-disc pl-5 text-sm text-error-color">
               {problems.map((p) => <li key={p}>{p}</li>)}

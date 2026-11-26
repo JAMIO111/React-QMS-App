@@ -286,6 +286,15 @@ describe("the set-up wizard", () => {
     expect(screen.getByRole("button", { name: /Finish set-up/ })).toBeEnabled();
   });
 
+  it("the review only counts finished areas: a skipped security step and a team that is only planned are not complete", () => {
+    localStorage.setItem("qms.teamDraft.org-1", JSON.stringify({ message: "", rows: [{ email: "a@x.com", roleId: "key:viewer", departmentIds: [], packageSlug: "contributor" }] }));
+    state = makeState({}, { security: "skipped" });
+    renderAt("/setup/review");
+    const ring = screen.getByRole("img", { name: /areas complete/ });
+    expect(ring).not.toHaveAttribute("aria-label", "5 of 5 areas complete");
+    expect(ring).toHaveAttribute("aria-label", expect.stringMatching(/^[0-4] of 5 areas complete$/));
+  });
+
   it("finishes the set-up and goes to the app", async () => {
     mutate.mockImplementation((_, opts) => opts?.onSuccess?.());
     renderAt("/setup/review");

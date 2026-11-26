@@ -4,7 +4,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddFileBody, CreatePpapBody, CustomerRulesBody, LevelBody, PpapListQuery, ReasonBody, SaveRequirementsBody, UpdateElementBody, UpdatePpapBody, WaiveBody } from './ppap.schemas';
+import { AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, LevelBody, PpapListQuery, ReasonBody, SaveRequirementsBody, UpdateElementBody, UpdatePpapBody, WaiveBody } from './ppap.schemas';
 import { PpapService } from './ppap.service';
 
 const READ = 'ppap.read';
@@ -129,6 +129,25 @@ export class PpapController {
   @ApiCreatedResponse({ description: 'Records a file already uploaded to the submission\'s folder in the ppap-files bucket as evidence for the element' })
   addFile(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.addFile(ctx, parse(Uuid, id), parse(AddFileBody, body));
+  }
+
+  @Post('ppap-elements/:id/links')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AddLinkBody) })
+  @ApiCreatedResponse({
+    description:
+      'Links a record Fortress already holds (a part revision, a control plan revision, an FMEA revision, a change, an inspection, a gauge R&R study, a material certificate, a calibration, a document, a gauge, a plan characteristic) as evidence for the element. The record must be in this organisation, readable by the caller, of a kind that is evidence for this element, and (where it belongs to one part) for the submission\'s part. Answers with the whole submission.',
+  })
+  addLink(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addLink(ctx, parse(Uuid, id), parse(AddLinkBody, body));
+  }
+
+  @Get('ppap-candidates')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'Records of one kind that can be linked to an element, read as the caller, scoped to the submission\'s part unless `q` searches; each with its own state: `{ kind, data: [{ id, label, status, ok, problem, linked }] }`' })
+  candidates(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    return this.service.candidates(ctx, parse(CandidatesQuery, query));
   }
 
   @Post('ppap-elements/:id/waive')

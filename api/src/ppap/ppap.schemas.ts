@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LINK_KINDS } from './ppap-links';
 
 /** Optional text that is trimmed; empty means "clear it". */
 const text = (max: number) =>
@@ -99,6 +100,25 @@ export const AddFileBody = z
   })
   .strict();
 export type AddFileBody = z.infer<typeof AddFileBody>;
+
+/** A link to a record Fortress already holds, as evidence for an element. The database says whether the kind fits the element and whether the record may be linked. */
+export const AddLinkBody = z
+  .object({
+    kind: z.enum(LINK_KINDS),
+    targetId: z.string().uuid(),
+    description: text(500),
+  })
+  .strict();
+export type AddLinkBody = z.infer<typeof AddLinkBody>;
+
+/** What can be linked to an element: records of one kind, scoped to the submission's part unless a search is given. */
+export const CandidatesQuery = z.object({
+  elementId: z.string().uuid(),
+  kind: z.enum(LINK_KINDS),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+});
+export type CandidatesQuery = z.infer<typeof CandidatesQuery>;
 
 export const PpapListQuery = z.object({
   q: z.string().trim().max(100).optional(),

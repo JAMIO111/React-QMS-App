@@ -1,6 +1,6 @@
 # PPAP (production part approval process) — plan
 
-**Status:** planned 2026-11-25; **PP1 built** (migration `20260447100000_ppap_foundation.sql`, not yet applied live); decisions PP1–PP16 are **proposed** · **Depends on:** the FMEA module (`docs/fmea-plan.md`, built first: PPAP elements 4 and 6 point at an FMEA revision in force) ·
+**Status:** planned 2026-11-25; **PP1 and PP2 built** (migrations `20260447100000_ppap_foundation.sql` and `20260451100000_ppap_evidence_links.sql`, not yet applied live); decisions PP1–PP16 are **proposed** · **Depends on:** the FMEA module (`docs/fmea-plan.md`, built first: PPAP elements 4 and 6 point at an FMEA revision in force) ·
 **Menu name:** PPAP (`BadgeCheckIcon`, to be checked in `components/icons`) · **Slices:** PP1–PP6, PPX (exit check)
 
 Per `docs/design-brief.md` §3.5 (approval and revision history preserved), §6.5 and the Phase 4 pattern: complete, tested vertical slices, informing rather than blocking.
@@ -106,7 +106,7 @@ Start inspection, the job hub, the production order and the change page use one 
 | Slice | Content |
 |---|---|
 | **PP1** | Foundation: permissions, packages, module, requirement sets (versions, default), `ppap_submissions` + 18 elements + lifecycle, level and reasons, register, submission page with the checklist and file evidence, menu, tests. |
-| **PP2** | Evidence links to the live records (the table in §4) with live state and freezing at submission, the "still needed" list, waivers, `ppap-candidates`. |
+| **PP2** (built) | Evidence links to the live records (the table in §4) with live state and freezing at submission, the "still needed" list, waivers, `ppap-candidates`. Built as: `app.ppap_link_kinds` (element → kinds), `add_ppap_link`, `ppap_link_state` (read as the caller; `available: false` when they cannot read it), `ppap_freeze_links` (internal, called by PP3's submit; frozen label, status, version and content fingerprint, "changed since" compares the live fingerprint), `ppap_candidates`; the API judges the statistics (Ppk against the minimum for initial studies and the number of readings, %GRR against the largest acceptable) with the customer's own minimums over the organisation's, and `markReady` refuses on them. A design FMEA is the evidence for element 4 and a process FMEA for element 6. Not built: opening the linked record from the submission (the state carries no parent ids), judging a type 1 or attribute study beyond its own verdict. |
 | **PP3** | PSW (generated, signed by a different person, printed), submit, the customer's decision events, interim expiry, withdraw, resubmission, periodic revalidation, notices. |
 | **PP4** | Customer portal: a customer sees and answers a submission (curated view, decision recorded as the CH6b pattern), home attention, email. |
 | **PP5** | Received direction: the supplier portal submits a package, our review and decision, supplier profile tab, expiry watchlist line, inspection recommendation input; customer rules per customer. |

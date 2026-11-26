@@ -4,8 +4,10 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { SpcService } from '../spc/spc.service';
+import { grrPercentOf, judgeCapability, judgeGrr, LinkKind, minimumsFor, StudyJudgement } from './ppap-links';
 import {
-  AddFileBody, CreatePpapBody, CustomerRulesBody, ELEMENT_LABEL, ELEMENT_ORDINAL, PpapListQuery, SaveRequirementsBody, UpdateElementBody, UpdatePpapBody,
+  AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, ELEMENT_LABEL, ELEMENT_ORDINAL, PpapListQuery, SaveRequirementsBody, UpdateElementBody, UpdatePpapBody,
 } from './ppap.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -68,14 +70,42 @@ const toSummary = (r: Row) => ({
   updatedAt: iso(r.updated_at) as string,
 });
 
-const toEvidence = (r: Row) => ({
+/** What a linked record is now, as the database works it out for the caller (app.ppap_link_state). `available` is false when the caller may not read the record: never a blank pass. */
+export interface LinkState {
+  available: boolean;
+  label?: string;
+  status?: string;
+  ok?: boolean;
+  problem?: string | null;
+  version?: string | null;
+  frozen: boolean;
+  frozenLabel?: string | null;
+  frozenStatus?: string | null;
+  frozenAt?: string | null;
+  changedSince?: boolean;
+}
+
+const toEvidence = (r: Row, state: LinkState | null = null) => ({
   id: r.id as string,
-  kind: r.kind as 'file',
-  fileName: r.file_name as string,
-  storagePath: r.storage_path as string,
+  kind: r.kind as 'file' | 'link',
+  fileName: (r.file_name as string) ?? null,
+  storagePath: (r.storage_path as string) ?? null,
   contentType: (r.content_type as string) ?? null,
-  sizeBytes: Number(r.size_bytes),
+  sizeBytes: r.size_bytes == null ? null : Number(r.size_bytes),
   description: (r.description as string) ?? null,
+  /** For a link: the record, what it was when frozen, what it is now, and (for a study) whether it meets the agreed minimum. */
+  link:
+    r.kind === 'link'
+      ? {
+          targetKind: r.target_kind as LinkKind,
+          targetId: r.target_id as string,
+          frozenAt: r.frozen_at ? iso(r.frozen_at) : null,
+          frozenLabel: (r.frozen_label as string) ?? null,
+          frozenStatus: (r.frozen_status as string) ?? null,
+          state,
+          study: null as StudyJudgement | null,
+        }
+      : null,
   addedBy: person(r.created_by, r.added_by_name),
   addedAt: iso(r.created_at) as string,
   removedAt: r.removed_at ? iso(r.removed_at) : null,
@@ -99,7 +129,10 @@ const toRules = (r: Row) => ({
 /** PPAP (PP1): submissions with their 18 elements and file evidence, and the organisation's requirements. Every write is a database function; reading is by RLS. */
 @Injectable()
 export class PpapService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly spc: SpcService,
+  ) {}
 
   // ---- the register ---------------------------------------------------------------------------------
 
@@ -140,7 +173,7 @@ export class PpapService {
 
   // ---- one submission --------------------------------------------------------------------------------
 
-  private async ppap(db: Db, ctx: RequestContext, id: string) {
+  async ppap(db: Db, ctx: RequestContext, id: string) {
     const org = orgOf(ctx);
     const found = (await db.execute<Row>(sql`select * from (${PPAP_SELECT}) x where x.id = ${id}::uuid and x.organisation_id = ${org}::uuid`)).rows[0];
     if (!found) throw ApiError.notFound('ppap_not_found', 'PPAP submission not found');
@@ -157,10 +190,17 @@ export class PpapService {
         select v.*, ${sql.raw(personName('pc'))} as added_by_name from public.ppap_evidence v left join public.profiles pc on pc.id = v.created_by
          where v.submission_id = ${id}::uuid and v.organisation_id = ${org}::uuid order by v.created_at`)
     ).rows;
+    const states = new Map<string, LinkState>(
+      (
+        await db.execute<Row>(sql`
+          select v.id, app.ppap_link_state(v.id) as s from public.ppap_evidence v
+           where v.submission_id = ${id}::uuid and v.organisation_id = ${org}::uuid and v.kind = 'link' and v.removed_at is null`)
+      ).rows.map((x) => [x.id as string, x.s as LinkState]),
+    );
     const byElement = new Map<string, ReturnType<typeof toEvidence>[]>();
     for (const v of evidenceRows) {
       const list = byElement.get(v.element_id as string) ?? [];
-      list.push(toEvidence(v));
+      list.push(toEvidence(v, states.get(v.id as string) ?? null));
       byElement.set(v.element_id as string, list);
     }
     const elements = elementRows
@@ -191,6 +231,8 @@ export class PpapService {
       ...toSummary(found),
       elements,
       problems,
+      /** The lines in `problems` that come from judging a study (capability, gauge R&R) against the agreed minimums; the database does not know these. */
+      studyProblems: [] as string[],
       requirementSet: set ? { id: set.id as string, version: Number(set.version), config: set.config } : null,
       /** Whether the elements and the wording can still change (draft or in preparation). */
       editable: Boolean(can.manage) && editing,
@@ -202,15 +244,24 @@ export class PpapService {
     };
   }
 
-  get(ctx: RequestContext, id: string) {
-    return this.database.asUser(ctx, (db) => this.ppap(db, ctx, id));
+  /** Runs the work (which answers the submission's id), reads the whole submission, then judges its studies against the agreed minimums. */
+  private async answer(ctx: RequestContext, work: (db: Db) => Promise<string>) {
+    const d = await this.database.asUser(ctx, async (db) => this.ppap(db, ctx, await work(db)));
+    return this.withStudies(ctx, d);
   }
 
-  create(ctx: RequestContext, body: CreatePpapBody) {
-    return this.database.asUser(ctx, async (db) => {
+  get(ctx: RequestContext, id: string) {
+    return this.answer(ctx, async () => id);
+  }
+
+  async create(ctx: RequestContext, body: CreatePpapBody) {
+    let created = false;
+    const d = await this.answer(ctx, async (db) => {
       const made = (await db.execute<Row>(sql`select app.create_ppap(${orgOf(ctx)}::uuid, ${json(body)}::jsonb) as r`)).rows[0].r as { id: string; created: boolean };
-      return { ...(await this.ppap(db, ctx, made.id)), created: made.created };
+      created = made.created;
+      return made.id;
     });
+    return { ...d, created };
   }
 
   update(ctx: RequestContext, id: string, body: UpdatePpapBody) {
@@ -221,7 +272,12 @@ export class PpapService {
     return this.command(ctx, id, sql`select app.set_ppap_level(${id}::uuid, ${level})`);
   }
 
-  markReady(ctx: RequestContext, id: string) {
+  async markReady(ctx: RequestContext, id: string) {
+    const before = await this.get(ctx, id);
+    // The database answers first when it has something to say; a study that does not meet its minimum is the API's to refuse.
+    if (before.studyProblems.length > 0 && before.problems.length === before.studyProblems.length) {
+      throw new ApiError(409, 'ppap_rule', `Not ready yet: ${before.studyProblems[0]}`);
+    }
     return this.command(ctx, id, sql`select app.mark_ppap_ready(${id}::uuid)`);
   }
 
@@ -234,9 +290,9 @@ export class PpapService {
   }
 
   private command(ctx: RequestContext, id: string, statement: SQL) {
-    return this.database.asUser(ctx, async (db) => {
+    return this.answer(ctx, async (db) => {
       await db.execute(statement);
-      return this.ppap(db, ctx, id);
+      return id;
     });
   }
 
@@ -244,11 +300,11 @@ export class PpapService {
 
   /** Runs a command on an element and answers with the whole submission it belongs to. */
   private elementCommand(ctx: RequestContext, elementId: string, statement: SQL) {
-    return this.database.asUser(ctx, async (db) => {
+    return this.answer(ctx, async (db) => {
       await db.execute(statement);
       const e = (await db.execute<Row>(sql`select submission_id from public.ppap_elements where id = ${elementId}::uuid`)).rows[0];
       if (!e) throw ApiError.notFound('ppap_not_found', 'PPAP element not found');
-      return this.ppap(db, ctx, e.submission_id as string);
+      return e.submission_id as string;
     });
   }
 
@@ -272,13 +328,124 @@ export class PpapService {
     return this.elementCommand(ctx, id, sql`select app.unwaive_ppap_element(${id}::uuid)`);
   }
 
+  addLink(ctx: RequestContext, id: string, body: AddLinkBody) {
+    return this.elementCommand(ctx, id, sql`select app.add_ppap_link(${id}::uuid, ${body.kind}, ${body.targetId}::uuid, ${body.description ?? null})`);
+  }
+
   removeEvidence(ctx: RequestContext, id: string, reason: string) {
-    return this.database.asUser(ctx, async (db) => {
+    return this.answer(ctx, async (db) => {
       const v = (await db.execute<Row>(sql`select submission_id from public.ppap_evidence where id = ${id}::uuid`)).rows[0];
       await db.execute(sql`select app.remove_ppap_evidence(${id}::uuid, ${reason})`);
       if (!v) throw ApiError.notFound('ppap_not_found', 'Evidence not found');
-      return this.ppap(db, ctx, v.submission_id as string);
+      return v.submission_id as string;
     });
+  }
+
+  /** Records of one kind that can be linked to an element (read as the caller), each with its own state so the screen can show it beside the name. */
+  candidates(ctx: RequestContext, q: CandidatesQuery) {
+    return this.database.asUser(ctx, async (db) => {
+      const rows = (await db.execute<Row>(sql`select * from app.ppap_candidates(${q.elementId}::uuid, ${q.kind}, ${q.q ?? null}, ${q.limit})`)).rows;
+      return {
+        kind: q.kind,
+        data: rows.map((r) => ({
+          id: r.target_id as string,
+          label: r.label as string,
+          status: r.status as string,
+          ok: Boolean(r.ok),
+          problem: (r.problem as string) ?? null,
+          linked: Boolean(r.linked),
+        })),
+      };
+    });
+  }
+
+  // ---- studies: statistics the database does not do -----------------------------------------------------
+
+  /**
+   * Judges the capability studies and gauge R&R studies a submission links to against the agreed minimums (the customer's own where they set one). The caller needs spc.read
+   * to see capability at all; without it the link says so and is not judged. Done after the database transaction because the control chart opens its own.
+   */
+  private async withStudies(ctx: RequestContext, d: Awaited<ReturnType<PpapService['ppap']>>) {
+    const live = d.elements.flatMap((e) =>
+      e.evidence.filter((v) => v.link && !v.removedAt && v.link.state?.available && ['plan_characteristic', 'msa_study'].includes(v.link.targetKind)).map((v) => ({ e, v })),
+    );
+    if (live.length === 0) return d;
+    const config = d.requirementSet?.config as { minCpkInitial: number; minCpkOngoing: number; minReadings: number; maxGrrPercent: number } | undefined;
+    if (!config) return d;
+    const plan = live.filter((x) => x.v.link!.targetKind === 'plan_characteristic').map((x) => x.v.link!.targetId);
+    const msa = live.filter((x) => x.v.link!.targetKind === 'msa_study').map((x) => x.v.link!.targetId);
+    const org = orgOf(ctx);
+    const facts = await this.database.asUser(ctx, async (db) => {
+      const rules = d.customer
+        ? (await db.execute<Row>(sql`select * from public.ppap_customer_rules where organisation_id = ${org}::uuid and customer_id = ${d.customer.id}::uuid`)).rows[0]
+        : undefined;
+      const can = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'spc.read') as spc`)).rows[0];
+      const chars = plan.length
+        ? (
+            await db.execute<Row>(sql`
+              select c.id, c.characteristic_key, c.data_type, o.operation_code,
+                     (select count(*)::int from public.inspection_measurements m
+                        join public.resolved_inspection_requirements q on q.id = m.requirement_id
+                        join public.inspection_records ir on ir.id = q.inspection_record_id
+                       where ir.part_id = ${d.part.id}::uuid and q.characteristic_key = c.characteristic_key and m.value_numeric is not null) as readings
+                from public.control_plan_characteristics c join public.control_plan_operations o on o.id = c.operation_id
+               where c.organisation_id = ${org}::uuid and c.id = any(string_to_array(${plan.join(',')}, ',')::uuid[])`)
+          ).rows
+        : [];
+      const studies = msa.length
+        ? (
+            await db.execute<Row>(sql`
+              select distinct on (s.id) s.id, s.study_type, r.result
+                from public.msa_studies s left join public.msa_study_results r on r.study_id = s.id
+               where s.organisation_id = ${org}::uuid and s.id = any(string_to_array(${msa.join(',')}, ',')::uuid[])
+               order by s.id, r.created_at desc nulls last`)
+          ).rows
+        : [];
+      return { rules, spc: Boolean(can.spc), chars: new Map(chars.map((c) => [c.id as string, c])), studies: new Map(studies.map((c) => [c.id as string, c])) };
+    });
+    const m = minimumsFor(config, facts.rules);
+    const extra: string[] = [];
+    for (const { e, v } of live) {
+      const link = v.link!;
+      let judged: StudyJudgement | null = null;
+      if (link.targetKind === 'plan_characteristic') {
+        const c = facts.chars.get(link.targetId);
+        if (c && facts.spc) {
+          const measured = c.data_type === 'variable';
+          let ppk: number | null = null;
+          let cpk: number | null = null;
+          let readings = Number(c.readings ?? 0);
+          if (measured) {
+            try {
+              const chart = (await this.spc.chart(ctx, { partId: d.part.id, characteristicKey: c.characteristic_key as string, operationCode: c.operation_code as string })) as {
+                capability?: { n: number; within: { k: number | null }; overall: { k: number | null } } | null;
+              };
+              if (chart.capability) {
+                ppk = chart.capability.overall.k;
+                cpk = chart.capability.within.k;
+                readings = chart.capability.n;
+              }
+            } catch {
+              // a chart that cannot be drawn (no readings yet) is judged with what the count says
+            }
+          }
+          judged = judgeCapability({ measured, readings, ppk, cpk }, m);
+        } else if (c) {
+          judged = { ok: true, text: 'Capability is not shown to you (it needs the right to see control charts)', problem: null };
+        }
+      } else {
+        const s = facts.studies.get(link.targetId);
+        if (s && s.study_type === 'grr_crossed') judged = judgeGrr(grrPercentOf(s.result), m);
+      }
+      link.study = judged;
+      if (judged && !judged.ok && judged.problem && e.requirement === 'required' && e.status !== 'waived') {
+        extra.push(`${e.label}: ${link.state?.label ?? 'a linked record'} ${judged.problem}`);
+      }
+    }
+    d.problems.push(...extra);
+    d.studyProblems.push(...extra);
+    d.canMarkReady = d.canMarkReady && extra.length === 0;
+    return d;
   }
 
   // ---- the requirements ------------------------------------------------------------------------------

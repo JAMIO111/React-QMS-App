@@ -691,6 +691,7 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/ppaps/{id}/withdraw': { reason: 'Hijacked' },
     'PATCH /api/v1/ppap-elements/{id}': { note: 'Hijacked' },
     'POST /api/v1/ppap-elements/{id}/files': { storagePath: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/ppap-elements/{id}/links': { kind: 'part_revision', targetId: '00000000-0000-4000-8000-000000000001' },
     'POST /api/v1/ppap-elements/{id}/waive': { reason: 'Hijacked, without a reason of substance' },
     'POST /api/v1/ppap-elements/{id}/unwaive': undefined,
     'POST /api/v1/ppap-evidence/{id}/remove': { reason: 'Hijacked' },
@@ -1315,6 +1316,7 @@ const hasSample = (op: Op) =>
     'POST /api/v1/ppaps/{id}/withdraw',
     'PATCH /api/v1/ppap-elements/{id}',
     'POST /api/v1/ppap-elements/{id}/files',
+    'POST /api/v1/ppap-elements/{id}/links',
     'POST /api/v1/ppap-elements/{id}/waive',
     'POST /api/v1/ppap-elements/{id}/unwaive',
     'POST /api/v1/ppap-evidence/{id}/remove',
@@ -1884,7 +1886,9 @@ describe('tenancy sweep over every API route', () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
     // The reporting datasets take a dataset key in the path; their isolation (a key reads only its own organisation) is tested in reporting.e2e-spec.ts.
-    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview', '/api/v1/reporting/v1/{dataset}'];
+    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview', '/api/v1/reporting/v1/{dataset}',
+      // Needs an element of the caller's own organisation; ppap-evidence-links.e2e-spec.ts asks it with another organisation's element and expects 404.
+      '/api/v1/ppap-candidates'];
     // The portal's own routes (external people only) answer an organisation owner 404 by design; external-portal.e2e-spec.ts covers them.
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path) && !o.path.startsWith('/api/v1/portal/'));
     const leaks: string[] = [];

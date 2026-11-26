@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CTAButton from "@/components/CTAButton";
 import { QrCodeIcon, UsersIcon } from "@/components/icons";
 import { uploadFileToSupabase } from "../../api/supabaseApi";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
-import { usePpapMutation } from "../../hooks/usePpap";
+import { usePpapCandidates, usePpapMutation } from "../../hooks/usePpap";
 import { describeApiError } from "../../lib/api-client";
 import { withVersion } from "../../lib/editConflicts";
-import { LEVELS, REASONS, fileSizeLabel, levelLabel } from "../../lib/ppap";
+import { LEVELS, REASONS, fileSizeLabel, levelLabel, linkKindLabel, linkKindsFor, verdictPill } from "../../lib/ppap";
 import { FormError, TextAreaField } from "../master-data/shared";
 import { PartPicker, PartyPicker, RevisionPicker } from "../ncr/Pickers";
 import ComboField from "../ui/ComboField";
@@ -172,6 +172,81 @@ export const AddFileDialog = ({ ppap, element, onClose }) => {
         <FormError error={mutation.error} />
         <Buttons onClose={onClose} pending={uploading || mutation.isPending} disabled={!file || tooBig} label="Add the file" />
       </form>
+    </Dialog>
+  );
+};
+
+/**
+ * Link a record Fortress already holds as evidence for an element. The choices are the records that fit (the kind, the submission's part), read as the person, each with its own
+ * state beside its name so a record that is not in good standing is seen before it is chosen; a search widens it to the whole organisation.
+ */
+export const LinkDialog = ({ element, onClose }) => {
+  const mutation = usePpapMutation();
+  const { showToast } = useToast();
+  const kinds = linkKindsFor(element.key);
+  const [kind, setKind] = useState(kinds[0]);
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const [description, setDescription] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const candidates = usePpapCandidates({ elementId: element.id, kind, q });
+  const rows = candidates.data?.data ?? [];
+
+  const link = (row) =>
+    mutation.mutate(
+      { action: "addLink", id: element.id, body: { kind, targetId: row.id, ...(description.trim() ? { description: description.trim() } : {}) } },
+      { onSuccess: onClose, onError: (err) => showToast({ type: "error", title: "Not linked", message: describeApiError(err) }) },
+    );
+
+  return (
+    <Dialog title={`Link a record: ${element.label}`} onClose={onClose} width="max-w-2xl">
+      <div className="flex flex-col gap-3">
+        {kinds.length > 1 && (
+          <ComboField
+            label="What to link"
+            value={kind}
+            onChange={(v) => v && setKind(v)}
+            options={kinds.map((k) => ({ value: k, label: linkKindLabel(k)[0].toUpperCase() + linkKindLabel(k).slice(1) }))}
+            clearable={false}
+            sort={false}
+          />
+        )}
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Search</span>
+          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Find a ${linkKindLabel(kind)} by its number or name`} className="min-h-9.5 rounded-md border border-border-color bg-secondary-bg px-3 text-sm" />
+          <span className="text-xs text-secondary-text">{q.trim() ? "Searching every record you can read." : "Showing the ones that fit this part. Search to look further."}</span>
+        </label>
+        <TextAreaField label="What it is (optional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={500} />
+        <ul aria-label={`${linkKindLabel(kind)} choices`} className="flex max-h-80 flex-col overflow-y-auto rounded-md border border-border-color">
+          {candidates.isLoading && <li className="p-3 text-sm text-secondary-text">Looking…</li>}
+          {!candidates.isLoading && rows.length === 0 && <li className="p-3 text-sm text-secondary-text">Nothing fits. Try a search.</li>}
+          {rows.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center gap-3 border-b border-border-color p-2 last:border-0">
+              <div className="min-w-48 flex-1">
+                <p className="text-sm font-medium text-primary-text">{row.label}</p>
+                <p className="text-xs text-secondary-text">{row.ok ? "In good standing" : `It ${row.problem ?? "is not in good standing"}`}</p>
+              </div>
+              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${verdictPill(row.ok ? "success" : "error")}`}>{String(row.status).replace(/_/g, " ")}</span>
+              {row.linked ? (
+                <span className="w-20 text-right text-sm text-secondary-text">Linked</span>
+              ) : (
+                <CTAButton type="secondary" size="md" aria-label={`Link ${row.label}`} loading={mutation.isPending && mutation.variables?.body?.targetId === row.id} onClick={() => link(row)}>
+                  Link
+                </CTAButton>
+              )}
+            </li>
+          ))}
+        </ul>
+        <FormError error={candidates.error ?? mutation.error} />
+        <div className="flex justify-end">
+          <CTAButton buttonType="button" type="neutral" size="md" onClick={onClose}>
+            Close
+          </CTAButton>
+        </div>
+      </div>
     </Dialog>
   );
 };

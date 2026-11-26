@@ -116,3 +116,57 @@ export const MINIMUMS = [
   { key: "minReadings", label: "Fewest readings for a study", step: "1" },
   { key: "maxGrrPercent", label: "Largest acceptable gauge R&R (%)", step: "1" },
 ];
+
+/** Which records can be evidence for which element, and their words (a mirror of app.ppap_link_kinds; ppap.e2e-spec.ts compares the API's copy with the database). */
+export const ELEMENT_LINK_KINDS = {
+  design_records: ["part_revision", "document_revision"],
+  engineering_change_documents: ["change_request", "document_revision"],
+  customer_engineering_approval: ["change_request"],
+  dfmea: ["fmea_revision"],
+  process_flow_diagram: ["control_plan_revision", "document_revision"],
+  pfmea: ["fmea_revision"],
+  control_plan: ["control_plan_revision"],
+  msa_studies: ["msa_study"],
+  dimensional_results: ["inspection"],
+  material_performance_tests: ["material_certificate", "document_revision"],
+  initial_process_studies: ["plan_characteristic"],
+  laboratory_documentation: ["calibration", "document_revision"],
+  appearance_approval_report: ["document_revision"],
+  sample_production_parts: ["document_revision"],
+  master_sample: ["document_revision"],
+  checking_aids: ["gauge", "document_revision"],
+  customer_specific_requirements: ["document_revision"],
+  part_submission_warrant: [],
+};
+export const LINK_KIND_LABEL = {
+  part_revision: "part revision",
+  control_plan_revision: "control plan revision",
+  fmea_revision: "FMEA revision",
+  change_request: "change",
+  inspection: "inspection",
+  msa_study: "gauge R&R study",
+  material_certificate: "material certificate",
+  calibration: "calibration",
+  document_revision: "document",
+  gauge: "gauge",
+  plan_characteristic: "control plan characteristic",
+};
+export const linkKindsFor = (elementKey) => ELEMENT_LINK_KINDS[elementKey] ?? [];
+export const linkKindLabel = (kind) => LINK_KIND_LABEL[kind] ?? kind;
+
+/** What to call a piece of evidence: a file's name, or the record it links to (as it is now, else as it was when frozen). */
+export const evidenceName = (v) => (v.kind === "link" ? (v.link?.state?.label ?? v.link?.frozenLabel ?? "A linked record") : (v.fileName ?? "A file"));
+
+/**
+ * How a link stands, in words and a tone: not available to this person, not in good standing (with why), a study that does not meet its minimum, or fine. A record the person
+ * cannot read is never shown as passing.
+ */
+export const linkVerdict = (link) => {
+  const state = link?.state;
+  if (!state) return { tone: "neutral", words: "Its state could not be read" };
+  if (!state.available) return { tone: "neutral", words: "You are not allowed to read this record, so its state is not shown to you" };
+  if (!state.ok) return { tone: "error", words: state.problem ? `It ${state.problem}` : "It is not in good standing" };
+  if (link.study && !link.study.ok) return { tone: "error", words: `It ${link.study.problem}` };
+  return { tone: "success", words: state.status ? `In good standing (${String(state.status).replace(/_/g, " ")})` : "In good standing" };
+};
+export const verdictPill = (tone) => TONE_CLASS[tone === "error" ? "error" : tone === "success" ? "success" : "neutral"];

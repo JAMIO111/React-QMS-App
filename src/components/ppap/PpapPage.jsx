@@ -7,13 +7,13 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePpap, usePpapMutation } from "../../hooks/usePpap";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { LEVELS, REQUIREMENT_OPTIONS, elementStatusLabel, elementStatusPill, fileSizeLabel, formatDay, levelLabel, progressPercent, progressWords, reasonLabel, requirementLabel, statusLabel, statusPill } from "../../lib/ppap";
+import { LEVELS, REQUIREMENT_OPTIONS, elementStatusLabel, elementStatusPill, evidenceName, fileSizeLabel, formatDay, levelLabel, linkKindLabel, linkKindsFor, linkVerdict, progressPercent, progressWords, reasonLabel, requirementLabel, statusLabel, statusPill, verdictPill } from "../../lib/ppap";
 import { ErrorNotice, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
-import { AddFileDialog, EditPpapDialog, ReasonDialog } from "./PpapDialogs";
+import { AddFileDialog, EditPpapDialog, LinkDialog, ReasonDialog } from "./PpapDialogs";
 
 const Fact = ({ label, children }) => (
   <div>
@@ -23,6 +23,36 @@ const Fact = ({ label, children }) => (
 );
 
 const LEVEL_OPTIONS = LEVELS.map((l) => ({ value: String(l), label: levelLabel(l) }));
+
+/** A piece of evidence that is a link to a record: its name, how it stands now (in words and colour), the study judged against the agreed minimum, and what it was when frozen. */
+const LinkEvidence = ({ evidence, editable, onRemove }) => {
+  const link = evidence.link;
+  const verdict = linkVerdict(link);
+  const changed = link.state?.changedSince;
+  return (
+    <li className="flex flex-col gap-0.5 rounded-md border border-border-color p-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium text-primary-text">{evidenceName(evidence)}</span>
+        <span className="text-secondary-text">{linkKindLabel(link.targetKind)}</span>
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${verdictPill(verdict.tone)}`}>{verdict.tone === "success" ? "In good standing" : verdict.tone === "error" ? "Needs attention" : "Not shown"}</span>
+        {evidence.description && <span className="text-primary-text">{evidence.description}</span>}
+        {editable && (
+          <button type="button" aria-label={`Remove ${evidenceName(evidence)}`} onClick={onRemove} className="ml-auto rounded p-0.5 text-secondary-text hover:text-error-color cursor-pointer">
+            <XIcon className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      <p className="text-secondary-text">{verdict.words}</p>
+      {link.study && <p className="text-secondary-text">{link.study.text}</p>}
+      {link.frozenAt && (
+        <p className="text-secondary-text">
+          Frozen when submitted: {link.frozenLabel} ({String(link.frozenStatus).replace(/_/g, " ")})
+          {changed ? <span className="font-medium text-warning-color"> — it has changed since</span> : ""}
+        </p>
+      )}
+    </li>
+  );
+};
 
 /** One element of the submission: its requirement and status in the list, and (opened) its evidence, note and what can be done with it. */
 const ElementRow = ({ ppap, element, onDialog, mutate, pendingId }) => {
@@ -51,7 +81,7 @@ const ElementRow = ({ ppap, element, onDialog, mutate, pendingId }) => {
         <span className="min-w-48 flex-1 font-medium text-primary-text">{element.label}</span>
         <span className="inline-flex rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium text-secondary-text">{requirementLabel(element.requirement)}</span>
         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${elementStatusPill(element.status)}`}>{elementStatusLabel(element.status)}</span>
-        <span className="w-28 shrink-0 text-right text-sm text-secondary-text">{element.liveEvidence === 1 ? "1 file" : `${element.liveEvidence} files`}</span>
+        <span className="w-28 shrink-0 text-right text-sm text-secondary-text">{element.liveEvidence === 1 ? "1 item" : `${element.liveEvidence} items`}</span>
       </div>
       {open && (
         <div className="flex flex-col gap-3 pb-4 pl-12 pr-1">
@@ -63,30 +93,34 @@ const ElementRow = ({ ppap, element, onDialog, mutate, pendingId }) => {
           {live.length === 0 && removed.length === 0 && <p className="text-sm text-secondary-text">No evidence yet.</p>}
           {live.length > 0 && (
             <ul aria-label={`Evidence for ${element.label}`} className="flex flex-col gap-1">
-              {live.map((v) => (
-                <li key={v.id} className="flex flex-wrap items-center gap-2 text-sm">
-                  <button type="button" onClick={() => openFile(v)} className="font-medium text-link-color hover:underline cursor-pointer">
-                    {v.fileName}
-                  </button>
-                  <span className="text-secondary-text">{fileSizeLabel(v.sizeBytes)}</span>
-                  {v.description && <span className="text-primary-text">{v.description}</span>}
-                  <span className="text-secondary-text">
-                    {v.addedBy?.name} · {formatDay(v.addedAt.slice(0, 10))}
-                  </span>
-                  {editable && (
-                    <button type="button" aria-label={`Remove ${v.fileName}`} onClick={() => onDialog({ kind: "remove", evidence: v })} className="rounded p-0.5 text-secondary-text hover:text-error-color cursor-pointer">
-                      <XIcon className="h-4 w-4" />
+              {live.map((v) =>
+                v.kind === "link" ? (
+                  <LinkEvidence key={v.id} evidence={v} editable={editable} onRemove={() => onDialog({ kind: "remove", evidence: v })} />
+                ) : (
+                  <li key={v.id} className="flex flex-wrap items-center gap-2 text-sm">
+                    <button type="button" onClick={() => openFile(v)} className="font-medium text-link-color hover:underline cursor-pointer">
+                      {v.fileName}
                     </button>
-                  )}
-                </li>
-              ))}
+                    <span className="text-secondary-text">{fileSizeLabel(v.sizeBytes)}</span>
+                    {v.description && <span className="text-primary-text">{v.description}</span>}
+                    <span className="text-secondary-text">
+                      {v.addedBy?.name} · {formatDay(v.addedAt.slice(0, 10))}
+                    </span>
+                    {editable && (
+                      <button type="button" aria-label={`Remove ${v.fileName}`} onClick={() => onDialog({ kind: "remove", evidence: v })} className="rounded p-0.5 text-secondary-text hover:text-error-color cursor-pointer">
+                        <XIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                  </li>
+                ),
+              )}
             </ul>
           )}
           {removed.length > 0 && (
             <ul aria-label="Removed evidence" className="flex flex-col gap-0.5 text-sm text-secondary-text">
               {removed.map((v) => (
                 <li key={v.id}>
-                  <span className="line-through">{v.fileName}</span> removed: {v.removeReason}
+                  <span className="line-through">{evidenceName(v)}</span> removed: {v.removeReason}
                 </li>
               ))}
             </ul>
@@ -107,6 +141,11 @@ const ElementRow = ({ ppap, element, onDialog, mutate, pendingId }) => {
           {!editable && element.note && <p className="whitespace-pre-wrap text-sm text-primary-text">{element.note}</p>}
           {editable && (
             <div className="flex flex-wrap gap-2">
+              {!waived && linkKindsFor(element.key).length > 0 && (
+                <CTAButton type="secondary" size="md" icon={PlusIcon} onClick={() => onDialog({ kind: "link", element })}>
+                  Link a record
+                </CTAButton>
+              )}
               {!waived && (
                 <CTAButton type="secondary" size="md" icon={PlusIcon} onClick={() => onDialog({ kind: "file", element })}>
                   Add a file
@@ -261,11 +300,12 @@ const PpapPage = () => {
           ))}
         </ul>
         <p className="border-t border-border-color px-4 py-3 text-sm text-secondary-text">
-          Linking an element to the control plan, FMEA, inspections and other records Fortress already holds comes next; for now an element's evidence is a file. The Part Submission Warrant is generated later.
+          Evidence is a link to a record Fortress already holds (the control plan, FMEA, inspections, gauge studies, documents) or a file. A link shows what the record is now, and is frozen when the submission is sent. The Part Submission Warrant is generated later.
         </p>
       </MenuCard>
 
       {dialog?.kind === "edit" && <EditPpapDialog ppap={ppap} onClose={() => setDialog(null)} />}
+      {dialog?.kind === "link" && <LinkDialog element={dialog.element} onClose={() => setDialog(null)} />}
       {dialog?.kind === "file" && <AddFileDialog ppap={ppap} element={dialog.element} onClose={() => setDialog(null)} />}
       {dialog?.kind === "withdraw" && (
         <ReasonDialog
@@ -281,9 +321,9 @@ const PpapPage = () => {
       )}
       {dialog?.kind === "remove" && (
         <ReasonDialog
-          title={`Remove ${dialog.evidence.fileName}`}
+          title={`Remove ${evidenceName(dialog.evidence)}`}
           label="Why is it removed"
-          hint="The file is kept, marked removed with this reason"
+          hint="It is kept, marked removed with this reason"
           submitLabel="Remove"
           tone="danger"
           pending={pendingAction("removeEvidence")}

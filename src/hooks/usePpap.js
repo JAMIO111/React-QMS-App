@@ -61,6 +61,8 @@ export const usePpapMutation = () => {
           return send(`/ppap-elements/${id}`, "PATCH");
         case "addFile":
           return send(`/ppap-elements/${id}/files`);
+        case "addLink":
+          return send(`/ppap-elements/${id}/links`);
         case "waive":
           return send(`/ppap-elements/${id}/waive`);
         case "unwaive":
@@ -116,5 +118,17 @@ export const useSetCustomerRules = () => {
     mutationFn: ({ customerId, body }) => apiFetch(`/ppap-customer-rules/${customerId}`, { method: "PUT", body, organisationId }),
     onSuccess: (answer) => queryClient.setQueryData(key(organisationId, "customer-rules"), answer),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Records of one kind that can be linked to an element (read as the person, with each one's own state). Only asked for while the dialog is open. */
+export const usePpapCandidates = ({ elementId, kind, q }, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "candidates", elementId, kind, q ?? ""),
+    queryFn: () => apiFetch(`/ppap-candidates?${qs({ elementId, kind, q: q?.trim() || undefined })}`, { organisationId }),
+    enabled: !!organisationId && !!elementId && !!kind && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
   });
 };

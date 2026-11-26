@@ -117,4 +117,60 @@ describe("a PPAP submission", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show Design records" }));
     expect(screen.queryByRole("button", { name: "Add a file" })).toBeNull();
   });
+  const linkEvidence = (over = {}) => ({
+    id: "v9", kind: "link", fileName: null, storagePath: null, contentType: null, sizeBytes: null, description: "The study", addedBy: { id: "u1", name: "Ada" },
+    addedAt: "2026-11-25T09:00:00.000Z", removedAt: null, removeReason: null,
+    link: { targetKind: "plan_characteristic", targetId: "pc1", frozenAt: null, frozenLabel: null, frozenStatus: null,
+      state: { available: true, ok: true, status: "effective", label: "Diameter on CP-001 rev B", changedSince: false }, study: { ok: false, problem: "Ppk 1.21 is below the agreed 1.67", text: "Ppk 1.21 over 150 readings; the agreed minimum is 1.67" } },
+    ...over,
+  });
+
+  it("shows a linked record with how it stands now and what its study found", async () => {
+    load({ elements: [element({ key: "initial_process_studies", label: "Initial process studies", evidence: [linkEvidence()], liveEvidence: 1 })] });
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Show Initial process studies" }));
+    const list = screen.getByRole("list", { name: "Evidence for Initial process studies" });
+    expect(within(list).getByText("Diameter on CP-001 rev B")).toBeInTheDocument();
+    expect(within(list).getByText("Needs attention")).toBeInTheDocument();
+    expect(within(list).getByText(/It Ppk 1.21 is below the agreed 1.67/)).toBeInTheDocument();
+    expect(within(list).getByText(/over 150 readings/)).toBeInTheDocument();
+  });
+
+  it("does not show a record the person cannot read as passing", async () => {
+    load({ elements: [element({ evidence: [linkEvidence({ link: { targetKind: "part_revision", targetId: "r1", frozenAt: null, frozenLabel: null, frozenStatus: null, state: { available: false, ok: false, label: null }, study: null } })], liveEvidence: 1 })] });
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Show Design records" }));
+    expect(screen.getByText("Not shown")).toBeInTheDocument();
+    expect(screen.getByText(/not allowed to read this record/)).toBeInTheDocument();
+  });
+
+  it("says when a frozen link has changed since it was submitted", async () => {
+    load({ elements: [element({ evidence: [linkEvidence({ link: { targetKind: "control_plan_revision", targetId: "c1", frozenAt: "2026-11-26T09:00:00.000Z", frozenLabel: "CP-001 rev A", frozenStatus: "effective", state: { available: true, ok: true, status: "superseded", label: "CP-001 rev A", changedSince: true }, study: null } })], liveEvidence: 1 })] });
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Show Design records" }));
+    expect(screen.getByText(/Frozen when submitted: CP-001 rev A \(effective\)/)).toBeInTheDocument();
+    expect(screen.getByText(/it has changed since/)).toBeInTheDocument();
+  });
+
+  it("links a record chosen from what fits, and refuses nothing silently", async () => {
+    load();
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Show Design records" }));
+    apiFetch.mockImplementation(async (path, opts) => {
+      if (path?.startsWith("/ppap-candidates")) return { data: [{ id: "pr1", kind: "part_revision", label: "BR-100 rev B", status: "released", ok: true, problem: null, linked: false }] };
+      if (path === "/ppap-elements/e1/links" && opts?.method === "POST") return submission();
+      return submission();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Link a record" }));
+    const dialog = await screen.findByRole("dialog", { name: /Link a record: Design records/ });
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Link BR-100 rev B" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppap-elements/e1/links", expect.objectContaining({ method: "POST", body: { kind: "part_revision", targetId: "pr1" } })));
+  });
+
+  it("offers no linking for the warrant, which is made, not linked", async () => {
+    load({ elements: [element({ key: "part_submission_warrant", label: "Part Submission Warrant" })] });
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Show Part Submission Warrant" }));
+    expect(screen.queryByRole("button", { name: "Link a record" })).toBeNull();
+  });
 });

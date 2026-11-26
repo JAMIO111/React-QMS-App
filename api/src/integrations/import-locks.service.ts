@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService } from '../database/database.service';
-import { ImportLockList, ImportLocksQuery } from './import-locks.schemas';
+import { ImportLockList, ImportLocksQuery, ImportManagedList } from './import-locks.schemas';
 
 /**
  * Which fields of a record a scheduled import owns right now (docs/import-field-locks-plan.md). The database works it out and answers only members who
@@ -18,6 +18,14 @@ export class ImportLocksService {
         [ctx.organisationId, q.entityType, q.recordId],
       );
       return { data: r.rows.map((x) => ({ field: x.field, connection: { id: x.connection_id, name: x.connection_name } })) };
+    });
+  }
+
+  /** Which areas (purchase orders, deliveries, customer orders, shipments) a scheduled import owns right now: hand entry of those is refused. */
+  managed(ctx: RequestContext): Promise<ImportManagedList> {
+    return this.database.asUser(ctx, async (_db, client) => {
+      const r = await client.query<{ area: ImportManagedList['data'][number]['area']; connection_name: string }>('select area, connection_name from app.import_managed_areas($1::uuid)', [ctx.organisationId]);
+      return { data: r.rows.map((x) => ({ area: x.area, connection: x.connection_name })) };
     });
   }
 }

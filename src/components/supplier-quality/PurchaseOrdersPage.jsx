@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
+import { useImportManaged } from "../../hooks/useImportManaged";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { usePurchaseOrders } from "../../hooks/useReceiving";
 import { PO_FILTERS, poFilterQuery } from "../../lib/receiving";
 import CTAButton from "../CTAButton";
+import ImportManagedNotice from "../integrations/ImportManagedNotice";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -17,6 +19,8 @@ const PAGE_SIZE = 25;
 /** What was ordered from suppliers. Open is the default; Late lists orders with a line past its date and not fully received. */
 const PurchaseOrdersPage = () => {
   const { can } = usePermissions();
+  const { managed } = useImportManaged();
+  const owner = managed("purchase_orders");
   const [params, setParams] = useSearchParams();
   const filter = PO_FILTERS.some((f) => f.value === params.get("filter")) ? params.get("filter") : "open";
   const q = params.get("q") ?? "";
@@ -36,8 +40,9 @@ const PurchaseOrdersPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Purchase orders</h1>
           <p className="text-sm text-secondary-text">What was ordered from suppliers, the date each line was requested for and the latest date agreed. Deliveries are recorded against them.</p>
         </div>
-        {can("receiving.manage") && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setCreating(true)}>Record an order</CTAButton>}
+        {can("receiving.manage") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setCreating(true)}>Record an order</CTAButton>}
       </div>
+      <ImportManagedNotice area="purchase_orders" connection={owner} />
       <div className="flex flex-wrap items-center gap-3">
         <SlidingToggle ariaLabel="Which orders" options={PO_FILTERS} value={filter} onChange={(v) => set({ filter: v === "open" ? "" : v, page: "" })} />
         <SearchBox label="Search orders" onSearch={onSearch} />

@@ -28,6 +28,10 @@ export const RECORDS: Partial<Record<EntityType, { table: string; label: (r: Rec
     table: '(select l.*, o.po_number from public.purchase_order_lines l join public.purchase_orders o on o.id = l.purchase_order_id)',
     label: (r) => `${r.po_number} line ${r.line_number}`,
   },
+  customer_order: {
+    table: '(select l.*, o.order_number from public.customer_order_lines l join public.customer_orders o on o.id = l.customer_order_id)',
+    label: (r) => `${r.order_number} line ${r.line_number}`,
+  },
 };
 
 /** Where a link's code lives, to show a linked record by its code rather than its id. Units are stored by their code already. */

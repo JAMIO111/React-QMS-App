@@ -89,7 +89,7 @@ describe('GET/PATCH /me', () => {
       'Alpha Precision',
       'Beta Castings',
     ]);
-    for (const m of res.body.memberships) expect(m.permissions).toEqual(['audits.read', 'calibration.read', 'capa.read', 'change.read', 'documentation.read', 'fmea.read', 'inspection.read', 'master_data.read', 'ncr.read', 'ppap.read', 'process_control.read', 'production.read', 'receiving.read', 'risk.read', 'spc.read', 'supplier_quality.read']);
+    for (const m of res.body.memberships) expect(m.permissions).toEqual(['audits.read', 'calibration.read', 'capa.read', 'change.read', 'documentation.read', 'fmea.read', 'inspection.read', 'master_data.read', 'ncr.read', 'ppap.read', 'process_control.read', 'production.read', 'receiving.read', 'risk.read', 'shipping.read', 'spc.read', 'supplier_quality.read']);
   });
 
   it('hides organisations where membership is suspended', async () => {

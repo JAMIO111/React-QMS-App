@@ -37,6 +37,7 @@ const calls = [];
 const routeApi = (routes = {}) =>
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
+    if (k === "GET /import-locks/managed-areas" && !(k in routes)) return { data: [] };
     calls.push({ k, path, body: opts.body });
     if (!(k in routes)) throw new Error(`unexpected ${k}`);
     return typeof routes[k] === "function" ? routes[k](path, opts) : routes[k];

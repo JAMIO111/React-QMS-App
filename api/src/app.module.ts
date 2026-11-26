@@ -126,6 +126,7 @@ import { DocumentFileStore, SupabaseDocumentFileStore } from './documents/contro
 import { DocumentsDashboardController, DocumentsDashboardService } from './documents/documents-dashboard';
 import { ChangeDashboardController, ChangeDashboardService } from './change/change-dashboard';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
+import { CustomerDashboardController, CustomerDashboardService } from './customer-quality/customer-dashboard';
 import { SupplierDashboardController, SupplierDashboardService } from './supplier-quality/supplier-dashboard';
 import { CompetencePeopleService } from './competence/competence-people.service';
 import { CompetenceTrainingService } from './competence/competence-training.service';
@@ -144,6 +145,8 @@ import { SupplierQualificationService } from './supplier-quality/supplier-qualif
 import { SupplierQualityService } from './supplier-quality/supplier-quality.service';
 import { ReceivingController } from './receiving/receiving.controller';
 import { ReceivingService } from './receiving/receiving.service';
+import { ShippingController } from './shipping/shipping.controller';
+import { ShippingService } from './shipping/shipping.service';
 import { MaterialCertificatesController } from './receiving/material-certificates.controller';
 import { MaterialCertificatesService } from './receiving/material-certificates.service';
 import { RequirementsController } from './receiving/requirements.controller';
@@ -328,6 +331,7 @@ export class AppModule implements NestModule {
         CompetenceController,
         ChangeDashboardController,
         CompetenceDashboardController,
+        CustomerDashboardController,
         SupplierDashboardController,
         DocumentsController,
         ChangeController,
@@ -353,6 +357,7 @@ export class AppModule implements NestModule {
         SupplierAssessmentController,
         SupplierScarController,
         ReceivingController,
+        ShippingController,
         RequirementsController,
         IntegrationsController,
         AgentsController,
@@ -458,6 +463,7 @@ export class AppModule implements NestModule {
         CompetencePeopleService,
         ChangeDashboardService,
         CompetenceDashboardService,
+        CustomerDashboardService,
         SupplierDashboardService,
         CompetenceTrainingService,
         DocumentsService,
@@ -488,6 +494,7 @@ export class AppModule implements NestModule {
         SupplierAssessmentService,
         SupplierScarService,
         ReceivingService,
+        ShippingService,
         RequirementsService,
         IntegrationsService,
         AgentsService,

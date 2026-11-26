@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { PlusIcon } from "@/components/icons";
+import { useImportManaged } from "../../hooks/useImportManaged";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { usePurchaseOrders, useReceipts } from "../../hooks/useReceiving";
 import CTAButton from "../CTAButton";
+import ImportManagedNotice from "../integrations/ImportManagedNotice";
 import MenuCard from "../ui/MenuCard";
 import { ErrorNotice } from "../master-data/shared";
 import InspectionRecommendation from "./InspectionRecommendation";
@@ -13,6 +15,9 @@ import { OrdersList, ReceiptsList } from "./ReceivingLists";
 const SupplierReceiving = ({ supplier }) => {
   const { can } = usePermissions();
   const allowed = can("receiving.read");
+  const { managed } = useImportManaged({ enabled: allowed });
+  const ordersFrom = managed("purchase_orders");
+  const deliveriesFrom = managed("receipts");
   const [dialog, setDialog] = useState(null);
   const orders = usePurchaseOrders({ supplierId: supplier.id, status: "open", pageSize: 25 }, { enabled: allowed });
   const receipts = useReceipts({ supplierId: supplier.id, status: "received", pageSize: 10 }, { enabled: allowed });
@@ -22,13 +27,15 @@ const SupplierReceiving = ({ supplier }) => {
   return (
     <div className="flex flex-col gap-4">
       <InspectionRecommendation supplier={supplier} />
+      <ImportManagedNotice area="purchase_orders" connection={ordersFrom} />
+      <ImportManagedNotice area="receipts" connection={deliveriesFrom} />
       <MenuCard title="Open purchase orders" subtitle="What is still expected from this supplier."
-        action={manage ? <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => setDialog("order")}>Record an order</CTAButton> : null}>
+        action={manage && !ordersFrom ? <CTAButton type="secondary" size="default" icon={PlusIcon} onClick={() => setDialog("order")}>Record an order</CTAButton> : null}>
         {orders.error && <ErrorNotice error={orders.error} />}
         {orders.isLoading ? <p className="text-sm text-secondary-text">Loading…</p> : (orders.data?.data ?? []).length === 0 ? <p className="text-sm text-secondary-text">No open purchase orders.</p> : <OrdersList rows={orders.data.data} showSupplier={false} />}
       </MenuCard>
       <MenuCard title="Latest deliveries" subtitle="The ten most recent. A delivery with a lot number makes the received lot."
-        action={manage ? <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setDialog("receipt")}>Record a delivery</CTAButton> : null}>
+        action={manage && !deliveriesFrom ? <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setDialog("receipt")}>Record a delivery</CTAButton> : null}>
         {receipts.error && <ErrorNotice error={receipts.error} />}
         {receipts.isLoading ? <p className="text-sm text-secondary-text">Loading…</p> : (receipts.data?.data ?? []).length === 0 ? <p className="text-sm text-secondary-text">No deliveries recorded yet.</p> : <ReceiptsList rows={receipts.data.data} showSupplier={false} />}
       </MenuCard>

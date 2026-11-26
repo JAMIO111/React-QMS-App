@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
+import { useImportManaged } from "../../hooks/useImportManaged";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useReceipts } from "../../hooks/useReceiving";
 import { RECEIPT_FILTERS } from "../../lib/receiving";
 import CTAButton from "../CTAButton";
+import ImportManagedNotice from "../integrations/ImportManagedNotice";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -17,6 +19,8 @@ const PAGE_SIZE = 25;
 /** What arrived, newest first. Search finds a receipt by its number, the delivery note, the order, a lot, a part or the supplier. */
 const GoodsReceiptsPage = () => {
   const { can } = usePermissions();
+  const { managed } = useImportManaged();
+  const owner = managed("receipts");
   const [params, setParams] = useSearchParams();
   const status = RECEIPT_FILTERS.some((f) => f.value === params.get("status")) ? params.get("status") : "received";
   const q = params.get("q") ?? "";
@@ -36,8 +40,9 @@ const GoodsReceiptsPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Goods receipts</h1>
           <p className="text-sm text-secondary-text">Deliveries from suppliers. A line with a lot number makes the received lot, so it can be traced and, later, inspected.</p>
         </div>
-        {can("receiving.manage") && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a delivery</CTAButton>}
+        {can("receiving.manage") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a delivery</CTAButton>}
       </div>
+      <ImportManagedNotice area="receipts" connection={owner} />
       <div className="flex flex-wrap items-center gap-3">
         <SlidingToggle ariaLabel="Which receipts" options={RECEIPT_FILTERS} value={status} onChange={(v) => set({ status: v === "received" ? "" : v, page: "" })} />
         <SearchBox label="Search receipts" onSearch={onSearch} />

@@ -1,5 +1,5 @@
 import { BadgeCheckIcon, BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ListTreeIcon, ScanSearchIcon, ShieldAlertIcon,
-  ListTodoIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
+  ListTodoIcon, PackageIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
   {
@@ -118,6 +118,17 @@ export const menuStructure = [
       { name: "Inspection requirements", path: "/Supplier-Quality/Inspection-Requirements", permission: "receiving.read" },
       { name: "Supplier corrective actions", path: "/Supplier-Quality/SCARs" },
       { name: "Expiry watchlist", path: "/Supplier-Quality/Expiry" },
+    ],
+  },
+  {
+    name: "Shipping",
+    icon: PackageIcon,
+    permission: "shipping.read",
+    path: "/Shipping",
+    subMenu: [
+      { name: "Dashboard", path: "/Shipping", end: true },
+      { name: "Customer orders", path: "/Shipping/Orders" },
+      { name: "Shipments", path: "/Shipping/Shipments" },
     ],
   },
   {

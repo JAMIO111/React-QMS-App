@@ -197,6 +197,8 @@ export const ENTITY_LABELS = {
   purchase_order: "Purchase orders",
   goods_receipt: "Goods receipts",
   po_receipt_total: "Received quantities",
+  customer_order: "Customer orders",
+  shipment: "Shipments",
 };
 
 export const RUN_KINDS = {
@@ -409,6 +411,8 @@ export const recordPath = (entityType, id) =>
     purchase_order: "/Supplier-Quality/Purchase-Orders",
     goods_receipt: "/Supplier-Quality/Goods-Receipts",
     po_receipt_total: "/Supplier-Quality/Purchase-Orders",
+    customer_order: "/Shipping/Orders",
+    shipment: "/Shipping/Shipments",
     customer: "/Customers",
     machine: "/Machines",
     employee: "/Employees",
@@ -498,6 +502,8 @@ export const ENTITY_DESCRIPTIONS = {
   purchase_order: "Order lines placed with suppliers, one row per line.",
   goods_receipt: "Deliveries and returns, one row per transaction. Old deliveries are never sent for inspection.",
   po_receipt_total: "Received so far per order line; Fortress records the increase as a delivery.",
+  customer_order: "Order lines placed by customers, one row per line.",
+  shipment: "What left, one row per movement out. A source's one inventory table is read with the record filter on its type and category; returns are never shipments.",
 };
 
 /** Whether a mapping row takes its value from somewhere (a column, joined columns, a fixed value or a value for empty cells). */

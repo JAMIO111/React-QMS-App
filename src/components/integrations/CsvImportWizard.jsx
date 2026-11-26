@@ -321,6 +321,7 @@ export const TemplateSettingsCard = ({ entityType, settings, onChange, readOnly 
   const fixed = ADD_ONLY_KINDS.includes(entityType) || ADD_UPDATE_KINDS.includes(entityType);
   const why = {
     goods_receipt: "Deliveries are always added: one already imported is never changed by a later file.",
+    shipment: "Shipments are always added: one already imported is never changed by a later file. A return is not a shipment, so leave those rows out.",
     po_receipt_total: "Totals are always added and updated: a higher total records a delivery of the increase.",
     nonconformance: "Non-conformances are always added as new records, never matched or updated. With no stage they arrive as drafts.",
     ncr_cost: "Cost lines are always added: a line already imported is never changed by a later file. A correction is a new line; a credit is a supplier recovery or customer charge.",

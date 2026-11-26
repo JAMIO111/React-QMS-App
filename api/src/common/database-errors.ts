@@ -136,6 +136,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'risk_rule', pg.message ?? 'That risk change is not allowed');
     case 'QM036': // FMEA rules: team, scope, revisions, approval (messages are written for users)
       return new ApiError(409, 'fmea_rule', pg.message ?? 'That FMEA change is not allowed');
+    case 'QM038': // shipping rules: customer orders and shipments (messages are written for users)
+      return new ApiError(409, 'shipping_rule', pg.message ?? 'That change is not allowed for this customer order or shipment');
     case 'QM037': // PPAP rules: requirements, submissions, elements, evidence, waivers (messages are written for users)
       return new ApiError(409, 'ppap_rule', pg.message ?? 'That PPAP change is not allowed');
     case 'QM035': // change management rules: drafts, scope, files, cancelling (messages are written for users)
@@ -158,6 +160,15 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
         details = undefined;
       }
       return new ApiError(409, 'field_managed_by_import', pg.message ?? 'That field is managed by an import and cannot be changed here', details);
+    }
+    case 'QM039': { // orders and deliveries a scheduled import owns: not entered by hand (the database puts {area, connection} in the detail)
+      let details: unknown;
+      try {
+        details = pg.detail ? JSON.parse(pg.detail) : undefined;
+      } catch {
+        details = undefined;
+      }
+      return new ApiError(409, 'record_managed_by_import', pg.message ?? 'These records come from an import and cannot be entered here', details);
     }
     case 'QM034': // measurement system analysis rules: studies, design, readings, completion (messages are written for users)
       return new ApiError(409, 'msa_rule', pg.message ?? 'That change is not allowed for this study');

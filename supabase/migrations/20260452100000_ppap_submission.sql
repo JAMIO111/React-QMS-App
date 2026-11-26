@@ -30,6 +30,17 @@ BEGIN
   EXECUTE replace(v_def, p_old, p_new);
 END $$;
 
+-- Like patch_once, but the old text is a regular expression (so line breaks and spacing in the live text do not matter) that must match exactly once.
+CREATE FUNCTION pg_temp.patch_re(p_fn regprocedure, p_marker text, p_pattern text, p_new text) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE v_def text := replace(pg_get_functiondef(p_fn), E'\r', ''); v_n integer;
+BEGIN
+  IF position(p_marker IN v_def) > 0 THEN RETURN; END IF;
+  SELECT count(*) INTO v_n FROM regexp_matches(v_def, p_pattern, 'g');
+  IF v_n <> 1 THEN RAISE EXCEPTION 'Expected the pattern % exactly once in %, found % times', p_pattern, p_fn, v_n; END IF;
+  EXECUTE regexp_replace(v_def, p_pattern, p_new);
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- 1. The submission: when it is next reviewed, and who may move its status
 -- ---------------------------------------------------------------------------
@@ -515,11 +526,9 @@ SELECT pg_temp.patch_once('app.create_ppap(uuid, jsonb)'::regprocedure, 'Only a 
     IF NOT app.ppap_replaceable(v_replaces) THEN RAISE EXCEPTION 'Only a rejected submission, one withdrawn after it was sent, or an approved one (to revalidate) can be replaced' USING ERRCODE = 'QM037'; END IF;
   END IF;
   v_rules := app.ppap_starting_rules(p_organisation_id, v_customer, v_level);$new$);
-SELECT pg_temp.patch_once('app.create_ppap(uuid, jsonb)'::regprocedure, 'requirement_set_id, owner_user_id, notes, client_key, replaces_id',
-  $old$level, reason, requirement_set_id, owner_user_id, notes, client_key)
-    VALUES (p_organisation_id, 'PPAP-' || to_char(make_date(v_year, 1, 1), 'YY') || '-' || app.pad_number(v_n, 4), v_dir, v_part, v_rev, v_customer, v_site, v_level, v_reason, v_set, v_owner, v_notes, v_key)$old$,
-  $new$level, reason, requirement_set_id, owner_user_id, notes, client_key, replaces_id)
-    VALUES (p_organisation_id, 'PPAP-' || to_char(make_date(v_year, 1, 1), 'YY') || '-' || app.pad_number(v_n, 4), v_dir, v_part, v_rev, v_customer, v_site, v_level, v_reason, v_set, v_owner, v_notes, v_key, v_replaces)$new$);
+SELECT pg_temp.patch_re('app.create_ppap(uuid, jsonb)'::regprocedure, 'client_key, replaces_id',
+  $re$client_key\)\s*VALUES\s*\(([^;]*?)v_key\s*\)$re$,
+  $new$client_key, replaces_id) VALUES (\1v_key, v_replaces)$new$);
 
 -- Keys (all optional): reason (default the old one), level (default the old one), partRevisionId (default the old one's), ownerId, notes, clientKey. Makes a new submission that
 -- names the old one, then carries over the notes of each element, the links (unfrozen, so they follow the current records) and the warrant's typed fields (unsigned). Files are not
@@ -603,9 +612,9 @@ GRANT EXECUTE ON FUNCTION app.ppap_review_months(), app.ppap_replaceable(uuid), 
 -- ---------------------------------------------------------------------------
 -- 12. Columns that name a user are classified (supabase/tests/sso_joining_moves.test.sql fails otherwise)
 -- ---------------------------------------------------------------------------
-SELECT pg_temp.patch_once(
+SELECT pg_temp.patch_re(
   'app.user_reference_columns()'::regprocedure,
   $m$'ppap_psw'$m$,
-  $old$    ('ppap_submissions', 'owner_user_id', 'history',$old$,
-  $new$    ('ppap_psw', 'signer_user_id', 'history', 'Who signed the Part Submission Warrant; a signature is a record of who signed at the time'),
+  $re$\(\s*'ppap_submissions',\s*'owner_user_id',\s*'history',$re$,
+  $new$('ppap_psw', 'signer_user_id', 'history', 'Who signed the Part Submission Warrant; a signature is a record of who signed at the time'),
     ('ppap_submissions', 'owner_user_id', 'history',$new$);

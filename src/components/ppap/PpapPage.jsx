@@ -7,13 +7,14 @@ import { useToast } from "../../contexts/ToastProvider";
 import { usePpap, usePpapMutation } from "../../hooks/usePpap";
 import { describeApiError } from "../../lib/api-client";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
-import { LEVELS, REQUIREMENT_OPTIONS, elementStatusLabel, elementStatusPill, evidenceName, fileSizeLabel, formatDay, levelLabel, linkKindLabel, linkKindsFor, linkVerdict, progressPercent, progressWords, reasonLabel, requirementLabel, statusLabel, statusPill, verdictPill } from "../../lib/ppap";
+import { LEVELS, REQUIREMENT_OPTIONS, elementStatusLabel, elementStatusPill, evidenceName, fileSizeLabel, formatDay, interimWords, lastDecision, levelLabel, linkKindLabel, linkKindsFor, linkVerdict, progressPercent, progressWords, reasonLabel, requirementLabel, reviewWords, statusLabel, statusPill, verdictPill } from "../../lib/ppap";
 import { ErrorNotice, TextAreaField } from "../master-data/shared";
 import Callout from "../ui/Callout";
 import ComboField from "../ui/ComboField";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import { AddFileDialog, EditPpapDialog, LinkDialog, ReasonDialog } from "./PpapDialogs";
+import { DecisionsCard, PswCard, SubmitDialog } from "./PpapSubmission";
 
 const Fact = ({ label, children }) => (
   <div>
@@ -227,6 +228,11 @@ const PpapPage = () => {
               Back to preparation
             </CTAButton>
           )}
+          {ppap.canSubmit && (
+            <CTAButton type="main" onClick={() => setDialog({ kind: "submit" })}>
+              Send to the customer
+            </CTAButton>
+          )}
           {ppap.canWithdraw && (
             <CTAButton type="danger" onClick={() => setDialog({ kind: "withdraw" })}>
               Withdraw
@@ -237,8 +243,29 @@ const PpapPage = () => {
 
       {ppap.status === "withdrawn" && <Callout tone="warning" title="Withdrawn">{ppap.withdrawReason}</Callout>}
       {ppap.status === "ready" && (
-        <Callout tone="success" title="Ready">
-          Every required element has evidence or a waiver. Sending the submission and recording the customer's decision arrive in a later release; until then you can take it back to preparation.
+        <Callout tone="success" title="Ready to send">
+          Every required element has evidence or a waiver and the warrant is signed. Check the warrant and the evidence, then send it. After that nothing can be edited.
+        </Callout>
+      )}
+      {ppap.status === "submitted" && (
+        <Callout tone="info" title="Sent to the customer">
+          Sent on {formatDay(lastDecision(ppap, "submitted")?.decidedOn)}. It is now frozen, and a linked record that changes from here shows "changed since it was submitted". Waiting for the customer's decision.
+        </Callout>
+      )}
+      {ppap.status === "interim_approved" && (
+        <Callout tone={ppap.interimExpired ? "error" : "warning"} title={ppap.interimExpired ? "Interim approval ran out" : "Interim approval"}>
+          {interimWords(ppap)} {lastDecision(ppap, "interim_approved")?.note}
+        </Callout>
+      )}
+      {ppap.status === "approved" && (
+        <Callout tone={ppap.reviewOverdue ? "warning" : "success"} title="Approved">
+          Approved on {formatDay(lastDecision(ppap, "approved")?.decidedOn)}
+          {lastDecision(ppap, "approved")?.theirReference ? `, their reference ${lastDecision(ppap, "approved").theirReference}` : ""}. {reviewWords(ppap)}
+        </Callout>
+      )}
+      {ppap.status === "rejected" && (
+        <Callout tone="error" title="Rejected">
+          {lastDecision(ppap, "rejected")?.note} {ppap.canResubmit ? "Resubmit to start a new submission that names this one." : ""}
         </Callout>
       )}
       {ppap.editable && ppap.problems.length > 0 && (
@@ -269,6 +296,7 @@ const PpapPage = () => {
           <Fact label="Requirements">Version {ppap.requirementSet?.version ?? "—"}</Fact>
           <Fact label="Started">{formatDay(ppap.createdAt.slice(0, 10))}</Fact>
           <Fact label="Ready">{ppap.readyAt ? formatDay(ppap.readyAt.slice(0, 10)) : "—"}</Fact>
+          <Fact label="Sent">{ppap.submittedAt ? formatDay(ppap.submittedAt.slice(0, 10)) : "—"}</Fact>
           <Fact label="Notes">{ppap.notes ?? "—"}</Fact>
         </dl>
         {ppap.editable && (
@@ -300,10 +328,14 @@ const PpapPage = () => {
           ))}
         </ul>
         <p className="border-t border-border-color px-4 py-3 text-sm text-secondary-text">
-          Evidence is a link to a record Fortress already holds (the control plan, FMEA, inspections, gauge studies, documents) or a file. A link shows what the record is now, and is frozen when the submission is sent. The Part Submission Warrant is generated later.
+          Evidence is a link to a record Fortress already holds (the control plan, FMEA, inspections, gauge studies, documents) or a file. A link shows what the record is now, and is frozen when the submission is sent. The Part Submission Warrant is below.
         </p>
       </MenuCard>
 
+      <PswCard ppap={ppap} />
+      <DecisionsCard ppap={ppap} />
+
+      {dialog?.kind === "submit" && <SubmitDialog ppap={ppap} onClose={() => setDialog(null)} />}
       {dialog?.kind === "edit" && <EditPpapDialog ppap={ppap} onClose={() => setDialog(null)} />}
       {dialog?.kind === "link" && <LinkDialog element={dialog.element} onClose={() => setDialog(null)} />}
       {dialog?.kind === "file" && <AddFileDialog ppap={ppap} element={dialog.element} onClose={() => setDialog(null)} />}

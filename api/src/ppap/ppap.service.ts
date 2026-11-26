@@ -7,7 +7,8 @@ import { DatabaseService, Db } from '../database/database.service';
 import { SpcService } from '../spc/spc.service';
 import { grrPercentOf, judgeCapability, judgeGrr, LinkKind, minimumsFor, StudyJudgement } from './ppap-links';
 import {
-  AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, ELEMENT_LABEL, ELEMENT_ORDINAL, PpapListQuery, SaveRequirementsBody, UpdateElementBody, UpdatePpapBody,
+  AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, DecisionBody, ELEMENT_LABEL, ELEMENT_ORDINAL, PpapListQuery, PswBody, ResubmitBody, ReviewBody,
+  SaveRequirementsBody, SignPswBody, SubmitBody, UpdateElementBody, UpdatePpapBody,
 } from './ppap.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -24,7 +25,11 @@ const PPAP_SELECT = sql`
   select s.*, p.part_number, p.name as part_name, pr.revision as rev_letter, pr.version as rev_version, pr.status as rev_status,
          c.name as customer_name, c.code as customer_code, st.name as site_name, ${sql.raw(personName('po'))} as owner_name,
          (select count(*)::int from public.ppap_elements e where e.submission_id = s.id and e.requirement = 'required') as required_count,
-         (select count(*)::int from public.ppap_elements e where e.submission_id = s.id and e.requirement = 'required' and e.status in ('ready', 'waived')) as done_count
+         (select count(*)::int from public.ppap_elements e where e.submission_id = s.id and e.requirement = 'required' and e.status in ('ready', 'waived')) as done_count,
+         s.next_review_on::text as next_review,
+         (s.status = 'approved' and s.next_review_on < current_date) as review_overdue,
+         (select d.expires_on::text from public.ppap_decisions d where d.submission_id = s.id and d.kind = 'interim_approved' order by d.seq desc limit 1) as interim_expires_on,
+         coalesce((select d.expires_on < current_date from public.ppap_decisions d where d.submission_id = s.id and d.kind = 'interim_approved' order by d.seq desc limit 1), false) as interim_expired
     from public.ppap_submissions s
     left join public.parts p on p.id = s.part_id
     left join public.part_revisions pr on pr.id = s.part_revision_id
@@ -66,6 +71,12 @@ const toSummary = (r: Row) => ({
   readyAt: r.ready_at ? iso(r.ready_at) : null,
   submittedAt: r.submitted_at ? iso(r.submitted_at) : null,
   withdrawReason: (r.withdraw_reason as string) ?? null,
+  /** When an approved submission is next reviewed, and whether that date has passed. */
+  nextReviewOn: (r.next_review as string) ?? null,
+  reviewOverdue: Boolean(r.review_overdue),
+  /** For an interim approval: the day it runs to, and whether that day has passed (worked out now, never stored). */
+  interimExpiresOn: r.status === 'interim_approved' ? ((r.interim_expires_on as string) ?? null) : null,
+  interimExpired: r.status === 'interim_approved' && Boolean(r.interim_expired),
   createdAt: iso(r.created_at) as string,
   updatedAt: iso(r.updated_at) as string,
 });
@@ -227,6 +238,33 @@ export class PpapService {
     ).rows[0];
     const status = found.status as string;
     const editing = ['draft', 'in_preparation'].includes(status);
+    const sent = ['submitted', 'interim_approved'].includes(status);
+    const me = (await db.execute<Row>(sql`select auth.uid() as id`)).rows[0].id as string | null;
+    const pswRow = (await db.execute<Row>(sql`select w.*, w.signed_on::text as signed_day from public.ppap_psw w where w.submission_id = ${id}::uuid and w.organisation_id = ${org}::uuid`)).rows[0];
+    const decisionRows = (
+      await db.execute<Row>(sql`
+        select d.*, d.decided_on::text as decided_day, d.expires_on::text as expires_day, ${sql.raw(personName('pc'))} as by_name
+          from public.ppap_decisions d left join public.profiles pc on pc.id = d.created_by
+         where d.submission_id = ${id}::uuid and d.organisation_id = ${org}::uuid order by d.seq`)
+    ).rows;
+    const reviewRows = (
+      await db.execute<Row>(sql`
+        select r.*, r.next_review_on::text as next_day, n.reference as new_reference, ${sql.raw(personName('pc'))} as by_name
+          from public.ppap_reviews r left join public.profiles pc on pc.id = r.created_by left join public.ppap_submissions n on n.id = r.new_submission_id
+         where r.submission_id = ${id}::uuid and r.organisation_id = ${org}::uuid order by r.created_at`)
+    ).rows;
+    const replaces = found.replaces_id
+      ? (await db.execute<Row>(sql`select id, reference, status from public.ppap_submissions where id = ${found.replaces_id as string}::uuid and organisation_id = ${org}::uuid`)).rows[0]
+      : undefined;
+    const replacedBy = (await db.execute<Row>(sql`select id, reference, status from public.ppap_submissions where replaces_id = ${id}::uuid and organisation_id = ${org}::uuid order by created_at`)).rows;
+    const wasSent = decisionRows.some((d) => d.kind === 'submitted');
+    const pswMissing: string[] = [];
+    if (!pswRow || pswRow.part_weight == null) pswMissing.push('the part weight');
+    if (!pswRow || pswRow.results_meet_requirements == null) pswMissing.push('whether the results meet the requirements');
+    if (pswRow && pswRow.results_meet_requirements === false && !pswRow.declaration) pswMissing.push('what does not meet them');
+    const preparedByMe = Boolean(me) && (me === found.owner_user_id || me === found.created_by || (pswRow && me === pswRow.prepared_by));
+    const signed = Boolean(pswRow?.signed_at);
+    const canSign = Boolean(can.approve) && editing && Boolean(pswRow) && !signed && pswMissing.length === 0 && !preparedByMe;
     return {
       ...toSummary(found),
       elements,
@@ -234,13 +272,64 @@ export class PpapService {
       /** The lines in `problems` that come from judging a study (capability, gauge R&R) against the agreed minimums; the database does not know these. */
       studyProblems: [] as string[],
       requirementSet: set ? { id: set.id as string, version: Number(set.version), config: set.config } : null,
+      /** The Part Submission Warrant: the typed fields, who prepared it, and the signature. The rest of the form is the submission itself (see GET /ppaps/{id}/psw). */
+      psw: pswRow
+        ? {
+            partWeight: pswRow.part_weight == null ? null : Number(pswRow.part_weight),
+            weightUnit: (pswRow.weight_unit as string) ?? null,
+            purchaseOrder: (pswRow.purchase_order as string) ?? null,
+            engineeringChangeLevel: (pswRow.engineering_change_level as string) ?? null,
+            resultsMeetRequirements: pswRow.results_meet_requirements == null ? null : Boolean(pswRow.results_meet_requirements),
+            declaration: (pswRow.declaration as string) ?? null,
+            signature: signed
+              ? { name: pswRow.signer_name as string, title: (pswRow.signer_title as string) ?? null, phone: (pswRow.signer_phone as string) ?? null, on: pswRow.signed_day as string, at: iso(pswRow.signed_at) as string }
+              : null,
+            unsigned: pswRow.unsigned_at ? { at: iso(pswRow.unsigned_at) as string, reason: (pswRow.unsign_reason as string) ?? null } : null,
+            frozen: Boolean(pswRow.frozen_at),
+            missing: pswMissing,
+          }
+        : null,
+      /** What happened and when, oldest first: sent, the customer's decisions, withdrawn. Never edited. */
+      decisions: decisionRows.map((d) => ({
+        id: d.id as string,
+        seq: Number(d.seq),
+        kind: d.kind as 'submitted' | 'approved' | 'interim_approved' | 'rejected' | 'withdrawn',
+        decidedOn: d.decided_day as string,
+        how: (d.how as string) ?? null,
+        theirReference: (d.their_reference as string) ?? null,
+        expiresOn: (d.expires_day as string) ?? null,
+        note: (d.note as string) ?? null,
+        file: d.storage_path ? { storagePath: d.storage_path as string, fileName: d.file_name as string, contentType: (d.content_type as string) ?? null, sizeBytes: Number(d.size_bytes) } : null,
+        recordedBy: person(d.created_by, d.by_name),
+        recordedAt: iso(d.created_at) as string,
+      })),
+      reviews: reviewRows.map((r) => ({
+        id: r.id as string,
+        outcome: r.outcome as 'no_change' | 'resubmission_started',
+        note: (r.note as string) ?? null,
+        nextReviewOn: (r.next_day as string) ?? null,
+        newSubmission: r.new_submission_id ? { id: r.new_submission_id as string, reference: (r.new_reference as string) ?? null } : null,
+        by: person(r.created_by, r.by_name),
+        at: iso(r.created_at) as string,
+      })),
+      replaces: replaces ? { id: replaces.id as string, reference: replaces.reference as string, status: replaces.status as string } : null,
+      replacedBy: replacedBy.map((x) => ({ id: x.id as string, reference: x.reference as string, status: x.status as string })),
       /** Whether the elements and the wording can still change (draft or in preparation). */
       editable: Boolean(can.manage) && editing,
       canManage: Boolean(can.manage),
       canApprove: Boolean(can.approve),
       canMarkReady: Boolean(can.manage) && editing && problems.length === 0,
       canReopen: Boolean(can.manage) && status === 'ready',
-      canWithdraw: Boolean(can.manage) && ['draft', 'in_preparation', 'ready'].includes(status),
+      canSavePsw: Boolean(can.manage) && editing && !signed,
+      canSign,
+      /** Why an approver who could otherwise sign cannot: they prepared it. */
+      signBlocked: Boolean(can.approve) && editing && Boolean(pswRow) && !signed && pswMissing.length === 0 && preparedByMe ? 'You prepared this submission, so someone else with approval rights must sign the warrant.' : null,
+      canUnsign: Boolean(can.approve) && editing && signed,
+      canSubmit: Boolean(can.manage) && status === 'ready',
+      canRecordDecision: Boolean(can.approve) && sent,
+      canWithdraw: (Boolean(can.manage) && ['draft', 'in_preparation', 'ready'].includes(status)) || (Boolean(can.approve) && sent),
+      canResubmit: Boolean(can.manage) && (['rejected', 'approved'].includes(status) || (status === 'withdrawn' && wasSent)),
+      canReview: Boolean(can.manage) && status === 'approved',
     };
   }
 
@@ -287,6 +376,106 @@ export class PpapService {
 
   withdraw(ctx: RequestContext, id: string, reason: string) {
     return this.command(ctx, id, sql`select app.withdraw_ppap(${id}::uuid, ${reason})`);
+  }
+
+  // ---- the warrant, submitting, the customer's decision ---------------------------------------------------
+
+  savePsw(ctx: RequestContext, id: string, body: PswBody) {
+    return this.command(ctx, id, sql`select app.save_ppap_psw(${id}::uuid, ${json(body)}::jsonb)`);
+  }
+
+  signPsw(ctx: RequestContext, id: string, body: SignPswBody) {
+    return this.command(ctx, id, sql`select app.sign_ppap_psw(${id}::uuid, ${body.title}, ${body.phone ?? null})`);
+  }
+
+  unsignPsw(ctx: RequestContext, id: string, reason: string) {
+    return this.command(ctx, id, sql`select app.unsign_ppap_psw(${id}::uuid, ${reason})`);
+  }
+
+  /** Sends the submission. A study that no longer meets its minimum (the API judges these, not the database) stops it just as the database stops a record that is no longer in good standing. */
+  async submit(ctx: RequestContext, id: string, body: SubmitBody) {
+    const before = await this.get(ctx, id);
+    if (before.status === 'ready' && before.studyProblems.length > 0) {
+      throw new ApiError(409, 'ppap_rule', `Something changed since it was marked ready: ${before.studyProblems[0]}`);
+    }
+    return this.command(ctx, id, sql`select app.submit_ppap(${id}::uuid, ${body.sentOn ?? null}::date, ${body.how ?? null}, ${body.note ?? null})`);
+  }
+
+  decide(ctx: RequestContext, id: string, body: DecisionBody) {
+    return this.command(
+      ctx,
+      id,
+      sql`select app.record_ppap_decision(${id}::uuid, ${body.kind}, ${body.decidedOn}::date, ${body.theirReference ?? null}, ${body.expiresOn ?? null}::date, ${body.note ?? null},
+                                          ${body.storagePath ?? null}, ${body.fileName ?? null}, ${body.contentType ?? null}, ${body.sizeBytes ?? null}::bigint)`,
+    );
+  }
+
+  /** Starts a new submission that replaces this one and answers with the new one. */
+  async resubmit(ctx: RequestContext, id: string, body: ResubmitBody) {
+    let created = false;
+    let linksCarried = 0;
+    const d = await this.answer(ctx, async (db) => {
+      const r = (await db.execute<Row>(sql`select app.start_ppap_resubmission(${id}::uuid, ${json(body)}::jsonb) as r`)).rows[0].r as { id: string; created: boolean; linksCarried?: number };
+      created = r.created;
+      linksCarried = r.linksCarried ?? 0;
+      return r.id;
+    });
+    return { ...d, created, linksCarried };
+  }
+
+  review(ctx: RequestContext, id: string, body: ReviewBody) {
+    return this.command(ctx, id, sql`select app.record_ppap_review(${id}::uuid, ${body.note}, ${body.nextReviewOn ?? null}::date)`);
+  }
+
+  /**
+   * The Part Submission Warrant as a form: the typed fields beside what the submission already knows (part, revision, customer, site, reason, level), the signer, and whether it
+   * is frozen. Read as the caller, so a part or customer they may not read has no name on it.
+   */
+  pswForm(ctx: RequestContext, id: string) {
+    return this.database.asUser(ctx, async (db) => {
+      const org = orgOf(ctx);
+      const r = (
+        await db.execute<Row>(sql`
+          select s.id, s.reference, s.status, s.level, s.reason, o.name as organisation_name,
+                 p.part_number, p.name as part_name, pr.revision as rev_letter, pr.version as rev_version, pr.drawing_ref, pr.released_at::date::text as released_day,
+                 c.name as customer_name, c.code as customer_code,
+                 concat_ws(', ', nullif(c.address_line1, ''), nullif(c.address_line2, ''), nullif(c.address_line3, ''), nullif(c.city, ''), nullif(c.region, ''), nullif(c.postcode, ''), nullif(c.country, '')) as customer_address,
+                 st.name as site_name,
+                 w.part_weight, w.weight_unit, w.purchase_order, w.engineering_change_level, w.results_meet_requirements, w.declaration,
+                 w.signer_name, w.signer_title, w.signer_phone, w.signed_on::text as signed_day, w.frozen_at,
+                 (select d.decided_on::text from public.ppap_decisions d where d.submission_id = s.id and d.kind = 'submitted' order by d.seq limit 1) as sent_day
+            from public.ppap_submissions s
+            left join public.organisations o on o.id = s.organisation_id
+            left join public.parts p on p.id = s.part_id
+            left join public.part_revisions pr on pr.id = s.part_revision_id
+            left join public.customers c on c.id = s.customer_id
+            left join public.sites st on st.id = s.site_id
+            left join public.ppap_psw w on w.submission_id = s.id
+           where s.id = ${id}::uuid and s.organisation_id = ${org}::uuid`)
+      ).rows[0];
+      if (!r) throw ApiError.notFound('ppap_not_found', 'PPAP submission not found');
+      return {
+        submissionId: r.id as string,
+        reference: r.reference as string,
+        status: r.status as string,
+        level: Number(r.level),
+        reason: r.reason as string,
+        organisation: (r.organisation_name as string) ?? null,
+        part: { number: (r.part_number as string) ?? null, name: (r.part_name as string) ?? null },
+        revision: { label: revisionLabel(r.rev_letter, r.rev_version), drawingRef: (r.drawing_ref as string) ?? null, releasedOn: (r.released_day as string) ?? null },
+        customer: { name: (r.customer_name as string) ?? null, code: (r.customer_code as string) ?? null, address: (r.customer_address as string) || null },
+        site: (r.site_name as string) ?? null,
+        purchaseOrder: (r.purchase_order as string) ?? null,
+        engineeringChangeLevel: (r.engineering_change_level as string) ?? null,
+        weight: r.part_weight == null ? null : { value: Number(r.part_weight), unit: r.weight_unit as string },
+        resultsMeetRequirements: r.results_meet_requirements == null ? null : Boolean(r.results_meet_requirements),
+        declaration: (r.declaration as string) ?? null,
+        signer: r.signer_name ? { name: r.signer_name as string, title: (r.signer_title as string) ?? null, phone: (r.signer_phone as string) ?? null, signedOn: r.signed_day as string } : null,
+        sentOn: (r.sent_day as string) ?? null,
+        /** True once the submission has been sent: until then the form is a draft and prints as one. */
+        frozen: Boolean(r.frozen_at),
+      };
+    });
   }
 
   private command(ctx: RequestContext, id: string, statement: SQL) {

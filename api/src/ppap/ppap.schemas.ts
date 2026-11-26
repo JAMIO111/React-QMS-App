@@ -120,6 +120,62 @@ export const CandidatesQuery = z.object({
 });
 export type CandidatesQuery = z.infer<typeof CandidatesQuery>;
 
+// ---- the warrant, submitting, the customer's decision ------------------------------------------------------
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date as yyyy-mm-dd');
+
+/** The typed fields of the Part Submission Warrant. Keys present are set; null clears. The rest of the form is read from the submission. */
+export const PswBody = z
+  .object({
+    partWeight: z.number().positive().max(1_000_000_000).nullable().optional(),
+    weightUnit: z.enum(['kg', 'g', 'lb', 'oz']).optional(),
+    purchaseOrder: text(100),
+    engineeringChangeLevel: text(100),
+    resultsMeetRequirements: z.boolean().nullable().optional(),
+    declaration: text(2000),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Nothing to change');
+export type PswBody = z.infer<typeof PswBody>;
+
+export const SignPswBody = z.object({ title: z.string().trim().min(1).max(100), phone: z.string().trim().max(50).optional() }).strict();
+export type SignPswBody = z.infer<typeof SignPswBody>;
+
+export const SubmitBody = z.object({ sentOn: isoDay.optional(), how: text(200), note: text(2000) }).strict();
+export type SubmitBody = z.infer<typeof SubmitBody>;
+
+/** What the customer decided, with their reference and, optionally, their signed warrant (a file already uploaded to the submission's folder). */
+export const DecisionBody = z
+  .object({
+    kind: z.enum(['approved', 'interim_approved', 'rejected']),
+    decidedOn: isoDay,
+    theirReference: text(100),
+    expiresOn: isoDay.nullable().optional(),
+    note: text(2000),
+    storagePath: z.string().min(1).max(500).optional(),
+    fileName: z.string().trim().min(1).max(255).optional(),
+    contentType: z.string().max(200).nullable().optional(),
+    sizeBytes: z.number().int().min(0).max(26214400).optional(),
+  })
+  .strict();
+export type DecisionBody = z.infer<typeof DecisionBody>;
+
+/** A new submission that replaces this one. Everything is optional: the old part revision, level and reason are the starting point. */
+export const ResubmitBody = z
+  .object({
+    reason: z.enum(PPAP_REASONS).optional(),
+    level: z.number().int().min(1).max(5).optional(),
+    partRevisionId: z.string().uuid().optional(),
+    ownerId: z.string().uuid().optional(),
+    notes: text(2000),
+    clientKey: z.string().min(8).max(80).optional(),
+  })
+  .strict();
+export type ResubmitBody = z.infer<typeof ResubmitBody>;
+
+export const ReviewBody = z.object({ note: z.string().trim().min(1).max(1000), nextReviewOn: isoDay.optional() }).strict();
+export type ReviewBody = z.infer<typeof ReviewBody>;
+
 export const PpapListQuery = z.object({
   q: z.string().trim().max(100).optional(),
   /** Statuses separated by commas, `live` (default: not withdrawn or rejected), or `all`. */

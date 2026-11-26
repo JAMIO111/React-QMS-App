@@ -69,6 +69,20 @@ export const usePpapMutation = () => {
           return send(`/ppap-elements/${id}/unwaive`);
         case "removeEvidence":
           return send(`/ppap-evidence/${id}/remove`);
+        case "savePsw":
+          return send(`/ppaps/${id}/psw`, "PUT");
+        case "signPsw":
+          return send(`/ppaps/${id}/psw/sign`);
+        case "unsignPsw":
+          return send(`/ppaps/${id}/psw/unsign`);
+        case "submit":
+          return send(`/ppaps/${id}/submit`);
+        case "decide":
+          return send(`/ppaps/${id}/decisions`);
+        case "resubmit":
+          return send(`/ppaps/${id}/resubmission`);
+        case "review":
+          return send(`/ppaps/${id}/reviews`);
         default:
           throw new Error(`Unknown action ${action}`);
       }
@@ -129,6 +143,17 @@ export const usePpapCandidates = ({ elementId, kind, q }, { enabled = true } = {
     queryFn: () => apiFetch(`/ppap-candidates?${qs({ elementId, kind, q: q?.trim() || undefined })}`, { organisationId }),
     enabled: !!organisationId && !!elementId && !!kind && enabled,
     placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
+/** The Part Submission Warrant as a form (the printable page). */
+export const usePswForm = (id) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "psw", id),
+    queryFn: () => apiFetch(`/ppaps/${id}/psw`, { organisationId }),
+    enabled: !!organisationId && !!id,
     retry: false,
   });
 };

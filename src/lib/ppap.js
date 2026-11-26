@@ -170,3 +170,42 @@ export const linkVerdict = (link) => {
   return { tone: "success", words: state.status ? `In good standing (${String(state.status).replace(/_/g, " ")})` : "In good standing" };
 };
 export const verdictPill = (tone) => TONE_CLASS[tone === "error" ? "error" : tone === "success" ? "success" : "neutral"];
+
+// ---- the warrant, submitting and the customer's decision (PP3) ----------------------------------------------------
+
+export const DECISION_KIND = {
+  submitted: { label: "Sent to the customer", tone: "info" },
+  approved: { label: "Approved", tone: "success" },
+  interim_approved: { label: "Interim approval", tone: "warning" },
+  rejected: { label: "Rejected", tone: "error" },
+  withdrawn: { label: "Withdrawn", tone: "neutral" },
+};
+export const decisionLabel = (kind) => DECISION_KIND[kind]?.label ?? kind;
+export const decisionPill = (kind) => TONE_CLASS[DECISION_KIND[kind]?.tone ?? "neutral"];
+/** What the customer can decide (the sending and a withdrawal are recorded by their own buttons). */
+export const DECISION_CHOICES = [
+  { value: "approved", label: "Approved" },
+  { value: "interim_approved", label: "Interim approval" },
+  { value: "rejected", label: "Rejected" },
+];
+export const WEIGHT_UNITS = ["kg", "g", "lb", "oz"].map((u) => ({ value: u, label: u }));
+export const RESULTS_CHOICES = [
+  { value: "yes", label: "Yes: the results meet all the requirements" },
+  { value: "no", label: "No: some do not" },
+];
+export const pswPath = (id) => `/PPAP/${id}/psw`;
+
+/** The interim approval's standing in words (worked out on read: a date that has passed is shown, never stored), or null for any other status. */
+export const interimWords = (ppap) => {
+  if (ppap?.status !== "interim_approved" || !ppap.interimExpiresOn) return null;
+  return ppap.interimExpired ? `The interim approval ran out on ${formatDay(ppap.interimExpiresOn)}. Record the customer's decision.` : `The interim approval runs to ${formatDay(ppap.interimExpiresOn)}.`;
+};
+/** When an approved submission is next reviewed, in words, or null. */
+export const reviewWords = (ppap) => {
+  if (ppap?.status !== "approved" || !ppap.nextReviewOn) return null;
+  return ppap.reviewOverdue ? `The review was due on ${formatDay(ppap.nextReviewOn)}.` : `Next review: ${formatDay(ppap.nextReviewOn)}.`;
+};
+/** The words about the latest decision of a kind, for the callout at the top of a sent submission. */
+export const lastDecision = (ppap, ...kinds) => [...(ppap?.decisions ?? [])].reverse().find((d) => kinds.includes(d.kind)) ?? null;
+/** The answers a person can take to be "results meet requirements": yes, no, or not answered. */
+export const resultsValue = (v) => (v === true ? "yes" : v === false ? "no" : "");

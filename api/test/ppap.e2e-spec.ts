@@ -67,7 +67,7 @@ describe('starting a submission', () => {
     expect(made.body.elements.map((e: any) => e.key)).toEqual(ELEMENT_TYPES.map((e) => e.key));
     expect(made.body.elements.every((e: any) => e.requirement === 'required' && e.status === 'not_started' && e.evidence.length === 0)).toBe(true);
     expect(made.body.requirementSet).toMatchObject({ version: 1 });
-    expect(made.body.problems).toHaveLength(17);
+    expect(made.body.problems).toHaveLength(18);
     ctx.ppap = made.body.id;
     const again = await api().post('/api/v1/ppaps').set(h).send({ ...body, clientKey: 'pp-retry-0001' }).expect(201);
     expect(again.body).toMatchObject({ id: ctx.ppap, created: false });
@@ -116,7 +116,7 @@ describe('elements and evidence', () => {
     const ready = await api().patch(`/api/v1/ppap-elements/${design}`).set(h).send({ status: 'ready', note: 'Rev B drawing' }).expect(200);
     expect(element(ready.body, 'design_records')).toMatchObject({ status: 'ready', note: 'Rev B drawing' });
     expect(ready.body.progress).toEqual({ required: 18, done: 1 });
-    expect(ready.body.problems).toHaveLength(16);
+    expect(ready.body.problems).toHaveLength(17);
   });
 
   it('removes evidence with a reason and keeps it', async () => {
@@ -154,12 +154,15 @@ describe('the level, ready, reopen and withdraw', () => {
     const one = await api().put(`/api/v1/ppaps/${ctx.ppap2}/level`).set(h).send({ level: 1 }).expect(200);
     expect(one.body.level).toBe(1);
     expect(one.body.progress.required).toBe(2);
-    expect(one.body.problems).toEqual(['Design FMEA: add evidence, or ask an approver to waive it']);
+    expect(one.body.problems).toEqual(['Design FMEA: add evidence, or ask an approver to waive it', expect.stringMatching(/^Part Submission Warrant: fill it in/)]);
     const early = await api().post(`/api/v1/ppaps/${ctx.ppap2}/ready`).set(h).expect(409);
     expect(early.body.error).toMatchObject({ code: 'ppap_rule', message: expect.stringMatching(/Not ready yet: Design FMEA/) });
     const qm = await as(QM);
     const dfmea = element(one.body, 'dfmea').id;
     await api().post(`/api/v1/ppap-elements/${dfmea}/waive`).set(qm).send({ reason: 'No design responsibility for this part' }).expect(200);
+    // the warrant: typed by the owner, signed by the quality manager
+    await api().put(`/api/v1/ppaps/${ctx.ppap2}/psw`).set(h).send({ partWeight: 1, resultsMeetRequirements: true }).expect(200);
+    await api().post(`/api/v1/ppaps/${ctx.ppap2}/psw/sign`).set(qm).send({ title: 'Quality Manager' }).expect(200);
     const ready = await api().post(`/api/v1/ppaps/${ctx.ppap2}/ready`).set(h).expect(200);
     expect(ready.body).toMatchObject({ status: 'ready', editable: false, canReopen: true, canWithdraw: true, canMarkReady: false });
     expect(ready.body.readyAt).not.toBeNull();

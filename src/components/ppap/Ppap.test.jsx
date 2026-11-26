@@ -16,6 +16,7 @@ vi.mock("../../api/supabaseApi", () => ({ uploadFileToSupabase: vi.fn(), generat
 import { apiFetch } from "../../lib/api-client";
 import PpapPage from "./PpapPage";
 import PpapRegisterPage from "./PpapRegisterPage";
+import PswFormPage from "./PswFormPage";
 
 const element = (over = {}) => ({
   id: "e1", key: "design_records", ordinal: 1, label: "Design records", requirement: "required", requirementEdited: false, status: "not_started", note: null,
@@ -27,7 +28,17 @@ const submission = (over = {}) => ({
   customer: { id: "c1", name: "Acme", code: "ACM" }, site: null, owner: { id: "u1", name: "Ada" }, requirementSetId: "rs1", requirementSet: { id: "rs1", version: 1 },
   replacesId: null, progress: { required: 2, done: 0 }, readyAt: null, submittedAt: null, withdrawReason: null, createdAt: "2026-11-25T09:00:00.000Z", updatedAt: "2026-11-25T09:00:00.000Z",
   elements: [element(), element({ id: "e2", key: "dfmea", ordinal: 4, label: "Design FMEA", requirement: "required" }), element({ id: "e3", key: "master_sample", ordinal: 15, label: "Master sample", requirement: "retain" })],
-  problems: ["Design records needs evidence", "Design FMEA needs evidence"], editable: true, canApprove: true, canMarkReady: false, canReopen: false, canWithdraw: true, ...over,
+  problems: ["Design records needs evidence", "Design FMEA needs evidence"], editable: true, canApprove: true, canMarkReady: false, canReopen: false, canWithdraw: true,
+  psw: null, decisions: [], reviews: [], replaces: null, replacedBy: [], nextReviewOn: null, reviewOverdue: false, interimExpiresOn: null, interimExpired: false,
+  canSavePsw: true, canSign: false, signBlocked: null, canUnsign: false, canSubmit: false, canRecordDecision: false, canResubmit: false, canReview: false, ...over,
+});
+const psw = (over = {}) => ({
+  partWeight: 1.25, weightUnit: "kg", purchaseOrder: "PO-77", engineeringChangeLevel: null, resultsMeetRequirements: true, declaration: null, signature: null, unsigned: null, frozen: false, missing: [], ...over,
+});
+const signed = { name: "Quinn Manager", title: "Quality Manager", phone: "01234 567890", on: "2026-11-20", at: "2026-11-20T10:00:00.000Z" };
+const decision = (over = {}) => ({
+  id: "d1", seq: 1, kind: "submitted", decidedOn: "2026-11-20", how: "Customer portal", theirReference: null, expiresOn: null, note: null, file: null,
+  recordedBy: { id: "u2", name: "Eli Engineer" }, recordedAt: "2026-11-20T09:00:00.000Z", ...over,
 });
 
 const wrap = (ui, path) =>
@@ -37,6 +48,7 @@ const wrap = (ui, path) =>
         <Routes>
           <Route path="/PPAP" element={ui} />
           <Route path="/PPAP/:id" element={ui} />
+          <Route path="/PPAP/:id/psw" element={ui} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -172,5 +184,122 @@ describe("a PPAP submission", () => {
     wrap(<PpapPage />, "/PPAP/p1");
     await userEvent.click(await screen.findByRole("button", { name: "Show Part Submission Warrant" }));
     expect(screen.queryByRole("button", { name: "Link a record" })).toBeNull();
+  });
+
+  it("lets a preparer type the warrant and saves its fields together", async () => {
+    load({ canSavePsw: true, psw: null });
+    wrap(<PpapPage />, "/PPAP/p1");
+    expect(await screen.findByText("Part Submission Warrant")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Part weight/), "1.5");
+    await userEvent.click(screen.getByRole("button", { name: "Save the warrant" }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/psw", expect.objectContaining({ method: "PUT", body: expect.objectContaining({ partWeight: 1.5, weightUnit: "kg", resultsMeetRequirements: null }) })),
+    );
+  });
+
+  it("offers the signature to an approver who did not prepare it, and signs with a title", async () => {
+    load({ canSavePsw: false, canSign: true, psw: psw() });
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Sign the warrant" }));
+    const dialog = await screen.findByRole("dialog", { name: /Sign the Part Submission Warrant/ });
+    const sign = within(dialog).getByRole("button", { name: "Sign" });
+    expect(sign).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/Your title/), "Quality Manager");
+    await userEvent.click(sign);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/psw/sign", expect.objectContaining({ method: "POST", body: { title: "Quality Manager" } })));
+  });
+
+  it("tells an approver who prepared it that someone else must sign, and offers no signature", async () => {
+    load({ canSavePsw: false, canSign: false, signBlocked: "You prepared this submission, so someone else with approval rights must sign the warrant.", psw: psw() });
+    wrap(<PpapPage />, "/PPAP/p1");
+    expect(await screen.findByText(/you prepared this submission/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign the warrant" })).toBeNull();
+  });
+
+  it("shows a signed warrant with who signed, and lets an approver take the signature off", async () => {
+    load({ canSavePsw: false, canUnsign: true, psw: psw({ signature: signed }) });
+    wrap(<PpapPage />, "/PPAP/p1");
+    expect(await screen.findByText(/Quinn Manager, Quality Manager/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take the signature off" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save the warrant" })).toBeNull();
+  });
+
+  it("sends a ready submission after saying when and how", async () => {
+    load({ status: "ready", editable: false, canSavePsw: false, canSubmit: true, canReopen: true, problems: [], psw: psw({ signature: signed }) });
+    wrap(<PpapPage />, "/PPAP/p1");
+    await userEvent.click(await screen.findByRole("button", { name: "Send to the customer" }));
+    const dialog = await screen.findByRole("dialog", { name: /Send PPAP-26-0001 to Acme/ });
+    expect(within(dialog).getByText(/freezes the warrant/i)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send it" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/submit", expect.objectContaining({ method: "POST", body: expect.objectContaining({ sentOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }) })));
+  });
+
+  it("lists what happened and records the customer's decision", async () => {
+    load({ status: "submitted", editable: false, canSavePsw: false, canRecordDecision: true, submittedAt: "2026-11-20T09:00:00.000Z", psw: psw({ signature: signed, frozen: true }), decisions: [decision()] });
+    wrap(<PpapPage />, "/PPAP/p1");
+    const list = await screen.findByRole("list", { name: "Decisions" });
+    expect(within(list).getByText("Sent to the customer")).toBeInTheDocument();
+    expect(within(list).getByText(/via Customer portal/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Record the customer's decision" }));
+    const dialog = await screen.findByRole("dialog", { name: /Record the customer's decision/ });
+    await userEvent.type(within(dialog).getByLabelText(/Their reference/), "ACME-OK-9");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Record it" }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/decisions", expect.objectContaining({ method: "POST", body: expect.objectContaining({ kind: "approved", theirReference: "ACME-OK-9" }) })),
+    );
+  });
+
+  it("says when an interim approval has run out, from the date and not from anything stored", async () => {
+    load({
+      status: "interim_approved", editable: false, canSavePsw: false, canRecordDecision: true, interimExpiresOn: "2026-11-01", interimExpired: true,
+      psw: psw({ signature: signed, frozen: true }), decisions: [decision(), decision({ id: "d2", seq: 2, kind: "interim_approved", decidedOn: "2026-10-01", expiresOn: "2026-11-01", note: "Until the gauge study is done" })],
+    });
+    wrap(<PpapPage />, "/PPAP/p1");
+    expect(await screen.findByText("Interim approval ran out")).toBeInTheDocument();
+    expect(screen.getByText(/ran out on/)).toBeInTheDocument();
+  });
+
+  it("resubmits a rejected submission and goes to the new one", async () => {
+    const rejected = { status: "rejected", editable: false, canSavePsw: false, canResubmit: true, psw: psw({ signature: signed, frozen: true }), decisions: [decision(), decision({ id: "d2", seq: 2, kind: "rejected", note: "Dimensional results were missing" })] };
+    apiFetch.mockImplementation(async (path, opts) => {
+      if (path === "/ppaps/p1/resubmission") return { ...submission({ id: "p2", reference: "PPAP-26-0002", replaces: { id: "p1", reference: "PPAP-26-0001", status: "rejected" } }), created: true };
+      if (path === "/ppaps/p2") return submission({ id: "p2", reference: "PPAP-26-0002", replaces: { id: "p1", reference: "PPAP-26-0001", status: "rejected" } });
+      return path === "/ppaps/p1" && !opts?.method ? submission(rejected) : {};
+    });
+    wrap(<PpapPage />, "/PPAP/p1");
+    expect((await screen.findAllByText(/Dimensional results were missing/)).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Resubmit" }));
+    const dialog = await screen.findByRole("dialog", { name: /Resubmit PPAP-26-0001/ });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start the new submission" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/resubmission", expect.objectContaining({ method: "POST" })));
+    expect(await screen.findByRole("heading", { name: "PPAP-26-0002" })).toBeInTheDocument();
+  });
+});
+
+describe("the Part Submission Warrant form", () => {
+  const form = (over = {}) => ({
+    submissionId: "p1", reference: "PPAP-26-0001", status: "in_preparation", level: 3, reason: "new_part", organisation: "Alpha Precision", part: { number: "BR-100", name: "Bracket" },
+    revision: { label: "B", drawingRef: "DWG-100", releasedOn: "2026-10-01" }, customer: { name: "Acme", code: "ACM", address: "1 Factory Road, Leeds, GB" }, site: "Main works", purchaseOrder: "PO-77",
+    engineeringChangeLevel: "EC-3", weight: { value: 1.25, unit: "kg" }, resultsMeetRequirements: true, declaration: null, signer: null, sentOn: null, frozen: false, ...over,
+  });
+  const loadForm = (over) => apiFetch.mockImplementation(async (path) => (path === "/ppaps/p1/psw" ? form(over) : {}));
+
+  it("shows the part, customer, typed fields and signer, and says it is a draft until it is sent", async () => {
+    loadForm({ signer: { name: "Quinn Manager", title: "Quality Manager", phone: null, signedOn: "2026-11-20" } });
+    wrap(<PswFormPage />, "/PPAP/p1/psw");
+    const sheet = await screen.findByRole("article", { name: "Part Submission Warrant" });
+    expect(within(sheet).getByText("BR-100")).toBeInTheDocument();
+    expect(within(sheet).getByText("1 Factory Road, Leeds, GB")).toBeInTheDocument();
+    expect(within(sheet).getByText("1.25 kg")).toBeInTheDocument();
+    expect(within(sheet).getByText("Quinn Manager")).toBeInTheDocument();
+    expect(within(sheet).getByText("Draft: not sent")).toBeInTheDocument();
+  });
+
+  it("says plainly that it is not yet signed, and is no draft once sent", async () => {
+    loadForm({ frozen: true, sentOn: "2026-11-20", signer: null });
+    wrap(<PswFormPage />, "/PPAP/p1/psw");
+    const sheet = await screen.findByRole("article", { name: "Part Submission Warrant" });
+    expect(within(sheet).getByText("Not yet signed")).toBeInTheDocument();
+    expect(within(sheet).queryByText(/^Draft/)).toBeNull();
   });
 });

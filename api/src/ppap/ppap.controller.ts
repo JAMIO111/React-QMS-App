@@ -4,7 +4,10 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, LevelBody, PpapListQuery, ReasonBody, SaveRequirementsBody, UpdateElementBody, UpdatePpapBody, WaiveBody } from './ppap.schemas';
+import {
+  AddFileBody, AddLinkBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, DecisionBody, LevelBody, PpapListQuery, PswBody, ReasonBody, ResubmitBody, ReviewBody, SaveRequirementsBody,
+  SignPswBody, SubmitBody, UpdateElementBody, UpdatePpapBody, WaiveBody,
+} from './ppap.schemas';
 import { PpapService } from './ppap.service';
 
 const READ = 'ppap.read';
@@ -109,9 +112,78 @@ export class PpapController {
   @HttpCode(200)
   @OrganisationScoped(MANAGE)
   @ApiBody({ schema: openApiSchema(ReasonBody) })
-  @ApiOkResponse({ description: 'Withdraws a submission that has not been sent, with a reason' })
+  @ApiOkResponse({ description: 'Withdraws a submission with a reason. Before sending that is a manager\'s act; once sent it needs approval rights and is recorded as a decision' })
   withdraw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.withdraw(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Get('ppaps/:id/psw')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The Part Submission Warrant as a form: the typed fields beside the part, revision, customer, site, reason and level, the signer, and whether it is frozen (sent)' })
+  pswForm(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.pswForm(ctx, parse(Uuid, id));
+  }
+
+  @Put('ppaps/:id/psw')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(PswBody) })
+  @ApiOkResponse({ description: 'Saves the typed fields of the warrant (weight, purchase order, engineering change level, whether the results meet the requirements, a declaration) while the submission is being prepared and the warrant is not signed' })
+  savePsw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.savePsw(ctx, parse(Uuid, id), parse(PswBody, body));
+  }
+
+  @Post('ppaps/:id/psw/sign')
+  @HttpCode(200)
+  @OrganisationScoped(APPROVE)
+  @ApiBody({ schema: openApiSchema(SignPswBody) })
+  @ApiOkResponse({ description: 'An approver signs the warrant with their title and phone. Never the owner, the person who created the submission or whoever last saved the warrant (409 ppap_rule)' })
+  signPsw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.signPsw(ctx, parse(Uuid, id), parse(SignPswBody, body));
+  }
+
+  @Post('ppaps/:id/psw/unsign')
+  @HttpCode(200)
+  @OrganisationScoped(APPROVE)
+  @ApiBody({ schema: openApiSchema(ReasonBody) })
+  @ApiOkResponse({ description: 'An approver takes the signature off while the submission is still being prepared, with a reason' })
+  unsignPsw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.unsignPsw(ctx, parse(Uuid, id), parse(ReasonBody, body).reason);
+  }
+
+  @Post('ppaps/:id/submit')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(SubmitBody) })
+  @ApiOkResponse({ description: 'Sends a ready submission: every link and the warrant are frozen, the status moves to submitted and the sending is recorded as a decision. Refused (409 ppap_rule) if anything is still needed' })
+  submit(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.submit(ctx, parse(Uuid, id), parse(SubmitBody, body ?? {}));
+  }
+
+  @Post('ppaps/:id/decisions')
+  @HttpCode(200)
+  @OrganisationScoped(APPROVE)
+  @ApiBody({ schema: openApiSchema(DecisionBody) })
+  @ApiOkResponse({ description: 'An approver records the customer\'s decision (approved, interim approved with an expiry and conditions, rejected with the reason), with their reference and optionally their signed warrant as a file in the submission\'s folder' })
+  decide(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decide(ctx, parse(Uuid, id), parse(DecisionBody, body));
+  }
+
+  @Post('ppaps/:id/resubmission')
+  @HttpCode(201)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ResubmitBody) })
+  @ApiCreatedResponse({ description: 'Starts a new submission that names this one (rejected, withdrawn after sending, or approved and due for revalidation). Links and notes are carried over unfrozen; files, waivers and the signature are not. Answers with the new submission' })
+  resubmit(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.resubmit(ctx, parse(Uuid, id), parse(ResubmitBody, body ?? {}));
+  }
+
+  @Post('ppaps/:id/reviews')
+  @HttpCode(200)
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(ReviewBody) })
+  @ApiOkResponse({ description: 'Records that an approved submission was reviewed and nothing changed, and when it is next due' })
+  review(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.review(ctx, parse(Uuid, id), parse(ReviewBody, body));
   }
 
   @Patch('ppap-elements/:id')

@@ -334,6 +334,14 @@ BEGIN
       'customerId', (SELECT id FROM public.customers WHERE organisation_id = a AND code = 'SWC'), 'reason', 'new_part'));
   PERFORM app.add_ppap_file(e.id, a::text || '/ppap/' || e.submission_id::text || '/sweep-drawing.pdf', 'sweep-drawing.pdf', 'application/pdf', 100)
     FROM public.ppap_elements e JOIN public.ppap_submissions s ON s.id = e.submission_id WHERE s.organisation_id = a AND e.element_key = 'design_records';
+  -- PPAP (PP3): a warrant, a decision and a review (written straight in as the system: the sweep only needs a row in each table).
+  PERFORM set_config('role', 'postgres', true);
+  PERFORM set_config('app.ppap_lifecycle', 'on', true);
+  INSERT INTO public.ppap_psw (organisation_id, submission_id, part_weight, weight_unit) SELECT s.organisation_id, s.id, 1, 'kg' FROM public.ppap_submissions s WHERE s.organisation_id = a;
+  INSERT INTO public.ppap_decisions (organisation_id, submission_id, seq, kind, decided_on) SELECT s.organisation_id, s.id, 1, 'submitted', current_date FROM public.ppap_submissions s WHERE s.organisation_id = a;
+  INSERT INTO public.ppap_reviews (organisation_id, submission_id, outcome, note, next_review_on) SELECT s.organisation_id, s.id, 'no_change', 'Sweep review', current_date + 30 FROM public.ppap_submissions s WHERE s.organisation_id = a;
+  PERFORM set_config('app.ppap_lifecycle', 'off', true);
+  PERFORM set_config('role', 'authenticated', true);
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.

@@ -13,6 +13,18 @@ INSERT INTO auth.users (id, email) VALUES
 CREATE FUNCTION pg_temp.fails(p_sql text) RETURNS text LANGUAGE plpgsql AS $$
 BEGIN EXECUTE p_sql; RETURN 'ok'; EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE || ': ' || SQLERRM; END $$;
 
+-- The warrant is a line in "still needed" (PP3): the preparer types it and an approver who did not prepare it signs it. Leaves nobody logged in.
+CREATE FUNCTION pg_temp.warrant(p_sub uuid, p_preparer uuid, p_approver uuid) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(p_preparer);
+  PERFORM app.save_ppap_psw(p_sub, '{"partWeight": 1, "resultsMeetRequirements": true}'::jsonb);
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(p_approver);
+  PERFORM app.sign_ppap_psw(p_sub, 'Quality Manager');
+  PERFORM pg_temp.logout();
+END $$;
+
 DO $$
 DECLARE
   ann uuid := '4e000000-0000-0000-0000-000000000e01'; bob uuid := '4e000000-0000-0000-0000-000000000e02';
@@ -30,6 +42,8 @@ BEGIN
   INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id)
     SELECT org, ou.id, (SELECT id FROM public.roles WHERE organisation_id = org AND key = CASE ou.user_id WHEN dan THEN 'quality_manager' WHEN bob THEN 'viewer' ELSE 'quality_engineer' END)
       FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id IN (bob, cat, dan);
+
+  UPDATE public.profiles SET first_name = 'Dan', surname = 'Approver' WHERE id = dan;
 
   -- ---- permissions and role defaults ----
   PERFORM pg_temp.assert_eq((SELECT array_agg(rp.permission_code ORDER BY rp.permission_code) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id
@@ -215,11 +229,14 @@ BEGIN
 
   -- ---- what is still needed, ready, reopen, withdraw ----
   PERFORM pg_temp.login(cat);
-  PERFORM pg_temp.assert_eq(cardinality(app.ppap_problems(s1)), 16, 'level 3: seventeen required elements besides the warrant, one waived, so sixteen are left');
+  PERFORM pg_temp.assert_eq(cardinality(app.ppap_problems(s1)), 17, 'level 3: seventeen required elements besides the warrant, one waived, so sixteen are left, and the warrant makes seventeen');
   PERFORM pg_temp.assert_eq((app.ppap_problems(s1))[1], 'Engineering change documents: add evidence, or ask an approver to waive it', 'the list says what to do, in order');
   t := pg_temp.fails(format('SELECT app.mark_ppap_ready(%L)', s1));
   PERFORM pg_temp.assert_eq(left(t, 5), 'QM037', 'it cannot be marked ready while something is needed');
-  PERFORM pg_temp.assert_eq(app.ppap_problems(s2), '{}'::text[], 'level 1 needs nothing yet (the warrant comes with PP3)');
+  PERFORM pg_temp.assert_eq(cardinality(app.ppap_problems(s2)), 1, 'level 1 needs only the warrant');
+  PERFORM pg_temp.warrant(s2, cat, dan);
+  PERFORM pg_temp.login(cat);
+  PERFORM pg_temp.assert_eq(app.ppap_problems(s2), '{}'::text[], 'with the warrant typed and signed nothing is needed');
   PERFORM app.mark_ppap_ready(s2);
   PERFORM pg_temp.assert_eq((SELECT status FROM public.ppap_submissions WHERE id = s2), 'ready', 'ready');
   PERFORM pg_temp.assert_eq((SELECT ready_by FROM public.ppap_submissions WHERE id = s2), cat, 'by the preparer');
@@ -239,6 +256,8 @@ BEGIN
   PERFORM pg_temp.assert_eq(left(t, 5), 'QM037', 'a withdrawn submission is final');
   s4 := (app.create_ppap(org, jsonb_build_object('partId', part, 'customerId', cust, 'reason', 'tooling', 'level', 1)) ->> 'id')::uuid;
   PERFORM pg_temp.assert_eq((SELECT reference FROM public.ppap_submissions WHERE id = s4), 'PPAP-' || v_year || '-0004', 'after a withdrawal the same reason can start again');
+  PERFORM pg_temp.warrant(s4, cat, dan);
+  PERFORM pg_temp.login(cat);
   PERFORM app.mark_ppap_ready(s4);
   PERFORM pg_temp.logout();
 

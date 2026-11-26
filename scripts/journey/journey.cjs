@@ -235,6 +235,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await run('riskAndReview', () => riskAndReview({ browser, page, stack, APP, orgName, see, shot, step, log, colleague, watch }));
   await run('changeManagement', () => changeManagement({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
   await run('fmea', () => fmea({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
+  await run('ppap', () => ppap({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
   await run('portalChangeApproval', () => portalChangeApproval({ browser, page, stack, APP, orgName, see, shot, step, log, owner, watch }));
   await run('workflowsAndReminders', () => workflowsAndReminders({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
   await run('newWorkflowTriggers', () => newWorkflowTriggers({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }));
@@ -2152,6 +2153,117 @@ async function fmea({ browser, page, stack, APP, orgName, see, shot, step, log, 
   const home = await api('GET', '/home-dashboard');
   log(`fmea: ${JSON.stringify(dash.kpis)} home ${JSON.stringify(home.fmea)}`);
   if (dash.kpis.inForce !== 1 || dash.kpis.needAttention !== 1 || dash.kpis.openActions !== 0 || home.fmea.inForce !== 1) throw new Error('the dashboard and the home page do not agree with the analysis');
+}
+
+/**
+ * Part approval (PPAP, PPX): a customer who asks for PPAP buys a part; the part page says none has been started; the owner starts one from there (so the
+ * part revision is kept as where it came from), types the warrant, Colin (an approver who did not prepare it) signs it, the owner marks it ready and sends it,
+ * Colin records the customer's approval, and the part page, the dashboard, the home page and the register all say it is approved.
+ */
+async function ppap({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }) {
+  step('set-up for part approval: a customer who asks for PPAP at level 1, a part they buy with a released revision, Colin as an approver');
+  const { rows: [org] } = await stack.admin.query(`select o.id from public.organisations o where o.name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const { rows: [colin] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [colleague.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+  // Colin signs warrants and records decisions, which need the quality manager role (the FMEA and document steps give it too; this keeps the step able to run alone).
+  await stack.admin.query(
+    `insert into public.user_role_assignments (organisation_id, membership_id, role_id)
+     select $1, m.id, r.id from public.organisation_users m, public.roles r
+      where m.organisation_id = $1 and m.user_id = $2 and r.organisation_id = $1 and r.key = 'quality_manager'
+        and not exists (select 1 from public.user_role_assignments a where a.membership_id = m.id and a.role_id = r.id)`,
+    [org.id, colin.id],
+  );
+  const customer = await api('POST', '/customers', { code: 'PPX-C', name: 'Approval Motors' });
+  const part = await api('POST', '/parts', { partNumber: 'PPX-100', name: 'Approval bracket', initialRevision: { revision: 'A' } });
+  await api('POST', `/parts/${part.id}/customers`, { customerId: customer.id, customerPartNumber: 'AM-4410', isPrimary: true });
+  await api('POST', `/part-revisions/${part.revisions[0].id}/release`);
+  await api('PUT', `/ppap-customer-rules/${customer.id}`, { defaultLevel: 1 });
+
+  step('the part page says Approval Motors asks for PPAP and none has been started; the owner starts one from there');
+  await page.goto(`${APP}/Parts/${part.id}`);
+  const card = page.getByRole('region', { name: 'Part approval' });
+  await see(card.getByRole('table', { name: 'PPAP by customer' }).getByText('Approval Motors'));
+  await shot(page, 'pp0-part-before');
+  await card.getByRole('button', { name: 'Start a PPAP' }).click();
+  const start = page.getByRole('dialog', { name: 'Start a PPAP submission' });
+  await see(start.getByText(/Raised from .*It is kept with the PPAP/));
+  await start.getByRole('button', { name: 'Start the submission' }).click();
+  await see(page.getByRole('heading', { level: 1, name: /PPAP-\d+-\d+/ }));
+  const ppapId = page.url().split('/PPAP/')[1].split(/[/?#]/)[0];
+  await see(page.getByText(/Raised from/));
+  await see(page.getByRole('list', { name: 'Still needed' }));
+  await shot(page, 'pp1-ppap-started');
+
+  step('the owner types the Part Submission Warrant; it cannot be marked ready until an approver who did not prepare it signs');
+  await page.getByLabel('Part weight').fill('1.25');
+  await page.getByRole('combobox', { name: /Do the results meet all the requirements/ }).click();
+  await page.getByRole('option', { name: /^Yes/ }).click();
+  await page.getByRole('button', { name: 'Save the warrant' }).click();
+  await see(page.getByText(/ask an approver who did not prepare|Nothing can be marked ready|signed by/i).first());
+  if (!(await page.getByRole('button', { name: 'Mark ready' }).isDisabled())) throw new Error('a submission with an unsigned warrant must not be markable as ready');
+
+  step('Colin signs the warrant from his own sign-in');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const colinPage = await ctx.newPage();
+  colinPage.setDefaultTimeout(15000);
+  watch(colinPage, 'colin');
+  await signIn(colinPage, APP, colleague.email);
+  await see(colinPage.getByRole('heading', { level: 1, name: /good (morning|afternoon|evening), Colin/i }));
+  await colinPage.goto(`${APP}/PPAP/${ppapId}`);
+  await colinPage.getByRole('button', { name: 'Sign the warrant' }).click();
+  const sign = colinPage.getByRole('dialog', { name: 'Sign the Part Submission Warrant' });
+  await sign.getByLabel('Your title').fill('Quality manager');
+  await sign.getByRole('button', { name: 'Sign', exact: true }).click();
+  await sign.waitFor({ state: 'hidden' });
+  await see(colinPage.getByText('Signed', { exact: true }));
+  await shot(colinPage, 'pp2-warrant-signed');
+
+  step('the owner marks it ready and sends it to the customer; sending freezes the warrant');
+  await page.reload();
+  await see(page.getByText('Signed', { exact: true }));
+  await page.getByRole('button', { name: 'Mark ready' }).click();
+  await see(page.getByRole('button', { name: 'Send to the customer' }));
+  await page.getByRole('button', { name: 'Send to the customer' }).click();
+  const send = page.getByRole('dialog', { name: /^Send PPAP-.* to Approval Motors$/ });
+  await send.getByLabel('How it was sent').fill('Their supplier portal');
+  await send.getByRole('button', { name: 'Send it', exact: true }).click();
+  await send.waitFor({ state: 'hidden' });
+  await see(page.getByText('Sent to the customer'));
+  await see(page.getByText(/frozen when the submission was sent/));
+  await shot(page, 'pp3-ppap-sent');
+
+  step('Colin records the customer\'s approval; the submission, the part page, the dashboard and the home page all say approved');
+  await colinPage.goto(`${APP}/PPAP/${ppapId}`);
+  await colinPage.getByRole('button', { name: "Record the customer's decision" }).click();
+  const decide = colinPage.getByRole('dialog', { name: "Record the customer's decision" });
+  await decide.getByLabel('Their reference').fill('AM-PSW-9001');
+  await decide.getByRole('button', { name: 'Record it', exact: true }).click();
+  await decide.waitFor({ state: 'hidden' });
+  await see(colinPage.getByText('Approved', { exact: true }).first());
+  await ctx.close();
+  await page.reload();
+  await see(page.getByRole('list', { name: 'Decisions' }).getByText(/Approved/));
+  await shot(page, 'pp4-ppap-approved');
+  await page.goto(`${APP}/Parts/${part.id}`);
+  await see(page.getByRole('region', { name: 'Part approval' }).getByRole('table', { name: 'PPAP by customer' }).getByText(/Approved/));
+  await page.goto(`${APP}/PPAP`);
+  await see(page.getByRole('heading', { name: 'Part approvals dashboard' }));
+  await page.getByRole('status', { name: /Loading the part approvals dashboard/ }).waitFor({ state: 'hidden' });
+  await shot(page, 'pp5-ppap-dashboard');
+  await page.goto(`${APP}/PPAP/Register`);
+  await see(page.getByText('Approval Motors').first());
+  await page.goto(`${APP}/`);
+  await see(page.getByRole('region', { name: 'Part approvals' }));
+  await page.getByRole('status', { name: 'Checking what needs attention' }).waitFor({ state: 'hidden' });
+  await shot(page, 'pp6-ppap-home');
+  const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const dash = await api('GET', `/ppap-dashboard?from=${day(-89)}&to=${day(0)}`);
+  const home = await api('GET', '/home-dashboard');
+  log(`ppap: ${JSON.stringify(dash.kpis)} home ${JSON.stringify(home.ppap)}`);
+  if (dash.kpis.approved < 1 || home.ppap.approved !== dash.kpis.approved || dash.kpis.rejected !== 0) throw new Error('the dashboard and the home page do not agree with the approval');
+  const row = (await stack.admin.query(`select status, origin_kind, (select count(*)::int from public.ppap_decisions d where d.submission_id = s.id and d.kind = 'approved') as approvals from public.ppap_submissions s where s.id = $1`, [ppapId])).rows[0];
+  if (row.status !== 'approved' || row.origin_kind !== 'part_revision' || row.approvals !== 1) throw new Error(`the submission is not as the journey left it: ${JSON.stringify(row)}`);
 }
 
 /**

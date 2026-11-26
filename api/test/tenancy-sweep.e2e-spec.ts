@@ -350,6 +350,12 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide': { approve: true, note: 'Hijacked' },
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/purchase-orders/{id}': undefined,
+    'GET /api/v1/customer-orders/{id}': undefined,
+    'POST /api/v1/customer-orders/{id}/close': {},
+    'POST /api/v1/customer-orders/{id}/cancel': { reason: 'Hijacked' },
+    'PATCH /api/v1/customer-order-lines/{id}': { agreedOn: '2027-01-01' },
+    'GET /api/v1/shipments/{id}': undefined,
+    'POST /api/v1/shipments/{id}/cancel': { reason: 'Hijacked' },
     'POST /api/v1/purchase-orders/{id}/close': {},
     'POST /api/v1/purchase-orders/{id}/cancel': { reason: 'Hijacked' },
     'PATCH /api/v1/purchase-order-lines/{id}': { agreedOn: '2027-01-01' },
@@ -993,6 +999,12 @@ const hasSample = (op: Op) =>
     'POST /api/v1/supplier-quality/scar-extensions/{id}/decide',
     'POST /api/v1/supplier-quality/scar-extensions/{id}/withdraw',
     'GET /api/v1/purchase-orders/{id}',
+    'GET /api/v1/customer-orders/{id}',
+    'POST /api/v1/customer-orders/{id}/close',
+    'POST /api/v1/customer-orders/{id}/cancel',
+    'PATCH /api/v1/customer-order-lines/{id}',
+    'GET /api/v1/shipments/{id}',
+    'POST /api/v1/shipments/{id}/cancel',
     'POST /api/v1/purchase-orders/{id}/close',
     'POST /api/v1/purchase-orders/{id}/cancel',
     'PATCH /api/v1/purchase-order-lines/{id}',
@@ -1407,6 +1419,9 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/scars/')) return a.supplierScar;
   if (path.startsWith('/api/v1/supplier-quality/scar-ncrs/')) return a.supplierScarLink;
   if (path.startsWith('/api/v1/purchase-orders/')) return a.purchaseOrder;
+  if (path.startsWith('/api/v1/customer-orders/')) return a.customerOrder;
+  if (path.startsWith('/api/v1/customer-order-lines/')) return a.orderLine;
+  if (path.startsWith('/api/v1/shipments/')) return a.shipment;
   if (path.startsWith('/api/v1/purchase-order-lines/')) return a.poLine;
   if (path.startsWith('/api/v1/goods-receipts/')) return a.goodsReceipt;
   if (path.startsWith('/api/v1/inspection-requirements/')) return a.requirement;
@@ -1780,6 +1795,9 @@ beforeAll(async () => {
     a.goodsReceipt = ((await q1(`select app.record_goods_receipt($1::uuid, $2::uuid, null, current_date, 'DN-A1', null, jsonb_build_array(jsonb_build_object('poLineId', $3::text, 'quantity', 2)), null) as r`, [a.supplier, a.purchaseOrder, a.poLine])).r as { id: string }).id;
     a.requirement = (await q1(`select app.save_inspection_requirement($1::uuid, null, '{"name":"Alpha rule","strategy":"full"}'::jsonb) as id`, [ids.orgA])).id;
     a.receiptLine = (await q1(`select id from public.goods_receipt_lines where goods_receipt_id = $1 limit 1`, [a.goodsReceipt])).id;
+    a.customerOrder = (await q1(`select app.create_customer_order($1::uuid, 'ALPHA-CO-1', 'ACUST-PO-1', current_date, null, jsonb_build_array(jsonb_build_object('partId', $2::text, 'quantity', 10, 'requestedOn', (current_date + 5)::text))) as id`, [a.customer, a.part])).id;
+    a.orderLine = (await q1(`select id from public.customer_order_lines where customer_order_id = $1 limit 1`, [a.customerOrder])).id;
+    a.shipment = ((await q1(`select app.record_shipment($1::uuid, $2::uuid, null, current_date, 'SDN-A1', null, jsonb_build_array(jsonb_build_object('orderLineId', $3::text, 'quantity', 2)), null) as r`, [a.customer, a.customerOrder, a.orderLine])).r as { id: string }).id;
     const lkNcr = (await q1(`insert into public.nonconformances (organisation_id, reference, source, title, supplier_id) values ($1, 'A-NCR-LK', 'supplier', 'Alpha linked NCR', $2) returning id`, [ids.orgA, a.supplier])).id;
     a.receiptLineNcr = (await q1(`select app.link_ncr_to_receipt_line($1::uuid, $2::uuid) as id`, [lkNcr, a.receiptLine])).id;
     a.integrationConnection = (await q1(`select app.create_integration_connection($1::uuid, 'csv', 'Alpha file', 'alpha-file', '{}'::jsonb) as id`, [ids.orgA])).id;

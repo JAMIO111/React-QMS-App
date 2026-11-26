@@ -82,6 +82,10 @@ const PurchaseOrdersPage = lazy(() => import("./components/supplier-quality/Purc
 const PurchaseOrderPage = lazy(() => import("./components/supplier-quality/PurchaseOrderPage.jsx"));
 const GoodsReceiptsPage = lazy(() => import("./components/supplier-quality/GoodsReceiptsPage.jsx"));
 const GoodsReceiptPage = lazy(() => import("./components/supplier-quality/GoodsReceiptPage.jsx"));
+const CustomerOrdersPage = lazy(() => import("./components/shipping/CustomerOrdersPage.jsx"));
+const CustomerOrderPage = lazy(() => import("./components/shipping/CustomerOrderPage.jsx"));
+const ShipmentsPage = lazy(() => import("./components/shipping/ShipmentsPage.jsx"));
+const ShipmentPage = lazy(() => import("./components/shipping/ShipmentPage.jsx"));
 const MaterialCertificatesPage = lazy(() => import("./components/supplier-quality/MaterialCertificatesPage.jsx"));
 const WatchlistPage = lazy(() => import("./components/supplier-quality/WatchlistPage.jsx"));
 const RequirementsPage = lazy(() => import("./components/supplier-quality/RequirementsPage.jsx"));
@@ -413,6 +417,11 @@ const router = createBrowserRouter([
           { path: "Supplier-Quality/Inspection-Requirements", element: <RequirementsPage /> },
           { path: "Supplier-Quality/Goods-Receipts", element: <GoodsReceiptsPage /> },
           { path: "Supplier-Quality/Goods-Receipts/:id", element: <GoodsReceiptPage /> },
+          { path: "Shipping", element: <Navigate to="Orders" replace /> },
+          { path: "Shipping/Orders", element: <CustomerOrdersPage /> },
+          { path: "Shipping/Orders/:id", element: <CustomerOrderPage /> },
+          { path: "Shipping/Shipments", element: <ShipmentsPage /> },
+          { path: "Shipping/Shipments/:id", element: <ShipmentPage /> },
           { path: "Supplier-Quality/SCARs", element: <ScarsPage /> },
           { path: "Supplier-Quality/SCARs/:id", element: <ScarPage /> },
           { path: "Machines", element: <MachinesPage /> },

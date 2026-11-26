@@ -26,6 +26,7 @@ import { CertificationsCard, DocumentsCard } from "./Qualification";
 import { RiskCard } from "./RiskAssessment";
 import { ApprovalCard, AssessmentsCard } from "./Approvals";
 import SupplierAudits from "./SupplierAudits";
+import SupplierPpap from "./SupplierPpap";
 import SupplierNcs from "./SupplierNcs";
 import SupplierPerformance from "./SupplierPerformance";
 import SupplierReceiving from "./SupplierReceiving";
@@ -39,6 +40,7 @@ const TABS = [
   { value: "incoming", label: "Incoming quality" },
   { value: "nonconformities", label: "Nonconformities" },
   { value: "scars", label: "SCARs" },
+  { value: "ppap", label: "Part approvals" },
   { value: "audits", label: "Audits" },
   { value: "documents", label: "Documents" },
   { value: "products", label: "Products & services" },
@@ -246,7 +248,8 @@ const SupplierProfilePage = () => {
   const supplier = useSupplier(id);
   useBreadcrumbNames([{ path: `/Suppliers/${id}`, label: supplier.data ? supplier.data.displayName || supplier.data.name : null }]);
   const [dialog, setDialog] = useState(null); // { kind: "edit" | "status" | "contact" | "product", ... }
-  const tab = TABS.some((t) => t.value === params.get("tab")) ? params.get("tab") : "overview";
+  const tabs = TABS.filter((t) => t.value !== "ppap" || can("ppap.read"));
+  const tab = tabs.some((t) => t.value === params.get("tab")) ? params.get("tab") : "overview";
   const canManage = can("supplier_quality.manage");
   const canApprove = can("supplier_quality.approve");
   const canEditCustom = canManage || can("master_data.manage");
@@ -292,7 +295,7 @@ const SupplierProfilePage = () => {
         </div>
       </div>
 
-      <SlidingToggle ariaLabel="Supplier sections" mode="tabs" options={TABS} value={tab} onChange={(v) => setParams((p) => { const n = new URLSearchParams(p); if (v === "overview") n.delete("tab"); else n.set("tab", v); return n; })} />
+      <SlidingToggle ariaLabel="Supplier sections" mode="tabs" options={tabs} value={tab} onChange={(v) => setParams((p) => { const n = new URLSearchParams(p); if (v === "overview") n.delete("tab"); else n.set("tab", v); return n; })} />
 
       {tab === "overview" && <Overview supplier={s} canManage={canManage} canEditCustom={canEditCustom} onAddContact={() => setDialog({ kind: "contact" })} onEditContact={(c) => setDialog({ kind: "contact", contact: c })} />}
       {tab === "products" && <Products supplier={s} canManage={canManage} onAdd={() => setDialog({ kind: "product" })} />}
@@ -309,6 +312,7 @@ const SupplierProfilePage = () => {
         </>
       )}
       {tab === "incoming" && <SupplierReceiving supplier={s} />}
+      {tab === "ppap" && <SupplierPpap supplier={s} />}
       {tab === "audits" && <SupplierAudits supplier={s} />}
       {tab === "documents" && <DocumentsCard supplierId={s.id} canManage={canManage} />}
 

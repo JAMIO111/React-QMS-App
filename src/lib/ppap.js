@@ -211,3 +211,15 @@ export const reviewWords = (ppap) => {
 export const lastDecision = (ppap, ...kinds) => [...(ppap?.decisions ?? [])].reverse().find((d) => kinds.includes(d.kind)) ?? null;
 /** The answers a person can take to be "results meet requirements": yes, no, or not answered. */
 export const resultsValue = (v) => (v === true ? "yes" : v === false ? "no" : "");
+
+/** The state of a supplier's part approval package for one part, as the supplier profile shows it (information only: it never changes the supplier's status). */
+export const SUPPLIER_PPAP_STATE = {
+  approved: { label: "Approved", tone: "success" },
+  interim: { label: "Interim approval", tone: "warning" },
+  interim_lapsed: { label: "Interim approval has run out", tone: "error" },
+  rejected: { label: "Rejected", tone: "error" },
+  submitted: { label: "Waiting for our decision", tone: "info" },
+  in_preparation: { label: "In preparation", tone: "info" },
+};
+export const supplierPpapLabel = (state) => SUPPLIER_PPAP_STATE[state]?.label ?? state;
+export const supplierPpapPill = (state) => TONE_CLASS[SUPPLIER_PPAP_STATE[state]?.tone ?? "neutral"];

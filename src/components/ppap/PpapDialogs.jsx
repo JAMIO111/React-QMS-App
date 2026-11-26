@@ -33,9 +33,9 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
   const { showToast } = useToast();
   const [part, setPart] = useState(defaults?.part ?? null);
   const [revisionId, setRevisionId] = useState(null);
-  const [direction, setDirection] = useState("submitted");
+  const [direction, setDirection] = useState(defaults?.direction ?? "submitted");
   const [customer, setCustomer] = useState(defaults?.customer ?? null);
-  const [supplier, setSupplier] = useState(null);
+  const [supplier, setSupplier] = useState(defaults?.supplier ?? null);
   const [level, setLevel] = useState("");
   const [reason, setReason] = useState(defaults?.reason ?? null);
   const [notes, setNotes] = useState("");

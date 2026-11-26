@@ -16,7 +16,10 @@ const KINDS = [
   { value: "", label: "Everything" },
   { value: "certification", label: "Certifications" },
   { value: "document", label: "Documents" },
+  { value: "ppap", label: "Interim part approvals" },
 ];
+const KIND_WORDS = { certification: "Certification", document: "Document", ppap: "Part approval" };
+const itemTo = (i) => (i.kind === "ppap" ? `/PPAP/${i.id}` : `/Suppliers/${i.supplier.id}?tab=${i.kind === "certification" ? "qualification" : "documents"}`);
 
 /** Certifications and documents that have expired or expire soon, across all active suppliers. Nothing here changes a supplier's status: it says what to look at. */
 const ExpiryWatchlistPage = () => {
@@ -32,7 +35,7 @@ const ExpiryWatchlistPage = () => {
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto p-4">
       <div>
         <h1 className="text-2xl font-semibold text-primary-text">Expiry watchlist</h1>
-        <p className="text-sm text-secondary-text">Supplier certifications and documents that have expired or will expire soon. An expiry never changes a supplier's approval status; it tells you what to chase.</p>
+        <p className="text-sm text-secondary-text">Supplier certifications, documents and interim part approvals that have expired or will expire soon. An expiry never changes a supplier's approval status; it tells you what to chase.</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <SlidingToggle ariaLabel="Look ahead" options={WINDOWS} value={String(days)} onChange={(v) => set("days", v, "60")} />
@@ -47,20 +50,20 @@ const ExpiryWatchlistPage = () => {
       {query.isLoading ? (
         <p className="text-sm text-secondary-text">Loading…</p>
       ) : data.length === 0 ? (
-        <Callout tone="success" title="Nothing to chase">No current certification or document has expired or expires within {days} days.</Callout>
+        <Callout tone="success" title="Nothing to chase">Nothing current has expired or expires within {days} days.</Callout>
       ) : (
-        <MenuCard title="To look at" subtitle="Soonest first. Open the supplier to renew a certification or upload a new version.">
+        <MenuCard title="To look at" subtitle="Soonest first. Open the supplier to renew a certification or upload a new version, or the package to record a decision.">
           <ul className="flex flex-col divide-y divide-border-color" aria-label="Expiring records">
             {data.map((i) => (
               <li key={`${i.kind}:${i.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <p className="font-medium text-primary-text">
-                    <Link to={`/Suppliers/${i.supplier.id}?tab=${i.kind === "certification" ? "qualification" : "documents"}`} className="text-link-color hover:underline">
+                    <Link to={itemTo(i)} className="text-link-color hover:underline">
                       {i.supplier.code} · {i.supplier.name}
                     </Link>
                   </p>
                   <p className="text-sm text-secondary-text">
-                    {i.kind === "certification" ? "Certification" : "Document"}: {i.title}
+                    {KIND_WORDS[i.kind]}: {i.title}
                     {i.detail ? ` · ${i.detail}` : ""} · expires {formatDate(i.expiresOn)}{i.verified ? "" : " · not verified"}
                   </p>
                 </div>

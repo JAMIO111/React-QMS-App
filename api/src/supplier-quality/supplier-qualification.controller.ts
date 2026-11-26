@@ -8,6 +8,7 @@ import {
   CreateCertificationBody, CreateDocumentBody, ReasonBody, RenewCertificationBody, SupplierCertification, SupplierDocument, UpdateCertificationBody, UpdateDocumentBody, VerifyBody,
   Watchlist, WatchlistQuery,
 } from './supplier-qualification.schemas';
+import { SupplierPpap } from './supplier-ppap';
 import { SupplierQualificationService } from './supplier-qualification.service';
 
 const READ = 'supplier_quality.read';
@@ -28,6 +29,13 @@ export class SupplierQualificationController {
   @ApiOkResponse({ description: 'Current certifications and documents that have expired or expire soon, soonest first', schema: openApiSchema(Watchlist) })
   watchlist(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.watchlist(ctx, parse(WatchlistQuery, query));
+  }
+
+  @Get('suppliers/:id/ppap')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The state of the part approval package for each part received from the supplier (information only)', schema: openApiSchema(SupplierPpap) })
+  ppap(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.ppap(ctx, parse(Uuid, id));
   }
 
   // ---- documents

@@ -7,6 +7,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { todayIn } from './expiry';
 import { recommendInspection } from './inspection-recommendation';
+import { canReadPpap, loadReceivedPackages, ppapForRecommendation } from './supplier-ppap';
 import { InspectionRecommendation, Performance, Schedule, ScheduleBody, PerformanceOverrides, PerformanceQuery, RecommendationQuery, SaveModelBody, SaveScorecardBody, Scorecard, ScorecardConfig, ScorecardModel, ScorecardSummary, SupplierSettings, SupplierSettingsBody, Watchlist, WatchlistQuery } from './supplier-performance.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -285,6 +286,8 @@ export class SupplierPerformanceService {
         where organisation_id = ${orgOf(ctx)}::uuid and supplier_id = ${supplierId}::uuid and part_id is null and part_family_id is null and classification_id is null and risk_rating is null and status = 'approved'
         order by approved_at desc limit 1`);
       const minLines = Number(r.model.config.min_lines);
+      // Part approvals only when the caller may read them: otherwise the rules say nothing about them (never "no problem").
+      const ppap = (await canReadPpap(db, ctx)) ? ppapForRecommendation(await loadReceivedPackages(db, ctx, supplierId), to) : null;
       const rec = recommendInspection({
         approvalStatus: sup.rows[0].approval_status as string,
         riskRating: (sup.rows[0].risk_rating as 'low' | 'medium' | 'high' | 'critical' | null) ?? null,
@@ -296,6 +299,7 @@ export class SupplierPerformanceService {
         majorNcs: Number(m.ncs.major),
         overdueScars: Number(m.scars.overdue_now),
         expiredCerts: Number(m.certs.expired),
+        ppap,
       });
       const rank = { reduced: 0, normal: 1, increased: 2 } as const;
       const currentLevel = (rule.rows[0]?.level as 'increased' | 'normal' | 'reduced' | undefined) ?? 'normal';
@@ -308,6 +312,7 @@ export class SupplierPerformanceService {
         basis: {
           days: q.days, from, to, approvalStatus: sup.rows[0].approval_status as string, riskRating: (sup.rows[0].risk_rating as string) ?? null, band: r.band, score: num(r.score),
           deliveredLines: Number(m.deliveries.lines), rejectedLines: Number(m.lotRejection.rejectedLines), criticalNcs: Number(m.ncs.critical), majorNcs: Number(m.ncs.major), overdueScars: Number(m.scars.overdue_now), expiredCerts: Number(m.certs.expired), minLines,
+          ppap: ppap ? { available: true, notApproved: ppap.notApproved, interim: ppap.interim } : { available: false, notApproved: [], interim: [] },
         },
         generatedAt: new Date().toISOString(),
       };

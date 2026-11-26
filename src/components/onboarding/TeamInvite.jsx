@@ -10,6 +10,8 @@ import { useAllDepartments, useMemberMutation, useMembers, usePermissions, useRo
 import { useSubscriptionOverview } from "../../hooks/useSubscription";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
+import ComboField from "../ui/ComboField";
+import { XIcon } from "@/components/icons";
 
 const field =
   "rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1.5 text-sm text-primary-text disabled:opacity-60";
@@ -61,7 +63,7 @@ const useSeats = (rows) => {
 };
 
 /**
- * Invite several people at once: paste addresses, set the same role, departments and package for everyone (or per person), see the seats left
+ * Invite several people at once: paste addresses, set the role, departments and package for each person, see the seats left
  * as you choose, send, and read what happened to each. Failed rows stay in the list so they can be fixed and sent again.
  */
 const TeamInvite = ({ live = true }) => {
@@ -98,7 +100,6 @@ const TeamInvite = ({ live = true }) => {
   const needed = seatsForDraft(rows);
 
   const update = (index, patch) => setRows((rs) => rs.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  const applyToAll = (patch) => setRows((rs) => rs.map((r) => ({ ...r, ...patch })));
   const toggleDepartment = (index, id) =>
     update(index, { departmentIds: rows[index].departmentIds.includes(id) ? rows[index].departmentIds.filter((x) => x !== id) : [...rows[index].departmentIds, id] });
 
@@ -171,77 +172,75 @@ const TeamInvite = ({ live = true }) => {
       </MenuCard>
 
       {rows.length > 0 && (
-        <MenuCard title={`To invite (${rows.length})`} subtitle="Choose a role, departments and a package for each person, or use Set for everyone" bodyClassName="flex flex-col gap-3">
-          <div className="grid gap-2 rounded-xl border border-border-color p-3 md:grid-cols-3" aria-label="Set for everyone" role="group">
-            <label className="flex flex-col gap-1 text-xs text-secondary-text">
-              Role for everyone
-              <select className={field} value="" onChange={(e) => e.target.value && applyToAll({ roleId: e.target.value })}>
-                <option value="">Set for everyone…</option>
-                {roleList.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-secondary-text">
-              Department for everyone
-              <select className={field} value="" onChange={(e) => e.target.value && applyToAll({ departmentIds: [e.target.value] })}>
-                <option value="">Set for everyone…</option>
-                {departmentList.map((d) => <option key={d.id} value={d.id}>{departmentLabel(d, siteList)}</option>)}
-              </select>
-            </label>
-            {canGivePackages && (
-              <label className="flex flex-col gap-1 text-xs text-secondary-text">
-                Package for everyone
-                <select className={field} value="" onChange={(e) => applyToAll({ packageSlug: e.target.value === "none" ? "" : e.target.value })}>
-                  <option value="">Set for everyone…</option>
-                  <option value="none">No package</option>
-                  {PACKAGES.map((p) => <option key={p.slug} value={p.slug}>{p.label}</option>)}
-                </select>
-              </label>
-            )}
-          </div>
-
-          <ul className="flex flex-col gap-2">
-            {rows.map((r, i) => (
-              <li key={r.email} className="flex flex-col gap-2 rounded-xl border border-border-color p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-medium text-primary-text">{r.email}</span>
-                  <button type="button" className="text-xs text-secondary-text underline" aria-label={`Remove ${r.email}`} onClick={() => setRows((rs) => rs.filter((_, x) => x !== i))}>Remove</button>
-                </div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <label className="flex flex-col gap-1 text-xs text-secondary-text">
-                    Role <span data-required className="sr-only">required</span>
-                    <select aria-label={`Role for ${r.email}`} aria-required="true" className={field} value={r.roleId} onChange={(e) => update(i, { roleId: e.target.value })}>
-                      <option value="">Choose a role</option>
-                      {roleList.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
-                    </select>
-                  </label>
-                  <fieldset className="flex flex-col gap-1 text-xs text-secondary-text">
-                    <legend data-required={needsDepartment(r) || undefined}>Departments</legend>
-                    <div className="flex max-h-24 flex-col gap-1 overflow-y-auto rounded-lg border border-border-color p-2">
-                      {departmentList.length === 0 && <span>No departments yet</span>}
-                      {departmentList.map((d) => (
-                        <label key={d.id} className="flex items-center gap-2 text-sm text-primary-text">
-                          <input type="checkbox" checked={r.departmentIds.includes(d.id)} onChange={() => toggleDepartment(i, d.id)} aria-label={`${departmentLabel(d, siteList)} for ${r.email}`} />
-                          {departmentLabel(d, siteList)}
-                        </label>
-                      ))}
+        <MenuCard title={`To invite (${rows.length})`} subtitle="Choose a role, departments and a package for each person" bodyClassName="flex flex-col gap-3">
+          <ul className="flex flex-col gap-3 p-0">
+            {rows.map((r, i) => {
+              const chosen = departmentList.filter((d) => r.departmentIds.includes(d.id));
+              const spare = departmentList.filter((d) => !r.departmentIds.includes(d.id));
+              return (
+                <li key={r.email} className="flex list-none flex-col gap-3 rounded-xl border border-border-color p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-sm font-medium text-primary-text">{r.email}</span>
+                    <button type="button" className="text-xs text-secondary-text underline" aria-label={`Remove ${r.email}`} onClick={() => setRows((rs) => rs.filter((_, x) => x !== i))}>Remove</button>
+                  </div>
+                  <div className={`grid gap-3 ${canGivePackages ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                    <div className="flex flex-col gap-1">
+                      <span data-required className="text-xs text-secondary-text">Role</span>
+                      <ComboField
+                        ariaLabel={`Role for ${r.email}`}
+                        value={r.roleId || null}
+                        onChange={(id) => update(i, { roleId: id ?? "" })}
+                        options={roleList.map((role) => ({ value: role.id, label: role.name }))}
+                        required
+                        placeholder="Choose a role"
+                      />
                     </div>
-                  </fieldset>
-                  {canGivePackages && (
-                    <label className="flex flex-col gap-1 text-xs text-secondary-text">
-                      Package
-                      <select aria-label={`Package for ${r.email}`} className={field} value={r.packageSlug} onChange={(e) => update(i, { packageSlug: e.target.value })}>
-                        <option value="">No package yet</option>
-                        {PACKAGES.map((p) => (
-                          <option key={p.slug} value={p.slug} disabled={live && seats.left(p.slug) < 1 && r.packageSlug !== p.slug}>
-                            {live ? `${p.label} (${Math.max(0, seats.left(p.slug) + (r.packageSlug === p.slug ? 1 : 0))} left)` : p.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                </div>
-              </li>
-            ))}
+                    <div className="flex flex-col gap-1">
+                      <span data-required={needsDepartment(r) || undefined} className="text-xs text-secondary-text">Departments</span>
+                      <ComboField
+                        ariaLabel={`Add a department for ${r.email}`}
+                        value={null}
+                        onChange={(id) => id && update(i, { departmentIds: [...r.departmentIds, id] })}
+                        options={spare.map((d) => ({ value: d.id, label: departmentLabel(d, siteList) }))}
+                        placeholder={departmentList.length === 0 ? "No departments yet" : spare.length === 0 ? "All added" : "Add a department"}
+                        disabled={spare.length === 0}
+                        clearable={false}
+                      />
+                      {chosen.length > 0 && (
+                        <ul aria-label={`Departments for ${r.email}`} className="flex flex-wrap gap-1.5 p-0">
+                          {chosen.map((d) => (
+                            <li key={d.id} className="list-none">
+                              <span className="inline-flex min-h-8 items-center gap-1 rounded-full border border-border-color bg-primary-bg pl-3 pr-1 text-sm text-primary-text">
+                                {departmentLabel(d, siteList)}
+                                <button type="button" aria-label={`Remove ${departmentLabel(d, siteList)} from ${r.email}`} className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-secondary-text hover:bg-secondary-bg hover:text-primary-text" onClick={() => toggleDepartment(i, d.id)}>
+                                  <XIcon className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    {canGivePackages && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-secondary-text">Package</span>
+                        <ComboField
+                          ariaLabel={`Package for ${r.email}`}
+                          value={r.packageSlug || null}
+                          onChange={(slug) => update(i, { packageSlug: slug ?? "" })}
+                          options={PACKAGES.map((p) => ({
+                            value: p.slug,
+                            label: live ? `${p.label} (${Math.max(0, seats.left(p.slug) + (r.packageSlug === p.slug ? 1 : 0))} left)` : p.label,
+                            disabled: live && seats.left(p.slug) < 1 && r.packageSlug !== p.slug,
+                          }))}
+                          placeholder="No package yet"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
 
           <label className="flex flex-col gap-1 text-sm text-primary-text">

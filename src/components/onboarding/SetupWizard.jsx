@@ -115,7 +115,7 @@ const SetupWizard = () => {
       <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[16rem_minmax(0,1fr)] lg:grid-rows-1">
         <div className="relative overflow-y-auto border-border-color p-3 lg:border-r"><Rail state={state} active={active} lockedFrom={lockedFrom} /></div>
         <div className="relative min-h-0 overflow-y-auto p-4">
-          <section key={active} aria-label={def.title} className={`mx-auto flex flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-5 ${active === "review" ? "max-w-5xl" : "max-w-3xl"}`}>
+          <section key={active} aria-label={def.title} className={`mx-auto flex flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-5 ${active === "review" || active === "team" ? "max-w-5xl" : "max-w-3xl"}`}>
             <div>
               <h2 className="text-xl font-semibold text-primary-text">{def.title}</h2>
               <p className="mt-1 text-sm text-secondary-text">{def.help}</p>

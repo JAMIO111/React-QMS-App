@@ -32,6 +32,11 @@ vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast })
 import TeamInvite from "./TeamInvite";
 
 const renderIt = () => render(<MemoryRouter><TeamInvite /></MemoryRouter>);
+// The custom combo box: open it, then choose an option by its words.
+const choose = async (name, option) => {
+  await userEvent.click(screen.getByRole("combobox", { name }));
+  await userEvent.click(await screen.findByRole("option", { name: option }));
+};
 const addPeople = async (text) => {
   await userEvent.type(screen.getByLabelText("Email addresses"), text);
   await userEvent.click(screen.getByRole("button", { name: "Add to the list" }));
@@ -54,12 +59,15 @@ describe("inviting a team", () => {
     for (const e of ["ann@example.com", "bob@example.com", "cy@example.com"]) expect(screen.getByLabelText(`Role for ${e}`)).toBeInTheDocument();
   });
 
-  it("sets role and department for everyone at once, and sends one request with a message", async () => {
+  it("sets each person's role and department with the custom drop-downs, and sends one request with a message", async () => {
     renderIt();
     await addPeople("a@example.com b@example.com");
-    const all = screen.getByRole("group", { name: "Set for everyone" });
-    await userEvent.selectOptions(within(all).getByLabelText("Role for everyone"), "r-viewer");
-    await userEvent.selectOptions(within(all).getByLabelText("Department for everyone"), "d-qa");
+    expect(screen.queryByRole("group", { name: "Set for everyone" })).toBeNull();
+    expect(document.querySelector("select")).toBeNull(); // no native drop-down is left
+    for (const e of ["a@example.com", "b@example.com"]) {
+      await choose(`Role for ${e}`, "Viewer");
+      await choose(`Add a department for ${e}`, "PA · Quality");
+    }
     await userEvent.type(screen.getByLabelText("Message"), "Welcome to the team");
     await userEvent.click(screen.getByRole("button", { name: "Send 2 invitations" }));
     expect(mutate).toHaveBeenCalledWith(
@@ -76,16 +84,30 @@ describe("inviting a team", () => {
     );
   });
 
+  it("shows the chosen departments as chips that can be taken off, and offers only the ones not yet chosen", async () => {
+    renderIt();
+    await addPeople("a@example.com");
+    await choose("Add a department for a@example.com", "PA · Quality");
+    const chips = screen.getByRole("list", { name: "Departments for a@example.com" });
+    expect(chips).toHaveTextContent("PA · Quality");
+    await userEvent.click(screen.getByRole("combobox", { name: "Add a department for a@example.com" }));
+    expect(screen.queryByRole("option", { name: "PA · Quality" })).toBeNull();
+    expect(await screen.findByRole("option", { name: "PA · Goods-in" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Remove PA · Quality from a@example.com" }));
+    expect(screen.queryByRole("list", { name: "Departments for a@example.com" })).toBeNull();
+  });
+
   it("will not send until each person has a role and, for most roles, a department", async () => {
     renderIt();
     await addPeople("a@example.com");
     const send = screen.getByRole("button", { name: "Send 1 invitation" });
     expect(screen.getByRole("alert")).toHaveTextContent("a@example.com: choose a role");
     expect(send).toBeDisabled();
-    await userEvent.selectOptions(screen.getByLabelText("Role for a@example.com"), "r-viewer");
+    await choose("Role for a@example.com", "Viewer");
     expect(screen.getByRole("alert")).toHaveTextContent("a@example.com: choose a department");
     expect(send).toBeDisabled();
-    await userEvent.click(screen.getByRole("checkbox", { name: "PA · Quality for a@example.com" }));
+    await choose("Add a department for a@example.com", "PA · Quality");
     expect(screen.queryByRole("alert")).toBeNull();
     expect(send).toBeEnabled();
   });
@@ -93,7 +115,7 @@ describe("inviting a team", () => {
   it("needs no department for an organisation-wide role", async () => {
     renderIt();
     await addPeople("boss@example.com");
-    await userEvent.selectOptions(screen.getByLabelText("Role for boss@example.com"), "r-owner");
+    await choose("Role for boss@example.com", "Owner");
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("button", { name: "Send 1 invitation" })).toBeEnabled();
   });
@@ -105,31 +127,29 @@ describe("inviting a team", () => {
       const seats = screen.getByRole("group", { name: "Seats left" });
       expect(seats).toHaveTextContent("Contributor: 2 left of 3");
       expect(seats).toHaveTextContent("Controller: 1 left of 2");
-      await userEvent.selectOptions(screen.getByLabelText("Package for a@example.com"), "contributor");
-      await userEvent.selectOptions(screen.getByLabelText("Package for b@example.com"), "contributor");
+      await choose("Package for a@example.com", "Contributor (2 left)");
+      await choose("Package for b@example.com", "Contributor (1 left)");
       expect(screen.getByRole("group", { name: "Seats left" })).toHaveTextContent("Contributor: 0 left of 3");
-      const third = screen.getByLabelText("Package for c@example.com");
-      expect(within(third).getByRole("option", { name: "Contributor (0 left)" })).toBeDisabled();
-      expect(within(screen.getByLabelText("Package for a@example.com")).getByRole("option", { name: "Contributor (1 left)" })).toBeEnabled();
-      expect(within(third).getByRole("option", { name: "Observer (0 left)" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("combobox", { name: "Package for c@example.com" }));
+      expect(await screen.findByRole("option", { name: "Contributor (0 left)" })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("option", { name: "Observer (0 left)" })).toHaveAttribute("aria-disabled", "true");
       expect(screen.getByRole("link", { name: "Buy more seats" })).toHaveAttribute("href", "/Settings/Subscription");
     });
 
-    it("blocks sending when everyone is given a package there are not enough seats for, and says how many more", async () => {
+    it("cannot give more people a package than there are seats for: the last seat is taken and the option is switched off", async () => {
       renderIt();
-      await addPeople("a@example.com b@example.com c@example.com");
-      const all = screen.getByRole("group", { name: "Set for everyone" });
-      await userEvent.selectOptions(within(all).getByLabelText("Role for everyone"), "r-owner");
-      await userEvent.selectOptions(within(all).getByLabelText("Package for everyone"), "controller");
-      expect(screen.getByRole("alert")).toHaveTextContent("Not enough Controller seats: 2 more needed");
-      expect(screen.getByRole("button", { name: "Send 3 invitations" })).toBeDisabled();
+      await addPeople("a@example.com b@example.com");
+      await choose("Package for a@example.com", /^Controller/);
+      expect(screen.getByRole("group", { name: "Seats left" })).toHaveTextContent("Controller: 0 left of 2");
+      await userEvent.click(screen.getByRole("combobox", { name: "Package for b@example.com" }));
+      expect(await screen.findByRole("option", { name: "Controller (0 left)" })).toHaveAttribute("aria-disabled", "true");
     });
 
     it("sends the package with the person", async () => {
       renderIt();
       await addPeople("a@example.com");
-      await userEvent.selectOptions(screen.getByLabelText("Role for a@example.com"), "r-owner");
-      await userEvent.selectOptions(screen.getByLabelText("Package for a@example.com"), "controller");
+      await choose("Role for a@example.com", "Owner");
+      await choose("Package for a@example.com", /^Controller/);
       await userEvent.click(screen.getByRole("button", { name: "Send 1 invitation" }));
       expect(mutate.mock.calls[0][0].body.invitations[0]).toMatchObject({ email: "a@example.com", packageSlug: "controller" });
     });
@@ -138,7 +158,7 @@ describe("inviting a team", () => {
       permissions = ["members.read", "members.manage"];
       renderIt();
       await addPeople("a@example.com");
-      expect(screen.queryByLabelText("Package for a@example.com")).toBeNull();
+      expect(screen.queryByRole("combobox", { name: "Package for a@example.com" })).toBeNull();
       expect(screen.queryByRole("group", { name: "Seats left" })).toBeNull();
       expect(screen.getByText(/invite people without a package/)).toBeInTheDocument();
     });
@@ -148,8 +168,7 @@ describe("inviting a team", () => {
     it("lists the outcome for each person, removes those who were invited and keeps the rest to fix", async () => {
       renderIt();
       await addPeople("a@example.com b@example.com c@example.com");
-      const all = screen.getByRole("group", { name: "Set for everyone" });
-      await userEvent.selectOptions(within(all).getByLabelText("Role for everyone"), "r-owner");
+      for (const e of ["a@example.com", "b@example.com", "c@example.com"]) await choose(`Role for ${e}`, "Owner");
       await userEvent.click(screen.getByRole("button", { name: "Send 3 invitations" }));
       mutate.mock.calls[0][1].onSuccess({
         invited: 2,
@@ -165,15 +184,15 @@ describe("inviting a team", () => {
       expect(within(results).getByText(/Email is not set up here/)).toBeInTheDocument();
       expect(within(results).getByText(/already a member/)).toBeInTheDocument();
       expect(screen.getByText("To invite (1)")).toBeInTheDocument();
-      expect(screen.getByLabelText("Role for c@example.com")).toBeInTheDocument();
-      expect(screen.queryByLabelText("Role for a@example.com")).toBeNull();
+      expect(screen.getByRole("combobox", { name: "Role for c@example.com" })).toBeInTheDocument();
+      expect(screen.queryByRole("combobox", { name: "Role for a@example.com" })).toBeNull();
       expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ type: "warning", title: "2 invited" }));
     });
 
     it("tells people with an existing account a link was emailed", async () => {
       renderIt();
       await addPeople("a@example.com");
-      await userEvent.selectOptions(screen.getByLabelText("Role for a@example.com"), "r-owner");
+      await choose("Role for a@example.com", "Owner");
       await userEvent.click(screen.getByRole("button", { name: "Send 1 invitation" }));
       mutate.mock.calls[0][1].onSuccess({ invited: 1, failed: 0, results: [{ email: "a@example.com", ok: true, emailOutcome: { sent: true, kind: "sign_in_link" } }] });
       expect(await screen.findByText(/emailed a sign-in link/)).toBeInTheDocument();
@@ -220,9 +239,9 @@ describe("planning the team before the plan is active", () => {
     renderDraft();
     expect(screen.getByText(/Plan your team now, invite them after you choose a plan/)).toBeInTheDocument();
     await addPeople("a@example.com, b@example.com");
-    const role = screen.getByLabelText("Role for a@example.com");
-    expect(within(role).getAllByRole("option").map((o) => o.textContent)).toEqual(expect.arrayContaining(["Quality engineer", "Inspector", "Viewer"]));
-    await userEvent.selectOptions(role, "key:viewer");
+    await userEvent.click(screen.getByRole("combobox", { name: "Role for a@example.com" }));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(expect.arrayContaining(["Quality engineer", "Inspector", "Viewer"]));
+    await userEvent.click(screen.getByRole("option", { name: "Viewer" }));
     expect(screen.queryByRole("button", { name: /Send \d invitation/ })).toBeNull();
     expect(screen.getByText(/Nobody is emailed until your plan is active/)).toBeInTheDocument();
     expect(mutate).not.toHaveBeenCalled();
@@ -231,8 +250,8 @@ describe("planning the team before the plan is active", () => {
   it("says how many seats the planned team needs, counting the owner's Controller seat", async () => {
     renderDraft();
     await addPeople("a@example.com, b@example.com");
-    await userEvent.selectOptions(screen.getByLabelText("Package for a@example.com"), "contributor");
-    await userEvent.selectOptions(screen.getByLabelText("Package for b@example.com"), "contributor");
+    await choose("Package for a@example.com", "Contributor");
+    await choose("Package for b@example.com", "Contributor");
     const needs = screen.getByRole("group", { name: "Seats this team needs" });
     expect(needs).toHaveTextContent("Controller: 1");
     expect(needs).toHaveTextContent("Contributor: 2");
@@ -253,10 +272,11 @@ describe("planning the team before the plan is active", () => {
   it("turns a planned standard role into the organisation's own role when invitations can be sent", async () => {
     const first = renderDraft();
     await addPeople("a@example.com");
-    await userEvent.selectOptions(screen.getByLabelText("Role for a@example.com"), "key:viewer");
-    await userEvent.selectOptions(screen.getByLabelText("Department for everyone"), "d-qa");
+    await choose("Role for a@example.com", "Viewer");
+    await choose("Add a department for a@example.com", "PA · Quality");
     first.unmount();
     renderIt();
-    expect(screen.getByLabelText("Role for a@example.com")).toHaveValue("r-viewer");
+    expect(screen.getByRole("combobox", { name: "Role for a@example.com" })).toHaveAttribute("placeholder", "Viewer");
+    expect(screen.getByRole("list", { name: "Departments for a@example.com" })).toHaveTextContent("PA · Quality");
   });
 });

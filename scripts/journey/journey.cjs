@@ -81,12 +81,13 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await see(page.getByText(/plan your team now/i));
   await page.getByLabel('Email addresses').fill(colleague.email);
   await page.getByRole('button', { name: 'Add to the list' }).click();
-  const everyone = page.getByRole('group', { name: 'Set for everyone' });
-  const roleOptions = await everyone.getByLabel('Role for everyone').locator('option').allTextContents();
-  const inspector = roleOptions.find((t) => /inspector/i.test(t));
-  await everyone.getByLabel('Role for everyone').selectOption(inspector ? { label: inspector } : { index: 1 });
-  await everyone.getByLabel('Department for everyone').selectOption({ index: 1 });
-  await everyone.getByLabel('Package for everyone').selectOption({ label: 'Contributor' });
+  const pickOption = async (combo, matcher) => {
+    await combo.click();
+    await page.getByRole('option', { name: matcher }).first().click();
+  };
+  await pickOption(page.getByRole('combobox', { name: `Role for ${colleague.email}` }), /inspector/i);
+  await pickOption(page.getByRole('combobox', { name: `Add a department for ${colleague.email}` }), /./);
+  await pickOption(page.getByRole('combobox', { name: `Package for ${colleague.email}` }), /^Contributor/);
   await see(page.getByRole('group', { name: 'Seats this team needs' }).getByText(/Contributor/));
   await shot(page, '10-invite-planned');
   if (await page.getByRole('button', { name: /send \d+ invitation/i }).count()) throw new Error('invitations must not be sendable before the plan is active');

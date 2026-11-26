@@ -53,6 +53,19 @@ const SORT: Record<PpapListQuery['sort'], string> = {
   createdAt: 'x.created_at',
 };
 
+const ORIGIN_SOURCES: Record<string, string> = {
+  part_revision: `select r.id, p.part_number || ' rev ' || r.revision as reference, p.name as title from public.part_revisions r join public.parts p on p.id = r.part_id where r.id = $ID`,
+  change: 'select id, reference, title from public.change_requests where id = $ID',
+  control_plan_revision: `select r.id, p.plan_code || ' rev ' || r.revision_code as reference, p.title from public.control_plan_revisions r join public.control_plans p on p.id = r.control_plan_id where r.id = $ID`,
+};
+async function originOf(db: Db, kind: unknown, id: unknown) {
+  if (typeof kind !== 'string' || typeof id !== 'string' || !ORIGIN_SOURCES[kind]) return null;
+  const found = (await db.execute<Row>(sql`select * from (${sql.raw(ORIGIN_SOURCES[kind].replace('$ID', `'${id}'::uuid`))}) s`)).rows[0];
+  return found
+    ? { kind, id, reference: found.reference as string, title: found.title as string, readable: true }
+    : { kind, id, reference: null as string | null, title: null as string | null, readable: false };
+}
+
 const revisionLabel = (letter: unknown, version: unknown) => (letter ? `${letter as string}${Number(version) > 1 ? ` v${Number(version)}` : ''}` : null);
 
 const toSummary = (r: Row) => ({
@@ -319,6 +332,8 @@ export class PpapService {
         by: person(r.created_by, r.by_name),
         at: iso(r.created_at) as string,
       })),
+      /** The record this PPAP was raised from, if it was; never changes. `readable: false` (and no words) when the caller cannot read it. */
+      origin: await originOf(db, found.origin_kind, found.origin_id),
       replaces: replaces ? { id: replaces.id as string, reference: replaces.reference as string, status: replaces.status as string } : null,
       replacedBy: replacedBy.map((x) => ({ id: x.id as string, reference: x.reference as string, status: x.status as string })),
       /** Whether the elements and the wording can still change (draft or in preparation). */
@@ -353,8 +368,11 @@ export class PpapService {
   async create(ctx: RequestContext, body: CreatePpapBody) {
     let created = false;
     const d = await this.answer(ctx, async (db) => {
-      const made = (await db.execute<Row>(sql`select app.create_ppap(${orgOf(ctx)}::uuid, ${json(body)}::jsonb) as r`)).rows[0].r as { id: string; created: boolean };
+      const { raisedFrom, ...rest } = body;
+      const made = (await db.execute<Row>(sql`select app.create_ppap(${orgOf(ctx)}::uuid, ${json(rest)}::jsonb) as r`)).rows[0].r as { id: string; created: boolean };
       created = made.created;
+      // Where it was raised from is kept in the same transaction, so a record the person cannot read leaves no PPAP behind.
+      if (created && raisedFrom) await db.execute(sql`select app.set_ppap_origin(${made.id}::uuid, ${raisedFrom.kind}, ${raisedFrom.id}::uuid)`);
       return made.id;
     });
     return { ...d, created };

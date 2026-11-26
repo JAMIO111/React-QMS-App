@@ -1821,6 +1821,8 @@ beforeAll(async () => {
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
   b.productionOrder = (await one(`insert into public.production_orders (organisation_id, order_number, part_id, quantity_planned) values ($1, 'B-WO-1', $2, 5) returning id`, [ids.orgB, b.part])).id;
+  b.plan = (await one(`insert into public.control_plans (organisation_id, plan_code, title) values ($1, 'B-CP', 'Beta plan') returning id`, [ids.orgB])).id;
+  b.planRevision = (await one(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code) values ($1, $2, 'A') returning id`, [ids.orgB, b.plan])).id;
   b.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'B-SUP', 'Beta supplier') returning id`, [ids.orgB])).id;
   b.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title, severity, description) values ($1, 'NC-B-0001', 'internal', 'Beta NC', 'minor', 'Beta') returning id`, [ids.orgB])).id;
   b.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'B-M1', 'Beta machine') returning id`, [ids.orgB])).id;
@@ -1953,6 +1955,9 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
       '/api/v1/fmeas/linked': `?kind=part&id=${b.part}`,
       '/api/v1/fmea-draft': `?kind=ncr&id=${b.ncr}`,
+      '/api/v1/ppap-draft': `?kind=control_plan_revision&id=${b.planRevision}`,
+      '/api/v1/part-ppap-state': `?partId=${b.part}`,
+      '/api/v1/ppap-prompts': `?kind=control_plan_revision&id=${b.planRevision}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/changes/linked': `?kind=part&id=${b.part}`,
       '/api/v1/change-draft': `?kind=ncr&id=${b.ncr}`,
@@ -1982,7 +1987,7 @@ describe('tenancy sweep over every API route', () => {
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);
-      expect(res.status).toBe(200);
+      expect({ path: op.path, status: res.status }).toEqual({ path: op.path, status: 200 });
       const text = JSON.stringify(res.body);
       for (const [name, id] of Object.entries(a)) if (text.includes(id)) leaks.push(`${op.path} contains A ${name}`);
     }

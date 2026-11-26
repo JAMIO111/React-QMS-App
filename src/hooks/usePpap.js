@@ -174,3 +174,31 @@ export const usePswForm = (id) => {
     retry: false,
   });
 };
+
+/** Where a part's revision stands for each of its customers, and what is worth saying about it (information only; `available` is false without `ppap.read`). */
+export const usePartPpapState = (partId, partRevisionId, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "part-state", partId, partRevisionId ?? null),
+    queryFn: () => apiFetch(`/part-ppap-state?${qs({ partId, partRevisionId })}`, { organisationId }),
+    enabled: !!organisationId && !!partId && enabled,
+    retry: false,
+  });
+};
+
+/** The PPAPs raised from a change or a control plan revision, and the new ones it may call for. */
+export const usePpapPrompts = (kind, id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "prompts", kind, id),
+    queryFn: () => apiFetch(`/ppap-prompts?${qs({ kind, id })}`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
+/** Asks what a record suggests for a PPAP raised from it. Nothing is saved; the answer fills the start dialog. */
+export const usePpapDraft = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({ mutationFn: ({ kind, id }) => apiFetch(`/ppap-draft?${qs({ kind, id })}`, { organisationId }) });
+};

@@ -49,6 +49,8 @@ export const REQUIREMENTS = ['required', 'retain', 'not_required', 'n_a'] as con
 export const ELEMENT_STATUSES = ['not_started', 'in_progress', 'ready'] as const;
 export const LEVELS = [1, 2, 3, 4, 5] as const;
 
+export const ORIGIN_KINDS = ['part_revision', 'change', 'control_plan_revision'] as const;
+
 export const CreatePpapBody = z
   .object({
     partId: z.string().uuid(),
@@ -63,6 +65,8 @@ export const CreatePpapBody = z
     notes: text(2000),
     ownerId: z.string().uuid().optional(),
     clientKey: z.string().min(8).max(80).optional(),
+    /** The record that suggested this PPAP (a part revision, a change or a control plan revision); kept once and never changed. */
+    raisedFrom: z.object({ kind: z.enum(ORIGIN_KINDS), id: z.string().uuid() }).strict().optional(),
   })
   .strict()
   .refine((b) => (b.direction === 'received' ? !!b.supplierId && !b.customerId : !!b.customerId && !b.supplierId), 'A submission names a customer, a received package names a supplier');
@@ -233,3 +237,7 @@ export type CustomerRulesBody = z.infer<typeof CustomerRulesBody>;
 /** PP4: staff put a sent submission to the customer for their answer in the portal. */
 export const AskCustomerBody = z.object({ note: z.string().trim().max(500).nullish() }).strict();
 export type AskCustomerBody = z.infer<typeof AskCustomerBody>;
+
+export const DraftQuery = z.object({ kind: z.enum(ORIGIN_KINDS), id: z.string().uuid() });
+export const PartStateQuery = z.object({ partId: z.string().uuid(), partRevisionId: z.string().uuid().optional() });
+export const PromptsQuery = z.object({ kind: z.enum(['change', 'control_plan_revision']), id: z.string().uuid() });

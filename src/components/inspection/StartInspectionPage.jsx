@@ -11,6 +11,7 @@ import { needsLotSize, startTrigger } from "../../lib/inspection";
 import { FormError, SelectField } from "../master-data/shared";
 import ActiveAlertsBanner from "../documentation/ActiveAlertsBanner";
 import DocumentsInForce from "../documents/DocumentsInForce";
+import { PartPpapBanner } from "../ppap/PartPpap";
 import ResolutionView from "../process-control/ResolutionView";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
@@ -79,6 +80,7 @@ const StartInspectionPage = () => {
       </Link>
       <h1 className="text-2xl font-semibold text-primary-text">Start an inspection</h1>
       <ActiveAlertsBanner partId={form.partId} machineId={form.machineId} operationCode={appliedOp || undefined} />
+      {form.partId && <PartPpapBanner partId={form.partId} />}
       <DocumentsInForce partId={form.partId || undefined} machineId={form.machineId || undefined} operationCode={appliedOp || undefined} />
       <MenuCard as="form" onSubmit={submit} title="What is being inspected" aria-label="Inspection context" bodyClassName="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">

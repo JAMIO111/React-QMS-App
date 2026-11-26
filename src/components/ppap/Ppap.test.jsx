@@ -113,6 +113,23 @@ describe("a PPAP submission", () => {
     expect(screen.getByText("0 of 2 required elements")).toBeInTheDocument();
   });
 
+  it("says where it was raised from, with a link where the record has a page, and says so when the record cannot be read", async () => {
+    load({ origin: { kind: "change", id: "chg1", reference: "CHG-26-0001", title: "New drawing", readable: true } });
+    const first = wrap(<PpapPage />, "/PPAP/p1");
+    const link = await screen.findByRole("link", { name: "CHG-26-0001: New drawing" });
+    expect(link).toHaveAttribute("href", "/Change/chg1");
+    expect(screen.getByText(/Raised from change/)).toBeInTheDocument();
+    first.unmount();
+    load({ origin: { kind: "control_plan_revision", id: "cpr1", reference: "CP-1 rev B", title: "Bracket plan", readable: true } });
+    const second = wrap(<PpapPage />, "/PPAP/p1");
+    expect(await screen.findByText(/Raised from control plan revision CP-1 rev B: Bracket plan/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /CP-1 rev B/ })).not.toBeInTheDocument();
+    second.unmount();
+    load({ origin: { kind: "part_revision", id: "pr1", reference: null, title: null, readable: false } });
+    wrap(<PpapPage />, "/PPAP/p1");
+    expect(await screen.findByText(/Raised from part revision a record you cannot read/)).toBeInTheDocument();
+  });
+
   it("opens an element to show its evidence and the ways to add to it", async () => {
     load({ elements: [element({ evidence: [{ id: "v1", kind: "file", fileName: "drawing.pdf", storagePath: "org-1/ppap/p1/x-drawing.pdf", contentType: "application/pdf", sizeBytes: 2048, description: "Rev B drawing", addedBy: { id: "u1", name: "Ada" }, addedAt: "2026-11-25T09:00:00.000Z", removedAt: null, removeReason: null }], liveEvidence: 1 })] });
     wrap(<PpapPage />, "/PPAP/p1");

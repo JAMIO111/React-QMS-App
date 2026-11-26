@@ -9,6 +9,7 @@ import { formatDate } from "../../lib/ncr";
 import { OPERATION_MOVES, OPERATION_STATUS, ORDER_MOVES, ORDER_STATUS, orderEditable, orderOperationsEditable, partLabel } from "../../lib/production";
 import { ErrorNotice, FormError, SelectField } from "../master-data/shared";
 import Field from "../ui/Field";
+import { PartPpapBanner } from "../ppap/PartPpap";
 import MenuCard from "../ui/MenuCard";
 import OrderDialog from "./OrderDialog";
 import { StatusBadge, StatusMoves } from "./shared";
@@ -98,6 +99,8 @@ const OrderPage = () => {
           </CTAButton>
         </div>
       </div>
+
+      {!["closed", "completed", "cancelled"].includes(o.status) && <PartPpapBanner partId={o.part.id} partRevisionId={o.partRevision?.id} />}
 
       <MenuCard title="Order" subtitle="What is being made, for whom and when">
         <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">

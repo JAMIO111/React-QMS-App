@@ -108,6 +108,7 @@ import { FmeaModelController } from './fmea/fmea-model.controller';
 import { FmeaModelService } from './fmea/fmea-model.service';
 import { FmeaService } from './fmea/fmea.service';
 import { PpapController } from './ppap/ppap.controller';
+import { PpapPromptsService } from './ppap/ppap-prompts.service';
 import { PpapService } from './ppap/ppap.service';
 import { ChangeService } from './change/change.service';
 import { RiskController } from './risk/risk.controller';
@@ -461,6 +462,7 @@ export class AppModule implements NestModule {
         ChangeService,
         FmeaService,
         PpapService,
+        PpapPromptsService,
         FmeaLinkedService,
         FmeaAnalysisService,
         FmeaActionsService,

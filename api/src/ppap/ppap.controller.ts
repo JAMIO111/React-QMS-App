@@ -5,9 +5,10 @@ import { openApiSchema, parse, Uuid } from '../common/validation';
 import { Versioned } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 import {
-  AddFileBody, AddLinkBody, AskCustomerBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, DecisionBody, LevelBody, PpapListQuery, PswBody, ReasonBody, ResubmitBody, ReviewBody, SaveRequirementsBody,
-  SignPswBody, SubmitBody, UpdateElementBody, UpdatePpapBody, WaiveBody,
+  AddFileBody, AddLinkBody, AskCustomerBody, CandidatesQuery, CreatePpapBody, CustomerRulesBody, DecisionBody, DraftQuery, LevelBody, PartStateQuery, PpapListQuery, PromptsQuery, PswBody, ReasonBody, ResubmitBody, ReviewBody,
+  SaveRequirementsBody, SignPswBody, SubmitBody, UpdateElementBody, UpdatePpapBody, WaiveBody,
 } from './ppap.schemas';
+import { PpapPromptsService } from './ppap-prompts.service';
 import { PpapService } from './ppap.service';
 
 const READ = 'ppap.read';
@@ -19,7 +20,7 @@ const APPROVE = 'ppap.approve';
 @ApiBearerAuth()
 @Controller()
 export class PpapController {
-  constructor(private readonly service: PpapService) {}
+  constructor(private readonly service: PpapService, private readonly prompts: PpapPromptsService) {}
 
   @Get('ppaps')
   @OrganisationScoped(READ)
@@ -35,6 +36,30 @@ export class PpapController {
   @ApiCreatedResponse({ description: 'Starts a submission with its 18 elements, set from the level and the customer\'s rules. A retry with the same `clientKey` returns the same submission (`created: false`)' })
   create(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.service.create(ctx, parse(CreatePpapBody, body));
+  }
+
+  @Get('ppap-draft')
+  @OrganisationScoped(MANAGE)
+  @ApiOkResponse({ description: 'What a part revision, a change or a control plan revision suggests for a PPAP raised from it: part, revision, customer(s), reason, notes. Nothing is saved.' })
+  draft(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(DraftQuery, query);
+    return this.prompts.draft(ctx, q.kind, q.id);
+  }
+
+  @Get('part-ppap-state')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'Where a part revision stands for each of its customers, and what is worth saying about it (banners): `{ available, part, revision, customers, attention, lastProducedOn, canRaise }`; `available: false` without `ppap.read`. Information only.' })
+  partState(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(PartStateQuery, query);
+    return this.prompts.partState(ctx, q.partId, q.partRevisionId);
+  }
+
+  @Get('ppap-prompts')
+  @OrganisationScoped(READ)
+  @ApiOkResponse({ description: 'The PPAPs raised from a change or a control plan revision, and the new ones it may call for: `{ available, applies, reference, prompts, raised, canRaise }`. Information only.' })
+  promptsFor(@Ctx() ctx: RequestContext, @Query() query: unknown) {
+    const q = parse(PromptsQuery, query);
+    return this.prompts.sourcePrompts(ctx, q.kind, q.id);
   }
 
   @Get('ppap-requirements')

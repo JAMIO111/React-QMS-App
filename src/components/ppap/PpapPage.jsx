@@ -57,6 +57,10 @@ const LinkEvidence = ({ evidence, editable, onRemove }) => {
 };
 
 /** One element of the submission: its requirement and status in the list, and (opened) its evidence, note and what can be done with it. */
+const ORIGIN_WORDS = { part_revision: "part revision", change: "change", control_plan_revision: "control plan revision" };
+/** A change and a part have their own pages; a control plan revision's address needs its plan, which the submission does not carry. */
+const originTo = (ppap) => (ppap.origin.kind === "change" ? `/Change/${ppap.origin.id}` : ppap.origin.kind === "part_revision" ? `/Parts/${ppap.part.id}` : null);
+
 const ElementRow = ({ ppap, element, onDialog, mutate, pendingId }) => {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(element.note ?? "");
@@ -212,6 +216,18 @@ const PpapPage = () => {
           <p className="text-sm text-secondary-text">
             {ppap.direction === "received" ? `From ${ppap.supplier?.name ?? "a supplier you cannot read"} (received)` : `For ${ppap.customer?.name ?? "a customer you cannot read"}`} · {reasonLabel(ppap.reason)}
           </p>
+          {ppap.origin && (
+            <p className="text-sm text-secondary-text">
+              Raised from {ORIGIN_WORDS[ppap.origin.kind]}{" "}
+              {!ppap.origin.readable ? (
+                "a record you cannot read"
+              ) : originTo(ppap) ? (
+                <Link to={originTo(ppap)} className="text-link-color hover:underline">{ppap.origin.reference}: {ppap.origin.title}</Link>
+              ) : (
+                `${ppap.origin.reference}: ${ppap.origin.title}`
+              )}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {ppap.editable && (

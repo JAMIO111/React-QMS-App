@@ -14,6 +14,7 @@ import MenuCard from "../ui/MenuCard";
 import { BoardCard, CustomerCard, CutInCard, ImpactCard } from "./ChangeAssessment";
 import { ReviewCard, TasksCard } from "./ChangeTasks";
 import RaisedFmeas from "../fmea/RaisedFmeas";
+import { PpapPrompts } from "../ppap/PartPpap";
 import { CancelDialog, ChangeDialog, LinksDialog } from "./ChangeDialogs";
 
 const Fact = ({ label, children }) => (
@@ -196,6 +197,7 @@ const ChangePage = () => {
       </header>
 
       {stage !== "cancelled" && <Stepper stage={stage} />}
+      <PpapPrompts kind="change" id={change.id} />
       <FormError error={mutation.error} />
 
       {stage === "cancelled" && (

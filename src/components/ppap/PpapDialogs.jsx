@@ -32,13 +32,13 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
   const mutation = usePpapMutation();
   const { showToast } = useToast();
   const [part, setPart] = useState(defaults?.part ?? null);
-  const [revisionId, setRevisionId] = useState(null);
+  const [revisionId, setRevisionId] = useState(defaults?.partRevisionId ?? null);
   const [direction, setDirection] = useState(defaults?.direction ?? "submitted");
   const [customer, setCustomer] = useState(defaults?.customer ?? null);
   const [supplier, setSupplier] = useState(defaults?.supplier ?? null);
   const [level, setLevel] = useState("");
   const [reason, setReason] = useState(defaults?.reason ?? null);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(defaults?.notes ?? "");
   // one key for this dialog, so a retried request after a dropped connection returns the same submission
   const [clientKey] = useState(() => crypto.randomUUID());
   const received = direction === "received";
@@ -58,6 +58,7 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
           ...(revisionId ? { partRevisionId: revisionId } : {}),
           ...(level ? { level: Number(level) } : {}),
           ...(notes.trim() ? { notes: notes.trim() } : {}),
+          ...(defaults?.raisedFrom ? { raisedFrom: defaults.raisedFrom } : {}),
         },
       },
       {
@@ -73,6 +74,7 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
   return (
     <Dialog title={received ? "Record a package from a supplier" : "Start a PPAP submission"} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        {defaults?.raisedFrom && defaults?.source && <p className="text-sm text-secondary-text">Raised from {defaults.source.reference}: {defaults.source.title}. It is kept with the PPAP.</p>}
         <SlidingToggle ariaLabel="Which way" mode="radio" value={direction} onChange={setDirection} options={[{ value: "submitted", label: "We send it to a customer" }, { value: "received", label: "A supplier sent it to us" }]} />
         <PartPicker label="Part" icon={QrCodeIcon} required value={part?.id ?? null} current={part?.id ? { id: part.id, partNumber: part.name ?? "" } : undefined} onChange={(id, item) => { setPart(id ? { id, name: item?.name ?? "" } : null); setRevisionId(null); }} />
         <RevisionPicker label="Part revision" partId={part?.id} value={revisionId} onChange={(id) => setRevisionId(id ?? null)} hint="Leave empty to use the released revision" />

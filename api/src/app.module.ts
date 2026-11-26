@@ -126,6 +126,7 @@ import { DocumentFileStore, SupabaseDocumentFileStore } from './documents/contro
 import { DocumentsDashboardController, DocumentsDashboardService } from './documents/documents-dashboard';
 import { ChangeDashboardController, ChangeDashboardService } from './change/change-dashboard';
 import { CompetenceDashboardController, CompetenceDashboardService } from './competence/competence-dashboard';
+import { CustomerDashboardController, CustomerDashboardService } from './customer-quality/customer-dashboard';
 import { SupplierDashboardController, SupplierDashboardService } from './supplier-quality/supplier-dashboard';
 import { CompetencePeopleService } from './competence/competence-people.service';
 import { CompetenceTrainingService } from './competence/competence-training.service';
@@ -330,6 +331,7 @@ export class AppModule implements NestModule {
         CompetenceController,
         ChangeDashboardController,
         CompetenceDashboardController,
+        CustomerDashboardController,
         SupplierDashboardController,
         DocumentsController,
         ChangeController,
@@ -461,6 +463,7 @@ export class AppModule implements NestModule {
         CompetencePeopleService,
         ChangeDashboardService,
         CompetenceDashboardService,
+        CustomerDashboardService,
         SupplierDashboardService,
         CompetenceTrainingService,
         DocumentsService,

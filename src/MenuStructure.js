@@ -126,6 +126,7 @@ export const menuStructure = [
     permission: "shipping.read",
     path: "/Shipping",
     subMenu: [
+      { name: "Dashboard", path: "/Shipping", end: true },
       { name: "Customer orders", path: "/Shipping/Orders" },
       { name: "Shipments", path: "/Shipping/Shipments" },
     ],

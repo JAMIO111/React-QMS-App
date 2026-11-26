@@ -88,8 +88,8 @@ Two new importable kinds, `customer_order` (one row per order line; key = order 
 | SH2 | API + e2e + both sweeps | **built** (`api/src/shipping/`, `api/test/shipping.e2e-spec.ts`, API sweep) |
 | SH3 | Screens: customer orders register and page, shipments register and page, record a shipment, menu group | **built** (`src/components/shipping/`, menu group Shipping, `Shipping.test.jsx`); not browser-checked; the registers are the simple pattern (no column menu, filter drawer or saved filters yet) |
 | SH4 | Imports: `customer_order` and `shipment` kinds, drift test | **built** (migration `20260461100000`, not yet applied live; `integration-orders-shipments.e2e-spec.ts`) |
-| CD1 | `app.customer_performance` (+ per-customer settings later), API `GET /customer-quality/dashboard` | |
-| CD2 | Dashboard page, home area, trace line, exit check and journey step | |
+| CD1 | `app.customer_performance` (+ per-customer settings later), API `GET /customer-quality/dashboard` | **built** (migration `20260462100000`, not yet applied live; `customer_performance.test.sql`, `customer-dashboard.e2e-spec.ts`) |
+| CD2 | Dashboard page, home area, trace line, exit check and journey step | dashboard page **built** at `/Shipping` (`CustomerDashboard.jsx`); home area, trace line, journey step and exit check not built |
 
 ## 8. Questions for the owner
 

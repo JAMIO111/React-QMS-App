@@ -57,6 +57,8 @@ export function notificationPath(entityType: string, entityId: string, details: 
       return id(d.change_id) ? `/Change/${id(d.change_id)}` : '/Change';
     case 'fmea_actions':
       return '/FMEA/My-Actions';
+    case 'ppap_submissions':
+      return id(d.ppap_id) ? `/PPAP/${id(d.ppap_id)}` : '/PPAP';
     case 'risk_actions':
       return id(d.risk_id) ? `/Risk/Register/${id(d.risk_id)}` : '/Risk/My-Work';
     case 'spc_alerts':

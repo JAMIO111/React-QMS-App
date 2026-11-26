@@ -13,6 +13,8 @@ describe("notificationLink", () => {
     expect(notificationLink({ entityType: "change_signoffs", entityId: "s", details: {} })).toBe("/Change");
     expect(notificationLink({ entityType: "change_tasks", entityId: "t", details: { change_id: "c1" } })).toBe("/Change/c1");
     expect(notificationLink({ entityType: "fmea_actions", entityId: "a", details: { fmea_id: "f1" } })).toBe("/FMEA/My-Actions");
+    expect(notificationLink({ entityType: "ppap_submissions", entityId: "s", details: { ppap_id: "p1" } })).toBe("/PPAP/p1");
+    expect(notificationLink({ entityType: "ppap_submissions", entityId: "s", details: {} })).toBe("/PPAP");
     expect(notificationLink({ entityType: "risks", entityId: "r", details: { risk_id: "r" } })).toBe("/Risk/Register/r");
     expect(notificationLink({ entityType: "management_review_actions", entityId: "a", details: { review_id: "m" } })).toBe("/Management-Review/My-Actions");
     expect(notificationLink({ entityType: "risk_actions", entityId: "x", details: { risk_id: "r" } })).toBe("/Risk/Register/r");

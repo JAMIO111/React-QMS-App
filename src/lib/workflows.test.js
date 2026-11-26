@@ -111,6 +111,8 @@ describe("more triggers and tests (WF4)", () => {
     const P = "11111111-2222-3333-4444-555555555555";
     expect(workflowRecordPath("scar", P)).toBe(`/Supplier-Quality/SCARs/${P}`);
     expect(workflowRecordPath("goods_receipt", P)).toBe(`/Supplier-Quality/Goods-Receipts/${P}`);
+    expect(workflowRecordPath("ppap", P)).toBe(`/PPAP/${P}`);
+    expect(workflowRecordPath("ppap", "x")).toBeNull();
     expect(workflowRecordPath("spc_alert", P)).toBe("/Process-Control/Alerts");
     expect(workflowRecordPath("risk", P)).toBe(`/Risk/Register/${P}`);
   });

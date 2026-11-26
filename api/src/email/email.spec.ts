@@ -36,6 +36,8 @@ describe('where an email links to', () => {
     expect(notificationPath('change_requests', A, {})).toBe('/Change');
     expect(notificationPath('change_tasks', A, { change_id: B })).toBe(`/Change/${B}`);
     expect(notificationPath('fmea_actions', A, { fmea_id: B })).toBe('/FMEA/My-Actions');
+    expect(notificationPath('ppap_submissions', A, { ppap_id: B })).toBe(`/PPAP/${B}`);
+    expect(notificationPath('ppap_submissions', A, { ppap_id: '../x' })).toBe('/PPAP');
     expect(notificationPath('supplier_band_drops', A, { record_kind: 'supplier', record_id: B })).toBe(`/Suppliers/${B}?tab=performance`);
     expect(notificationPath('supplier_band_drops', A, { record_id: '../x' })).toBe('/Supplier-Quality/Watchlist');
     expect(notificationPath('something_else', A, {})).toBeNull();

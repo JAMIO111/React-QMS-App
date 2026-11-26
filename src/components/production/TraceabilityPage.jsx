@@ -9,6 +9,7 @@ import { LOT_STATUS, ORDER_STATUS, SERIAL_STATUS, TRACE_TYPE, partLabel, tracePa
 import { formatDateTime } from "../../lib/processControl";
 import { changePath, formatDay, stageLabel, stagePill } from "../../lib/change";
 import { fmeaPath, kindLabel as fmeaKindLabel, revisionPath as fmeaRevisionPath } from "../../lib/fmea";
+import { TRACE_THEN, ppapPath, statusLabel as ppapStatusLabel, statusPill as ppapStatusPill, traceThenPill } from "../../lib/ppap";
 import { ErrorNotice } from "../master-data/shared";
 import { ResultBadge, StatusPill } from "../inspection/shared";
 import MenuCard from "../ui/MenuCard";
@@ -300,6 +301,37 @@ const Report = ({ type, id }) => {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          )}
+        </MenuCard>
+      )}
+
+      {t.ppaps?.available && (
+        <MenuCard title="Part approvals" subtitle="The part approvals (PPAP) for this part, and where each stood on the day this record was created in Fortress">
+          {t.ppaps.data.length === 0 ? (
+            <p className="text-sm text-secondary-text">No part approval has been sent or received for this part.</p>
+          ) : (
+            <table className="w-full text-sm" aria-label="Part approvals">
+              <thead><tr className="text-left text-xs text-secondary-text"><Th>Approval</Th><Th>For</Th><Th>When this was created</Th><Th>Now</Th></tr></thead>
+              <tbody>
+                {t.ppaps.data.map((p) => (
+                  <tr key={p.id} className="border-t border-border-color">
+                    <Td>
+                      <Link className="font-medium text-link-color hover:underline" to={ppapPath(p.id)}>{p.reference}</Link>
+                      <div className="text-xs text-secondary-text">Rev {p.revision ?? "?"} · level {p.level}{p.sentOn ? ` · ${p.direction === "received" ? "received" : "sent"} ${formatDay(p.sentOn)}` : ""}</div>
+                    </Td>
+                    <Td>{p.party ? `${p.party}${p.direction === "received" ? " (supplier)" : ""}` : "—"}</Td>
+                    <Td>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${traceThenPill(p.then)}`}>{TRACE_THEN[p.then]?.label ?? p.then}</span>
+                      {p.thenOn && <div className="text-xs text-secondary-text">{formatDay(p.thenOn)}{p.thenExpiresOn ? ` · to ${formatDay(p.thenExpiresOn)}` : ""}</div>}
+                    </Td>
+                    <Td>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${ppapStatusPill(p.status)}`}>{ppapStatusLabel(p.status)}</span>
+                      {p.interimExpiresOn && <div className="text-xs text-secondary-text">to {formatDay(p.interimExpiresOn)}</div>}
+                    </Td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

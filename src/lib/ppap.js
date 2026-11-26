@@ -87,6 +87,36 @@ export const CELL_OPTIONS = Object.entries(CELL).map(([value, label]) => ({ valu
 
 export const ppapPath = (id) => `/PPAP/${id}`;
 
+/** The dashboard's lists (`needsAction`, `awaiting`): why an item is there, and the words for its date. */
+export const ATTENTION = {
+  rejected: { label: "Rejected", tone: "error" },
+  interim_lapsed: { label: "Interim approval ran out", tone: "error" },
+  interim_ending: { label: "Interim approval ending", tone: "warning" },
+  review_overdue: { label: "Revalidation overdue", tone: "warning" },
+  awaiting: { label: "Waiting for an answer", tone: "info" },
+};
+const dayCount = (n) => `${Math.abs(n)} ${Math.abs(n) === 1 ? "day" : "days"}`;
+export const attentionWhen = (item) => {
+  const { reason, on, days } = item;
+  if (!on) return "";
+  if (reason === "rejected") return `Rejected ${formatDay(on)}${days != null ? ` · ${dayCount(days)} ago` : ""}`;
+  if (reason === "interim_lapsed") return `Ran out ${formatDay(on)}${days != null ? ` · ${dayCount(days)} ago` : ""}`;
+  if (reason === "interim_ending") return `Runs to ${formatDay(on)}${days != null ? ` · ${days === 0 ? "today" : `${dayCount(days)} left`}` : ""}`;
+  if (reason === "review_overdue") return `Was due ${formatDay(on)}${days != null ? ` · ${dayCount(days)} ago` : ""}`;
+  return `${item.direction === "received" ? "Received" : "Sent"} ${formatDay(on)}${days != null ? ` · waiting ${dayCount(days)}` : ""}`;
+};
+
+/** Where a part approval stood on the day a record was created in Fortress, as the trace page words it (`then` in the API's answer). */
+export const TRACE_THEN = {
+  not_sent: { label: "Not sent yet", tone: "neutral" },
+  no_answer: { label: "Sent, no answer yet", tone: "info" },
+  approved: { label: "Approved", tone: "success" },
+  interim_approved: { label: "Approved for now", tone: "warning" },
+  interim_lapsed: { label: "Interim approval had run out", tone: "error" },
+  rejected: { label: "Rejected", tone: "error" },
+};
+export const traceThenPill = (then) => TONE_CLASS[TRACE_THEN[then]?.tone ?? "neutral"];
+
 export const progressWords = ({ required, done }) => (required === 0 ? "Nothing required" : `${done} of ${required} required elements`);
 export const progressPercent = ({ required, done }) => (required === 0 ? 100 : Math.round((done / required) * 100));
 

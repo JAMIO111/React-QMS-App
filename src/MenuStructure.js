@@ -179,7 +179,10 @@ export const menuStructure = [
     icon: BadgeCheckIcon,
     permission: "ppap.read",
     path: "/PPAP",
-    subMenu: [],
+    subMenu: [
+      { name: "Dashboard", path: "/PPAP", end: true },
+      { name: "Part approvals", path: "/PPAP/Register" },
+    ],
   },
   {
     name: "Management review",

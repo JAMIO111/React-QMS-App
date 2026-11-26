@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DASHBOARD_STALE_MS } from "@/lib/dashboardPeriod";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -19,6 +20,19 @@ export const usePpaps = (params, { enabled = true } = {}) => {
     queryKey: key(organisationId, "list", params),
     queryFn: () => apiFetch(`/ppaps?${qs(params)}`, { organisationId }),
     enabled: !!organisationId && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+};
+
+/** The dashboard: figures as of today and what was sent and answered in the period (`GET /ppap-dashboard`). */
+export const usePpapDashboard = (period) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "dashboard", period?.fromIso, period?.toIso),
+    queryFn: () => apiFetch(`/ppap-dashboard?${qs({ from: period.fromIso, to: period.toIso })}`, { organisationId }),
+    staleTime: DASHBOARD_STALE_MS,
+    enabled: !!organisationId && !!period?.fromIso,
     placeholderData: keepPreviousData,
     retry: false,
   });

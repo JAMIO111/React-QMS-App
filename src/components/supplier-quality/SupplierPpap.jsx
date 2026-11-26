@@ -64,7 +64,7 @@ export default function SupplierPpap({ supplier }) {
                 </table>
               </>
             )}
-            <p className="text-xs text-secondary-text">Every package, including earlier ones, is in the <Link to="/PPAP" className="text-link-color hover:underline">PPAP register</Link>.</p>
+            <p className="text-xs text-secondary-text">Every package, including earlier ones, is in the <Link to="/PPAP/Register" className="text-link-color hover:underline">PPAP register</Link>.</p>
           </div>
         ) : null}
       </MenuCard>

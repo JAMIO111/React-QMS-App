@@ -264,3 +264,42 @@ describe('FMEAs on the trace', () => {
     expect((await trace('lot', ctx.lot)).fmeas.available).toBe(true);
   });
 });
+
+describe('part approvals (PPAP) on the trace', () => {
+  // The quality manager the FMEA tests above made a member of the organisation.
+  const QM = 'f5000000-0000-0000-0000-0000000000e1';
+  const day = (n = 0) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  it('lists the approvals for the part with where each stood on the day the record was created, and where it stands now', async () => {
+    const h = await as(ids.ownerA);
+    const customer = (await admin.query(`insert into public.customers (organisation_id, code, name) values ($1, 'TR-C', 'Trace Customer') returning id`, [ids.orgA])).rows[0].id as string;
+    await api().put(`/api/v1/ppap-customer-rules/${customer}`).set(await as(QM)).send({ defaultLevel: 1 }).expect(200);
+    const made = (await api().post('/api/v1/ppaps').set(h).send({ partId: ctx.rod, customerId: customer, reason: 'new_part', level: 1 }).expect(201)).body;
+    await api().put(`/api/v1/ppaps/${made.id}/psw`).set(h).send({ partWeight: 1.25, weightUnit: 'kg', purchaseOrder: 'PO-1', resultsMeetRequirements: true }).expect(200);
+    await api().post(`/api/v1/ppaps/${made.id}/psw/sign`).set(await as(QM)).send({ title: 'Quality manager' }).expect(200);
+    await api().post(`/api/v1/ppaps/${made.id}/ready`).set(h).expect(200);
+    await api().post(`/api/v1/ppaps/${made.id}/submit`).set(h).send({ sentOn: day(-3), how: 'Emailed' }).expect(200);
+    // Sent, not yet answered: the lot was made today and the answer comes later.
+    let t = await trace('lot', ctx.lot);
+    expect(t.ppaps.available).toBe(true);
+    expect(t.ppaps.data).toHaveLength(1);
+    expect(t.ppaps.data[0]).toMatchObject({ id: made.id, direction: 'submitted', party: 'Trace Customer', level: 1, status: 'submitted', sentOn: day(-3), then: 'no_answer', thenOn: null });
+    await api().post(`/api/v1/ppaps/${made.id}/decisions`).set(await as(QM)).send({ kind: 'approved', decidedOn: day() }).expect(200);
+    // Approved today, and the lot was created today: approved then and now.
+    t = await trace('lot', ctx.lot);
+    expect(t.ppaps.data[0]).toMatchObject({ then: 'approved', thenOn: day(), status: 'approved' });
+    // As if the lot had been made the day after it was sent and before the answer: no answer yet. And before it was sent: not sent.
+    await admin.query(`update public.lots set created_at = (current_date - 1)::timestamptz + interval '12 hours' where id = $1`, [ctx.lot]);
+    expect((await trace('lot', ctx.lot)).ppaps.data[0]).toMatchObject({ then: 'no_answer', status: 'approved' });
+    await admin.query(`update public.lots set created_at = (current_date - 10)::timestamptz + interval '12 hours' where id = $1`, [ctx.lot]);
+    expect((await trace('lot', ctx.lot)).ppaps.data[0]).toMatchObject({ then: 'not_sent' });
+    // an order and a serial number of the same part see it too (matched by the part)
+    expect((await trace('order', ctx.wo1)).ppaps.data.map((p: { id: string }) => p.id)).toContain(made.id);
+  });
+
+  it('leaves the section out for someone who may not read part approvals, and never lists another organisation\'s', async () => {
+    await admin.query(`delete from public.role_permissions where permission_code = 'ppap.read' and role_id = (select id from public.roles where organisation_id = $1 and key = 'viewer')`, [ids.orgA]);
+    const t = await trace('lot', ctx.lot, await as(ids.dual));
+    expect(t.ppaps).toEqual({ available: false, data: [] });
+    expect((await trace('lot', ctx.lot)).ppaps.available).toBe(true);
+  });
+});

@@ -137,6 +137,7 @@ const FmeaRegisterPage = lazy(() => import("./components/fmea/FmeaRegisterPage.j
 const FmeaPage = lazy(() => import("./components/fmea/FmeaPage.jsx"));
 const FmeaRevisionPage = lazy(() => import("./components/fmea/RevisionPage.jsx"));
 const FmeaMyActionsPage = lazy(() => import("./components/fmea/MyActionsPage.jsx"));
+const PpapDashboard = lazy(() => import("./components/ppap/PpapDashboard.jsx"));
 const PpapRegisterPage = lazy(() => import("./components/ppap/PpapRegisterPage.jsx"));
 const PpapPage = lazy(() => import("./components/ppap/PpapPage.jsx"));
 const PswFormPage = lazy(() => import("./components/ppap/PswFormPage.jsx"));
@@ -392,7 +393,8 @@ const router = createBrowserRouter([
           { path: "FMEA/:id", element: <FmeaPage /> },
           { path: "FMEA/:id/revisions/:revisionId", element: <FmeaRevisionPage /> },
           { path: "FMEA/:id/revisions/:revisionId/report", element: <FmeaFormPage /> },
-          { path: "PPAP", element: <PpapRegisterPage /> },
+          { path: "PPAP", element: <PpapDashboard /> },
+          { path: "PPAP/Register", element: <PpapRegisterPage /> },
           { path: "PPAP/:id", element: <PpapPage /> },
           { path: "PPAP/:id/psw", element: <PswFormPage /> },
           { path: "Risk/Register", element: <RiskRegisterPage /> },

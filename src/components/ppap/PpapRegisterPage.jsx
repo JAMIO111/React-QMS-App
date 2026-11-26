@@ -37,7 +37,7 @@ const toCsvRow = (p) => ({
 });
 
 /**
- * The PPAP register (`/PPAP`): every production part approval submission — the same server-side table, column menu, header search, filter drawer, saved
+ * The PPAP register (`/PPAP/Register`; `/PPAP` is the dashboard): every production part approval submission — the same server-side table, column menu, header search, filter drawer, saved
  * filters and CSV export as the other registers. Those not withdrawn or rejected by default; filters live in the URL.
  */
 const PpapRegisterPage = () => {

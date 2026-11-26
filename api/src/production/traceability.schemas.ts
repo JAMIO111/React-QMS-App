@@ -54,6 +54,28 @@ const TraceFmea = z.object({
   changedSince: z.boolean(),
 });
 
+/**
+ * A part approval (PPAP) for this subject's part that was sent or received, with where it stood on the day the subject was created in Fortress (`then`) and where it stands now: the lot
+ * made under an interim approval that has since run out, or before the part was approved at all, says so. Information only.
+ */
+export const TRACE_PPAP_THEN = ['not_sent', 'no_answer', 'approved', 'interim_approved', 'interim_lapsed', 'rejected'] as const;
+const TracePpap = z.object({
+  id: Id,
+  reference: z.string(),
+  direction: z.enum(['submitted', 'received']),
+  party: z.string().nullable(),
+  level: z.number(),
+  revision: z.string().nullable(),
+  status: z.string(),
+  sentOn: z.string().nullable(),
+  then: z.enum(TRACE_PPAP_THEN),
+  /** The day the answer in force then was recorded (and, for an interim approval, the day it ran to). */
+  thenOn: z.string().nullable(),
+  thenExpiresOn: z.string().nullable(),
+  /** The day the interim approval in force now runs to. */
+  interimExpiresOn: z.string().nullable(),
+});
+
 export const Traceability = z.object({
   subject: z.object({
     type: z.enum(SUBJECT_TYPES),
@@ -104,6 +126,7 @@ export const Traceability = z.object({
   ncrs: z.object({ available: z.boolean(), total: z.number(), data: z.array(TraceNcr) }),
   changes: z.object({ available: z.boolean(), data: z.array(TraceChange) }),
   fmeas: z.object({ available: z.boolean(), data: z.array(TraceFmea) }),
+  ppaps: z.object({ available: z.boolean(), data: z.array(TracePpap) }),
   equipment: z.object({
     machines: z.array(z.object({ id: Id, code: z.string(), name: z.string(), inspections: z.number(), operations: z.number() })),
     gauges: z.array(z.object({ id: Id, assetNumber: z.string(), readings: z.number(), outOfCalibration: z.number(), lastUsed: dateTime })),

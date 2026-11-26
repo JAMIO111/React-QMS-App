@@ -166,6 +166,24 @@ describe("what needs attention on the home page", () => {
     expect(fmea).not.toHaveTextContent("of high priority");
   });
 
+  it("shows the part approvals area with what is late or waiting, each a link to the filtered register", async () => {
+    const all = sample()["/home-dashboard"];
+    answers["/home-dashboard"] = {
+      ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf,
+      ppap: { approved: 7, rejected: 1, interimLapsed: 2, interimEnding: 1, reviewsOverdue: 3, awaitingUs: 0, awaitingCustomer: 4 },
+    };
+    renderIt();
+    const ppap = await screen.findByRole("region", { name: "Part approvals" });
+    await waitFor(() => expect(ppap).toHaveTextContent("part approvals in force"));
+    // two critical lines (rejected, run out) and three to watch (ending, revalidation, waiting for the customer)
+    expect(ppap).toHaveTextContent("2 critical");
+    expect(ppap).toHaveTextContent("3 to watch");
+    expect(within(ppap).getByRole("link", { name: /Part approval rejected and not yet answered/ })).toHaveAttribute("href", "/PPAP/Register?status=rejected");
+    expect(within(ppap).getByRole("link", { name: /Interim approvals that have run out/ })).toHaveAttribute("href", "/PPAP/Register?status=interim_approved");
+    expect(within(ppap).getByRole("link", { name: /Packages waiting for the customer/ })).toHaveAttribute("href", "/PPAP/Register?status=submitted");
+    expect(ppap).not.toHaveTextContent("from a supplier waiting for our answer");
+  });
+
   it("says so when everything is clear", async () => {
     const all = sample()["/home-dashboard"];
     answers["/home-dashboard"] = { ...Object.fromEntries(Object.keys(all).map((k) => [k, null])), asOf: all.asOf, competence: all.competence, audits: { ...all.audits, openFindings: 0 } };

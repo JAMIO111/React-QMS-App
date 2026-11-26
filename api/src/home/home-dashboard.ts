@@ -12,6 +12,7 @@ import { CELLS, EXPIRING as COMPETENCE_EXPIRING } from '../competence/competence
 import { DatabaseService } from '../database/database.service';
 import { FMEA_ACTIONS_OVERDUE, FMEA_AWAITING, FMEA_CAUSES_IN_FORCE, FMEA_IN_FORCE, FMEA_REVIEWS_OVERDUE } from '../fmea/fmea-dashboard';
 import { dataQualityChecks } from '../master-data/master-data-dashboard';
+import { PPAP_APPROVED, PPAP_AWAITING, PPAP_ENDING_DAYS, PPAP_INTERIM, PPAP_REJECTED, PPAP_REVIEWS_OVERDUE } from '../ppap/ppap-dashboard';
 import { UNHANDLED_FAILURE } from '../process-control/process-control-dashboard';
 import { EXPIRY_WARNING_DAYS } from '../supplier-quality/expiry';
 import { AWAITING, EXPIRING as SUPPLIER_EXPIRING, LINES, LIVE } from '../supplier-quality/supplier-dashboard';
@@ -47,6 +48,7 @@ export const HomeDashboard = z.object({
   competence: z.object({ withGaps: count, gaps: count, expired: count, expiring30: count, neverAssessed: count }).nullable(),
   change: z.object({ open: count, signoffsWaiting: count, tasksOverdue: count, pastCutIn: count, customerWaiting: count }).nullable(),
   fmea: z.object({ inForce: count, reviewsOverdue: count, awaitingApproval: count, overdueActions: count, highPriority: count }).nullable(),
+  ppap: z.object({ approved: count, rejected: count, interimLapsed: count, interimEnding: count, reviewsOverdue: count, awaitingUs: count, awaitingCustomer: count }).nullable(),
   masterData: z.object({ checks: z.array(z.object({ key: z.string(), label: z.string(), kind: z.string(), count })) }).nullable(),
 });
 export type HomeDashboard = z.infer<typeof HomeDashboard>;
@@ -84,6 +86,7 @@ export class HomeDashboardService {
                app.has_permission(${org}::uuid, 'competence.read') as competence,
                app.has_permission(${org}::uuid, 'change.read') as change,
                app.has_permission(${org}::uuid, 'fmea.read') as fmea,
+               app.has_permission(${org}::uuid, 'ppap.read') as ppap,
                app.has_permission(${org}::uuid, 'master_data.read') as master_data`);
 
       const nc = async () => {
@@ -217,6 +220,19 @@ export class HomeDashboardService {
         return { inForce: n(r.in_force), reviewsOverdue: n(r.reviews), awaitingApproval: n(r.awaiting), overdueActions: n(r.late), highPriority: n(r.high) };
       };
 
+      // The same fragments as the PPAP dashboard, so the two cannot disagree.
+      const ppap = async () => {
+        const r = await one(sql`
+          select (select count(*) from (${PPAP_APPROVED(org)}) s)::int as approved,
+                 (select count(*) from (${PPAP_REJECTED(org)}) s)::int as rejected,
+                 (select count(*) from (${PPAP_INTERIM(org)}) s where s.expires_on < current_date)::int as lapsed,
+                 (select count(*) from (${PPAP_INTERIM(org)}) s where s.expires_on >= current_date and s.expires_on <= current_date + ${PPAP_ENDING_DAYS}::int)::int as ending,
+                 (select count(*) from (${PPAP_REVIEWS_OVERDUE(org)}) s)::int as reviews,
+                 (select count(*) from (${PPAP_AWAITING(org)}) s where s.direction = 'received')::int as awaiting_us,
+                 (select count(*) from (${PPAP_AWAITING(org)}) s where s.direction = 'submitted')::int as awaiting_customer`);
+        return { approved: n(r.approved), rejected: n(r.rejected), interimLapsed: n(r.lapsed), interimEnding: n(r.ending), reviewsOverdue: n(r.reviews), awaitingUs: n(r.awaiting_us), awaitingCustomer: n(r.awaiting_customer) };
+      };
+
       return {
         asOf: String(can.today),
         nc: can.nc ? await nc() : null,
@@ -229,6 +245,7 @@ export class HomeDashboardService {
         competence: can.competence ? await competence() : null,
         change: can.change ? await change() : null,
         fmea: can.fmea ? await fmea() : null,
+        ppap: can.ppap ? await ppap() : null,
         masterData: can.master_data ? { checks: await dataQualityChecks(many, org) } : null,
       };
     });

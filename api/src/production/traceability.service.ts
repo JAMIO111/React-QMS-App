@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
-import { SUBJECT_TYPES, TraceQuery, Traceability } from './traceability.schemas';
+import { SUBJECT_TYPES, TRACE_PPAP_THEN, TraceQuery, Traceability } from './traceability.schemas';
 
 type Row = Record<string, unknown>;
 type Kind = (typeof SUBJECT_TYPES)[number];
@@ -69,7 +69,8 @@ export class TraceabilityService {
 
       const mayChange = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'change.read') as ok`)).rows[0].ok === true;
       const mayFmea = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'fmea.read') as ok`)).rows[0].ok === true;
-      const [order, lots, serials, inspections, ncrs, machines, gauges, changes, fmeas] = await Promise.all([
+      const mayPpap = (await db.execute<Row>(sql`select app.has_permission(${org}::uuid, 'ppap.read') as ok`)).rows[0].ok === true;
+      const [order, lots, serials, inspections, ncrs, machines, gauges, changes, fmeas, ppaps] = await Promise.all([
         orderId ? this.loadOrder(db, org, orderId) : Promise.resolve(null),
         this.loadLots(db, org, q.type, q.id, subject.lotId),
         this.loadSerials(db, org, q.type, q.id, orderId),
@@ -79,6 +80,7 @@ export class TraceabilityService {
         mayInspect ? this.loadGauges(db, linked('i')) : Promise.resolve([]),
         mayChange ? this.loadChanges(db, org, q.type, q.id, subject) : Promise.resolve(null),
         mayFmea ? this.loadFmeas(db, org, q.type, q.id, subject.view.part.id) : Promise.resolve(null),
+        mayPpap ? this.loadPpaps(db, org, q.type, q.id, subject.view.part.id) : Promise.resolve(null),
       ]);
 
       return {
@@ -91,6 +93,7 @@ export class TraceabilityService {
         equipment: { machines, gauges },
         changes: changes ?? { available: false, data: [] },
         fmeas: fmeas ?? { available: false, data: [] },
+        ppaps: ppaps ?? { available: false, data: [] },
       };
     });
   }
@@ -132,6 +135,53 @@ export class TraceabilityService {
         now: rev(r.now_id, r.now_letter, r.now_from),
         changedSince: (r.then_id ?? null) !== (r.now_id ?? null),
       })),
+    };
+  }
+
+  /**
+   * The part approvals (PPAP, either direction) for the subject's part that were sent or received, each with where it stood on the day the subject was created in Fortress and where it
+   * stands now. Where it stood then is the answer recorded on or before that day, and an interim approval counts as lapsed if it had run out by then. Read as the caller; information only.
+   */
+  private async loadPpaps(db: Db, org: string, type: Kind, id: string, partId: string) {
+    const table = type === 'order' ? 'production_orders' : type === 'lot' ? 'lots' : 'serial_numbers';
+    const when = (await db.execute<Row>(sql`select to_char(created_at at time zone 'UTC', 'YYYY-MM-DD') as day from public.${sql.raw(table)} where id = ${id}::uuid`)).rows[0]?.day as string;
+    const rows = (
+      await db.execute<Row>(sql`
+        select s.id, s.reference, s.direction, s.level, s.status, pr.revision, coalesce(c.name, su.name) as party,
+               to_char(sent.decided_on, 'YYYY-MM-DD') as sent_on,
+               t.kind as then_kind, to_char(t.decided_on, 'YYYY-MM-DD') as then_on, to_char(t.expires_on, 'YYYY-MM-DD') as then_expires,
+               (select to_char(x.expires_on, 'YYYY-MM-DD') from public.ppap_decisions x where x.submission_id = s.id and x.kind = 'interim_approved' order by x.seq desc limit 1) as now_expires
+          from public.ppap_submissions s
+          join public.part_revisions pr on pr.id = s.part_revision_id
+          left join public.customers c on c.id = s.customer_id and c.organisation_id = s.organisation_id
+          left join public.suppliers su on su.id = s.supplier_id and su.organisation_id = s.organisation_id
+          join lateral (select x.decided_on from public.ppap_decisions x where x.submission_id = s.id and x.kind = 'submitted' order by x.seq limit 1) sent on true
+          left join lateral (select d.* from public.ppap_decisions d where d.submission_id = s.id and d.kind in ('approved', 'interim_approved', 'rejected')
+                               and d.decided_on <= ${when}::date order by d.seq desc limit 1) t on true
+         where s.organisation_id = ${org}::uuid and s.part_id = ${partId}::uuid and s.status in ('submitted', 'approved', 'interim_approved', 'rejected')
+         order by s.reference limit 20`)
+    ).rows;
+    return {
+      available: true,
+      data: rows.map((r) => {
+        const sentOn = (r.sent_on as string) ?? null;
+        const then: (typeof TRACE_PPAP_THEN)[number] =
+          sentOn && sentOn > when ? 'not_sent' : !r.then_kind ? 'no_answer' : r.then_kind === 'interim_approved' && (r.then_expires as string) < when ? 'interim_lapsed' : (r.then_kind as 'approved' | 'interim_approved' | 'rejected');
+        return {
+          id: r.id as string,
+          reference: r.reference as string,
+          direction: r.direction as 'submitted' | 'received',
+          party: (r.party as string) ?? null,
+          level: Number(r.level),
+          revision: (r.revision as string) ?? null,
+          status: r.status as string,
+          sentOn,
+          then,
+          thenOn: (r.then_on as string) ?? null,
+          thenExpiresOn: (r.then_expires as string) ?? null,
+          interimExpiresOn: r.status === 'interim_approved' ? ((r.now_expires as string) ?? null) : null,
+        };
+      }),
     };
   }
 

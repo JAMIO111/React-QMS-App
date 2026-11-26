@@ -702,6 +702,13 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/ppap-customer-requests/{id}/withdraw': { reason: 'Hijacked' },
     'GET /api/v1/portal/ppaps/{id}': undefined,
     'POST /api/v1/portal/ppaps/{id}/decide': { kind: 'approved' },
+    'POST /api/v1/ppaps/{id}/supplier-requests': { note: 'Hijacked' },
+    'GET /api/v1/portal/ppap-packages/{id}': undefined,
+    'POST /api/v1/portal/ppap-packages/{id}/files/upload-url': { elementKey: 'dfmea', fileName: 'x.pdf' },
+    'POST /api/v1/portal/ppap-packages/{id}/files': { elementKey: 'dfmea', path: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/portal/ppap-package-files/{id}/remove': undefined,
+    'POST /api/v1/portal/ppap-package-files/{id}/download-url': undefined,
+    'POST /api/v1/portal/ppap-packages/{id}/submit': { note: 'Hijacked' },
     'PATCH /api/v1/ppap-elements/{id}': { note: 'Hijacked' },
     'POST /api/v1/ppap-elements/{id}/files': { storagePath: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
     'POST /api/v1/ppap-elements/{id}/links': { kind: 'part_revision', targetId: '00000000-0000-4000-8000-000000000001' },
@@ -1340,6 +1347,13 @@ const hasSample = (op: Op) =>
     'POST /api/v1/ppap-customer-requests/{id}/withdraw',
     'GET /api/v1/portal/ppaps/{id}',
     'POST /api/v1/portal/ppaps/{id}/decide',
+    'POST /api/v1/ppaps/{id}/supplier-requests',
+    'GET /api/v1/portal/ppap-packages/{id}',
+    'POST /api/v1/portal/ppap-packages/{id}/files/upload-url',
+    'POST /api/v1/portal/ppap-packages/{id}/files',
+    'POST /api/v1/portal/ppap-package-files/{id}/remove',
+    'POST /api/v1/portal/ppap-package-files/{id}/download-url',
+    'POST /api/v1/portal/ppap-packages/{id}/submit',
     'PATCH /api/v1/ppap-elements/{id}',
     'POST /api/v1/ppap-elements/{id}/files',
     'POST /api/v1/ppap-elements/{id}/links',
@@ -1413,7 +1427,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/ppap-elements/')) return a.ppapElement;
   if (path.startsWith('/api/v1/ppap-evidence/')) return a.ppapEvidence;
   if (path.startsWith('/api/v1/ppap-customer-rules/')) return a.customer;
-  if (path.startsWith('/api/v1/ppap-customer-requests/') || path.startsWith('/api/v1/portal/ppaps/')) return a.portalPpapRequest;
+  if (path.startsWith('/api/v1/ppap-customer-requests/') || path.startsWith('/api/v1/portal/ppaps/') || path.startsWith('/api/v1/portal/ppap-packages/') || path.startsWith('/api/v1/portal/ppap-package-files/')) return a.portalPpapRequest;
   if (path.startsWith('/api/v1/ppaps/')) return a.ppap;
   if (path.startsWith('/api/v1/fmea-revisions/')) return a.fmeaRevision;
   if (path.startsWith('/api/v1/fmea-items/')) return a.fmeaItem;

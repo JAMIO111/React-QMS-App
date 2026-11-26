@@ -178,10 +178,12 @@ const PortalDocumentsPage = portalPage("PortalDocumentsPage");
 const PortalComplaintsPage = portalPage("PortalComplaintsPage");
 const PortalChangeRequestsPage = portalPage("PortalChangeRequestsPage");
 const PortalPpapsPage = portalPage("PortalPpapsPage");
+const PortalPpapPackagesPage = portalPage("PortalPpapPackagesPage");
 const PortalCertificatesPage = portalPage("PortalCertificatesPage");
 const PortalTeamPage = portalPage("PortalTeamPage");
 const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
 const PortalScarPage = lazy(() => import("./components/portal/PortalScarPage.jsx"));
+const PortalPpapPackagePage = lazy(() => import("./components/portal/PortalPpapPackagePage.jsx"));
 const PortalPpapPage = lazy(() => import("./components/portal/PortalPpapPage.jsx"));
 const PortalChangeApprovalPage = lazy(() => import("./components/portal/PortalChangeApprovalPage.jsx"));
 const PortalPerformancePage = lazy(() => import("./components/portal/PortalPerformancePage.jsx"));
@@ -268,12 +270,14 @@ const router = createBrowserRouter([
           { path: "complaints", element: <PortalComplaintsPage /> },
           { path: "change-requests", element: <PortalChangeRequestsPage /> },
           { path: "ppaps", element: <PortalPpapsPage /> },
+          { path: "ppap-packages", element: <PortalPpapPackagesPage /> },
           { path: "documents", element: <PortalDocumentsPage /> },
           { path: "certificates", element: <PortalCertificatesPage /> },
           { path: "team", element: <PortalTeamPage /> },
           { path: "shared/:shareId", element: <PortalContent><PortalSharedPage /></PortalContent> },
           { path: "scars/:scarId", element: <PortalContent><PortalScarPage /></PortalContent> },
           { path: "ppaps/:requestId", element: <PortalContent><PortalPpapPage /></PortalContent> },
+          { path: "ppap-packages/:requestId", element: <PortalContent><PortalPpapPackagePage /></PortalContent> },
           { path: "change-approvals/:approvalId", element: <PortalContent><PortalChangeApprovalPage /></PortalContent> },
           // The performance page is the dashboard now; the old address still works.
           { path: "performance", element: <PortalPerformancePage /> },

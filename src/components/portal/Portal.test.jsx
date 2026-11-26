@@ -24,6 +24,7 @@ vi.mock("../../hooks/usePortal", () => ({
   usePortalCapas: () => ({ data: { data: [] }, isLoading: false }),
   usePortalChangeApprovals: () => ({ data: { data: approvals }, isLoading: false }),
   usePortalPpaps: () => ({ data: { data: [] }, isLoading: false }),
+  usePortalPpapPackages: () => ({ data: { data: [] }, isLoading: false }),
   usePortalMutation: () => ({ mutate, isPending: false, variables: null }),
 }));
 vi.mock("../../hooks/useSignOut", () => ({ default: () => [signOut, false] }));
@@ -70,10 +71,10 @@ describe("the supplier and customer portal", () => {
     expect(within(menu).queryByRole("link", { name: "Settings" })).toBeNull();
   });
 
-  it("a supplier's menu has corrective actions and process changes and not 8D reports, complaints or certificates; an admin also has Team", () => {
+  it("a supplier's menu has corrective actions, part approvals and process changes and not 8D reports, complaints or certificates; an admin also has Team", () => {
     renderIt();
     const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
-    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Process changes", "Documents and alerts", "Team"]);
+    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Part approvals", "Process changes", "Documents and alerts", "Team"]);
   });
 
   it("a customer's menu has 8D reports, part approvals, complaints, change requests and certificates, and no corrective actions; a member has no Team", () => {

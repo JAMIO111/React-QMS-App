@@ -85,6 +85,8 @@ export const usePpapMutation = () => {
           return send(`/ppaps/${id}/reviews`);
         case "askCustomer":
           return send(`/ppaps/${id}/customer-requests`);
+        case "askSupplier":
+          return send(`/ppaps/${id}/supplier-requests`);
         case "withdrawCustomerRequest":
           return send(`/ppap-customer-requests/${id}/withdraw`);
         default:

@@ -167,6 +167,11 @@ export const PPAP_DECISION = {
   interim_approved: { label: "Approved for now", tone: "bg-warning-color/20 text-primary-text" },
   rejected: { label: "Rejected", tone: "bg-error-color/15 text-error-color" },
 };
+export const PPAP_PACKAGE_STATUS = {
+  pending: { label: "To prepare", tone: "bg-warning-color/20 text-primary-text" },
+  answered: { label: "Submitted", tone: "bg-success-color/15 text-success-color" },
+};
+export const ppapPackagePath = (id, organisationId) => `/portal/ppap-packages/${id}${organisationId ? `?org=${organisationId}` : ""}`;
 export const ppapPath = (id, organisationId) => `/portal/ppaps/${id}${organisationId ? `?org=${organisationId}` : ""}`;
 /** The words for each kind of party: a customer asks for a change, a supplier tells us about one. */
 export const CHANGE_WORDS = {
@@ -213,6 +218,7 @@ export const portalMenu = (access) => {
     { key: "dashboard", name: "Dashboard", icon: "dashboard", path: "/portal", end: true },
     { key: "ncrs", name: "Non-conformances", icon: "ncr", path: "/portal/non-conformances", badge: "ncrs" },
     ...(supplier ? [{ key: "scars", name: "Corrective actions", icon: "scar", path: "/portal/scars", badge: "scars" }] : []),
+    ...(supplier ? [{ key: "ppap-packages", name: "Part approvals", icon: "ppap", path: "/portal/ppap-packages", badge: "ppapPackages" }] : []),
     ...(customer ? [{ key: "capas", name: "8D reports", icon: "capa", path: "/portal/8ds", badge: "capas" }] : []),
     ...(customer ? [{ key: "ppaps", name: "Part approvals", icon: "ppap", path: "/portal/ppaps", badge: "ppaps" }] : []),
     ...(customer ? [{ key: "complaints", name: "Complaints", icon: "complaint", path: "/portal/complaints" }] : []),
@@ -230,7 +236,7 @@ export const portalPageTitle = (pathname) => {
   if (p.startsWith("/portal/non-conformances") || p.startsWith("/portal/shared")) return "Non-conformances";
   if (p.startsWith("/portal/scars")) return "Corrective actions";
   if (p.startsWith("/portal/8ds")) return "8D reports";
-  if (p.startsWith("/portal/ppaps")) return "Part approvals";
+  if (p.startsWith("/portal/ppaps") || p.startsWith("/portal/ppap-packages")) return "Part approvals";
   if (p.startsWith("/portal/complaints")) return "Complaints";
   if (p.startsWith("/portal/change-requests") || p.startsWith("/portal/change-approvals")) return "Change requests";
   if (p.startsWith("/portal/documents")) return "Documents and alerts";

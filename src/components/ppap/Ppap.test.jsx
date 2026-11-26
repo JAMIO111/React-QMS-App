@@ -278,6 +278,55 @@ describe("a PPAP submission", () => {
     );
   });
 
+  describe("asking a supplier for the package", () => {
+    const acme = { partyId: "pt1", supplierId: "s1", name: "Acme Castings" };
+    const received = { direction: "received", customer: null, supplier: { id: "s1", name: "Acme Castings", code: "ACME" }, psw: null, canSavePsw: false, canManage: true };
+    const loadWith = (over, requests) =>
+      apiFetch.mockImplementation(async (path, opts) => {
+        if (path === "/ppaps/p1" && !opts?.method) return submission({ ...received, ...over });
+        if (path === "/ppaps/p1/customer-requests" && !opts?.method) return requests;
+        return {};
+      });
+
+    it("asks the supplier with a message, and says what they will see", async () => {
+      loadWith({}, { data: [], customer: null, supplier: acme });
+      wrap(<PpapPage />, "/PPAP/p1");
+      await userEvent.click(await screen.findByRole("button", { name: "Ask the supplier" }));
+      const dialog = await screen.findByRole("dialog", { name: /Ask Acme Castings for PPAP-26-0001/ });
+      expect(within(dialog).getByText(/They never see our own files or notes/)).toBeInTheDocument();
+      await userEvent.type(within(dialog).getByLabelText(/Message to them/), "Please send it.");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Ask them" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/supplier-requests", expect.objectContaining({ method: "POST", body: { note: "Please send it." } })));
+    });
+
+    it("shows a waiting request and a submitted one, and withdraws the waiting one with a reason", async () => {
+      loadWith({}, {
+        data: [
+          { id: "r1", partyId: "pt1", customer: "Acme Castings", status: "pending", requestedAt: "2026-11-21T10:00:00Z", requestNote: "Please send it.", requestedBy: "Eli Engineer" },
+          { id: "r0", partyId: "pt1", customer: "Acme Castings", status: "answered", requestedAt: "2026-11-01T10:00:00Z", answeredAt: "2026-11-02T10:00:00Z", answeredBy: "Sam" },
+        ],
+        customer: null, supplier: acme,
+      });
+      wrap(<PpapPage />, "/PPAP/p1");
+      const list = await screen.findByRole("list", { name: "Requests to the supplier" });
+      expect(within(list).getByText("Waiting for the supplier")).toBeInTheDocument();
+      expect(within(list).getByText("Submitted by the supplier")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask the supplier" })).toBeNull();
+      await userEvent.click(within(list).getAllByRole("button", { name: "Withdraw the request to Acme Castings" })[0]);
+      const dialog = await screen.findByRole("dialog", { name: "Withdraw this request" });
+      await userEvent.type(within(dialog).getByLabelText(/Why/), "Asked too early");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/ppap-customer-requests/r1/withdraw", expect.objectContaining({ method: "POST", body: { reason: "Asked too early" } })));
+    });
+
+    it("says so when the supplier is not set up for the portal, and is not shown once the package has been submitted with nothing asked", async () => {
+      loadWith({}, { data: [], customer: null, supplier: null });
+      wrap(<PpapPage />, "/PPAP/p1");
+      expect(await screen.findByText(/is not set up for the portal/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask the supplier" })).toBeNull();
+    });
+  });
+
   describe("a package received from a supplier", () => {
     const received = {
       direction: "received", customer: null, supplier: { id: "s1", name: "Acme Castings", code: "ACME" }, psw: null, canSavePsw: false,

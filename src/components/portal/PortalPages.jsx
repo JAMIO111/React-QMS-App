@@ -4,6 +4,7 @@ import Callout from "../ui/Callout";
 import PortalChangeRequests from "./PortalChangeRequests";
 import { ChangeApprovalList } from "./PortalChangeApprovalPage";
 import { PpapList } from "./PortalPpapPage";
+import { PpapPackageList } from "./PortalPpapPackagePage";
 import PortalComplaints, { PortalEvidence } from "./PortalComplaints";
 import PortalPeople from "./PortalPeople";
 import PortalRegister from "./PortalRegister";
@@ -191,6 +192,19 @@ export function PortalTeamPage() {
   if (access.role !== "admin") return <Navigate to="/portal" replace />;
   if (access.mfaRequired) return <MfaNeeded access={access} />;
   return <Content><PortalPeople access={access} /></Content>;
+}
+
+/** Part approval packages a supplier has been asked to prepare (PP5b). */
+export function PortalPpapPackagesPage() {
+  const { access } = useOutletContext();
+  if (access.partyKind !== "supplier") return <Navigate to="/portal" replace />;
+  if (access.mfaRequired) return <MfaNeeded access={access} />;
+  return (
+    <Content>
+      <PpapPackageList access={access} />
+      <p className="text-sm text-secondary-text">Only packages that {access.organisationName} has asked you for are listed here.</p>
+    </Content>
+  );
 }
 
 /** Part approval submissions a customer has been asked to answer (PP4). */

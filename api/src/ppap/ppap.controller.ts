@@ -263,6 +263,14 @@ export class PpapController {
     return this.service.askCustomer(ctx, parse(Uuid, id), parse(AskCustomerBody, body).note ?? null);
   }
 
+  @Post('ppaps/:id/supplier-requests')
+  @OrganisationScoped(MANAGE)
+  @ApiBody({ schema: openApiSchema(AskCustomerBody) })
+  @ApiOkResponse({ description: 'Asks the supplier a received package is from to prepare and submit it in their portal (their people are emailed)' })
+  askSupplier(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.askSupplier(ctx, parse(Uuid, id), parse(AskCustomerBody, body).note ?? null);
+  }
+
   @Post('ppap-customer-requests/:id/withdraw')
   @HttpCode(200)
   @OrganisationScoped(MANAGE)

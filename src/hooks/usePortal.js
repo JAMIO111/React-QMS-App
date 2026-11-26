@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
-import { uploadPortalComplaintFile, uploadPortalScarFile } from "../api/supabaseApi";
+import { uploadPortalComplaintFile, uploadPortalPpapPackageFile, uploadPortalScarFile } from "../api/supabaseApi";
 import { useAuth } from "../contexts/AuthProvider";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
@@ -507,6 +507,47 @@ export const usePortalPpapMutation = (organisationId, id) => {
     onSuccess: (data) => queryClient.setQueryData(portalKey(user?.id, organisationId, "ppap", id), data),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
   });
+};
+
+/** The part approval packages staff have asked a supplier to prepare, and one of them as the supplier may see it (PP5b). */
+export const usePortalPpapPackages = (organisationId, { enabled = true } = {}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "ppap-packages"),
+    queryFn: () => apiFetch("/portal/ppap-packages", { organisationId }),
+    enabled: !!user && !!organisationId && enabled,
+    retry: false,
+  });
+};
+
+export const usePortalPpapPackage = (organisationId, id) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: portalKey(user?.id, organisationId, "ppap-package", id),
+    queryFn: () => apiFetch(`/portal/ppap-packages/${id}`, { organisationId }),
+    enabled: !!user && !!organisationId && !!id,
+    retry: false,
+  });
+};
+
+/** Adding a file, taking one back and submitting wait for the server (it decides what is allowed); the package it answers with replaces the cached one. */
+export const usePortalPpapPackageMutation = (organisationId, id) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, elementKey, file, fileId, note }) => {
+      if (action === "add") return uploadPortalPpapPackageFile(file, organisationId, id, elementKey);
+      if (action === "remove") return apiFetch(`/portal/ppap-package-files/${fileId}/remove`, { method: "POST", organisationId });
+      return apiFetch(`/portal/ppap-packages/${id}/submit`, { method: "POST", organisationId, body: { note: note ?? null } });
+    },
+    onSuccess: (data) => queryClient.setQueryData(portalKey(user?.id, organisationId, "ppap-package", id), data),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["api", "portal", user?.id, organisationId] }),
+  });
+};
+
+export const openPortalPpapPackageFile = async (organisationId, fileId) => {
+  const { url } = await apiFetch(`/portal/ppap-package-files/${fileId}/download-url`, { method: "POST", organisationId });
+  window.open(url, "_blank", "noopener");
 };
 
 /** One SCAR as the supplier sees it, with what they may do next. */

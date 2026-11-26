@@ -714,7 +714,12 @@ export class PpapService {
   private async customerRequestsOf(db: Db, id: string) {
     const requests = (await db.execute<{ r: unknown[] }>(sql`select app.ppap_customer_requests(${id}::uuid) as r`)).rows[0].r;
     const party = (await db.execute<{ party_id: string; customer_id: string; party_name: string }>(sql`select * from app.ppap_customer_party(${id}::uuid)`)).rows[0];
-    return { data: requests, customer: party ? { partyId: party.party_id, customerId: party.customer_id, name: party.party_name } : null };
+    const supplier = (await db.execute<{ party_id: string; supplier_id: string; party_name: string }>(sql`select * from app.ppap_supplier_party(${id}::uuid)`)).rows[0];
+    return {
+      data: requests,
+      customer: party ? { partyId: party.party_id, customerId: party.customer_id, name: party.party_name } : null,
+      supplier: supplier ? { partyId: supplier.party_id, supplierId: supplier.supplier_id, name: supplier.party_name } : null,
+    };
   }
 
   /** Staff ask the customer to answer (their people are emailed, best effort: a failed send never undoes the request). */
@@ -727,6 +732,16 @@ export class PpapService {
     return { data: asked.data, customer: asked.customer, email };
   }
 
+  /** Staff ask the supplier to prepare and submit a package we are recording (they are emailed, best effort). */
+  async askSupplier(ctx: RequestContext, id: string, note: string | null) {
+    const asked = await this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<{ id: string }>(sql`select app.request_ppap_supplier_package(${id}::uuid, ${note}) as id`);
+      return { requestId: r.rows[0].id, ...(await this.customerRequestsOf(db, id)) };
+    });
+    const email = await this.tellCustomer(ctx, asked.requestId, note, 'supplier');
+    return { data: asked.data, customer: asked.customer, supplier: asked.supplier, email };
+  }
+
   withdrawCustomerRequest(ctx: RequestContext, requestId: string, reason: string) {
     return this.database.asUser(ctx, async (db) => {
       const found = await db.execute<{ submission_id: string }>(sql`select submission_id from public.portal_ppap_requests where id = ${requestId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
@@ -736,7 +751,7 @@ export class PpapService {
     });
   }
 
-  private async tellCustomer(ctx: RequestContext, requestId: string, note: string | null) {
+  private async tellCustomer(ctx: RequestContext, requestId: string, note: string | null, kind: 'customer' | 'supplier' = 'customer') {
     try {
       const info = await this.database.asUser(ctx, async (db) => {
         const people = await db.execute<{ email: string; name: string | null }>(sql`select email, name from app.ppap_request_recipients(${requestId}::uuid)`);
@@ -751,11 +766,15 @@ export class PpapService {
       if (!info.rec) return { attempted: 0, sent: 0 };
       return await this.portalMailer.send({
         to: info.people.map((p) => ({ email: p.email, name: p.name })),
-        subject: `${info.rec.org_name} asks for your answer on a part approval: ${info.rec.reference}`,
-        heading: 'Please answer a part approval submission',
-        paragraphs: [`${info.rec.org_name} has sent you part approval submission ${info.rec.reference} for ${info.rec.part_number}. Open it on your portal to approve it, approve it for now, or say what you cannot accept.`],
+        subject: kind === 'supplier' ? `${info.rec.org_name} asks you for a part approval package: ${info.rec.reference}` : `${info.rec.org_name} asks for your answer on a part approval: ${info.rec.reference}`,
+        heading: kind === 'supplier' ? 'Please prepare a part approval package' : 'Please answer a part approval submission',
+        paragraphs: [
+          kind === 'supplier'
+            ? `${info.rec.org_name} asks you for the part approval package ${info.rec.reference} for ${info.rec.part_number}. Open it on your portal, add a file for each element asked of you, and submit it.`
+            : `${info.rec.org_name} has sent you part approval submission ${info.rec.reference} for ${info.rec.part_number}. Open it on your portal to approve it, approve it for now, or say what you cannot accept.`,
+        ],
         quote: note ? { text: note, by: info.rec.org_name } : undefined,
-        path: `/portal/ppaps/${requestId}?org=${orgOf(ctx)}`,
+        path: kind === 'supplier' ? `/portal/ppap-packages/${requestId}?org=${orgOf(ctx)}` : `/portal/ppaps/${requestId}?org=${orgOf(ctx)}`,
         button: 'Open in the portal',
         footerWho: info.rec.org_name,
       });

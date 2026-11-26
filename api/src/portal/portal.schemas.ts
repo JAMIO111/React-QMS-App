@@ -118,3 +118,10 @@ export const PpapDecisionBody = z
     expiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date as yyyy-mm-dd').nullish(),
   })
   .strict();
+
+/** PP5b: a supplier adds a file to one element of the package asked of them (the element is named by its key; the API chooses the path). */
+export const PpapPackageUploadBody = z.object({ elementKey: z.string().trim().min(1).max(60), fileName: z.string().trim().min(1).max(255) }).strict();
+export const PpapPackageFileBody = z
+  .object({ elementKey: z.string().trim().min(1).max(60), path: z.string().min(1).max(1024), fileName: z.string().trim().min(1).max(255), contentType: z.string().max(150).optional(), sizeBytes: z.number().int().min(0).max(26_214_400) })
+  .strict();
+export const PpapPackageSubmitBody = z.object({ note: z.string().trim().max(2000).nullish() }).strict();

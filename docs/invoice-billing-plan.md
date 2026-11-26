@@ -1,6 +1,6 @@
 # Pay by invoice (self-serve) — plan
 
-Status: **planned, not built.** I9 (abuse limits) agreed 2026-11-26; I1–I8 are proposed until the owner confirms them. Written 2026-11-26.
+Status: **planned, not built; IV0 spike run 2026-11-26 (findings in §9, one check still open).** I9 (abuse limits) agreed 2026-11-26; I1–I8 are proposed until the owner confirms them. Written 2026-11-26.
 Related: `docs/onboarding-plan.md` §13 (Stripe), `docs/stripe-setup.md`, `docs/subscription-plan.md`.
 
 ## 1. What this is
@@ -53,7 +53,7 @@ Invoice path: choose seats and interval as now → **Billing details** form (com
 - `POST /billing/invoice-subscription` (owner only, `subscription.manage`; strict body: `seats`, `interval`, `company {name, address…, email, vatNumber?}`, `poReference?`, `clientKey`).
   1. Same guards as `checkout()`: owner, no live subscription, `assertNoSeatProblems`, prices from `app.stripe_price_for`, `invoice_billing_allowed`.
   2. Update the Stripe customer (name, email, address) and add the tax id (`customers.createTaxId`; an invalid number is a form error, not a silent drop).
-  3. `subscriptions.create({ collection_method: 'send_invoice', days_until_due: 14, automatic_tax, payment_settings: { payment_method_types: ['customer_balance','card'], payment_method_options: { customer_balance: { funding_type: 'bank_transfer', bank_transfer: { type: 'gb_bank_transfer' } } } }, metadata, … }, { idempotencyKey })`, the first invoice finalised at once, PO reference as an invoice custom field.
+  3. `subscriptions.create({ collection_method: 'send_invoice', days_until_due: 14, automatic_tax, payment_settings: { payment_method_types: ['customer_balance','card'], payment_method_options: { customer_balance: { funding_type: 'bank_transfer', bank_transfer: { type: 'gb_bank_transfer' } } } }, metadata, … }, { idempotencyKey })`, **then finalise the first invoice ourselves** (`invoices.finalize`; Stripe leaves it a draft for about an hour otherwise, §9), PO reference as an invoice custom field.
   4. Re-read the subscription from Stripe and apply it through the existing `syncSubscription` (Stripe stays the source of truth; a retry with the same `clientKey` returns the same subscription).
 - `StripeGateway` gains `createInvoiceSubscription(...)` and `updateCustomerBilling(...)`; `SubscriptionSnapshot` gains `collectionMethod` and `daysUntilDue`; `toSubscriptionSnapshot` maps them. The fake gateway in tests gets the same methods.
 - `SubscriptionOverview` gains `paymentRoute: 'card' | 'invoice'`, `billingContact`, `purchaseOrder`, and `openInvoice {id, number, amountDue, dueOn, hostedUrl}` (from the latest open invoice) so the page can show what is owed.
@@ -106,3 +106,26 @@ Custom payment terms per customer in the UI, credit notes and refunds screens, p
 - **Stripe dashboard settings are outside the code** and silently change behaviour (unpaid-invoice handling, reminder emails). They are written into `stripe-setup.md` and checked in IVX.
 - **Tax:** a wrong or missing address/VAT number produces wrong VAT on an invoice that cannot be edited once finalised; the form validates address completeness and the tax id with Stripe at entry.
 - **Bank transfer reconciliation** is Stripe's (customer balance); a payment that arrives without the invoice reference can sit unapplied. Stripe handles most cases automatically; the rest is a manual Stripe-dashboard task for the owner and is not built here.
+
+## 9. IV0 findings (sandbox, 2026-11-26, test clock `clock_1UgBqWK5lGCrs5Si5RKqu1PI`, customer `cus_Vhb2CmSlHGBeJc`, subscription `sub_1UgBquK5lGCrs5SiZAbTozoM`)
+
+Made with the Stripe connector against the **sandbox** only (never the live account): a customer attached to a test clock, a Contributor monthly subscription × 2 with `collection_method: send_invoice`, `days_until_due: 14`, `automatic_tax` on and bank transfer (`customer_balance`, `gb_bank_transfer`) plus card as the payment methods.
+
+**Observed**
+1. **The subscription is `active` the moment it is created**, with no payment (no trial, no incomplete state). Access can start at once, as I1 assumes.
+2. **The first invoice is created as a `draft` and Stripe finalises it about an hour later** (`automatically_finalizes_at` = created + 1 h). It does **not** finalise immediately. We therefore finalise it ourselves right after creating the subscription (`POST /v1/invoices/{id}/finalize`), after which it is `open` with a number, a **hosted payment page** (`hosted_invoice_url`) and a PDF (`invoice_pdf`). Its `due_date` is 14 days from creation either way.
+3. **`gb_bank_transfer` and card are accepted** on the sandbox account (the subscription and invoice carry `payment_method_types: [customer_balance, card]`), so the hosted page can offer UK bank details. The live account has not been checked: **turn on Bank transfers in the live Stripe dashboard (Settings → Payment methods) before launch.**
+4. **Tax:** automatic tax is complete with 0 % and `taxability_reason: not_collecting` (no registration yet, as in `stripe-setup.md`). A VAT number added later changes nothing until a registration exists.
+5. **A seat increase does not create an invoice.** Raising 2 → 3 seats with `create_prorations` leaves **pending invoice items on the customer** (−£20 "unused time on 2 ×" and +£30 "remaining time on 3 ×"), to be added to the **next** invoice; `latest_invoice` stays the first one. This confirms I8, and it also shows the unused-time credit **refers to the first invoice even though that is still unpaid**, so the net extra (£10) is only collected at the next renewal. With §3a's rule (no seat increase while any invoice is open) this cannot be reached before the first invoice is paid.
+
+**From Stripe's documentation (not observed: the connector cannot advance a test clock)**
+6. A `send_invoice` subscription becomes **`past_due` when its invoice is unpaid at the due date**; the Dashboard setting (Billing → Subscriptions and emails → Manage failed payments) can then move it to `canceled` or `unpaid`, or leave it `past_due`. Status resolution can use the most recent invoice or all invoices. Paying the governing invoice makes the subscription `active` again, **even after the due date**.
+7. The invoice itself reads `past_due`, and an operator can mark it `uncollectible` or `void`; voiding the first invoice of a `past_due` subscription makes it `active`.
+
+**What this changes in the design**
+- **§4.3's extra validity rule (open invoice + grace) is probably unnecessary.** Stripe itself makes the subscription `past_due` at the due date, and the existing machinery already treats `past_due` with a grace measured from when we learn of it (`past_due_since`, `grace_period_days`), so setting the 3-day grace (I9.3) is enough. **Keep the extra rule only if the check below shows the status does not move.**
+- **Set Stripe's "Manage failed payments" to leave the subscription `past_due`** (do not auto-cancel), so Fortress, not Stripe, decides when access stops, and a late payment simply restores it. Write this into `stripe-setup.md`.
+- The API creates the subscription, **finalises the first invoice**, then reads both back and applies them through `syncSubscription` as before.
+
+**Still open (one check, needs the Stripe dashboard)**
+The test clock above is frozen at 26 Nov 2026 23:10 UTC and the first invoice (`in_1UgBquK5lGCrs5SizjDgm36D`, £20, open) is due **10 Dec 2026 23:10 UTC**. In the sandbox dashboard open **Billing → Test clocks → "IV0 invoice spike" → Advance time** to **12 Dec 2026** and tell me; I will then read the subscription and invoice and record whether it went `past_due` and which events fired, then advance to ~20 Dec to see whether the failed-payment setting moves it on. Not yet observed either way: reminder emails, what Stripe does with an unmatched bank transfer, cancel at period end on an unpaid invoice. The clock deletes itself on 26 Dec 2026.

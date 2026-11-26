@@ -106,8 +106,8 @@ const TeamInvite = ({ live = true }) => {
   const add = () => {
     const emails = parseEmails(paste).filter((e) => !rows.some((r) => r.email === e));
     if (emails.length === 0) return;
-    const template = rows[0] ?? emptyRow("");
-    setRows((rs) => [...rs, ...emails.map((email) => ({ ...emptyRow(email), roleId: template.roleId, departmentIds: template.departmentIds, packageSlug: "" }))]);
+    // Each new person starts empty: nothing is copied from the people already on the list.
+    setRows((rs) => [...rs, ...emails.map((email) => emptyRow(email))]);
     setPaste("");
     setResults(null);
   };

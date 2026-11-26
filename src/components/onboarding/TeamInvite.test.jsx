@@ -99,6 +99,20 @@ describe("inviting a team", () => {
     expect(screen.queryByRole("list", { name: "Departments for a@example.com" })).toBeNull();
   });
 
+  it("starts each newly added person with no role, department or package, whatever the people already listed have", async () => {
+    renderIt();
+    await addPeople("a@example.com");
+    await choose("Role for a@example.com", "Viewer");
+    await choose("Add a department for a@example.com", "PA · Quality");
+    await choose("Package for a@example.com", /^Contributor/);
+    await addPeople("b@example.com");
+    expect(screen.getByRole("combobox", { name: "Role for b@example.com" })).toHaveTextContent("");
+    expect(screen.queryByRole("list", { name: "Departments for b@example.com" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Package for b@example.com" })).toHaveValue("");
+    // The first person keeps what was chosen for them.
+    expect(screen.getByRole("list", { name: "Departments for a@example.com" })).toHaveTextContent("PA · Quality");
+  });
+
   it("will not send until each person has a role and, for most roles, a department", async () => {
     renderIt();
     await addPeople("a@example.com");

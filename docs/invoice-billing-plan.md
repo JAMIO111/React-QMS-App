@@ -1,6 +1,6 @@
 # Pay by invoice (self-serve) — plan
 
-Status: **planned, not built; IV0 spike run 2026-11-26 (findings in §9, one check still open).** I9 (abuse limits) agreed 2026-11-26; I1–I8 are proposed until the owner confirms them. Written 2026-11-26.
+Status: **planned, not built; IV0 spike run 2026-11-26 (findings in §9, one check still open). I9 and I10 agreed 2026-11-26.** I9 (abuse limits) agreed 2026-11-26; I1–I8 are proposed until the owner confirms them. Written 2026-11-26.
 Related: `docs/onboarding-plan.md` §13 (Stripe), `docs/stripe-setup.md`, `docs/subscription-plan.md`.
 
 ## 1. What this is
@@ -28,7 +28,8 @@ Self-serve invoicing means an owner can choose **Pay by invoice** on the plan st
 | I5 | Who may choose it | Any **owner**, but only after entering **legal company name, billing address and a billing email**; VAT number optional. An operator can switch it off for an organisation (`invoice_billing_allowed`, default on). | Self-serve, with a company on the invoice and a stop for abuse. |
 | I6 | Changing route | An organisation may move **from card to invoice and back** only at a renewal, from the Subscription page, by cancelling at period end and starting the other kind (no live switching of a running subscription's collection method in the first version). | Avoids half-states; Stripe supports switching but the edge cases (open invoices, proration) are not worth it yet. |
 | I7 | Purchase order | Optional **PO reference** on the form, put on every invoice (Stripe invoice custom field). | The most common thing accounts payable ask for. |
-| I8 | Seat changes | Extra seats are **added to the next invoice** (prorated), not invoiced instantly; removing seats credits the next invoice. | Matches how invoiced customers expect to be billed; avoids a surprise mid-month invoice. Cost: extra seats are in use before they are billed. |
+| I8 | Seat changes (**replaced by I10**) | Extra seats are **added to the next invoice** (prorated), not invoiced instantly; removing seats credits the next invoice. | Matches how invoiced customers expect to be billed; avoids a surprise mid-month invoice. Cost: extra seats are in use before they are billed. |
+| I10 | Seat increases are billed at once, for card and invoice (agreed 2026-11-26, see §3b) | Increases use `always_invoice`; decreases stay credits on the next invoice. **Replaces I8.** | A deferred charge lets an organisation hold extra seats until the next renewal (up to a year on annual) before anything is collected. |
 | I9 | Abuse limits (agreed 2026-11-26, see §3a) | Seat cap until the first invoice is paid; data-leaving features closed while it is unpaid; 3 days' grace for invoiced customers; one invoiced organisation per company; operator alerts. | Keeps the self-serve start while capping the worst case at the seats on one invoice. |
 
 ## 3a. Abuse limits (I9)
@@ -42,6 +43,19 @@ The worst case without limits is up to 21 days of use (14 to pay + 7 grace) with
 5. **Operator alerts.** A notice to platform operators when an organisation starts an invoiced subscription, and when its **first** invoice passes its due date; both also appear on the `/platform` organisations tab (route, first invoice paid or not, overdue days). Never emailed to the customer.
 
 **Not built (kept for if real abuse appears):** refusing free-mail billing addresses, pay-first access (nothing until the first invoice is paid), operator approval of the first invoice, a card on file as a fallback, archiving unpaid invoiced organisations sooner than the existing job does.
+
+## 3b. Seat increases are billed at once (I10)
+
+**Why.** The IV0 spike (§9) showed that a seat increase with `create_prorations` creates only **pending invoice items**; nothing is invoiced until the next invoice, which is the renewal. The card route uses the same setting today. So an organisation can add seats and use them until the renewal: up to **a year** on an annual plan, a month on a monthly one. Dropping the seats again before renewal does not avoid the charge (the pending items land on the same invoice), but if that invoice is never paid the seats were free until access stops.
+
+**Rule (both routes).**
+1. **An increase is invoiced immediately** (`proration_behavior: always_invoice`): for an invoiced subscription a new invoice for the prorated amount, due in the usual 14 days (and finalised by us at once, as in §9); for a card subscription the card is charged now.
+2. **A decrease stays a credit** on the next invoice (`create_prorations`); nothing is refunded, so there is nothing to game. Seats in use cannot be reduced below the people holding them (existing `check_seat_change`).
+3. **§3a still applies on top:** no further increase while any invoice is open or overdue (so an unpaid increase invoice blocks the next increase), and an overdue one follows the same grace and lock as any other invoice.
+4. **The preview says what will happen:** "Invoiced now: £X (due <date>)" for an invoiced subscription, "Charged now: £X" for a card, and "Credit of £X on your next invoice" for a decrease. `previewSeats` previews with the same proration setting the change will use, and its `amountDue` is the amount collected now.
+5. **Card customers: seats only if the payment succeeds.** Use `payment_behavior: pending_if_incomplete` so a declined card leaves the subscription unchanged instead of giving the seats and then going past due. **To check in the sandbox before building** (the same check for the invoiced route: whether a pending update is allowed on a `send_invoice` subscription; if not, the invoiced route grants the seats at once and relies on the open-invoice rules above).
+
+**Cost.** Card customers see a charge when they add seats instead of at the next renewal: a behaviour change to say in the release notes and the seat dialog. It can ship **on its own, before the invoice work** (slice IV-S below), because it changes only `StripeGateway.updateSeats` / `previewSeatChange` and the seat dialog.
 
 ## 4. Design
 
@@ -69,7 +83,7 @@ Invoice path: choose seats and interval as now → **Billing details** form (com
 - Tests: SQL test for validity (open invoice just before due → valid; past due + grace → locked; paid → valid again; card route unaffected), idempotent apply, a card customer never reads as invoiced.
 
 ### 4.4 Seats and the rest of billing
-- `previewSeats` / `changeSeats` already go through Stripe; for `send_invoice` the proration lands on the **next invoice** (`proration_behavior: 'create_prorations'` is already what we use), which is I8. The preview copy must say "added to your next invoice", not "charged now" (`amountDue` is not what is payable today).
+- `previewSeats` / `changeSeats` already go through Stripe; **increases are invoiced at once and decreases credited (I10, §3b)**, so the preview copy says "invoiced now" / "charged now" / "credit on your next invoice".
 - **Customer Portal:** for invoiced customers it shows invoices and billing details; "update payment method" is meaningless. Keep the portal configuration as is and hide the "payment method" wording on our own page for the invoice route.
 - **Stripe Tax:** unchanged (`automatic_tax`); a tax id entered on the form is what lets a VAT-registered business be invoiced correctly.
 - **Reminders and dunning:** use Stripe's own invoice emails (send on finalise, reminder before due, overdue reminder) — turn on in the Stripe dashboard (Billing → Subscriptions and emails). Fortress adds an in-app banner (`SubscriptionBanner`): "Invoice INV-… for £X is due on …" and, once overdue, "access stops on …" (reuses `subscriptionWarning`).
@@ -90,6 +104,7 @@ Invoice path: choose seats and interval as now → **Billing details** form (com
 
 | Slice | Content | Done when |
 |---|---|---|
+| **IV-S seat billing (both routes, can ship first)** | `updateSeats` / `previewSeatChange` take the proration setting: `always_invoice` for increases (card: `pending_if_incomplete`, after a sandbox check), `create_prorations` for decreases; preview and seat dialog wording; fake gateway; e2e; docs. No migration. | Card seat increases charge at once and a declined card changes nothing; tests green. |
 | **IV0 spike (sandbox, no app code)** | Create an invoiced subscription by script in the sandbox; record what Stripe does when unpaid (status, events, emails), bank-transfer details, proration on a seat change, cancel at period end. Settles §5 and decides whether the database rule in §4.3 is needed beyond `past_due`. | A short findings note added to this plan; I1–I8 confirmed or changed. |
 | **IV1 migration + SQL test** | Columns, `invoice_billing_allowed`, patched `stripe_apply_subscription`, validity rule, **the §3a limits** (`invoice_first_payment_pending`, seat rule, company key and VAT uniqueness, 3-day grace, operator alerts), operator functions, sweep seeds, guardrails. | `db:check` green incl. new test with deliberate breaks tried. |
 | **IV2 API** | Gateway methods (real + fake), snapshot mapping, `POST /billing/invoice-subscription` (VAT verified with Stripe first, duplicate company refused), reporting keys, write-out integrations and bulk exports refused while `invoice_first_payment_pending` (`403 payable_first`), overview fields, e2e with the fake gateway and real signature verification, tenancy sweep. | `api:test` and `api:test:e2e` green. |

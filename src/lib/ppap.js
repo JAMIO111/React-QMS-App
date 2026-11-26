@@ -180,7 +180,9 @@ export const DECISION_KIND = {
   rejected: { label: "Rejected", tone: "error" },
   withdrawn: { label: "Withdrawn", tone: "neutral" },
 };
-export const decisionLabel = (kind) => DECISION_KIND[kind]?.label ?? kind;
+export const decisionLabel = (kind, direction) => (kind === "submitted" && direction === "received" ? "Received from the supplier" : (DECISION_KIND[kind]?.label ?? kind));
+/** The party a submission is with, in words: the customer it goes to, or the supplier it came from. */
+export const partyOf = (ppap) => (ppap?.direction === "received" ? ppap.supplier : ppap?.customer);
 export const decisionPill = (kind) => TONE_CLASS[DECISION_KIND[kind]?.tone ?? "neutral"];
 /** What the customer can decide (the sending and a withdrawal are recorded by their own buttons). */
 export const DECISION_CHOICES = [

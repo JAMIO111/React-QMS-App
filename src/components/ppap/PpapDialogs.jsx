@@ -11,6 +11,7 @@ import { LEVELS, REASONS, fileSizeLabel, levelLabel, linkKindLabel, linkKindsFor
 import { FormError, TextAreaField } from "../master-data/shared";
 import { PartPicker, PartyPicker, RevisionPicker } from "../ncr/Pickers";
 import ComboField from "../ui/ComboField";
+import SlidingToggle from "../ui/SlidingToggle";
 import Dialog from "../ui/Dialog";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
@@ -32,13 +33,16 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
   const { showToast } = useToast();
   const [part, setPart] = useState(defaults?.part ?? null);
   const [revisionId, setRevisionId] = useState(null);
+  const [direction, setDirection] = useState("submitted");
   const [customer, setCustomer] = useState(defaults?.customer ?? null);
+  const [supplier, setSupplier] = useState(null);
   const [level, setLevel] = useState("");
   const [reason, setReason] = useState(defaults?.reason ?? null);
   const [notes, setNotes] = useState("");
   // one key for this dialog, so a retried request after a dropped connection returns the same submission
   const [clientKey] = useState(() => crypto.randomUUID());
-  const ready = part?.id && customer?.id && reason;
+  const received = direction === "received";
+  const ready = part?.id && (received ? supplier?.id : customer?.id) && reason;
 
   const save = (e) => {
     e.preventDefault();
@@ -48,7 +52,7 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
         action: "create",
         body: {
           partId: part.id,
-          customerId: customer.id,
+          ...(received ? { direction: "received", supplierId: supplier.id } : { customerId: customer.id }),
           reason,
           clientKey,
           ...(revisionId ? { partRevisionId: revisionId } : {}),
@@ -67,16 +71,21 @@ export const NewPpapDialog = ({ onClose, onSaved, defaults }) => {
   };
 
   return (
-    <Dialog title="Start a PPAP submission" onClose={onClose} width="max-w-2xl">
+    <Dialog title={received ? "Record a package from a supplier" : "Start a PPAP submission"} onClose={onClose} width="max-w-2xl">
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
+        <SlidingToggle ariaLabel="Which way" mode="radio" value={direction} onChange={setDirection} options={[{ value: "submitted", label: "We send it to a customer" }, { value: "received", label: "A supplier sent it to us" }]} />
         <PartPicker label="Part" icon={QrCodeIcon} required value={part?.id ?? null} current={part?.id ? { id: part.id, partNumber: part.name ?? "" } : undefined} onChange={(id, item) => { setPart(id ? { id, name: item?.name ?? "" } : null); setRevisionId(null); }} />
         <RevisionPicker label="Part revision" partId={part?.id} value={revisionId} onChange={(id) => setRevisionId(id ?? null)} hint="Leave empty to use the released revision" />
-        <PartyPicker label="Customer" kind="customers" icon={UsersIcon} required value={customer?.id ?? null} current={customer?.id ? { id: customer.id, name: customer.name ?? "" } : undefined} onChange={(id, item) => setCustomer(id ? { id, name: item?.name ?? "" } : null)} />
-        <ComboField label="Why is it being submitted" required value={reason} onChange={setReason} options={REASONS} clearable={false} sort={false} />
+        {received ? (
+          <PartyPicker label="Supplier" kind="suppliers" icon={UsersIcon} required value={supplier?.id ?? null} current={supplier?.id ? { id: supplier.id, name: supplier.name ?? "" } : undefined} onChange={(id, item) => setSupplier(id ? { id, name: item?.name ?? "" } : null)} />
+        ) : (
+          <PartyPicker label="Customer" kind="customers" icon={UsersIcon} required value={customer?.id ?? null} current={customer?.id ? { id: customer.id, name: customer.name ?? "" } : undefined} onChange={(id, item) => setCustomer(id ? { id, name: item?.name ?? "" } : null)} />
+        )}
+        <ComboField label={received ? "Why they sent it" : "Why is it being submitted"} required value={reason} onChange={setReason} options={REASONS} clearable={false} sort={false} />
         <ComboField label="Level" value={level} onChange={(v) => setLevel(v ?? "")} options={LEVEL_CHOICES} clearable={false} sort={false} hint="Decides which of the 18 elements are required. You can change it while you prepare." />
         <TextAreaField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
         <FormError error={mutation.error} />
-        <Buttons onClose={onClose} pending={mutation.isPending} disabled={!ready} label="Start the submission" />
+        <Buttons onClose={onClose} pending={mutation.isPending} disabled={!ready} label={received ? "Record the package" : "Start the submission"} />
       </form>
     </Dialog>
   );

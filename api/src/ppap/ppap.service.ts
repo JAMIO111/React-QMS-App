@@ -24,7 +24,7 @@ const num = (v: unknown) => (v == null ? null : Number(v));
  */
 const PPAP_SELECT = sql`
   select s.*, p.part_number, p.name as part_name, pr.revision as rev_letter, pr.version as rev_version, pr.status as rev_status,
-         c.name as customer_name, c.code as customer_code, st.name as site_name, ${sql.raw(personName('po'))} as owner_name,
+         c.name as customer_name, c.code as customer_code, su.name as supplier_name, su.code as supplier_code, st.name as site_name, ${sql.raw(personName('po'))} as owner_name,
          (select count(*)::int from public.ppap_elements e where e.submission_id = s.id and e.requirement = 'required') as required_count,
          (select count(*)::int from public.ppap_elements e where e.submission_id = s.id and e.requirement = 'required' and e.status in ('ready', 'waived')) as done_count,
          s.next_review_on::text as next_review,
@@ -35,6 +35,7 @@ const PPAP_SELECT = sql`
     left join public.parts p on p.id = s.part_id
     left join public.part_revisions pr on pr.id = s.part_revision_id
     left join public.customers c on c.id = s.customer_id
+    left join public.suppliers su on su.id = s.supplier_id
     left join public.sites st on st.id = s.site_id
     left join public.profiles po on po.id = s.owner_user_id`;
 
@@ -42,6 +43,8 @@ const SORT: Record<PpapListQuery['sort'], string> = {
   reference: 'x.reference',
   part: 'lower(x.part_number)',
   customer: 'lower(x.customer_name)',
+  supplier: 'lower(x.supplier_name)',
+  direction: 'x.direction',
   level: 'x.level',
   status: 'x.status',
   owner: 'lower(x.owner_name)',
@@ -63,6 +66,7 @@ const toSummary = (r: Row) => ({
   part: { id: r.part_id as string, partNumber: (r.part_number as string) ?? null, name: (r.part_name as string) ?? null },
   partRevision: { id: r.part_revision_id as string, label: revisionLabel(r.rev_letter, r.rev_version), status: (r.rev_status as string) ?? null },
   customer: r.customer_id ? { id: r.customer_id as string, name: (r.customer_name as string) ?? null, code: (r.customer_code as string) ?? null } : null,
+  supplier: r.supplier_id ? { id: r.supplier_id as string, name: (r.supplier_name as string) ?? null, code: (r.supplier_code as string) ?? null } : null,
   site: r.site_id ? { id: r.site_id as string, name: (r.site_name as string) ?? null } : null,
   owner: person(r.owner_user_id, r.owner_name),
   requirementSetId: r.requirement_set_id as string,
@@ -166,11 +170,12 @@ export class PpapService {
       if (q.reason) where.push(sql`x.reason = any(string_to_array(${q.reason}, ','))`);
       if (q.owner === 'me') where.push(sql`x.owner_user_id = auth.uid()`);
       if (q.customerId) where.push(sql`x.customer_id = ${q.customerId}::uuid`);
+      if (q.supplierId) where.push(sql`x.supplier_id = ${q.supplierId}::uuid`);
       if (q.partId) where.push(sql`x.part_id = ${q.partId}::uuid`);
       if (q.q) {
         const p = likePattern(q.q);
         where.push(sql`(x.reference ilike ${p} escape '\\' or x.part_number ilike ${p} escape '\\' or x.part_name ilike ${p} escape '\\'
-                        or x.customer_name ilike ${p} escape '\\' or x.owner_name ilike ${p} escape '\\')`);
+                        or x.customer_name ilike ${p} escape '\\' or x.supplier_name ilike ${p} escape '\\' or x.owner_name ilike ${p} escape '\\')`);
       }
       const filter = sql.join(where, sql` and `);
       const total = (await db.execute<Row>(sql`select count(*)::int as n from (${PPAP_SELECT}) x where ${filter}`)).rows[0];

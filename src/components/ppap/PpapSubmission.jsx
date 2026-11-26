@@ -243,16 +243,16 @@ export const SubmitDialog = ({ ppap, onClose }) => {
     );
   };
   return (
-    <Dialog title={`Send ${ppap.reference} to ${ppap.customer?.name ?? "the customer"}`} onClose={onClose} width="max-w-lg">
+    <Dialog title={ppap.direction === "received" ? `Record ${ppap.reference} as received from ${ppap.supplier?.name ?? "the supplier"}` : `Send ${ppap.reference} to ${ppap.customer?.name ?? "the customer"}`} onClose={onClose} width="max-w-lg">
       <form noValidate onSubmit={submit} className="flex flex-col gap-3">
         <Callout tone="info">
           Sending freezes the warrant and records what every linked record is now. A later change to one of them shows as "changed since it was submitted". It cannot be edited after this; if the customer rejects it, you start a new submission.
         </Callout>
-        <RHFDatePickerPopout label="Sent on" valueFormat="iso" allowFuture={false} value={sentOn} onChange={(d) => setSentOn(d ?? "")} />
+        <RHFDatePickerPopout label={ppap.direction === "received" ? "Received on" : "Sent on"} valueFormat="iso" allowFuture={false} value={sentOn} onChange={(d) => setSentOn(d ?? "")} />
         <TextInput label="How it was sent" value={how} onChange={(e) => setHow(e.target.value)} maxLength={200} hint="Their portal, email, courier …" />
         <TextAreaField label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={2000} />
         <FormError error={mutation.error} />
-        <Buttons onClose={onClose} pending={mutation.isPending} label="Send it" />
+        <Buttons onClose={onClose} pending={mutation.isPending} label={ppap.direction === "received" ? "Record it" : "Send it"} />
       </form>
     </Dialog>
   );
@@ -312,12 +312,12 @@ export const DecisionDialog = ({ ppap, onClose }) => {
   };
 
   return (
-    <Dialog title="Record the customer's decision" onClose={onClose} width="max-w-xl">
+    <Dialog title={ppap.direction === "received" ? "Record our decision" : "Record the customer's decision"} onClose={onClose} width="max-w-xl">
       <form noValidate onSubmit={submit} className="flex flex-col gap-3">
-        <ComboField label="What did they decide" required value={kind} onChange={(v) => setKind(v ?? "approved")} options={DECISION_CHOICES} clearable={false} sort={false} />
+        <ComboField label={ppap.direction === "received" ? "What did we decide" : "What did they decide"} required value={kind} onChange={(v) => setKind(v ?? "approved")} options={DECISION_CHOICES} clearable={false} sort={false} />
         <RHFDatePickerPopout label="Decided on" required valueFormat="iso" allowFuture={false} value={decidedOn} onChange={(d) => setDecidedOn(d ?? "")} />
         {kind === "interim_approved" && <RHFDatePickerPopout label="Runs to" required valueFormat="iso" minDate={decidedOn || undefined} value={expiresOn} onChange={(d) => setExpiresOn(d ?? "")} />}
-        <TextInput label="Their reference" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
+        <TextInput label={ppap.direction === "received" ? "Our reference" : "Their reference"} value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
         <TextAreaField
           label={kind === "interim_approved" ? "The conditions" : kind === "rejected" ? "Why it was rejected" : "Note"}
           required={needsNote}
@@ -442,7 +442,7 @@ export const DecisionsCard = ({ ppap }) => {
         <div className="flex flex-wrap gap-2">
           {ppap.canRecordDecision && (
             <CTAButton type="main" size="md" onClick={() => setDialog("decide")}>
-              Record the customer's decision
+              {ppap.direction === "received" ? "Record our decision" : "Record the customer's decision"}
             </CTAButton>
           )}
           {ppap.canReview && (
@@ -493,7 +493,7 @@ export const DecisionsCard = ({ ppap }) => {
             {ppap.decisions.map((d) => (
               <li key={d.id} className="flex flex-col gap-0.5 rounded-md border border-border-color p-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${decisionPill(d.kind)}`}>{decisionLabel(d.kind)}</span>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${decisionPill(d.kind)}`}>{decisionLabel(d.kind, ppap.direction)}</span>
                   <span className="font-medium text-primary-text">{formatDay(d.decidedOn)}</span>
                   {d.how && <span className="text-secondary-text">via {d.how}</span>}
                   {d.theirReference && <span className="text-secondary-text">their reference {d.theirReference}</span>}

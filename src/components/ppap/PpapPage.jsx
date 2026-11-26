@@ -210,7 +210,7 @@ const PpapPage = () => {
             {ppap.partRevision?.label ? ` · revision ${ppap.partRevision.label}` : ""}
           </p>
           <p className="text-sm text-secondary-text">
-            For {ppap.customer?.name ?? "a customer you cannot read"} · {reasonLabel(ppap.reason)}
+            {ppap.direction === "received" ? `From ${ppap.supplier?.name ?? "a supplier you cannot read"} (received)` : `For ${ppap.customer?.name ?? "a customer you cannot read"}`} · {reasonLabel(ppap.reason)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -231,7 +231,7 @@ const PpapPage = () => {
           )}
           {ppap.canSubmit && (
             <CTAButton type="main" onClick={() => setDialog({ kind: "submit" })}>
-              Send to the customer
+              {ppap.direction === "received" ? "Record as received" : "Send to the customer"}
             </CTAButton>
           )}
           {ppap.canWithdraw && (
@@ -244,13 +244,16 @@ const PpapPage = () => {
 
       {ppap.status === "withdrawn" && <Callout tone="warning" title="Withdrawn">{ppap.withdrawReason}</Callout>}
       {ppap.status === "ready" && (
-        <Callout tone="success" title="Ready to send">
-          Every required element has evidence or a waiver and the warrant is signed. Check the warrant and the evidence, then send it. After that nothing can be edited.
+        <Callout tone="success" title={ppap.direction === "received" ? "Ready to record as received" : "Ready to send"}>
+          {ppap.direction === "received"
+            ? "Every required element has evidence or a waiver. Check the evidence, then record it as received. After that nothing can be edited."
+            : "Every required element has evidence or a waiver and the warrant is signed. Check the warrant and the evidence, then send it. After that nothing can be edited."}
         </Callout>
       )}
       {ppap.status === "submitted" && (
-        <Callout tone="info" title="Sent to the customer">
-          Sent on {formatDay(lastDecision(ppap, "submitted")?.decidedOn)}. It is now frozen, and a linked record that changes from here shows "changed since it was submitted". Waiting for the customer's decision.
+        <Callout tone="info" title={ppap.direction === "received" ? "Received from the supplier" : "Sent to the customer"}>
+          {ppap.direction === "received" ? "Received" : "Sent"} on {formatDay(lastDecision(ppap, "submitted")?.decidedOn)}. It is now frozen, and a linked record that changes from here shows "changed since it was submitted". Waiting for{" "}
+          {ppap.direction === "received" ? "our decision" : "the customer's decision"}.
         </Callout>
       )}
       {ppap.status === "interim_approved" && (
@@ -291,7 +294,7 @@ const PpapPage = () => {
               "—"
             )}
           </Fact>
-          <Fact label="Customer">{ppap.customer?.name ?? "—"}</Fact>
+          <Fact label={ppap.direction === "received" ? "Supplier" : "Customer"}>{(ppap.direction === "received" ? ppap.supplier?.name : ppap.customer?.name) ?? "—"}</Fact>
           <Fact label="Owner">{ppap.owner?.name ?? "—"}</Fact>
           <Fact label="Site">{ppap.site?.name ?? "—"}</Fact>
           <Fact label="Requirements">Version {ppap.requirementSet?.version ?? "—"}</Fact>
@@ -333,7 +336,7 @@ const PpapPage = () => {
         </p>
       </MenuCard>
 
-      <PswCard ppap={ppap} />
+      {ppap.direction !== "received" && <PswCard ppap={ppap} />}
       <CustomerAnswerCard ppap={ppap} />
       <DecisionsCard ppap={ppap} />
 

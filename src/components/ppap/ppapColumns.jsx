@@ -43,7 +43,7 @@ export const ppapColumns = [
   ),
   col("part", "Part", head(QrCodeIcon, "Part"), (i) => text(partWords(i.row.original)), { size: 260, minSize: 120, maxSize: 600, sortKey: "part", accessor: partWords }),
   col("revision", "Revision", head(FileTextIcon, "Revision"), (i) => <div className="table-row-item whitespace-nowrap">{i.row.original.partRevision?.label ?? "—"}</div>, { size: 100, accessor: (p) => p.partRevision?.label }),
-  col("customer", "Customer", head(UsersIcon, "Customer"), (i) => text(i.row.original.customer?.name), { size: 180, sortKey: "customer", accessor: (p) => p.customer?.name }),
+  col("customer", "Customer or supplier", head(UsersIcon, "Customer or supplier"), (i) => text(i.row.original.direction === "received" ? `${i.row.original.supplier?.name ?? "—"} (supplier)` : i.row.original.customer?.name), { size: 200, sortKey: "customer", accessor: (p) => (p.direction === "received" ? p.supplier?.name : p.customer?.name) }),
   col("level", "Level", head(BadgeCheckIcon, "Level"), (i) => <div className="table-row-item whitespace-nowrap">Level {i.row.original.level}</div>, { size: 90, sortKey: "level" }),
   col("reason", "Reason", head(FileTextIcon, "Reason"), (i) => text(reasonLabel(i.row.original.reason)), { size: 220, accessor: (p) => reasonLabel(p.reason) }),
   col(

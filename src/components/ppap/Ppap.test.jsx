@@ -71,6 +71,35 @@ describe("the PPAP register", () => {
   });
 });
 
+describe("the PPAP register, both directions", () => {
+  it("shows a received package with its supplier", async () => {
+    apiFetch.mockImplementation(async (path) => {
+      if (path?.startsWith("/ppaps?")) return { data: [submission({ id: "p2", reference: "PPAP-26-0002", direction: "received", customer: null, supplier: { id: "s1", name: "Acme Castings", code: "ACME" } })], page: 1, pageSize: 25, total: 1 };
+      if (path?.startsWith("/saved-filters")) return { data: [], limit: 5 };
+      return {};
+    });
+    wrap(<PpapRegisterPage />, "/PPAP");
+    const table = await screen.findByRole("region", { name: "PPAP submissions" });
+    expect(await within(table).findByText("Acme Castings (supplier)")).toBeInTheDocument();
+  });
+});
+
+describe("starting a PPAP package", () => {
+  it("can be a package a supplier sent, which names a supplier and no customer", async () => {
+    apiFetch.mockImplementation(async () => ({}));
+    const { NewPpapDialog } = await import("./PpapDialogs");
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <NewPpapDialog onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("dialog", { name: "Start a PPAP submission" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "A supplier sent it to us" }));
+    expect(screen.getByRole("dialog", { name: "Record a package from a supplier" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record the package" })).toBeDisabled();
+  });
+});
+
 describe("a PPAP submission", () => {
   const load = (over) => apiFetch.mockImplementation(async (path, opts) => (path === "/ppaps/p1" && !opts?.method ? submission(over) : {}));
 
@@ -247,6 +276,47 @@ describe("a PPAP submission", () => {
     await waitFor(() =>
       expect(apiFetch).toHaveBeenCalledWith("/ppaps/p1/decisions", expect.objectContaining({ method: "POST", body: expect.objectContaining({ kind: "approved", theirReference: "ACME-OK-9" }) })),
     );
+  });
+
+  describe("a package received from a supplier", () => {
+    const received = {
+      direction: "received", customer: null, supplier: { id: "s1", name: "Acme Castings", code: "ACME" }, psw: null, canSavePsw: false,
+      elements: [element({ id: "e1", key: "part_submission_warrant", ordinal: 18, label: "Part Submission Warrant", requirement: "required" })],
+    };
+
+    it("says it comes from the supplier, and offers no warrant of ours", async () => {
+      load(received);
+      wrap(<PpapPage />, "/PPAP/p1");
+      expect(await screen.findByText(/From Acme Castings \(received\)/)).toBeInTheDocument();
+      expect(screen.getByText("Supplier")).toBeInTheDocument();
+      expect(screen.queryByText("Part Submission Warrant", { selector: "h2, h3" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Sign the warrant/ })).toBeNull();
+    });
+
+    it("is recorded as received, not sent, and our decision is ours", async () => {
+      load({
+        ...received, status: "ready", canSubmit: true, canMarkReady: false, editable: false, problems: [],
+      });
+      wrap(<PpapPage />, "/PPAP/p1");
+      expect(await screen.findByText("Ready to record as received")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Record as received" }));
+      const dialog = await screen.findByRole("dialog", { name: /Record PPAP-26-0001 as received from Acme Castings/ });
+      expect(within(dialog).getByLabelText(/Received on/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Record it" })).toBeInTheDocument();
+    });
+
+    it("words what happened and the decision for a supplier's package", async () => {
+      load({
+        ...received, status: "submitted", editable: false, canRecordDecision: true, submittedAt: "2026-11-20T09:00:00.000Z", decisions: [decision()],
+      });
+      wrap(<PpapPage />, "/PPAP/p1");
+      const list = await screen.findByRole("list", { name: "Decisions" });
+      expect(within(list).getByText("Received from the supplier")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Record our decision" }));
+      const dialog = await screen.findByRole("dialog", { name: "Record our decision" });
+      expect(within(dialog).getByText("What did we decide")).toBeInTheDocument();
+      expect(screen.queryByText("Customer's answer in the portal")).toBeNull();
+    });
   });
 
   describe("putting it to the customer in the portal", () => {

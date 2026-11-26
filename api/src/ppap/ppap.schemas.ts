@@ -53,7 +53,10 @@ export const CreatePpapBody = z
   .object({
     partId: z.string().uuid(),
     partRevisionId: z.string().uuid().optional(),
-    customerId: z.string().uuid(),
+    /** `submitted` (we send it to a customer, the default) or `received` (a supplier sent us a package). */
+    direction: z.enum(['submitted', 'received']).optional(),
+    customerId: z.string().uuid().optional(),
+    supplierId: z.string().uuid().optional(),
     siteId: z.string().uuid().nullable().optional(),
     level: z.number().int().min(1).max(5).optional(),
     reason: z.enum(PPAP_REASONS),
@@ -61,7 +64,8 @@ export const CreatePpapBody = z
     ownerId: z.string().uuid().optional(),
     clientKey: z.string().min(8).max(80).optional(),
   })
-  .strict();
+  .strict()
+  .refine((b) => (b.direction === 'received' ? !!b.supplierId && !b.customerId : !!b.customerId && !b.supplierId), 'A submission names a customer, a received package names a supplier');
 export type CreatePpapBody = z.infer<typeof CreatePpapBody>;
 
 export const UpdatePpapBody = z
@@ -181,12 +185,13 @@ export const PpapListQuery = z.object({
   /** Statuses separated by commas, `live` (default: not withdrawn or rejected), or `all`. */
   status: csv([...PPAP_STATUSES, 'live', 'all']),
   direction: csv(['submitted', 'received']),
+  supplierId: z.string().uuid().optional(),
   level: csv(['1', '2', '3', '4', '5']),
   reason: csv(PPAP_REASONS),
   owner: z.enum(['me']).optional(),
   customerId: z.string().uuid().optional(),
   partId: z.string().uuid().optional(),
-  sort: z.enum(['reference', 'part', 'customer', 'level', 'status', 'owner', 'progress', 'updatedAt', 'createdAt']).default('reference'),
+  sort: z.enum(['reference', 'part', 'customer', 'supplier', 'direction', 'level', 'status', 'owner', 'progress', 'updatedAt', 'createdAt']).default('reference'),
   order: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),

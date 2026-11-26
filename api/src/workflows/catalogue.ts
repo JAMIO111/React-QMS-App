@@ -80,6 +80,18 @@ const FMEA_FIELDS: TriggerField[] = [
   { key: 'fmea_kind', label: 'Kind of FMEA', type: 'enum', options: FMEA_KIND },
   { key: 'title', label: 'Title', type: 'text' },
 ];
+const PPAP_REASON = o(
+  ['new_part', 'New part'], ['engineering_change', 'Engineering change'], ['tooling', 'Tooling'], ['discrepancy_correction', 'Correction of a discrepancy'],
+  ['alternate_material_or_supplier', 'Alternate material or supplier'], ['process_change', 'Process change'], ['not_produced_12_months', 'Not produced for 12 months'],
+  ['customer_request', 'Customer request'], ['other', 'Other'],
+);
+const PPAP_FIELDS: TriggerField[] = [
+  { key: 'direction', label: 'Direction', type: 'enum', options: o(['submitted', 'We send it to a customer'], ['received', 'A supplier sent it to us']) },
+  { key: 'level', label: 'Submission level', type: 'number' },
+  { key: 'reason', label: 'Reason', type: 'enum', options: PPAP_REASON },
+  { key: 'part_number', label: 'Part number', type: 'text' },
+  { key: 'party', label: 'Customer or supplier', type: 'text' },
+];
 export const TRIGGERS: Trigger[] = [
   { eventType: 'ncr.created', entityType: 'nonconformance', label: 'A non-conformance is raised', permission: 'ncr.read', fields: NC_FIELDS },
   {
@@ -385,6 +397,24 @@ export const TRIGGERS: Trigger[] = [
     permission: 'fmea.read',
     fields: [...FMEA_FIELDS, { key: 'days_overdue', label: 'Days past the review date', type: 'number' }],
   },
+  { eventType: 'ppap.submitted', entityType: 'ppap', label: 'A part approval package is sent or received', permission: 'ppap.read', fields: PPAP_FIELDS },
+  { eventType: 'ppap.approved', entityType: 'ppap', label: 'A part approval is granted', permission: 'ppap.read', fields: PPAP_FIELDS },
+  { eventType: 'ppap.interim_approved', entityType: 'ppap', label: 'A part approval is granted for now only', permission: 'ppap.read', fields: PPAP_FIELDS },
+  { eventType: 'ppap.rejected', entityType: 'ppap', label: 'A part approval is rejected', permission: 'ppap.read', fields: PPAP_FIELDS },
+  {
+    eventType: 'ppap.interim_expiring',
+    entityType: 'ppap',
+    label: 'An interim part approval is about to run out',
+    permission: 'ppap.read',
+    fields: [...PPAP_FIELDS, { key: 'days_to_expiry', label: 'Days until it runs out (negative once it has)', type: 'number' }],
+  },
+  {
+    eventType: 'ppap.review_due',
+    entityType: 'ppap',
+    label: 'A part approval is due for revalidation',
+    permission: 'ppap.read',
+    fields: [...PPAP_FIELDS, { key: 'days_overdue', label: 'Days past the revalidation date', type: 'number' }],
+  },
   {
     eventType: 'quality_alert.issued',
     entityType: 'quality_alert',
@@ -441,6 +471,8 @@ export function workflowRecordPath(kind: unknown, id: unknown): string | null {
       return `/Change/${t}`;
     case 'fmea':
       return `/FMEA/${t}`;
+    case 'ppap':
+      return `/PPAP/${t}`;
     default:
       return null;
   }

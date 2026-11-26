@@ -3,7 +3,7 @@ import HeaderIcon from "./HeaderIcon";
 import SearchBar from "./ui/SearchBar";
 import { useUser } from "../contexts/UserProvider";
 import { useNotification } from "../contexts/NotificationProvider";
-import { useNotifications } from "../hooks/useNotifications";
+import { useBadges } from "../hooks/useBadges";
 import OrganisationSwitcher from "./OrganisationSwitcher";
 import ProfileMenu from "./ProfileMenu";
 
@@ -15,9 +15,9 @@ const Header = () => {
     "User";
   const jobTitle = profile?.job_title ?? "";
   const { openPane } = useNotification();
-  const { data: notificationData } = useNotifications();
+  const { data: counts } = useBadges();
 
-  const newNotifications = notificationData?.unread ?? 0;
+  const newNotifications = counts?.notifications ?? 0;
 
   return (
     <header className="flex justify-between items-center border-b-1 border-border-color bg-secondary-bg px-4">

@@ -1,21 +1,33 @@
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api-client";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import { refreshOrganisation } from "../lib/refresh";
 import { guessCache, rollbackGuess } from "../lib/optimistic";
+import { badgesKey, useBadges } from "./useBadges";
 
 const key = (organisationId, ...rest) => ["api", "org", organisationId, "notifications", ...rest];
 
-/** The member's notifications for the current organisation, with the unread count; refreshed every minute. */
+/**
+ * The member's notifications for the current organisation, with the unread count. Only the notification pane asks for the list; the bell's count comes
+ * from `useBadges` (once a minute), and while the pane is open a change in that count fetches the list again.
+ */
 export const useNotifications = () => {
   const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  const unread = useBadges().data?.notifications;
+  const seen = useRef(unread);
+  useEffect(() => {
+    if (seen.current === unread) return;
+    seen.current = unread;
+    queryClient.invalidateQueries({ queryKey: key(organisationId, "list") });
+  }, [unread, organisationId, queryClient]);
   return useQuery({
     queryKey: key(organisationId, "list"),
     queryFn: () => apiFetch("/notifications?limit=100", { organisationId }),
     enabled: !!organisationId,
     retry: false,
     staleTime: 1000 * 30,
-    refetchInterval: 1000 * 60,
     refetchOnWindowFocus: true,
   });
 };
@@ -26,10 +38,22 @@ export const useMarkNotificationsRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) => apiFetch("/notifications/read", { method: "POST", body, organisationId }),
-    onMutate: (body) => guessCache(queryClient, key(organisationId, "list"), (data) => guessNotificationsRead(data, body)),
+    onMutate: async (body) => {
+      const list = await guessCache(queryClient, key(organisationId, "list"), (data) => guessNotificationsRead(data, body));
+      // The bell's number comes from the badges, which change at once too.
+      const bell = await guessCache(queryClient, badgesKey(organisationId), (data) => guessBellRead(data, body));
+      return { optimistic: list.optimistic || bell.optimistic, snapshot: [...list.snapshot, ...bell.snapshot] };
+    },
     onError: (_e, _body, context) => rollbackGuess(queryClient, context),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
   });
+};
+
+/** The badges `{ notifications, … }` once `{ ids }` or `{ all: true }` are marked read. */
+export const guessBellRead = (data, { ids, all } = {}) => {
+  if (typeof data?.notifications !== "number" || data.notifications === 0) return data;
+  const next = all ? 0 : Math.max(0, data.notifications - (ids?.length ?? 0));
+  return next === data.notifications ? data : { ...data, notifications: next };
 };
 
 /** The notifications list `{ data, unread }` as it will be once `{ ids }` or `{ all: true }` are marked read. */

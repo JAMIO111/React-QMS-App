@@ -85,6 +85,8 @@ export const InspectionRecommendation = z.object({
   basis: z.object({
     days: z.number().int(), from: DateOnly, to: DateOnly, approvalStatus: z.string(), riskRating: z.string().nullable(), band: z.enum(BANDS), score: z.number().nullable(),
     deliveredLines: z.number().int(), rejectedLines: z.number().int(), criticalNcs: z.number().int(), majorNcs: z.number().int(), overdueScars: z.number().int(), expiredCerts: z.number().int(), minLines: z.number().int(),
+    /** Part approval packages of the supplier's parts; `available` is false when the caller may not read them (then they played no part in the answer). */
+    ppap: z.object({ available: z.boolean(), notApproved: z.array(z.string()), interim: z.array(z.string()) }),
   }),
   generatedAt: Iso,
 });

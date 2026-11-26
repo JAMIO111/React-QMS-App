@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { AcknowledgeBody, ChangeApprovalDecisionBody, ChangeRequestBody, ClosureDecisionBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
+import { AcknowledgeBody, ChangeApprovalDecisionBody, ChangeRequestBody, ClosureDecisionBody, PpapDecisionBody, PpapPackageFileBody, PpapPackageSubmitBody, PpapPackageUploadBody, ComplaintBody, ScarActionCompleteBody, CommentBody, OwnPartyInviteBody, ReasonBody, ScarAcknowledgeBody, ScarExtensionBody, ScarExtensionWithdrawBody, ScarFileBody, ScarRespondBody, ScarUploadBody, ShareFileBody } from './portal.schemas';
 import { PortalScoped } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -227,6 +227,86 @@ export class PortalController {
   @ApiOkResponse({ description: 'The customer approves the change, or says what they cannot accept (a note is then needed). Final. Recorded on the change; nothing else moves' })
   decideChangeApproval(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.decideChangeApproval(ctx, Uuid.parse(id), parse(ChangeApprovalDecisionBody, body));
+  }
+
+  @Get('ppaps')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Part approval submissions staff have asked this customer to answer (customers only): reference, part, status, nothing else' })
+  ppaps(@Ctx() ctx: RequestContext) {
+    return this.service.listPpaps(ctx);
+  }
+
+  @Get('ppaps/:id')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'One request with the submission as the customer may see it: their part, the level, the elements by name, the signed warrant (named fields only)' })
+  ppap(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getPpap(ctx, Uuid.parse(id));
+  }
+
+  @Post('ppaps/:id/decide')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(PpapDecisionBody) })
+  @ApiOkResponse({ description: 'The customer approves the submission, approves it for now (the day it runs to and its conditions are needed) or rejects it (a reason is needed). Final. Recorded as the submission\'s decision, today' })
+  decidePpap(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.decidePpap(ctx, Uuid.parse(id), parse(PpapDecisionBody, body));
+  }
+
+  @Get('ppap-packages')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Part approval packages staff have asked this supplier to prepare (suppliers only): reference, part, status, nothing else' })
+  ppapPackages(@Ctx() ctx: RequestContext) {
+    return this.service.listPpapPackages(ctx);
+  }
+
+  @Get('ppap-packages/:id')
+  @PortalScoped()
+  @ApiOkResponse({ description: 'One package as the supplier may see it: what is asked of them, their own files and what is still missing (named fields only)' })
+  ppapPackage(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.getPpapPackage(ctx, Uuid.parse(id));
+  }
+
+  @Post('ppap-packages/:id/files/upload-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(PpapPackageUploadBody) })
+  @ApiOkResponse({ description: 'A token to upload one file to the package\'s folder (only while it is being prepared, to an element asked of the supplier, at most ten to an element); 403 file_not_allowed otherwise' })
+  ppapPackageUploadUrl(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    const b = parse(PpapPackageUploadBody, body);
+    return this.service.ppapPackageUploadLink(ctx, Uuid.parse(id), b.elementKey, b.fileName);
+  }
+
+  @Post('ppap-packages/:id/files')
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(PpapPackageFileBody) })
+  @ApiOkResponse({ description: 'Record an uploaded file on an element of the package; answers with the package' })
+  addPpapPackageFile(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.addPpapPackageFile(ctx, Uuid.parse(id), parse(PpapPackageFileBody, body));
+  }
+
+  @Post('ppap-package-files/:id/remove')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiOkResponse({ description: 'Take back a file of the supplier\'s company while the package is still being prepared; answers with the package' })
+  removePpapPackageFile(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.removePpapPackageFile(ctx, Uuid.parse(id));
+  }
+
+  @Post('ppap-package-files/:id/download-url')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiOkResponse({ description: 'A short-lived link (ten minutes) to a file added by someone at the supplier\'s company' })
+  ppapPackageFileUrl(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.ppapPackageFileLink(ctx, Uuid.parse(id));
+  }
+
+  @Post('ppap-packages/:id/submit')
+  @HttpCode(200)
+  @PortalScoped()
+  @ApiBody({ schema: openApiSchema(PpapPackageSubmitBody) })
+  @ApiOkResponse({ description: 'The supplier submits the package (every required element needs evidence). It is then recorded as submitted and the supplier sees our decision when we make it' })
+  submitPpapPackage(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.submitPpapPackage(ctx, Uuid.parse(id), parse(PpapPackageSubmitBody, body).note ?? null);
   }
 
   @Get('change-request-parts')

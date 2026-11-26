@@ -25,7 +25,7 @@ BEGIN
   -- ---- every organisation bucket's policies go through the one function and the direct-access check ----
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'
                               AND coalesce(qual, with_check) LIKE '%storage_file_allowed%' AND coalesce(qual, with_check) LIKE '%storage_direct_allowed%'),
-                            28::bigint, 'insert and select of the fourteen organisation buckets use the shared rule');
+                            30::bigint, 'insert and select of the fifteen organisation buckets use the shared rule');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'
                               AND policyname LIKE 'org_logos_%' AND coalesce(qual, with_check) LIKE '%storage_direct_allowed%'), 4::bigint,
                             'every logo policy checks direct access');

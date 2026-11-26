@@ -9,6 +9,8 @@ import { Empty, SplitBar, StatTile, cardLink } from "../dashboard/DashboardGraph
 import { BellIcon, ClipboardCheckIcon, ClipboardListIcon, FileTextIcon, TriangleAlertIcon } from "@/components/icons";
 import { usePortalCapas, usePortalHome, usePortalNcrs } from "../../hooks/usePortal";
 import { ChangeApprovalList } from "./PortalChangeApprovalPage";
+import { PpapList } from "./PortalPpapPage";
+import { PpapPackageList } from "./PortalPpapPackagePage";
 import { STAGES } from "../../lib/ncr";
 import { PERIODS } from "../../lib/supplierPerformance";
 import { describeApiError } from "../../lib/api-client";
@@ -93,6 +95,8 @@ export default function PortalDashboard() {
             )}
           </section>
           <ChangeApprovalList access={access} onlyWaiting heading="Changes waiting for your approval" />
+          <PpapList access={access} onlyWaiting heading="Part approvals waiting for your answer" />
+          <PpapPackageList access={access} onlyEditable heading="Part approval packages to prepare" />
           {waitingScars.length > 0 && (
             <section aria-labelledby="portal-scars-awaiting" className="rounded-2xl border border-warning-color/40 bg-secondary-bg p-5">
               <h2 id="portal-scars-awaiting" className="text-lg font-semibold">Waiting for your response</h2>

@@ -23,6 +23,8 @@ vi.mock("../../hooks/usePortal", () => ({
   usePortalNcrs: () => ({ data: { data: [] }, isLoading: false }),
   usePortalCapas: () => ({ data: { data: [] }, isLoading: false }),
   usePortalChangeApprovals: () => ({ data: { data: approvals }, isLoading: false }),
+  usePortalPpaps: () => ({ data: { data: [] }, isLoading: false }),
+  usePortalPpapPackages: () => ({ data: { data: [] }, isLoading: false }),
   usePortalMutation: () => ({ mutate, isPending: false, variables: null }),
 }));
 vi.mock("../../hooks/useSignOut", () => ({ default: () => [signOut, false] }));
@@ -69,19 +71,19 @@ describe("the supplier and customer portal", () => {
     expect(within(menu).queryByRole("link", { name: "Settings" })).toBeNull();
   });
 
-  it("a supplier's menu has corrective actions and process changes and not 8D reports, complaints or certificates; an admin also has Team", () => {
+  it("a supplier's menu has corrective actions, part approvals and process changes and not 8D reports, complaints or certificates; an admin also has Team", () => {
     renderIt();
     const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
-    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Process changes", "Documents and alerts", "Team"]);
+    expect(names).toEqual(["Dashboard", "Non-conformances", "Corrective actions", "Part approvals", "Process changes", "Documents and alerts", "Team"]);
   });
 
-  it("a customer's menu has 8D reports, complaints, change requests and certificates, and no corrective actions; a member has no Team", () => {
+  it("a customer's menu has 8D reports, part approvals, complaints, change requests and certificates, and no corrective actions; a member has no Team", () => {
     const customer = { ...acme, partyKind: "customer", partyName: "Wayne Ltd", role: "member" };
     me = { ...me, portal: [customer] };
     home = { data: { access: customer, attention: [], shared: 0, scarsAwaiting: [], scars: 0 }, isLoading: false, error: null };
     renderIt();
     const names = within(screen.getByRole("navigation", { name: "Portal menu" })).getAllByRole("link").map((l) => l.getAttribute("title"));
-    expect(names).toEqual(["Dashboard", "Non-conformances", "8D reports", "Complaints", "Change requests", "Documents and alerts", "Certificates and reports"]);
+    expect(names).toEqual(["Dashboard", "Non-conformances", "8D reports", "Part approvals", "Complaints", "Change requests", "Documents and alerts", "Certificates and reports"]);
   });
 
   it("highlights only the page the person is on, so Dashboard is not lit on every page", () => {

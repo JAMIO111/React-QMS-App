@@ -310,6 +310,7 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/receipt-line-ncrs/{id}/unlink': { reason: 'Hijacked link' },
     'PUT /api/v1/supplier-quality/suppliers/{id}/performance/settings': { graceDaysAfter: 3 },
     'GET /api/v1/supplier-quality/suppliers/{id}/inspection-recommendation': undefined,
+    'GET /api/v1/supplier-quality/suppliers/{id}/ppap': undefined,
     'GET /api/v1/supplier-quality/suppliers/{id}/scorecards': undefined,
     'POST /api/v1/supplier-quality/suppliers/{id}/scorecards': { from: '2026-01-01', to: '2026-01-31' },
     'GET /api/v1/supplier-quality/scorecards/{id}': undefined,
@@ -683,6 +684,39 @@ const sampleBody = (op: Op): object | undefined =>
     'POST /api/v1/fmeas/{id}/reviews': { outcome: 'no_change', note: 'Hijacked' },
     'POST /api/v1/fmea-causes/{id}/carry-to-plan': { controlKind: 'prevention', controlPlanId: ids.ownerA, operationCode: 'OP-10', characteristicKey: 'OD' },
     'POST /api/v1/fmea-control-links/{id}/end': { reason: 'Hijacked' },
+    'GET /api/v1/ppaps/{id}': undefined,
+    'PATCH /api/v1/ppaps/{id}': { notes: 'Hijacked' },
+    'PUT /api/v1/ppaps/{id}/level': { level: 1 },
+    'POST /api/v1/ppaps/{id}/ready': undefined,
+    'POST /api/v1/ppaps/{id}/reopen': undefined,
+    'POST /api/v1/ppaps/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/ppaps/{id}/psw': undefined,
+    'PUT /api/v1/ppaps/{id}/psw': { partWeight: 1 },
+    'POST /api/v1/ppaps/{id}/psw/sign': { title: 'Hijacked' },
+    'POST /api/v1/ppaps/{id}/psw/unsign': { reason: 'Hijacked' },
+    'POST /api/v1/ppaps/{id}/submit': {},
+    'POST /api/v1/ppaps/{id}/decisions': { kind: 'approved', decidedOn: '2026-01-01' },
+    'POST /api/v1/ppaps/{id}/resubmission': {},
+    'POST /api/v1/ppaps/{id}/reviews': { note: 'Hijacked' },
+    'GET /api/v1/ppaps/{id}/customer-requests': undefined,
+    'POST /api/v1/ppaps/{id}/customer-requests': { note: 'Hijacked' },
+    'POST /api/v1/ppap-customer-requests/{id}/withdraw': { reason: 'Hijacked' },
+    'GET /api/v1/portal/ppaps/{id}': undefined,
+    'POST /api/v1/portal/ppaps/{id}/decide': { kind: 'approved' },
+    'POST /api/v1/ppaps/{id}/supplier-requests': { note: 'Hijacked' },
+    'GET /api/v1/portal/ppap-packages/{id}': undefined,
+    'POST /api/v1/portal/ppap-packages/{id}/files/upload-url': { elementKey: 'dfmea', fileName: 'x.pdf' },
+    'POST /api/v1/portal/ppap-packages/{id}/files': { elementKey: 'dfmea', path: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/portal/ppap-package-files/{id}/remove': undefined,
+    'POST /api/v1/portal/ppap-package-files/{id}/download-url': undefined,
+    'POST /api/v1/portal/ppap-packages/{id}/submit': { note: 'Hijacked' },
+    'PATCH /api/v1/ppap-elements/{id}': { note: 'Hijacked' },
+    'POST /api/v1/ppap-elements/{id}/files': { storagePath: 'x/ppap/y/z.pdf', fileName: 'z.pdf', sizeBytes: 1 },
+    'POST /api/v1/ppap-elements/{id}/links': { kind: 'part_revision', targetId: '00000000-0000-4000-8000-000000000001' },
+    'POST /api/v1/ppap-elements/{id}/waive': { reason: 'Hijacked, without a reason of substance' },
+    'POST /api/v1/ppap-elements/{id}/unwaive': undefined,
+    'POST /api/v1/ppap-evidence/{id}/remove': { reason: 'Hijacked' },
+    'PUT /api/v1/ppap-customer-rules/{id}': { defaultLevel: 1 },
   })[`${op.method} ${op.path}`];
 
 const hasSample = (op: Op) =>
@@ -919,6 +953,7 @@ const hasSample = (op: Op) =>
     'POST /api/v1/receipt-line-ncrs/{id}/unlink',
     'PUT /api/v1/supplier-quality/suppliers/{id}/performance/settings',
     'GET /api/v1/supplier-quality/suppliers/{id}/inspection-recommendation',
+    'GET /api/v1/supplier-quality/suppliers/{id}/ppap',
     'GET /api/v1/supplier-quality/suppliers/{id}/scorecards',
     'POST /api/v1/supplier-quality/suppliers/{id}/scorecards',
     'GET /api/v1/supplier-quality/scorecards/{id}',
@@ -1295,6 +1330,39 @@ const hasSample = (op: Op) =>
     'GET /api/v1/fmea-revisions/{id}/base-changes',
     'POST /api/v1/fmea-causes/{id}/carry-to-plan',
     'POST /api/v1/fmea-control-links/{id}/end',
+    'GET /api/v1/ppaps/{id}',
+    'PATCH /api/v1/ppaps/{id}',
+    'PUT /api/v1/ppaps/{id}/level',
+    'POST /api/v1/ppaps/{id}/ready',
+    'POST /api/v1/ppaps/{id}/reopen',
+    'POST /api/v1/ppaps/{id}/withdraw',
+    'GET /api/v1/ppaps/{id}/psw',
+    'PUT /api/v1/ppaps/{id}/psw',
+    'POST /api/v1/ppaps/{id}/psw/sign',
+    'POST /api/v1/ppaps/{id}/psw/unsign',
+    'POST /api/v1/ppaps/{id}/submit',
+    'POST /api/v1/ppaps/{id}/decisions',
+    'POST /api/v1/ppaps/{id}/resubmission',
+    'POST /api/v1/ppaps/{id}/reviews',
+    'GET /api/v1/ppaps/{id}/customer-requests',
+    'POST /api/v1/ppaps/{id}/customer-requests',
+    'POST /api/v1/ppap-customer-requests/{id}/withdraw',
+    'GET /api/v1/portal/ppaps/{id}',
+    'POST /api/v1/portal/ppaps/{id}/decide',
+    'POST /api/v1/ppaps/{id}/supplier-requests',
+    'GET /api/v1/portal/ppap-packages/{id}',
+    'POST /api/v1/portal/ppap-packages/{id}/files/upload-url',
+    'POST /api/v1/portal/ppap-packages/{id}/files',
+    'POST /api/v1/portal/ppap-package-files/{id}/remove',
+    'POST /api/v1/portal/ppap-package-files/{id}/download-url',
+    'POST /api/v1/portal/ppap-packages/{id}/submit',
+    'PATCH /api/v1/ppap-elements/{id}',
+    'POST /api/v1/ppap-elements/{id}/files',
+    'POST /api/v1/ppap-elements/{id}/links',
+    'POST /api/v1/ppap-elements/{id}/waive',
+    'POST /api/v1/ppap-elements/{id}/unwaive',
+    'POST /api/v1/ppap-evidence/{id}/remove',
+    'PUT /api/v1/ppap-customer-rules/{id}',
     'GET /api/v1/fmea-revisions/{id}/control-coverage',
     'GET /api/v1/fmea-revisions/{id}/occurrence-evidence',
     'GET /api/v1/control-plan-revisions/{id}/fmea-cover',
@@ -1358,6 +1426,11 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/supplier-quality/supplier-certifications/')) return a.supplierCertification;
   if (path.startsWith('/api/v1/supplier-quality/classifications/')) return a.supplierClassification;
   if (path.startsWith('/api/v1/competence/categories/')) return a.competenceCategory;
+  if (path.startsWith('/api/v1/ppap-elements/')) return a.ppapElement;
+  if (path.startsWith('/api/v1/ppap-evidence/')) return a.ppapEvidence;
+  if (path.startsWith('/api/v1/ppap-customer-rules/')) return a.customer;
+  if (path.startsWith('/api/v1/ppap-customer-requests/') || path.startsWith('/api/v1/portal/ppaps/') || path.startsWith('/api/v1/portal/ppap-packages/') || path.startsWith('/api/v1/portal/ppap-package-files/')) return a.portalPpapRequest;
+  if (path.startsWith('/api/v1/ppaps/')) return a.ppap;
   if (path.startsWith('/api/v1/fmea-revisions/')) return a.fmeaRevision;
   if (path.startsWith('/api/v1/fmea-items/')) return a.fmeaItem;
   if (path.startsWith('/api/v1/fmea-functions/')) return a.fmeaFunction;
@@ -1624,6 +1697,12 @@ beforeAll(async () => {
     a.fmeaAction = (await q1(`select app.add_fmea_action($1::uuid, jsonb_build_object('kind', 'prevention', 'description', 'Alpha action', 'ownerUserId', $2::text, 'dueOn', (current_date + 30)::text)) as id`, [a.fmeaCause, ids.ownerA])).id;
     await q1(`select app.save_fmea_cause($1::uuid, $2::uuid, '{"preventionControls":"Alpha control"}'::jsonb) as id`, [a.fmeaMode, a.fmeaCause]);
     a.fmeaControlLink = (await q1(`select app.carry_fmea_cause_to_plan($1::uuid, jsonb_build_object('controlKind', 'prevention', 'controlPlanId', $2::text, 'operationCode', 'OP-10', 'characteristicKey', 'OD')) as id`, [a.fmeaCause, a.plan])).id;
+    const ppapPart = (await q1(`insert into public.parts (organisation_id, part_number, name) values ($1, 'PPAP-SW-1', 'PPAP sweep part') returning id`, [ids.orgA])).id;
+    const ppapRev = (await q1(`insert into public.part_revisions (organisation_id, part_id, revision) values ($1, $2, 'A') returning id`, [ids.orgA, ppapPart])).id;
+    await client.query(`update public.part_revisions set status = 'released' where id = $1`, [ppapRev]);
+    a.ppap = (await q1(`select (app.create_ppap($1::uuid, jsonb_build_object('partId', $2::text, 'customerId', $3::text, 'reason', 'new_part'))->>'id')::uuid as id`, [ids.orgA, ppapPart, a.customer])).id;
+    a.ppapElement = (await q1(`select id from public.ppap_elements where submission_id = $1 and element_key = 'design_records'`, [a.ppap])).id;
+    a.ppapEvidence = (await q1(`select app.add_ppap_file($1::uuid, $2::text || '/ppap/' || $3::text || '/alpha.pdf', 'alpha.pdf', 'application/pdf', 1) as id`, [a.ppapElement, ids.orgA, a.ppap])).id;
     a.changeType = (await q1(`select id from public.change_types where organisation_id = $1 and key = 'process'`, [ids.orgA])).id;
     a.changeFunction = (await q1(`select id from public.change_functions where organisation_id = $1 and key = 'quality'`, [ids.orgA])).id;
     a.changeArea = (await q1(`select id from public.change_areas where organisation_id = $1 and key = 'design'`, [ids.orgA])).id;
@@ -1637,6 +1716,14 @@ beforeAll(async () => {
       `insert into public.portal_change_approvals (organisation_id, change_id, party_id) select $1, $2, party_id from public.external_access where id = $3 returning id`,
       [ids.orgA, sweepChange, a.externalAccess],
     )).rows[0].id;
+    // PP4: a request for a customer to answer a PPAP submission (written by a function; seeded directly here).
+    // (the table has no grants for people, so the insert is made as the connection's own role, then the person's role is put back)
+    await client.query('reset role');
+    a.portalPpapRequest = (await q1(
+      `insert into public.portal_ppap_requests (organisation_id, submission_id, party_id) select $1, $2, party_id from public.external_access where id = $3 returning id`,
+      [ids.orgA, a.ppap, a.externalAccess],
+    )).id;
+    await client.query('set local role authenticated');
     a.changeAttachment = (await q1(`select app.add_change_attachment($2::uuid, $1::text || '/change/' || $2::text || '/a.pdf', 'a.pdf', 'application/pdf', 1) as id`, [ids.orgA, a.change])).id;
     await admin.query(`update public.organisation_settings set change_allow_self_approval = true where organisation_id = $1`, [ids.orgA]);
     const changeB = (await q1(`select app.create_change($1::uuid, jsonb_build_object('title', 'Alpha board change', 'typeId', $2::text, 'description', 'x', 'reason', 'y', 'links', jsonb_build_array(jsonb_build_object('kind', 'part', 'id', $3::text)))) as id`, [ids.orgA, a.changeType, a.part])).id;
@@ -1734,6 +1821,8 @@ beforeAll(async () => {
   b.viewerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'viewer'`, [ids.orgB])).id;
   b.part = (await one(`insert into public.parts (organisation_id, part_number, name) values ($1, 'B-PART', 'Beta part') returning id`, [ids.orgB])).id;
   b.productionOrder = (await one(`insert into public.production_orders (organisation_id, order_number, part_id, quantity_planned) values ($1, 'B-WO-1', $2, 5) returning id`, [ids.orgB, b.part])).id;
+  b.plan = (await one(`insert into public.control_plans (organisation_id, plan_code, title) values ($1, 'B-CP', 'Beta plan') returning id`, [ids.orgB])).id;
+  b.planRevision = (await one(`insert into public.control_plan_revisions (organisation_id, control_plan_id, revision_code) values ($1, $2, 'A') returning id`, [ids.orgB, b.plan])).id;
   b.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'B-SUP', 'Beta supplier') returning id`, [ids.orgB])).id;
   b.ncr = (await one(`insert into public.nonconformances (organisation_id, reference, source, title, severity, description) values ($1, 'NC-B-0001', 'internal', 'Beta NC', 'minor', 'Beta') returning id`, [ids.orgB])).id;
   b.machine = (await one(`insert into public.machines (organisation_id, code, name) values ($1, 'B-M1', 'Beta machine') returning id`, [ids.orgB])).id;
@@ -1850,7 +1939,9 @@ describe('tenancy sweep over every API route', () => {
     const auth = { Authorization: `Bearer ${await token(ids.ownerB)}`, 'X-Organisation-Id': ids.orgB };
     // The SPC chart and baseline reads need a characteristic with readings; their isolation is tested in spc.e2e-spec.ts (analysis: spc-analysis.e2e-spec.ts).
     // The reporting datasets take a dataset key in the path; their isolation (a key reads only its own organisation) is tested in reporting.e2e-spec.ts.
-    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview', '/api/v1/reporting/v1/{dataset}'];
+    const needsData = ['/api/v1/spc/chart', '/api/v1/spc/baselines', '/api/v1/spc/analysis', '/api/v1/incoming-inspection/preview', '/api/v1/reporting/v1/{dataset}',
+      // Needs an element of the caller's own organisation; ppap-evidence-links.e2e-spec.ts asks it with another organisation's element and expects 404.
+      '/api/v1/ppap-candidates'];
     // The portal's own routes (external people only) answer an organisation owner 404 by design; external-portal.e2e-spec.ts covers them.
     const lists = ops.filter((o) => o.scoped && o.method === 'GET' && !o.path.includes('{id}') && !needsData.includes(o.path) && !o.path.startsWith('/api/v1/portal/'));
     const leaks: string[] = [];
@@ -1864,11 +1955,15 @@ describe('tenancy sweep over every API route', () => {
       '/api/v1/risks/linked': `?kind=part&id=${b.part}`,
       '/api/v1/fmeas/linked': `?kind=part&id=${b.part}`,
       '/api/v1/fmea-draft': `?kind=ncr&id=${b.ncr}`,
+      '/api/v1/ppap-draft': `?kind=control_plan_revision&id=${b.planRevision}`,
+      '/api/v1/part-ppap-state': `?partId=${b.part}`,
+      '/api/v1/ppap-prompts': `?kind=control_plan_revision&id=${b.planRevision}`,
       '/api/v1/risk-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/changes/linked': `?kind=part&id=${b.part}`,
       '/api/v1/change-draft': `?kind=ncr&id=${b.ncr}`,
       '/api/v1/changes-dashboard': '?from=2026-01-01&to=2026-12-31',
       '/api/v1/fmea-dashboard': '?from=2026-01-01&to=2026-12-31',
+      '/api/v1/ppap-dashboard': '?from=2026-01-01&to=2026-12-31',
       '/api/v1/ncr-dashboard': '?from=2025-01-01&to=2027-12-31',
       '/api/v1/exchange-rates/preview': '?from=EUR&to=GBP&date=2026-01-02',
       '/api/v1/calibration-dashboard': '?from=2025-01-01&to=2027-12-31',
@@ -1893,7 +1988,7 @@ describe('tenancy sweep over every API route', () => {
     };
     for (const op of lists) {
       const res = await call(op, op.path + (listQuery[op.path] ?? ''), auth);
-      expect(res.status).toBe(200);
+      expect({ path: op.path, status: res.status }).toEqual({ path: op.path, status: 200 });
       const text = JSON.stringify(res.body);
       for (const [name, id] of Object.entries(a)) if (text.includes(id)) leaks.push(`${op.path} contains A ${name}`);
     }

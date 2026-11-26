@@ -56,4 +56,29 @@ describe('inspection recommendation', () => {
   it('puts increase before any chance of reduction', () => {
     expect(level({ riskRating: 'high', band: 'good' }).level).toBe('increased');
   });
+
+  describe('part approval packages (PPAP)', () => {
+    it('increases when a part has no approved package, and names the parts', () => {
+      const r = level({ ppap: { notApproved: ['PN-1', 'PN-2'], interim: [] } });
+      expect(r.level).toBe('increased');
+      expect(r.reasons.find((x) => x.code === 'ppap_not_approved')?.message).toContain('PN-1, PN-2');
+    });
+
+    it('shortens a long list of parts', () => {
+      const r = level({ ppap: { notApproved: ['A', 'B', 'C', 'D', 'E'], interim: [] } });
+      expect(r.reasons[0].message).toContain('A, B, C and 2 more');
+    });
+
+    it('lets a part on a valid interim approval stand but blocks a reduction', () => {
+      const r = level({ ppap: { notApproved: [], interim: ['PN-3'] } });
+      expect(r.level).toBe('normal');
+      expect(r.reasons.map((x) => x.code)).toEqual(['ppap_interim']);
+    });
+
+    it('says nothing when approvals are absent, unreadable or all approved', () => {
+      expect(level({ ppap: null }).level).toBe('reduced');
+      expect(level({}).level).toBe('reduced');
+      expect(level({ ppap: { notApproved: [], interim: [] } }).level).toBe('reduced');
+    });
+  });
 });

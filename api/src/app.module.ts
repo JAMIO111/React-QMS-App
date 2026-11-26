@@ -103,10 +103,14 @@ import { FmeaEvidenceService } from './fmea/fmea-evidence.service';
 import { FmeaAnalysisService } from './fmea/fmea-analysis.service';
 import { FmeaController } from './fmea/fmea.controller';
 import { FmeaDashboardController, FmeaDashboardService } from './fmea/fmea-dashboard';
+import { PpapDashboardController, PpapDashboardService } from './ppap/ppap-dashboard';
 import { FmeaLinkedService } from './fmea/fmea-linked.service';
 import { FmeaModelController } from './fmea/fmea-model.controller';
 import { FmeaModelService } from './fmea/fmea-model.service';
 import { FmeaService } from './fmea/fmea.service';
+import { PpapController } from './ppap/ppap.controller';
+import { PpapPromptsService } from './ppap/ppap-prompts.service';
+import { PpapService } from './ppap/ppap.service';
 import { ChangeService } from './change/change.service';
 import { RiskController } from './risk/risk.controller';
 import { RiskDashboardController, RiskDashboardService } from './risk/risk-dashboard';
@@ -185,6 +189,7 @@ import { GaugeUsageController, InspectionMeasurementsController, InspectionsCont
 import { InspectionService } from './inspection/inspection.service';
 import { NcrAffectedLotsController, NcrContainmentActionsController, NcrDispositionsController, NcrWorkflowController } from './ncr/ncr-workflow.controller';
 import { NcrWorkflowService } from './ncr/ncr-workflow.service';
+import { BadgesController, BadgesService } from './home/badges';
 import { HomeDashboardController, HomeDashboardService } from './home/home-dashboard';
 import { MasterDataDashboardController, MasterDataDashboardService } from './master-data/master-data-dashboard';
 import { ProcessControlDashboardController, ProcessControlDashboardService } from './process-control/process-control-dashboard';
@@ -332,9 +337,11 @@ export class AppModule implements NestModule {
         FmeaControlsController,
         FmeaEvidenceController,
         FmeaModelController,
+        PpapController,
         RiskController,
         RiskDashboardController,
         FmeaDashboardController,
+        PpapDashboardController,
         QualityObjectivesController,
         MsaController,
         ManagementReviewsController,
@@ -379,6 +386,7 @@ export class AppModule implements NestModule {
         ProcessControlDashboardController,
         MasterDataDashboardController,
         HomeDashboardController,
+        BadgesController,
         NcrWorkflowController,
         NcrContainmentActionsController,
         NcrDispositionsController,
@@ -455,6 +463,8 @@ export class AppModule implements NestModule {
         DocumentsService,
         ChangeService,
         FmeaService,
+        PpapService,
+        PpapPromptsService,
         FmeaLinkedService,
         FmeaAnalysisService,
         FmeaActionsService,
@@ -464,6 +474,7 @@ export class AppModule implements NestModule {
         RiskService,
         RiskDashboardService,
         FmeaDashboardService,
+        PpapDashboardService,
         QualityObjectivesService,
         MsaService,
         ManagementReviewsService,
@@ -507,6 +518,7 @@ export class AppModule implements NestModule {
         ProcessControlDashboardService,
         MasterDataDashboardService,
         HomeDashboardService,
+        BadgesService,
         NcrWorkflowService,
         OrganisationsService,
         StructureService,

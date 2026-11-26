@@ -36,6 +36,9 @@ export function reminderPath(area, targetId) {
       return "/FMEA/My-Actions";
     case "fmea_reviews":
       return t ? `/FMEA/${t}` : "/FMEA/Register";
+    case "ppap_interim":
+    case "ppap_reviews":
+      return t ? `/PPAP/${t}` : "/PPAP";
     default:
       return null;
   }

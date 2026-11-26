@@ -37,6 +37,8 @@ export function notificationLink(n) {
       return d.change_id ? `/Change/${d.change_id}` : "/Change";
     case "fmea_actions":
       return "/FMEA/My-Actions";
+    case "ppap_submissions":
+      return d.ppap_id ? `/PPAP/${d.ppap_id}` : "/PPAP";
     case "document_signoffs":
     case "document_recipients":
       return d.document_id && d.revision_id ? `/Documentation/Documents/${d.document_id}/revisions/${d.revision_id}` : "/Documentation/Documents";
@@ -71,7 +73,9 @@ export function notificationLink(n) {
               ? `/Documentation/Quality-Alerts/${d.record_id}`
               : d.record_kind === "change"
                 ? `/Change/${d.record_id}`
-                : ncrPath(d.record_id);
+                : d.record_kind === "ppap"
+                  ? `/PPAP/${d.record_id}`
+                  : ncrPath(d.record_id);
     case "reminder_digests":
       return "/Reminders";
     case "reminder_overdue_notices":

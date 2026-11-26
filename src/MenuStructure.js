@@ -1,4 +1,4 @@
-import { BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ListTreeIcon, ScanSearchIcon, ShieldAlertIcon,
+import { BadgeCheckIcon, BoxesIcon, ChartNoAxesCombinedIcon, ClipboardCheckIcon, ClipboardListIcon, FactoryIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, LayoutDashboardIcon, ListTreeIcon, ScanSearchIcon, ShieldAlertIcon,
   ListTodoIcon, PresentationIcon, TriangleAlertIcon, TruckIcon } from "@/components/icons";
 
 export const menuStructure = [
@@ -172,6 +172,16 @@ export const menuStructure = [
       { name: "Dashboard", path: "/FMEA", end: true },
       { name: "FMEAs", path: "/FMEA/Register" },
       { name: "My actions", path: "/FMEA/My-Actions", badge: "my-fmea-actions" },
+    ],
+  },
+  {
+    name: "PPAP",
+    icon: BadgeCheckIcon,
+    permission: "ppap.read",
+    path: "/PPAP",
+    subMenu: [
+      { name: "Dashboard", path: "/PPAP", end: true },
+      { name: "Part approvals", path: "/PPAP/Register" },
     ],
   },
   {

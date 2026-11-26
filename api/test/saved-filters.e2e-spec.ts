@@ -53,6 +53,15 @@ describe('saved filters', () => {
     expect((await list(h)).data.map((f: { name: string }) => f.name)).not.toContain('My overdue reviews');
   });
 
+  it('keeps the PPAP register\'s filters apart too', async () => {
+    const h = await as(ids.ownerA);
+    const made = await api().post('/api/v1/saved-filters').set(h).send({ scope: 'ppap_register', name: 'Mine in preparation', filters: { owner: 'me', status: 'in_preparation' } }).expect(201);
+    expect(made.body).toMatchObject({ scope: 'ppap_register', filters: { owner: 'me', status: 'in_preparation' } });
+    const ppap = (await api().get('/api/v1/saved-filters?scope=ppap_register').set(h).expect(200)).body;
+    expect(ppap.data.map((f: { name: string }) => f.name)).toEqual(['Mine in preparation']);
+    expect((await list(h)).data.map((f: { name: string }) => f.name)).not.toContain('Mine in preparation');
+  });
+
   it('refuse a bad name, a bad body and an unknown register', async () => {
     const h = await as(ids.ownerA);
     expect((await save('', {}, h)).status).toBe(400);

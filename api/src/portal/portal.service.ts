@@ -102,12 +102,20 @@ export class PortalService {
       const approvals = ctx.portal?.partyKind === 'customer'
         ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_change_approvals(${ctx.organisationId}::uuid) where can_decide`)).rows.length
         : 0;
+      const ppaps = ctx.portal?.partyKind === 'customer'
+        ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_ppaps(${ctx.organisationId}::uuid) where can_decide`)).rows.length
+        : 0;
+      const packages = ctx.portal?.partyKind === 'supplier'
+        ? (await db.execute<{ request_id: string }>(sql`select request_id from app.portal_list_ppap_packages(${ctx.organisationId}::uuid) where can_edit`)).rows.length
+        : 0;
       // What needs the person's attention: SCARs awaiting their response, and records shared with them not yet opened or with something new said.
       return {
         access: mine,
         attention: items.filter((i) => !i.viewed || i.newComments > 0 || pending.has(i.id) || closing.has(i.id)).map((i) => ({ ...i, needsAcknowledgement: pending.has(i.id), needsClosure: closing.has(i.id) })),
         toConfirm: closing.size,
         changesToApprove: approvals,
+        ppapsToAnswer: ppaps,
+        ppapPackagesToPrepare: packages,
         toAcknowledge: pending.size,
         shared: items.length,
         scarsAwaiting: scars.filter((c) => c.awaitingResponse),
@@ -334,6 +342,126 @@ export class PortalService {
     return this.database.asUser(ctx, async (db) => {
       await db.execute(sql`select app.portal_decide_change_approval(${id}::uuid, ${b.approve}, ${b.note ?? null}, ${b.reference ?? null})`);
       return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_change_approval(${id}::uuid) as r`)).rows[0].r;
+    });
+  }
+
+  /** The part approval submissions a customer has been asked to answer (PP4): named fields only; a withdrawn request is not shown. */
+  listPpaps(ctx: RequestContext) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_ppaps(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.request_id as string,
+          reference: c.reference as string,
+          partNumber: c.part_number as string,
+          partName: c.part_name as string,
+          theirPartNumber: (c.their_part_number as string | null) ?? null,
+          level: Number(c.level),
+          status: c.status as 'pending' | 'answered',
+          submissionStatus: c.submission_status as string,
+          requestedAt: iso(c.requested_at),
+          answeredAt: iso(c.answered_at),
+          canDecide: Boolean(c.can_decide),
+        })),
+      };
+    });
+  }
+
+  getPpap(ctx: RequestContext, id: string) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap(${id}::uuid) as r`)).rows[0].r);
+  }
+
+  /** The customer's answer: recorded as the submission's decision, today, by the same rules staff use. */
+  decidePpap(ctx: RequestContext, id: string, b: { kind: 'approved' | 'interim_approved' | 'rejected'; note?: string | null; reference?: string | null; expiresOn?: string | null }) {
+    this.customerParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_decide_ppap(${id}::uuid, ${b.kind}, ${b.note ?? null}, ${b.reference ?? null}, ${b.expiresOn ?? null}::date)`);
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap(${id}::uuid) as r`)).rows[0].r;
+    });
+  }
+
+  private supplierParty(ctx: RequestContext) {
+    const party = ctx.portal;
+    if (!party || party.partyKind !== 'supplier') throw ApiError.notFound('ppap_packages_unavailable', 'Part approval packages are asked of suppliers');
+    return party.partyId;
+  }
+
+  /** The part approval packages staff have asked this supplier to prepare (PP5b): named fields only. */
+  listPpapPackages(ctx: RequestContext) {
+    this.supplierParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const r = await db.execute<Row>(sql`select * from app.portal_list_ppap_packages(${ctx.organisationId}::uuid)`);
+      return {
+        data: r.rows.map((c) => ({
+          id: c.request_id as string,
+          reference: c.reference as string,
+          partNumber: c.part_number as string,
+          partName: c.part_name as string,
+          level: Number(c.level),
+          status: c.status as 'pending' | 'answered',
+          submissionStatus: c.submission_status as string,
+          requestedAt: iso(c.requested_at),
+          answeredAt: iso(c.answered_at),
+          canEdit: Boolean(c.can_edit),
+        })),
+      };
+    });
+  }
+
+  getPpapPackage(ctx: RequestContext, id: string) {
+    this.supplierParty(ctx);
+    return this.database.asUser(ctx, async (db) => (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap_package(${id}::uuid) as r`)).rows[0].r);
+  }
+
+  /** The path is chosen here, never by the browser; the database says whether the package is theirs, still being prepared, and the element is one asked of them. */
+  async ppapPackageUploadLink(ctx: RequestContext, requestId: string, elementKey: string, fileName: string) {
+    this.supplierParty(ctx);
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    const folder = await this.database.asUser(ctx, async (db) => (await db.execute<{ f: string }>(sql`select app.portal_ppap_package_folder(${requestId}::uuid) as f`)).rows[0]?.f ?? null);
+    if (!folder) throw ApiError.notFound('package_not_found', 'Package not found');
+    const path = `${ctx.organisationId}/ppap/${folder}/${randomUUID()}-${this.safeName(fileName)}`;
+    await this.database.asUser(ctx, async (db) => {
+      const ok = await db.execute<{ ok: boolean }>(sql`select app.portal_ppap_upload_allowed(${requestId}::uuid, ${elementKey}, ${path}) as ok`);
+      if (!ok.rows[0].ok) throw new ApiError(403, 'file_not_allowed', 'Files can be added only while you are preparing the package, to an element asked of you, and at most ten to an element');
+    });
+    const signed = await this.signer.signUpload('ppap-files', path);
+    return { bucket: 'ppap-files', path, token: signed.token, signedUrl: signed.signedUrl };
+  }
+
+  addPpapPackageFile(ctx: RequestContext, requestId: string, b: { elementKey: string; path: string; fileName: string; contentType?: string; sizeBytes: number }) {
+    this.supplierParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_add_ppap_file(${requestId}::uuid, ${b.elementKey}, ${b.path}, ${b.fileName}, ${b.contentType ?? null}, ${b.sizeBytes}::bigint)`);
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap_package(${requestId}::uuid) as r`)).rows[0].r;
+    });
+  }
+
+  removePpapPackageFile(ctx: RequestContext, fileId: string) {
+    this.supplierParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      const req = (await db.execute<{ id: string }>(sql`select app.portal_remove_ppap_file(${fileId}::uuid) as id`)).rows[0].id;
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap_package(${req}::uuid) as r`)).rows[0].r;
+    });
+  }
+
+  async ppapPackageFileLink(ctx: RequestContext, fileId: string) {
+    this.supplierParty(ctx);
+    if (!this.signer.enabled) throw new ApiError(503, 'file_storage_unavailable', 'File links are not set up on this server yet');
+    const f = await this.database.asUser(ctx, async (db) => (await db.execute<{ storage_path: string; file_name: string }>(sql`select * from app.portal_ppap_package_file_path(${fileId}::uuid)`)).rows[0]);
+    const seconds = 600;
+    const url = await this.signer.signDownload('ppap-files', f.storage_path, seconds, f.file_name);
+    if (!url) throw ApiError.notFound('file_not_found', 'File not found');
+    return { url, expiresIn: seconds, expiresAt: new Date(Date.now() + seconds * 1000).toISOString() };
+  }
+
+  /** The supplier submits the package: the database checks every required element has evidence and records it as submitted, exactly as recording it as received does. */
+  submitPpapPackage(ctx: RequestContext, requestId: string, note: string | null) {
+    this.supplierParty(ctx);
+    return this.database.asUser(ctx, async (db) => {
+      await db.execute(sql`select app.portal_submit_ppap_package(${requestId}::uuid, ${note})`);
+      return (await db.execute<{ r: Record<string, unknown> }>(sql`select app.portal_get_ppap_package(${requestId}::uuid) as r`)).rows[0].r;
     });
   }
 

@@ -1,4 +1,5 @@
 import {
+  BadgeCheckIcon,
   BoxesIcon,
   ChartNoAxesCombinedIcon,
   ClipboardCheckIcon,
@@ -37,6 +38,7 @@ export const HOME_MODULES = [
   { key: "competence", label: "Competence", icon: GraduationCapIcon, to: "/Competence" },
   { key: "change", label: "Change", icon: GitPullRequestArrowIcon, to: "/Change" },
   { key: "fmea", label: "FMEA", icon: ListTreeIcon, to: "/FMEA" },
+  { key: "ppap", label: "Part approvals", icon: BadgeCheckIcon, to: "/PPAP" },
   { key: "masterData", label: "Master data", icon: BoxesIcon, to: "/Master-Data" },
 ];
 
@@ -134,6 +136,17 @@ const READERS = {
       line("high", `${plural(n(k.highPriority), "Cause")} of high priority in the FMEAs in force`, k.highPriority, "warning", "/FMEA"),
       line("reviews", `FMEA ${plural(n(k.reviewsOverdue), "review")} overdue`, k.reviewsOverdue, "warning", "/FMEA/Register"),
       line("awaiting", `${plural(n(k.awaitingApproval), "FMEA revision")} waiting for approval`, k.awaitingApproval, "warning", "/FMEA/Register"),
+    ],
+  }),
+  ppap: (k) => ({
+    headline: { value: n(k.approved), label: `${plural(n(k.approved), "part approval")} in force` },
+    lines: [
+      line("rejected", `Part ${plural(n(k.rejected), "approval")} rejected and not yet answered`, k.rejected, "critical", "/PPAP/Register?status=rejected"),
+      line("lapsed", `Interim ${plural(n(k.interimLapsed), "approval")} that ${n(k.interimLapsed) === 1 ? "has" : "have"} run out`, k.interimLapsed, "critical", "/PPAP/Register?status=interim_approved"),
+      line("ending", `Interim ${plural(n(k.interimEnding), "approval")} ending within 30 days`, k.interimEnding, "warning", "/PPAP/Register?status=interim_approved"),
+      line("reviews", `Part ${plural(n(k.reviewsOverdue), "approval")} due for revalidation`, k.reviewsOverdue, "warning", "/PPAP/Register?status=approved"),
+      line("awaiting_us", `${plural(n(k.awaitingUs), "Package")} from a supplier waiting for our answer`, k.awaitingUs, "warning", "/PPAP/Register?status=submitted"),
+      line("awaiting_customer", `${plural(n(k.awaitingCustomer), "Package")} waiting for the customer`, k.awaitingCustomer, "warning", "/PPAP/Register?status=submitted"),
     ],
   }),
   masterData: (k) => {

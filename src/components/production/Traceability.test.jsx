@@ -208,6 +208,40 @@ describe("traceability page", () => {
     expect(screen.queryByRole("table", { name: "FMEAs" })).toBeNull();
   });
 
+  it("shows each part approval with where it stood when the record was created and where it stands now", async () => {
+    result = trace({
+      ppaps: {
+        available: true,
+        data: [
+          { id: "p1", reference: "PPAP-26-0001", direction: "submitted", party: "Wayne Ltd", level: 3, revision: "A", status: "approved", sentOn: "2026-05-01", then: "approved", thenOn: "2026-05-20", thenExpiresOn: null, interimExpiresOn: null },
+          { id: "p2", reference: "PPAP-26-0002", direction: "submitted", party: "Stark Ltd", level: 1, revision: "A", status: "interim_approved", sentOn: "2026-06-01", then: "interim_lapsed", thenOn: "2026-06-10", thenExpiresOn: "2026-06-30", interimExpiresOn: "2026-12-31" },
+          { id: "p3", reference: "PPAP-26-0003", direction: "received", party: "Acme Castings", level: 3, revision: "B", status: "submitted", sentOn: "2026-11-01", then: "not_sent", thenOn: null, thenExpiresOn: null, interimExpiresOn: null },
+        ],
+      },
+    });
+    renderAt("/Production/Traceability?type=order&id=o1");
+    const table = await screen.findByRole("table", { name: "Part approvals" });
+    expect(within(table).getByRole("link", { name: "PPAP-26-0001" })).toHaveAttribute("href", "/PPAP/p1");
+    const rows = within(table).getAllByRole("row");
+    // approved when this was created, and approved now
+    expect(within(rows[1]).getAllByText("Approved", { selector: "span" })).toHaveLength(2);
+    expect(within(rows[2]).getByText("Interim approval had run out")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Interim approval")).toBeInTheDocument();
+    expect(within(rows[3]).getByText("Not sent yet")).toBeInTheDocument();
+    expect(within(rows[3]).getByText("Acme Castings (supplier)")).toBeInTheDocument();
+  });
+
+  it("says no part approval has been sent, and leaves the section out when the reader may not read them", async () => {
+    result = trace({ ppaps: { available: true, data: [] } });
+    const first = renderAt("/Production/Traceability?type=order&id=o1");
+    expect(await screen.findByText("No part approval has been sent or received for this part.")).toBeInTheDocument();
+    first.unmount();
+    result = trace({ ppaps: { available: false, data: [] } });
+    renderAt("/Production/Traceability?type=order&id=o1");
+    await screen.findByRole("heading", { name: "WO-154789" });
+    expect(screen.queryByRole("table", { name: "Part approvals" })).toBeNull();
+  });
+
   it("finds a number and opens its report", async () => {
     searchResult = [{ type: "lot", id: "l1", number: "LOT-1", status: "open", part: rod }];
     renderAt("/Production/Traceability");

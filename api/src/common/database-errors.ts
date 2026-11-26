@@ -136,6 +136,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       return new ApiError(409, 'risk_rule', pg.message ?? 'That risk change is not allowed');
     case 'QM036': // FMEA rules: team, scope, revisions, approval (messages are written for users)
       return new ApiError(409, 'fmea_rule', pg.message ?? 'That FMEA change is not allowed');
+    case 'QM037': // PPAP rules: requirements, submissions, elements, evidence, waivers (messages are written for users)
+      return new ApiError(409, 'ppap_rule', pg.message ?? 'That PPAP change is not allowed');
     case 'QM035': // change management rules: drafts, scope, files, cancelling (messages are written for users)
       return new ApiError(409, 'change_rule', pg.message ?? 'That change is not allowed');
     case 'QM028': // workflow rules and tasks (messages are written for users)

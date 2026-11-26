@@ -43,6 +43,7 @@ export default function InspectionRecommendation({ supplier }) {
           </ul>
           <p className="flex flex-wrap items-center gap-2 text-xs text-secondary-text">
             Performance <BandPill band={r.basis.band} /> · risk {r.basis.riskRating ?? "not assessed"} · {r.basis.approvalStatus.replace(/_/g, " ")} · {formatDate(r.basis.from)} to {formatDate(r.basis.to)}
+            {r.basis.ppap?.available ? ` · part approvals: ${r.basis.ppap.notApproved.length === 0 && r.basis.ppap.interim.length === 0 ? "none outstanding" : `${r.basis.ppap.notApproved.length} not approved, ${r.basis.ppap.interim.length} interim`}` : ""}
           </p>
           {r.level === "reduced" && <Callout tone="info">A requirement that reduces inspection is never applied to a part with a critical characteristic: those are always inspected in full.</Callout>}
           {r.change !== "none" && can("supplier_quality.manage") && (

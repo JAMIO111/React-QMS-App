@@ -108,3 +108,20 @@ export const LotEvidenceBody = z
 export const ChangeApprovalDecisionBody = z
   .object({ approve: z.boolean(), note: z.string().trim().max(2000).nullish(), reference: z.string().trim().max(200).nullish() })
   .strict();
+
+/** PP4: a customer's answer to a PPAP submission: approved, approved for now (with the day it runs to and its conditions) or rejected (with why). They decide today. */
+export const PpapDecisionBody = z
+  .object({
+    kind: z.enum(['approved', 'interim_approved', 'rejected']),
+    note: z.string().trim().max(2000).nullish(),
+    reference: z.string().trim().max(100).nullish(),
+    expiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date as yyyy-mm-dd').nullish(),
+  })
+  .strict();
+
+/** PP5b: a supplier adds a file to one element of the package asked of them (the element is named by its key; the API chooses the path). */
+export const PpapPackageUploadBody = z.object({ elementKey: z.string().trim().min(1).max(60), fileName: z.string().trim().min(1).max(255) }).strict();
+export const PpapPackageFileBody = z
+  .object({ elementKey: z.string().trim().min(1).max(60), path: z.string().min(1).max(1024), fileName: z.string().trim().min(1).max(255), contentType: z.string().max(150).optional(), sizeBytes: z.number().int().min(0).max(26_214_400) })
+  .strict();
+export const PpapPackageSubmitBody = z.object({ note: z.string().trim().max(2000).nullish() }).strict();

@@ -36,6 +36,8 @@ const PortalApp = () => {
       capas: kindOf("capa"),
       documents: kindOf("document", "quality_alert"),
       changeApprovals: d.changesToApprove ?? 0,
+      ppaps: d.ppapsToAnswer ?? 0,
+      ppapPackages: d.ppapPackagesToPrepare ?? 0,
       scars: new Set([...d.scarsAwaiting, ...(d.scarsWithActions ?? [])].map((c) => c.id)).size,
     };
   }, [home.data, current]);

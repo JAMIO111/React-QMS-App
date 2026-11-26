@@ -328,6 +328,20 @@ BEGIN
     SELECT c.organisation_id, c.revision_id, c.id, 'prevention', (SELECT id FROM public.control_plans WHERE organisation_id = a AND plan_code = 'SWEEP-FMEA-CP'), 'OP-10', 'OD'
       FROM public.fmea_causes c JOIN public.fmea_revisions r ON r.id = c.revision_id JOIN public.fmeas f ON f.id = r.fmea_id WHERE f.organisation_id = a AND f.title = 'Sweep FMEA' LIMIT 1;
   PERFORM set_config('role', 'authenticated', true);
+  -- PPAP (PP1): a customer's rules, a submission with its 18 elements and a file as evidence (written by the functions as the owner).
+  PERFORM app.set_ppap_customer_rules(c.id, '{"defaultLevel":2}'::jsonb) FROM public.customers c WHERE c.organisation_id = a AND c.code = 'SWC';
+  PERFORM app.create_ppap(a, jsonb_build_object('partId', (SELECT id FROM public.parts WHERE organisation_id = a AND part_number = 'SW-P1'),
+      'customerId', (SELECT id FROM public.customers WHERE organisation_id = a AND code = 'SWC'), 'reason', 'new_part'));
+  PERFORM app.add_ppap_file(e.id, a::text || '/ppap/' || e.submission_id::text || '/sweep-drawing.pdf', 'sweep-drawing.pdf', 'application/pdf', 100)
+    FROM public.ppap_elements e JOIN public.ppap_submissions s ON s.id = e.submission_id WHERE s.organisation_id = a AND e.element_key = 'design_records';
+  -- PPAP (PP3): a warrant, a decision and a review (written straight in as the system: the sweep only needs a row in each table).
+  PERFORM set_config('role', 'postgres', true);
+  PERFORM set_config('app.ppap_lifecycle', 'on', true);
+  INSERT INTO public.ppap_psw (organisation_id, submission_id, part_weight, weight_unit) SELECT s.organisation_id, s.id, 1, 'kg' FROM public.ppap_submissions s WHERE s.organisation_id = a;
+  INSERT INTO public.ppap_decisions (organisation_id, submission_id, seq, kind, decided_on) SELECT s.organisation_id, s.id, 1, 'submitted', current_date FROM public.ppap_submissions s WHERE s.organisation_id = a;
+  INSERT INTO public.ppap_reviews (organisation_id, submission_id, outcome, note, next_review_on) SELECT s.organisation_id, s.id, 'no_change', 'Sweep review', current_date + 30 FROM public.ppap_submissions s WHERE s.organisation_id = a;
+  PERFORM set_config('app.ppap_lifecycle', 'off', true);
+  PERFORM set_config('role', 'authenticated', true);
   -- Management review (MR1): a manual quality objective with a value.
   PERFORM app.record_quality_objective_value(app.save_quality_objective(a, '{"title":"Sweep objective","target":95,"unit":"%"}'::jsonb), current_date, 96);
   -- Management review (MR2): a review held with an input gathered, an attendee, a decision and an action.
@@ -553,6 +567,10 @@ BEGIN
   INSERT INTO public.portal_change_approvals (organisation_id, change_id, party_id)
     SELECT a, x.id, (SELECT id FROM public.portal_parties WHERE organisation_id = a LIMIT 1) FROM public.change_requests x WHERE x.organisation_id = a LIMIT 1;
   INSERT INTO sweep VALUES ('portal_change_approval', (SELECT id FROM public.portal_change_approvals WHERE organisation_id = a));
+  -- PPAP (PP4): a request for a customer to answer a submission (written by a function; seeded directly here).
+  INSERT INTO public.portal_ppap_requests (organisation_id, submission_id, party_id)
+    SELECT a, x.id, (SELECT id FROM public.portal_parties WHERE organisation_id = a LIMIT 1) FROM public.ppap_submissions x WHERE x.organisation_id = a LIMIT 1;
+  INSERT INTO sweep VALUES ('portal_ppap_request', (SELECT id FROM public.portal_ppap_requests WHERE organisation_id = a));
   -- External portal (PT5c): a customer contact.
   INSERT INTO public.customer_contacts (organisation_id, customer_id, name)
     SELECT a, c.id, 'Sweep contact' FROM public.customers c WHERE c.organisation_id = a LIMIT 1;

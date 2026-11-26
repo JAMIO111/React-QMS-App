@@ -137,6 +137,10 @@ const FmeaRegisterPage = lazy(() => import("./components/fmea/FmeaRegisterPage.j
 const FmeaPage = lazy(() => import("./components/fmea/FmeaPage.jsx"));
 const FmeaRevisionPage = lazy(() => import("./components/fmea/RevisionPage.jsx"));
 const FmeaMyActionsPage = lazy(() => import("./components/fmea/MyActionsPage.jsx"));
+const PpapDashboard = lazy(() => import("./components/ppap/PpapDashboard.jsx"));
+const PpapRegisterPage = lazy(() => import("./components/ppap/PpapRegisterPage.jsx"));
+const PpapPage = lazy(() => import("./components/ppap/PpapPage.jsx"));
+const PswFormPage = lazy(() => import("./components/ppap/PswFormPage.jsx"));
 const RiskPage = lazy(() => import("./components/risk/RiskPage.jsx"));
 const RiskDashboard = lazy(() => import("./components/risk/RiskDashboard.jsx"));
 const RiskHeatMapPage = lazy(() => import("./components/risk/RiskHeatMapPage.jsx"));
@@ -174,10 +178,14 @@ const PortalCapasPage = portalPage("PortalCapasPage");
 const PortalDocumentsPage = portalPage("PortalDocumentsPage");
 const PortalComplaintsPage = portalPage("PortalComplaintsPage");
 const PortalChangeRequestsPage = portalPage("PortalChangeRequestsPage");
+const PortalPpapsPage = portalPage("PortalPpapsPage");
+const PortalPpapPackagesPage = portalPage("PortalPpapPackagesPage");
 const PortalCertificatesPage = portalPage("PortalCertificatesPage");
 const PortalTeamPage = portalPage("PortalTeamPage");
 const PortalSharedPage = lazy(() => import("./components/portal/PortalSharedPage.jsx"));
 const PortalScarPage = lazy(() => import("./components/portal/PortalScarPage.jsx"));
+const PortalPpapPackagePage = lazy(() => import("./components/portal/PortalPpapPackagePage.jsx"));
+const PortalPpapPage = lazy(() => import("./components/portal/PortalPpapPage.jsx"));
 const PortalChangeApprovalPage = lazy(() => import("./components/portal/PortalChangeApprovalPage.jsx"));
 const PortalPerformancePage = lazy(() => import("./components/portal/PortalPerformancePage.jsx"));
 const JobPage = lazy(() => import("./components/jobs/JobPage.jsx"));
@@ -262,11 +270,15 @@ const router = createBrowserRouter([
           { path: "8ds", element: <PortalCapasPage /> },
           { path: "complaints", element: <PortalComplaintsPage /> },
           { path: "change-requests", element: <PortalChangeRequestsPage /> },
+          { path: "ppaps", element: <PortalPpapsPage /> },
+          { path: "ppap-packages", element: <PortalPpapPackagesPage /> },
           { path: "documents", element: <PortalDocumentsPage /> },
           { path: "certificates", element: <PortalCertificatesPage /> },
           { path: "team", element: <PortalTeamPage /> },
           { path: "shared/:shareId", element: <PortalContent><PortalSharedPage /></PortalContent> },
           { path: "scars/:scarId", element: <PortalContent><PortalScarPage /></PortalContent> },
+          { path: "ppaps/:requestId", element: <PortalContent><PortalPpapPage /></PortalContent> },
+          { path: "ppap-packages/:requestId", element: <PortalContent><PortalPpapPackagePage /></PortalContent> },
           { path: "change-approvals/:approvalId", element: <PortalContent><PortalChangeApprovalPage /></PortalContent> },
           // The performance page is the dashboard now; the old address still works.
           { path: "performance", element: <PortalPerformancePage /> },
@@ -381,6 +393,10 @@ const router = createBrowserRouter([
           { path: "FMEA/:id", element: <FmeaPage /> },
           { path: "FMEA/:id/revisions/:revisionId", element: <FmeaRevisionPage /> },
           { path: "FMEA/:id/revisions/:revisionId/report", element: <FmeaFormPage /> },
+          { path: "PPAP", element: <PpapDashboard /> },
+          { path: "PPAP/Register", element: <PpapRegisterPage /> },
+          { path: "PPAP/:id", element: <PpapPage /> },
+          { path: "PPAP/:id/psw", element: <PswFormPage /> },
           { path: "Risk/Register", element: <RiskRegisterPage /> },
           { path: "Risk/Register/:id", element: <RiskPage /> },
           { path: "Competence", element: <CompetenceDashboard /> },

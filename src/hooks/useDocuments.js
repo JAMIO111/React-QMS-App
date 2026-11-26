@@ -342,7 +342,7 @@ export const useMyDocuments = () => {
   });
 };
 
-/** For the menu badge (polled every 5 minutes, like My alerts). */
+/** The counts behind the My documents page (the menu badge comes from `useBadges`, which asks once a minute). */
 export const useMyDocumentCount = ({ enabled = true } = {}) => {
   const { organisationId } = useOrganisation();
   return useQuery({
@@ -350,7 +350,6 @@ export const useMyDocumentCount = ({ enabled = true } = {}) => {
     queryFn: () => apiFetch("/my-documents/count", { organisationId }),
     enabled: !!organisationId && enabled,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     retry: false,
   });
 };

@@ -121,6 +121,17 @@ export const useSupplierCertifications = (id, { enabled = true } = {}) => {
   });
 };
 
+/** The state of the part approval package for each part received from a supplier (information only; `available` is false without `ppap.read`). */
+export const useSupplierPpap = (id, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: key(organisationId, "ppap", id),
+    queryFn: () => apiFetch(`/supplier-quality/suppliers/${id}/ppap`, { organisationId }),
+    enabled: !!organisationId && !!id && enabled,
+    retry: false,
+  });
+};
+
 /** Current certifications and documents that expired or expire within `days`, across suppliers. */
 export const useExpiryWatchlist = ({ days = 60, kind = "" } = {}) => {
   const { organisationId } = useOrganisation();

@@ -37,6 +37,7 @@ import { LotPicker, OrderPickerWithCreate, SerialPicker } from "../production/pi
 import { useActiveAlerts } from "../../hooks/useDocumentation";
 import { useDocumentsInForce } from "../../hooks/useDocuments";
 import { DocumentsInForceList } from "../documents/DocumentsInForce";
+import { PartPpapBanner } from "../ppap/PartPpap";
 import SidePanes from "./panes/SidePanes";
 import { MeasurementFilesCard } from "../measurement-imports/ImportFromFile";
 import AlertsPane from "./panes/AlertsPane";
@@ -326,6 +327,7 @@ const JobPage = () => {
         {error && <ErrorNotice error={error} />}
         {inspection && (
           <>
+            {open && <PartPpapBanner partId={inspection.part.id} />}
             <header
               className="flex flex-wrap items-center gap-x-4 gap-y-2"
               aria-label="Job summary"

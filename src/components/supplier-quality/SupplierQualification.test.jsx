@@ -285,6 +285,24 @@ describe("the expiry watchlist", () => {
     await waitFor(() => expect(calls.at(-1).path).toContain("days=30"));
   });
 
+  it("lists an interim part approval and links to its package", async () => {
+    routeApi({
+      "GET /supplier-quality/expiry-watchlist": (path) => ({
+        data: [item({ kind: "ppap", id: "k9", title: "PPAP-26-0009 · PN-9 rev A", detail: "Interim part approval", verified: true })],
+        counts: { expired: 0, expiring: 1 },
+        days: 60,
+        path,
+      }),
+    });
+    renderUi(<ExpiryWatchlistPage />, "/Supplier-Quality/Expiry?kind=ppap");
+    const list = await screen.findByRole("list", { name: "Expiring records" });
+    const row = within(list).getByRole("listitem");
+    expect(within(row).getByRole("link", { name: /ACME · Acme Metals/ })).toHaveAttribute("href", "/PPAP/k9");
+    expect(row).toHaveTextContent("Part approval: PPAP-26-0009 · PN-9 rev A · Interim part approval");
+    expect(row).not.toHaveTextContent("not verified");
+    expect(calls.at(-1).path).toContain("kind=ppap");
+  });
+
   it("says so when there is nothing to chase", async () => {
     routeApi({ "GET /supplier-quality/expiry-watchlist": { data: [], counts: { expired: 0, expiring: 0 }, days: 60 } });
     renderUi(<ExpiryWatchlistPage />, "/Supplier-Quality/Expiry");

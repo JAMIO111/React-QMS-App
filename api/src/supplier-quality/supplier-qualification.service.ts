@@ -6,6 +6,7 @@ import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { expiryOf, todayIn } from './expiry';
+import { canReadPpap, SupplierPpap, supplierPpap } from './supplier-ppap';
 import {
   CreateCertificationBody, CreateDocumentBody, ReasonBody, RenewCertificationBody, SupplierCertification, SupplierDocument, UpdateCertificationBody, UpdateDocumentBody, VerifyBody,
   Watchlist, WatchlistQuery,
@@ -201,6 +202,15 @@ export class SupplierQualificationService {
     });
   }
 
+  /** What the supplier's part approval packages say about each part we buy from them (information only; `available: false` without `ppap.read`). */
+  ppap(ctx: RequestContext, supplierId: string): Promise<SupplierPpap> {
+    return this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<Row>(sql`select 1 as x from public.suppliers where id = ${supplierId}::uuid and organisation_id = ${orgOf(ctx)}::uuid`);
+      if (!found.rows[0]) throw supplierNotFound();
+      return supplierPpap(db, ctx, supplierId, todayIn(ctx.timeZone));
+    });
+  }
+
   // ---- watchlist -----------------------------------------------------------------------------------
 
   /**
@@ -210,8 +220,8 @@ export class SupplierQualificationService {
   watchlist(ctx: RequestContext, q: WatchlistQuery): Promise<z.infer<typeof Watchlist>> {
     return this.database.asUser(ctx, async (db) => {
       const today = todayIn(ctx.timeZone);
-      const wantCerts = q.kind !== 'document';
-      const wantDocs = q.kind !== 'certification';
+      const wantCerts = q.kind === undefined || q.kind === 'certification';
+      const wantDocs = q.kind === undefined || q.kind === 'document';
       const certs = wantCerts
         ? await db.execute<Row>(sql`
             select c.id, c.cert_type, c.title, c.certificate_number, c.issuing_body, c.expires_on::text as expires_on_t, (c.verified_at is not null) as verified, s.id as supplier_id, s.code, s.name
@@ -226,7 +236,24 @@ export class SupplierQualificationService {
             where d.organisation_id = ${orgOf(ctx)}::uuid and d.status = 'current' and d.expires_on is not null and s.active
               and d.expires_on <= (${today}::date + ${q.days}::int)`)
         : { rows: [] as Row[] };
+      // Interim part approvals (PP5c): a received package running on an interim approval that has run out or will within `days`. Only for someone who may read part approvals.
+      const ppaps =
+        q.kind === undefined || q.kind === 'ppap'
+          ? (await canReadPpap(db, ctx))
+            ? await db.execute<Row>(sql`
+                select s.id, s.reference, p.part_number, pr.revision, d.expires_on::text as expires_on_t, su.id as supplier_id, su.code, su.name
+                  from public.ppap_submissions s
+                  join public.suppliers su on su.id = s.supplier_id
+                  join public.parts p on p.id = s.part_id
+                  left join public.part_revisions pr on pr.id = s.part_revision_id
+                  join lateral (select x.expires_on from public.ppap_decisions x where x.submission_id = s.id and x.kind = 'interim_approved' order by x.seq desc limit 1) d on true
+                 where s.organisation_id = ${orgOf(ctx)}::uuid and s.direction = 'received' and s.status = 'interim_approved' and su.active and d.expires_on is not null
+                   and d.expires_on <= (${today}::date + ${q.days}::int)
+                   and not exists (select 1 from public.ppap_submissions r where r.replaces_id = s.id and r.organisation_id = s.organisation_id and r.status <> 'withdrawn')`)
+            : { rows: [] as Row[] }
+          : { rows: [] as Row[] };
       const items = [
+        ...ppaps.rows.map((r) => ({ kind: 'ppap' as const, r, title: `${r.reference as string} · ${r.part_number as string}${r.revision ? ` rev ${r.revision as string}` : ''}`, detail: 'Interim part approval' })),
         ...certs.rows.map((r) => ({ kind: 'certification' as const, r, title: (r.title as string) ?? String(r.cert_type).replace(/_/g, ' ').toUpperCase(), detail: `${r.certificate_number as string} · ${r.issuing_body as string}` })),
         ...docs.rows.map((r) => ({ kind: 'document' as const, r, title: r.title as string, detail: (r.revision as string) ? `Revision ${r.revision as string}` : null })),
       ]
@@ -241,7 +268,7 @@ export class SupplierQualificationService {
             expiresOn: r.expires_on_t as string,
             state: e.state === 'expired' ? ('expired' as const) : ('expiring' as const),
             daysLeft: e.daysLeft!,
-            verified: !!r.verified,
+            verified: kind === 'ppap' ? true : !!r.verified,
           };
         })
         .sort((a, b) => a.daysLeft - b.daysLeft || a.supplier.name.localeCompare(b.supplier.name));

@@ -35,6 +35,23 @@ describe("inspection recommendation", () => {
     expect(apiFetch.mock.calls[0][0]).toBe("/supplier-quality/suppliers/s1/inspection-recommendation?days=90");
   });
 
+  it("says which parts have no approved part approval package, and notes when they could not be read", async () => {
+    apiFetch.mockResolvedValue(rec({
+      reasons: [{ code: "ppap_not_approved", kind: "raises", message: "2 parts have no approved part approval package (PPAP): PN-1, PN-2" }],
+      basis: { ...basis, ppap: { available: true, notApproved: ["PN-1", "PN-2"], interim: ["PN-3"] } },
+    }));
+    renderUi();
+    expect(await screen.findByText(/PN-1, PN-2/)).toBeInTheDocument();
+    expect(screen.getByText(/part approvals: 2 not approved, 1 interim/)).toBeInTheDocument();
+  });
+
+  it("does not mention part approvals when the person may not read them", async () => {
+    apiFetch.mockResolvedValue(rec({ basis: { ...basis, ppap: { available: false, notApproved: [], interim: [] } } }));
+    renderUi();
+    await screen.findByText("Consider increased inspection");
+    expect(screen.queryByText(/part approvals:/)).not.toBeInTheDocument();
+  });
+
   it("reminds that a reduction never reaches a part with a critical characteristic, and offers nothing when nothing changes", async () => {
     apiFetch.mockResolvedValue(rec({ level: "reduced", canReduce: true, change: "lower", reasons: [{ code: "earned", kind: "supports", message: "Approved, low risk" }] }));
     renderUi();

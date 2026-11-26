@@ -40,6 +40,8 @@ export function workflowRecordPath(kind, id) {
       return `/Change/${id}`;
     case "fmea":
       return `/FMEA/${id}`;
+    case "ppap":
+      return `/PPAP/${id}`;
     default:
       return null;
   }
@@ -64,7 +66,7 @@ export function dueWords(dueOn) {
 /** The module a trigger belongs to, from the permission it needs (shown beside each trigger so the long list reads by area). */
 const AREAS = {
   ncr: "Non-conformance", inspection: "Inspection", spc: "Process control", process_control: "Process control", master_data: "Master data",
-  calibration: "Calibration", capa: "8D", audits: "Audits", supplier_quality: "Supplier quality", receiving: "Supplier quality", risk: "Risk", documentation: "Documentation", fmea: "FMEA",
+  calibration: "Calibration", capa: "8D", audits: "Audits", supplier_quality: "Supplier quality", receiving: "Supplier quality", risk: "Risk", documentation: "Documentation", fmea: "FMEA", ppap: "PPAP",
 };
 export const triggerArea = (trigger) => AREAS[String(trigger?.permission ?? "").split(".")[0]] ?? "";
 export const triggerOptions = (triggers) =>

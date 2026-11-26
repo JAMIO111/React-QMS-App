@@ -70,7 +70,7 @@ export type RenewCertificationBody = z.infer<typeof RenewCertificationBody>;
 export const WatchlistQuery = z.object({
   /** Warn this many days ahead (expired ones are always listed). */
   days: z.coerce.number().int().min(1).max(365).default(60),
-  kind: z.enum(['certification', 'document']).optional(),
+  kind: z.enum(['certification', 'document', 'ppap']).optional(),
 });
 export type WatchlistQuery = z.infer<typeof WatchlistQuery>;
 
@@ -128,7 +128,7 @@ export const SupplierCertification = z.object({
 export type SupplierCertification = z.infer<typeof SupplierCertification>;
 
 export const WatchlistItem = z.object({
-  kind: z.enum(['certification', 'document']),
+  kind: z.enum(['certification', 'document', 'ppap']),
   id: z.string().uuid(),
   supplier: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }),
   title: z.string(),

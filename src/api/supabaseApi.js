@@ -69,6 +69,19 @@ export const uploadPortalComplaintFile = async (file, organisationId, complaintI
   });
 };
 
+/** A supplier adds a file to one element of the package asked of them: the API chooses the path and signs the upload, then the file is recorded (PP5b). */
+export const uploadPortalPpapPackageFile = async (file, organisationId, requestId, elementKey) => {
+  const actual = file.file ?? file;
+  const link = await apiFetch(`/portal/ppap-packages/${requestId}/files/upload-url`, { method: "POST", organisationId, body: { elementKey, fileName: actual.name || "file" } });
+  const { error } = await supabase.storage.from(link.bucket).uploadToSignedUrl(link.path, link.token, actual, actual.type ? { contentType: actual.type } : undefined);
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+  return apiFetch(`/portal/ppap-packages/${requestId}/files`, {
+    method: "POST",
+    organisationId,
+    body: { elementKey, path: link.path, fileName: actual.name || "file", ...(actual.type ? { contentType: actual.type } : {}), sizeBytes: actual.size },
+  });
+};
+
 export const uploadPortalScarFile = async (file, organisationId, scarId) => {
   const actual = file.file ?? file;
   const link = await apiFetch(`/portal/scars/${scarId}/files/upload-url`, { method: "POST", organisationId, body: { fileName: actual.name || "file" } });

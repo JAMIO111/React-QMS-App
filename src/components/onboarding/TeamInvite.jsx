@@ -1,13 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import MenuCard from "../ui/MenuCard";
 import { describeApiError } from "../../lib/api-client";
 import { ORGANISATION_WIDE_ROLE_KEYS } from "../../lib/departments";
-import { expiresIn, parseEmails } from "../../lib/onboarding";
+import { expiresIn, loadTeamDraft, parseEmails, saveTeamDraft, seatsForDraft } from "../../lib/onboarding";
+import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAllDepartments, useMemberMutation, useMembers, usePermissions, useRoles, useSites } from "../../hooks/useQmsApi";
 import { useSubscriptionOverview } from "../../hooks/useSubscription";
 import CTAButton from "@/components/CTAButton";
+import Callout from "../ui/Callout";
+import ComboField from "../ui/ComboField";
+import { XIcon } from "@/components/icons";
 
 const field =
   "rounded-lg border border-border-color bg-text-input-color px-2 min-h-9.5 py-1.5 text-sm text-primary-text disabled:opacity-60";
@@ -15,6 +19,19 @@ const PACKAGES = [
   { slug: "controller", label: "Controller" },
   { slug: "contributor", label: "Contributor" },
   { slug: "observer", label: "Observer" },
+];
+
+/**
+ * The roles that every organisation has. Before the plan is active the role list cannot be read (it needs rights that wait for the plan), so a draft
+ * names roles from this list; each is matched to the organisation's real role when the invitations are sent.
+ */
+const FALLBACK_ROLES = [
+  { id: "key:owner", key: "owner", name: "Owner" },
+  { id: "key:admin", key: "admin", name: "Admin" },
+  { id: "key:quality_manager", key: "quality_manager", name: "Quality manager" },
+  { id: "key:quality_engineer", key: "quality_engineer", name: "Quality engineer" },
+  { id: "key:inspector", key: "inspector", name: "Inspector" },
+  { id: "key:viewer", key: "viewer", name: "Viewer" },
 ];
 
 const emptyRow = (email) => ({ email, roleId: "", departmentIds: [], packageSlug: "" });
@@ -46,31 +63,43 @@ const useSeats = (rows) => {
 };
 
 /**
- * Invite several people at once: paste addresses, set the same role, departments and package for everyone (or per person), see the seats left
+ * Invite several people at once: paste addresses, set the role, departments and package for each person, see the seats left
  * as you choose, send, and read what happened to each. Failed rows stay in the list so they can be fixed and sent again.
  */
-const TeamInvite = () => {
+const TeamInvite = ({ live = true }) => {
   const { can } = usePermissions();
-  const roles = useRoles();
+  const { organisationId } = useOrganisation();
+  // Until the plan is active the role list is out of reach: plan with the standard roles, and match them to the real ones when sending.
+  const roles = useRoles({ enabled: live });
   const sites = useSites();
   const departments = useAllDepartments();
   const mutation = useMemberMutation();
   const { showToast } = useToast();
   const [paste, setPaste] = useState("");
-  const [rows, setRows] = useState([]);
-  const [message, setMessage] = useState("");
+  const [saved] = useState(() => loadTeamDraft(organisationId));
+  const [rows, setRows] = useState(saved.rows);
+  const [message, setMessage] = useState(saved.message);
   const [results, setResults] = useState(null);
   const seats = useSeats(rows);
   const canGivePackages = can("subscription.seats");
+  // The plan is kept in this browser as it is typed, so leaving the page loses nothing.
+  useEffect(() => saveTeamDraft(organisationId, { rows, message }), [organisationId, rows, message]);
 
-  const roleList = roles.data?.data ?? [];
+  const roleList = live && roles.data?.data ? roles.data.data : FALLBACK_ROLES;
+  const realRoleId = (id) => (id?.startsWith("key:") ? (roles.data?.data ?? []).find((r) => r.key === id.slice(4))?.id ?? "" : id);
   const siteList = sites.data?.data ?? [];
   const departmentList = departments.data?.data ?? [];
+  // Once the real roles can be read, a planned person's standard role becomes the organisation's own.
+  useEffect(() => {
+    if (!live || !roles.data?.data) return;
+    setRows((rs) => (rs.some((r) => r.roleId?.startsWith("key:")) ? rs.map((r) => (r.roleId?.startsWith("key:") ? { ...r, roleId: realRoleId(r.roleId) } : r)) : rs));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, roles.data]);
   const roleKey = (id) => roleList.find((r) => r.id === id)?.key;
   const needsDepartment = (row) => !!row.roleId && !ORGANISATION_WIDE_ROLE_KEYS.includes(roleKey(row.roleId));
+  const needed = seatsForDraft(rows);
 
   const update = (index, patch) => setRows((rs) => rs.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  const applyToAll = (patch) => setRows((rs) => rs.map((r) => ({ ...r, ...patch })));
   const toggleDepartment = (index, id) =>
     update(index, { departmentIds: rows[index].departmentIds.includes(id) ? rows[index].departmentIds.filter((x) => x !== id) : [...rows[index].departmentIds, id] });
 
@@ -88,13 +117,15 @@ const TeamInvite = () => {
     rows.forEach((r) => {
       if (!r.roleId) list.push(`${r.email}: choose a role`);
       else if (needsDepartment(r) && r.departmentIds.length === 0) list.push(`${r.email}: choose a department`);
+      // Where packages are enforced a member with no seat cannot use anything, so every person is given one.
+      else if (canGivePackages && !r.packageSlug) list.push(`${r.email}: choose a package`);
     });
     PACKAGES.forEach((p) => {
-      if (seats.ready && seats.left(p.slug) < 0) list.push(`Not enough ${p.label} seats: ${-seats.left(p.slug)} more needed`);
+      if (live && seats.ready && seats.left(p.slug) < 0) list.push(`Not enough ${p.label} seats: ${-seats.left(p.slug)} more needed`);
     });
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, roleList, seats.ready]);
+  }, [rows, roleList, seats.ready, live, canGivePackages]);
 
   const send = () =>
     mutation.mutate(
@@ -103,7 +134,7 @@ const TeamInvite = () => {
         body: {
           invitations: rows.map((r) => ({
             email: r.email,
-            roleId: r.roleId,
+            roleId: realRoleId(r.roleId),
             departmentIds: r.departmentIds,
             ...(r.packageSlug ? { packageSlug: r.packageSlug } : {}),
             ...(message.trim() ? { message: message.trim() } : {}),
@@ -122,6 +153,14 @@ const TeamInvite = () => {
 
   return (
     <div className="flex flex-col gap-4">
+      {!live && (
+        <Callout tone="info" title="Plan your team now, invite them after you choose a plan">
+          Add the people you will need and what each will do. We keep the list, use it to suggest how many seats to buy, and let you send the invitations once your plan is active.
+        </Callout>
+      )}
+      {live && rows.length > 0 && !results && saved.rows.length > 0 && problems.length === 0 && (
+        <Callout tone="success" title="Your planned team is ready to send">Review the list below, then send the invitations.</Callout>
+      )}
       <MenuCard title="Add people" subtitle="Paste email addresses: one per line, or separated by commas" bodyClassName="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm text-primary-text">
           Email addresses
@@ -135,77 +174,76 @@ const TeamInvite = () => {
       </MenuCard>
 
       {rows.length > 0 && (
-        <MenuCard title={`To invite (${rows.length})`} subtitle="Choose a role, departments and a package for each person, or use Set for everyone" bodyClassName="flex flex-col gap-3">
-          <div className="grid gap-2 rounded-xl border border-border-color p-3 md:grid-cols-3" aria-label="Set for everyone" role="group">
-            <label className="flex flex-col gap-1 text-xs text-secondary-text">
-              Role for everyone
-              <select className={field} value="" onChange={(e) => e.target.value && applyToAll({ roleId: e.target.value })}>
-                <option value="">Set for everyone…</option>
-                {roleList.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-secondary-text">
-              Department for everyone
-              <select className={field} value="" onChange={(e) => e.target.value && applyToAll({ departmentIds: [e.target.value] })}>
-                <option value="">Set for everyone…</option>
-                {departmentList.map((d) => <option key={d.id} value={d.id}>{departmentLabel(d, siteList)}</option>)}
-              </select>
-            </label>
-            {canGivePackages && (
-              <label className="flex flex-col gap-1 text-xs text-secondary-text">
-                Package for everyone
-                <select className={field} value="" onChange={(e) => applyToAll({ packageSlug: e.target.value === "none" ? "" : e.target.value })}>
-                  <option value="">Set for everyone…</option>
-                  <option value="none">No package</option>
-                  {PACKAGES.map((p) => <option key={p.slug} value={p.slug}>{p.label}</option>)}
-                </select>
-              </label>
-            )}
-          </div>
-
-          <ul className="flex flex-col gap-2">
-            {rows.map((r, i) => (
-              <li key={r.email} className="flex flex-col gap-2 rounded-xl border border-border-color p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-medium text-primary-text">{r.email}</span>
-                  <button type="button" className="text-xs text-secondary-text underline" aria-label={`Remove ${r.email}`} onClick={() => setRows((rs) => rs.filter((_, x) => x !== i))}>Remove</button>
-                </div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <label className="flex flex-col gap-1 text-xs text-secondary-text">
-                    Role <span data-required className="sr-only">required</span>
-                    <select aria-label={`Role for ${r.email}`} aria-required="true" className={field} value={r.roleId} onChange={(e) => update(i, { roleId: e.target.value })}>
-                      <option value="">Choose a role</option>
-                      {roleList.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
-                    </select>
-                  </label>
-                  <fieldset className="flex flex-col gap-1 text-xs text-secondary-text">
-                    <legend data-required={needsDepartment(r) || undefined}>Departments</legend>
-                    <div className="flex max-h-24 flex-col gap-1 overflow-y-auto rounded-lg border border-border-color p-2">
-                      {departmentList.length === 0 && <span>No departments yet</span>}
-                      {departmentList.map((d) => (
-                        <label key={d.id} className="flex items-center gap-2 text-sm text-primary-text">
-                          <input type="checkbox" checked={r.departmentIds.includes(d.id)} onChange={() => toggleDepartment(i, d.id)} aria-label={`${departmentLabel(d, siteList)} for ${r.email}`} />
-                          {departmentLabel(d, siteList)}
-                        </label>
-                      ))}
+        <MenuCard title={`To invite (${rows.length})`} subtitle="Choose a role, departments and a package for each person" bodyClassName="flex flex-col gap-3">
+          <ul className="flex flex-col gap-3 p-0">
+            {rows.map((r, i) => {
+              const chosen = departmentList.filter((d) => r.departmentIds.includes(d.id));
+              const spare = departmentList.filter((d) => !r.departmentIds.includes(d.id));
+              return (
+                <li key={r.email} className="flex list-none flex-col gap-3 rounded-xl border border-border-color p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-sm font-medium text-primary-text">{r.email}</span>
+                    <button type="button" className="text-xs text-secondary-text underline" aria-label={`Remove ${r.email}`} onClick={() => setRows((rs) => rs.filter((_, x) => x !== i))}>Remove</button>
+                  </div>
+                  <div className={`grid gap-3 ${canGivePackages ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                    <div className="flex flex-col gap-1">
+                      <span data-required className="text-xs text-secondary-text">Role</span>
+                      <ComboField
+                        ariaLabel={`Role for ${r.email}`}
+                        value={r.roleId || null}
+                        onChange={(id) => update(i, { roleId: id ?? "" })}
+                        options={roleList.map((role) => ({ value: role.id, label: role.name }))}
+                        required
+                        placeholder="Choose a role"
+                      />
                     </div>
-                  </fieldset>
-                  {canGivePackages && (
-                    <label className="flex flex-col gap-1 text-xs text-secondary-text">
-                      Package
-                      <select aria-label={`Package for ${r.email}`} className={field} value={r.packageSlug} onChange={(e) => update(i, { packageSlug: e.target.value })}>
-                        <option value="">No package yet</option>
-                        {PACKAGES.map((p) => (
-                          <option key={p.slug} value={p.slug} disabled={seats.left(p.slug) < 1 && r.packageSlug !== p.slug}>
-                            {p.label} ({Math.max(0, seats.left(p.slug) + (r.packageSlug === p.slug ? 1 : 0))} left)
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                </div>
-              </li>
-            ))}
+                    <div className="flex flex-col gap-1">
+                      <span data-required={needsDepartment(r) || undefined} className="text-xs text-secondary-text">Departments</span>
+                      <ComboField
+                        ariaLabel={`Add a department for ${r.email}`}
+                        value={null}
+                        onChange={(id) => id && update(i, { departmentIds: [...r.departmentIds, id] })}
+                        options={spare.map((d) => ({ value: d.id, label: departmentLabel(d, siteList) }))}
+                        placeholder={departmentList.length === 0 ? "No departments yet" : spare.length === 0 ? "All added" : "Add a department"}
+                        disabled={spare.length === 0}
+                        clearable={false}
+                      />
+                      {chosen.length > 0 && (
+                        <ul aria-label={`Departments for ${r.email}`} className="flex flex-wrap gap-1.5 p-0">
+                          {chosen.map((d) => (
+                            <li key={d.id} className="list-none">
+                              <span className="inline-flex min-h-8 items-center gap-1 rounded-full border border-border-color bg-primary-bg pl-3 pr-1 text-sm text-primary-text">
+                                {departmentLabel(d, siteList)}
+                                <button type="button" aria-label={`Remove ${departmentLabel(d, siteList)} from ${r.email}`} className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-secondary-text hover:bg-secondary-bg hover:text-primary-text" onClick={() => toggleDepartment(i, d.id)}>
+                                  <XIcon className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    {canGivePackages && (
+                      <div className="flex flex-col gap-1">
+                        <span data-required className="text-xs text-secondary-text">Package</span>
+                        <ComboField
+                          ariaLabel={`Package for ${r.email}`}
+                          value={r.packageSlug || null}
+                          onChange={(slug) => update(i, { packageSlug: slug ?? "" })}
+                          options={PACKAGES.map((p) => ({
+                            value: p.slug,
+                            label: live ? `${p.label} (${Math.max(0, seats.left(p.slug) + (r.packageSlug === p.slug ? 1 : 0))} left)` : p.label,
+                            disabled: live && seats.left(p.slug) < 1 && r.packageSlug !== p.slug,
+                          }))}
+                          placeholder="Choose a package"
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
 
           <label className="flex flex-col gap-1 text-sm text-primary-text">
@@ -213,7 +251,7 @@ const TeamInvite = () => {
             <textarea aria-label="Message" className={`${field} min-h-16`} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
           </label>
 
-          {canGivePackages && seats.ready && (
+          {live && canGivePackages && seats.ready && (
             <div aria-label="Seats left" role="group" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-primary-text">
               {PACKAGES.map((p) => (
                 <span key={p.slug} className={seats.left(p.slug) < 0 ? "text-error-color" : ""}>
@@ -223,17 +261,32 @@ const TeamInvite = () => {
               <Link to="/Settings/Subscription" className="text-link-color underline">Buy more seats</Link>
             </div>
           )}
-          {!canGivePackages && <p className="text-xs text-secondary-text">You can invite people without a package; an owner or administrator can give them one afterwards.</p>}
+          {!live && (
+            <div aria-label="Seats this team needs" role="group" className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl bg-primary-bg px-3 py-2 text-sm text-primary-text">
+              <span className="text-secondary-text">Seats this team needs:</span>
+              {PACKAGES.map((p) => (
+                <span key={p.slug}>
+                  {p.label}: <strong>{needed[p.slug]}</strong>
+                  {p.slug === "controller" ? <span className="text-secondary-text"> (including you)</span> : null}
+                </span>
+              ))}
+            </div>
+          )}
+          {!canGivePackages && <p className="text-xs text-secondary-text">You can invite people without a package; an owner or administrator can give them one afterwards. Until then they can sign in but not use Fortress.</p>}
           {problems.length > 0 && (
             <ul role="alert" className="list-disc pl-5 text-sm text-error-color">
               {problems.map((p) => <li key={p}>{p}</li>)}
             </ul>
           )}
-          <div className="flex justify-end">
-            <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending || problems.length > 0} loading={mutation.isPending} onClick={send}>
-              {mutation.isPending ? "Sending…" : `Send ${rows.length} invitation${rows.length === 1 ? "" : "s"}`}
-            </CTAButton>
-          </div>
+          {live ? (
+            <div className="flex justify-end">
+              <CTAButton buttonType="button" type="main" size="lg" disabled={mutation.isPending || problems.length > 0} loading={mutation.isPending} onClick={send}>
+                {mutation.isPending ? "Sending…" : `Send ${rows.length} invitation${rows.length === 1 ? "" : "s"}`}
+              </CTAButton>
+            </div>
+          ) : (
+            <p className="text-xs text-secondary-text">Saved on this device as you go. Nobody is emailed until your plan is active.</p>
+          )}
         </MenuCard>
       )}
 
@@ -249,7 +302,7 @@ const TeamInvite = () => {
         </MenuCard>
       )}
 
-      <PendingInvitations />
+      {live && <PendingInvitations />}
     </div>
   );
 };

@@ -35,6 +35,15 @@ export const loadChoice = (organisationId) => {
   return DEFAULT_CHOICE;
 };
 
+/** True when a choice was saved earlier in this tab (a trip to Stripe and back), as opposed to the default. */
+export const hasSavedChoice = (organisationId) => {
+  try {
+    return sessionStorage.getItem(draftKey(organisationId)) !== null;
+  } catch {
+    return false;
+  }
+};
+
 export const saveChoice = (organisationId, choice) => {
   try {
     sessionStorage.setItem(draftKey(organisationId), JSON.stringify(choice));

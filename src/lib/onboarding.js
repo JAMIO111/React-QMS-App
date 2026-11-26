@@ -1,18 +1,69 @@
-/** The set-up wizard (docs/onboarding-plan.md): the steps in order, in plain words. */
+/**
+ * The set-up wizard (docs/onboarding-plan.md): the steps in the order the owner sees them. Everything that costs nothing comes first; the plan and seats
+ * come last, once the owner knows how many people they will need, and the invitations are sent after it. `server` names the steps the database tracks
+ * for a page (the "Organisation" page covers the database's organisation and details steps).
+ */
 export const SETUP_STEPS = [
-  { key: "organisation", label: "Organisation", title: "Your organisation", help: "The name people will see, and where it is based." },
-  { key: "plan", label: "Plan & seats", title: "Plan and seats", help: "Every organisation needs a subscription with at least one Controller seat, which the owner holds." },
-  { key: "details", label: "Details", title: "Organisation details", help: "Your legal name, country, logo and colour. All optional, all changeable later." },
-  { key: "sites", label: "Sites & departments", title: "Sites and departments", help: "Where work happens. Add the sites you run and the departments in each." },
-  { key: "security", label: "Security", title: "Security", help: "Decide whether everyone must use two-factor authentication, and set up your own." },
-  { key: "team", label: "Team & roles", title: "Your team", help: "Invite the people who will work in Fortress QMS and give them their roles." },
-  { key: "review", label: "Review", title: "Review and finish", help: "Check what is set up and finish." },
+  { key: "organisation", label: "Organisation", title: "Your organisation", help: "Your name, legal details, logo and colour. Only the name is needed; the rest can wait.", server: ["organisation", "details"] },
+  { key: "sites", label: "Sites & departments", title: "Sites and departments", help: "Where work happens. Add the sites you run and the departments in each.", server: ["sites"] },
+  { key: "security", label: "Security", title: "Security", help: "Decide whether everyone must use two-factor authentication, and set up your own.", server: ["security"] },
+  { key: "team", label: "Your team", title: "Your team", help: "Plan who will work in Fortress QMS and what each person will do. Invitations go out once your plan is active.", server: ["team"] },
+  { key: "plan", label: "Plan & seats", title: "Plan and seats", help: "Choose the seats your team needs. Every organisation needs a Controller seat, which the owner holds.", server: ["plan"] },
+  { key: "review", label: "Review", title: "Review and finish", help: "Everything you have set up, in one place.", server: ["review"] },
 ];
 export const setupStepIndex = (key) => SETUP_STEPS.findIndex((s) => s.key === key);
 export const setupStepOf = (key) => SETUP_STEPS.find((s) => s.key === key) ?? SETUP_STEPS[0];
 
-/** Steps the owner marks themselves; the others (organisation, plan, sites, review) are done by doing them. */
-export const MARKABLE_STEPS = ["details", "security", "team"];
+/** Steps the owner marks themselves; the others (organisation, sites, plan, review) are done by doing them. The Organisation page marks its optional details when it is left. */
+export const MARKABLE_STEPS = ["security", "team"];
+
+/** Where a page stands, from the database's own steps: done when its required ones are done, skipped when they were skipped, else pending. */
+export const pageStatus = (state, key) => {
+  const def = setupStepOf(key);
+  const found = def.server.map((k) => state.steps.find((x) => x.key === k)).filter(Boolean);
+  const main = found[0];
+  if (!main) return { status: "pending", required: false };
+  return { status: main.status, required: found.some((x) => x.required) };
+};
+
+/**
+ * The page the wizard opens on: the first one not done or skipped (the review last). The Organisation page counts as open until its optional
+ * details have been looked at too, so a new organisation starts there rather than on the first thing that happens to be missing.
+ */
+export const currentSetupStep = (state) => {
+  const detailsLooked = state.steps.find((x) => x.key === "details")?.status !== "pending";
+  return SETUP_STEPS.find((s) => s.key !== "review" && (pageStatus(state, s.key).status === "pending" || (s.key === "organisation" && !detailsLooked)))?.key ?? "review";
+};
+
+/** The invitations the owner has planned but cannot send until the plan is active, kept in this browser. */
+const DRAFT_KEY = (organisationId) => `qms.teamDraft.${organisationId}`;
+export const loadTeamDraft = (organisationId) => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY(organisationId)) ?? "null");
+    if (saved && Array.isArray(saved.rows)) {
+      return { message: String(saved.message ?? ""), rows: saved.rows.filter((r) => r && typeof r.email === "string").map((r) => ({ email: r.email, roleId: r.roleId ?? "", departmentIds: Array.isArray(r.departmentIds) ? r.departmentIds : [], packageSlug: r.packageSlug ?? "" })) };
+    }
+  } catch {
+    // No saved draft.
+  }
+  return { rows: [], message: "" };
+};
+export const saveTeamDraft = (organisationId, draft) => {
+  try {
+    if (draft.rows.length === 0 && !draft.message) localStorage.removeItem(DRAFT_KEY(organisationId));
+    else localStorage.setItem(DRAFT_KEY(organisationId), JSON.stringify(draft));
+  } catch {
+    // The draft is just not remembered.
+  }
+};
+export const clearTeamDraft = (organisationId) => saveTeamDraft(organisationId, { rows: [], message: "" });
+
+/** Seats the planned team would take, by package, with the owner's Controller seat added: what the plan step starts from. */
+export const seatsForDraft = (rows) => {
+  const seats = { controller: 1, contributor: 0, observer: 0 };
+  for (const r of rows) if (r.packageSlug && r.packageSlug in seats) seats[r.packageSlug] += 1;
+  return seats;
+};
 
 /** Remembers, for this browser session, that the owner chose "finish later", so the app stops sending them back to /setup. */
 const DEFERRED_KEY = "qms.setupDeferred";

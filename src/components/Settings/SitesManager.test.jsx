@@ -32,14 +32,51 @@ beforeEach(() => {
 });
 
 describe("sites", () => {
-  it("shows each site's time zone and currency", () => {
+  it("shows each site as a card with its time zone, currency and departments, without opening anything", () => {
     renderIt();
-    expect(screen.getByRole("button", { name: /MAIN — Main site/ })).toHaveTextContent("UTC · USD");
+    expect(screen.getByRole("heading", { name: "Main site" })).toBeInTheDocument();
+    const card = screen.getByRole("heading", { name: "Main site" }).closest("li");
+    expect(card).toHaveTextContent("MAIN");
+    expect(card).toHaveTextContent("UTC");
+    expect(card).toHaveTextContent("USD");
+    expect(within(card).getByRole("list", { name: "Departments of Main site" })).toHaveTextContent("Quality");
+    expect(card.querySelector("[aria-expanded]")).toBeNull();
+  });
+
+  it("adds a department right on the card, with the form revealed by an obvious button", async () => {
+    apiFetch.mockResolvedValue({});
+    renderIt();
+    expect(screen.queryByRole("form", { name: "Add department" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Add department" }));
+    const form = screen.getByRole("form", { name: "Add department" });
+    await userEvent.type(within(form).getByLabelText("Code"), "wh");
+    await userEvent.type(within(form).getByLabelText("Name"), "Warehouse");
+    await userEvent.click(within(form).getByRole("button", { name: "Add department" }));
+    await waitFor(() => expect(calls().some((c) => c.path === "/departments")).toBe(true));
+    expect(calls().find((c) => c.path === "/departments")).toMatchObject({ method: "POST", body: { code: "WH", name: "Warehouse", siteId: "s1" } });
+  });
+
+  it("deactivates a department from its chip", async () => {
+    apiFetch.mockResolvedValue({});
+    renderIt();
+    await userEvent.click(screen.getByRole("button", { name: "Deactivate department Quality" }));
+    await waitFor(() => expect(calls().some((c) => c.method === "PATCH")).toBe(true));
+    expect(calls().find((c) => c.method === "PATCH")).toMatchObject({ path: "/departments/d1", body: { active: false } });
+  });
+
+  it("offers one-click suggestions for a site with no departments", async () => {
+    apiFetch.mockResolvedValue({});
+    departments = [];
+    renderIt();
+    expect(screen.getByText(/No departments yet/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Quick add Quality" }));
+    await waitFor(() => expect(calls().some((c) => c.path === "/departments")).toBe(true));
+    expect(calls().find((c) => c.path === "/departments")).toMatchObject({ method: "POST", body: { code: "QA", name: "Quality", siteId: "s1" } });
   });
 
   it("opens a pop-up to edit a site, not an inline form", async () => {
     renderIt();
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit site MAIN" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit site MAIN" });
     const details = within(dialog).getByRole("form", { name: "Edit site MAIN" });
     expect(within(details).getByLabelText("Name")).toHaveValue("Main site");
@@ -51,7 +88,7 @@ describe("sites", () => {
   it("saves the changed time zone and currency", async () => {
     apiFetch.mockResolvedValue({});
     renderIt();
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit site MAIN" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit site MAIN" });
     const zone = within(dialog).getByRole("combobox", { name: "Time zone" });
     await userEvent.click(zone);
@@ -70,7 +107,7 @@ describe("sites", () => {
   it("adds departments from the site pop-up as they are entered", async () => {
     apiFetch.mockResolvedValue({});
     renderIt();
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit site MAIN" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit site MAIN" });
     const form = within(dialog).getByRole("form", { name: "Add department" });
     await userEvent.type(within(form).getByLabelText("Code"), "mfg");

@@ -106,7 +106,7 @@ async function shot(page, name) { await page.screenshot({ path: path.join(OUT, `
   };
   let failed = null;
   try {
-    await require('./journey.cjs')({ browser, stack: journeyStack, APP, watch, shot, step, log, problems });
+    await require(process.env.JOURNEY_FILE || './journey.cjs')({ browser, stack: journeyStack, APP, watch, shot, step, log, problems });
   } catch (e) {
     failed = e;
     for (const c of browser.contexts()) for (const [i, p] of c.pages().entries()) await p.screenshot({ path: path.join(OUT, `FAILED-${i}.png`) }).catch(() => {});

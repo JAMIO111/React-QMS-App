@@ -250,6 +250,38 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       leaveOut: 'Rows marked are skipped before anything is written',
     },
   },
+  customer_order: {
+    table: 'customer_order_lines',
+    fields: {
+      orderNumber: { column: 'order_number', table: 'customer_orders' }, customer: { column: 'customer_id', table: 'customer_orders' },
+      customerReference: { column: 'customer_reference', table: 'customer_orders' },
+      orderedOn: { column: 'ordered_on', table: 'customer_orders' }, orderNotes: { column: 'notes', table: 'customer_orders' },
+      lineNumber: { column: 'line_number' }, part: { column: 'part_id' }, quantityOrdered: { column: 'quantity_ordered' },
+      unit: { column: 'unit' }, requestedOn: { column: 'requested_on' }, agreedOn: { column: 'agreed_on' }, lineStatus: { column: 'status' },
+    },
+    excluded: {
+      ...SYSTEM,
+      customer_order_id: 'The order is found by its number, or made from the line',
+    },
+  },
+  shipment: {
+    table: 'shipment_lines',
+    fields: {
+      documentNumber: { column: 'source_document', table: 'shipments' }, customer: { column: 'customer_id', table: 'shipments' },
+      orderNumber: { column: 'customer_order_id', table: 'shipments' }, shippedOn: { column: 'shipped_on', table: 'shipments' },
+      deliveryNote: { column: 'delivery_note', table: 'shipments' }, site: { column: 'site_id', table: 'shipments' },
+      orderLine: { column: 'order_line_id' }, part: { column: 'part_id' }, quantity: { column: 'quantity_shipped' }, lotNumber: { column: 'lot_id' }, notes: { column: 'notes' },
+    },
+    excluded: {
+      ...SYSTEM,
+      shipment_id: 'The shipment is found by its document, or made from the row',
+      line_number: 'Numbered in Fortress, in the order the rows arrive',
+    },
+    virtual: {
+      movement: 'Says whether the row is a shipment or a return (a return is refused: it belongs to an RMA, never to a shipment)',
+      leaveOut: 'Rows marked are skipped before anything is written',
+    },
+  },
   production_order: {
     table: 'production_orders',
     fields: {

@@ -16,6 +16,8 @@ export const ENTITY_TYPES = [
   'purchase_order',
   'goods_receipt',
   'po_receipt_total',
+  'customer_order',
+  'shipment',
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -34,6 +36,8 @@ export const ENTITY_LABELS: Record<EntityType, string> = {
   purchase_order: 'purchase orders',
   goods_receipt: 'goods receipts',
   po_receipt_total: 'received quantities',
+  customer_order: 'customer orders',
+  shipment: 'shipments',
 };
 
 /** A staged row waiting to be applied. `internalId` is the QMS record it already maps to (then `action` is update), else null (create). */

@@ -110,6 +110,8 @@ const NOT_LOCKABLE: Record<string, string> = {
   nonconformance: 'Non-conformances are only ever added, never updated',
   ncr_cost: 'Cost lines are only ever added: a posted cost is not edited, a correction is a new line',
   goods_receipt: 'Deliveries are only ever added, never updated',
+  customer_order: 'Customer order lines are not covered by field locks yet, like purchase order lines',
+  shipment: 'Shipments are only ever added, never updated',
   po_receipt_total: 'Received totals follow the source and are not edited by people',
   purchase_order: 'Order lines are a later step (the agreed date is the one editable field)',
 };

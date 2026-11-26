@@ -40,7 +40,7 @@ END $$;
 DO $$
 DECLARE
   ann uuid := '6a700000-0000-0000-0000-000000000a01'; eve uuid := '6a700000-0000-0000-0000-000000000a02'; val uuid := '6a700000-0000-0000-0000-000000000a03';
-  org uuid; org2 uuid; api uuid; s uuid; s2 uuid; tpl uuid; tpl_rec uuid; v_err text;
+  org uuid; org2 uuid; api uuid; s uuid; s2 uuid; tpl uuid; tpl_rec uuid; v_err text; cust uuid; prt uuid; tpl_co uuid; tpl_sh uuid;
 BEGIN
   PERFORM pg_temp.login(ann); org := app.create_organisation('Manual Alpha'); PERFORM pg_temp.logout();
   PERFORM pg_temp.login(eve); org2 := app.create_organisation('Manual Beta'); PERFORM pg_temp.logout();
@@ -107,6 +107,32 @@ BEGIN
   UPDATE public.integration_templates SET archived_at = NULL, archive_reason = NULL WHERE id = tpl_rec;
   UPDATE public.integration_import_settings SET template_id = NULL WHERE connection_id = api AND entity_type = 'goods_receipt';
   PERFORM pg_temp.assert_eq(pg_temp.delivery(ann, s), 'ok', 'a schedule with no template owns nothing');
+
+  -- ---- customer orders and shipments follow the same rule (their kinds are importable now) ----
+  INSERT INTO public.customers (organisation_id, code, name) VALUES (org, 'ACME', 'Acme Motors') RETURNING id INTO cust;
+  INSERT INTO public.parts (organisation_id, part_number, name) VALUES (org, 'P-1', 'Bracket') RETURNING id INTO prt;
+  PERFORM pg_temp.login(ann);
+  PERFORM app.set_integration_import_settings(api, 'customer_order', '{"writeMode": "add_update"}'::jsonb);
+  PERFORM app.set_integration_import_settings(api, 'shipment', '{"writeMode": "add_only"}'::jsonb);
+  tpl_co := app.create_integration_template(org, 'customer_order', 'ERP customer orders', NULL, jsonb_build_object('keyField', 'Id', 'settings', '{"writeMode": "add_update"}'::jsonb,
+    'fields', '[{"target": "orderNumber", "source": "No"}]'::jsonb));
+  tpl_sh := app.create_integration_template(org, 'shipment', 'ERP shipments', NULL, jsonb_build_object('keyField', 'Id', 'settings', '{"writeMode": "add_only"}'::jsonb,
+    'fields', '[{"target": "quantity", "source": "Qty"}]'::jsonb));
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.create_customer_order(%L, 'CO-1', NULL, current_date, NULL, '[{"partId":"%s","quantity":1,"requestedOn":"2031-01-01"}]'::jsonb)$f$, cust, prt)), 5), 'ok', 'a customer order can be typed while no schedule is on');
+  PERFORM pg_temp.logout();
+  UPDATE public.integration_import_settings SET schedule = 'daily', template_id = tpl_co WHERE connection_id = api AND entity_type = 'customer_order';
+  UPDATE public.integration_import_settings SET schedule = 'daily', template_id = tpl_sh WHERE connection_id = api AND entity_type = 'shipment';
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.create_customer_order(%L, 'CO-2', NULL, current_date, NULL, '[{"partId":"%s","quantity":1,"requestedOn":"2031-01-01"}]'::jsonb)$f$, cust, prt)), 5), 'QM039', 'a scheduled import of customer orders refuses one typed by hand');
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.record_shipment(%L, NULL, NULL, current_date, 'DN-1', NULL, '[{"partId":"%s","quantity":1}]'::jsonb, NULL)$f$, cust, prt)), 5), 'QM039', 'and so does one of shipments');
+  PERFORM pg_temp.logout();
+  PERFORM pg_temp.assert_eq(pg_temp.managed(ann, org), 'customer_orders=ERP,shipments=ERP', 'the screen is told about all of them');
+  UPDATE public.integration_import_settings SET schedule = 'manual' WHERE connection_id = api AND entity_type IN ('customer_order', 'shipment');
+  PERFORM pg_temp.login(ann);
+  PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($f$SELECT app.record_shipment(%L, NULL, NULL, current_date, 'DN-2', NULL, '[{"partId":"%s","quantity":1}]'::jsonb, NULL)$f$, cust, prt)), 5), 'ok', 'switching the schedules off opens both again');
+  PERFORM pg_temp.logout();
 
   -- ---- nobody can call the rule or the guard directly ----
   PERFORM pg_temp.login(ann);

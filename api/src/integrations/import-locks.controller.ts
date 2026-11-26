@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { ImportLockList, ImportLocksQuery } from './import-locks.schemas';
+import { ImportLockList, ImportLocksQuery, ImportManagedList } from './import-locks.schemas';
 import { ImportLocksService } from './import-locks.service';
 
 /**
@@ -21,5 +21,12 @@ export class ImportLocksController {
   @ApiOkResponse({ description: 'The locked fields of one record, each with the connection that manages it (empty when nothing is locked)', schema: openApiSchema(ImportLockList) })
   list(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.list(ctx, parse(ImportLocksQuery, query));
+  }
+
+  @Get('managed-areas')
+  @OrganisationScoped()
+  @ApiOkResponse({ description: 'Areas of orders and deliveries a scheduled import owns, with the connection (empty when hand entry is open); the database refuses hand entry there: 409 record_managed_by_import', schema: openApiSchema(ImportManagedList) })
+  managed(@Ctx() ctx: RequestContext) {
+    return this.service.managed(ctx);
   }
 }

@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
+import { useImportManaged } from "../../hooks/useImportManaged";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCustomerOrders } from "../../hooks/useShipping";
 import { ORDER_FILTERS, orderFilterQuery } from "../../lib/shipping";
 import CTAButton from "../CTAButton";
+import ImportManagedNotice from "../integrations/ImportManagedNotice";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -17,6 +19,8 @@ const PAGE_SIZE = 25;
 /** What customers have ordered. Open is the default; Late lists orders with a line past its date and not fully shipped. */
 const CustomerOrdersPage = () => {
   const { can } = usePermissions();
+  const { managed } = useImportManaged();
+  const owner = managed("customer_orders");
   const [params, setParams] = useSearchParams();
   const filter = ORDER_FILTERS.some((f) => f.value === params.get("filter")) ? params.get("filter") : "open";
   const q = params.get("q") ?? "";
@@ -36,8 +40,9 @@ const CustomerOrdersPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Customer orders</h1>
           <p className="text-sm text-secondary-text">What customers have ordered, the date each line was asked for and the date confirmed to them. Shipments are recorded against them.</p>
         </div>
-        {can("shipping.manage") && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setCreating(true)}>Record an order</CTAButton>}
+        {can("shipping.manage") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setCreating(true)}>Record an order</CTAButton>}
       </div>
+      <ImportManagedNotice area="customer_orders" connection={owner} />
       <div className="flex flex-wrap items-center gap-3">
         <SlidingToggle ariaLabel="Which orders" options={ORDER_FILTERS} value={filter} onChange={(v) => set({ filter: v === "open" ? "" : v, page: "" })} />
         <SearchBox label="Search orders" onSearch={onSearch} />

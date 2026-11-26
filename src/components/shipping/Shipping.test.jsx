@@ -41,6 +41,7 @@ const calls = [];
 const routeApi = (routes = {}) =>
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path.split("?")[0]}`;
+    if (k === "GET /import-locks/managed-areas" && !(k in routes)) return { data: [] };
     calls.push({ k, path, body: opts.body });
     if (!(k in routes)) throw new Error(`unexpected ${k}`);
     return typeof routes[k] === "function" ? routes[k](path, opts) : routes[k];
@@ -111,6 +112,30 @@ describe("customer order register", () => {
     renderAt(<CustomerOrdersPage />, "/");
     await screen.findByText(/No customer orders here/);
     expect(screen.queryByRole("button", { name: /Record an order/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("hand entry while an import owns the records", () => {
+  it("closes the record buttons and says which connection the records come from", async () => {
+    routeApi({ "GET /customer-orders": { data: [orderRow()], page: 1, pageSize: 25, total: 1 }, "GET /import-locks/managed-areas": { data: [{ area: "customer_orders", connection: "ERP" }] } });
+    renderAt(<CustomerOrdersPage />, "/Shipping/Orders");
+    expect(await screen.findByText("Customer orders come from ERP")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /record an order/i })).not.toBeInTheDocument();
+  });
+
+  it("leaves the button when only another area is owned", async () => {
+    routeApi({ "GET /customer-orders": { data: [orderRow()], page: 1, pageSize: 25, total: 1 }, "GET /import-locks/managed-areas": { data: [{ area: "shipments", connection: "ERP" }] } });
+    renderAt(<CustomerOrdersPage />, "/Shipping/Orders");
+    expect(await screen.findByRole("button", { name: /record an order/i })).toBeInTheDocument();
+    expect(screen.queryByText(/come from ERP/)).not.toBeInTheDocument();
+  });
+
+  it("hides Record a shipment on an order while shipments come from an import, and keeps closing available", async () => {
+    routeApi({ "GET /customer-orders/o1": order(), "GET /import-locks/managed-areas": { data: [{ area: "shipments", connection: "ERP" }] } });
+    renderAt(<CustomerOrderPage />, "/Shipping/Orders/o1", "/Shipping/Orders/:id");
+    expect(await screen.findByText("Shipments come from ERP")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /record a shipment/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /close order/i })).toBeInTheDocument();
   });
 });
 

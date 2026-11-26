@@ -10,3 +10,8 @@ export type ImportLocksQuery = z.infer<typeof ImportLocksQuery>;
 export const ImportLock = z.object({ field: z.string(), connection: z.object({ id: z.string().uuid(), name: z.string() }) });
 export const ImportLockList = z.object({ data: z.array(ImportLock) });
 export type ImportLockList = z.infer<typeof ImportLockList>;
+
+/** Areas of orders and movements a scheduled import owns, so hand entry of them is closed (docs/order-fulfilment-plan.md). */
+export const IMPORT_MANAGED_AREAS = ['purchase_orders', 'receipts', 'customer_orders', 'shipments'] as const;
+export const ImportManagedList = z.object({ data: z.array(z.object({ area: z.enum(IMPORT_MANAGED_AREAS), connection: z.string() })) });
+export type ImportManagedList = z.infer<typeof ImportManagedList>;

@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PlusIcon } from "@/components/icons";
+import { useImportManaged } from "../../hooks/useImportManaged";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useShipments } from "../../hooks/useShipping";
 import { SHIPMENT_FILTERS } from "../../lib/shipping";
 import CTAButton from "../CTAButton";
+import ImportManagedNotice from "../integrations/ImportManagedNotice";
 import Callout from "../ui/Callout";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -17,6 +19,8 @@ const PAGE_SIZE = 25;
 /** What left, newest first. Search finds a shipment by its number, the delivery note, the order, a lot, a part or the customer. */
 const ShipmentsPage = () => {
   const { can } = usePermissions();
+  const { managed } = useImportManaged();
+  const owner = managed("shipments");
   const [params, setParams] = useSearchParams();
   const status = SHIPMENT_FILTERS.some((f) => f.value === params.get("status")) ? params.get("status") : "shipped";
   const q = params.get("q") ?? "";
@@ -36,8 +40,9 @@ const ShipmentsPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Shipments</h1>
           <p className="text-sm text-secondary-text">Deliveries to customers. A line may name the lot it came from, so a customer problem can be traced back to it.</p>
         </div>
-        {can("shipping.manage") && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a shipment</CTAButton>}
+        {can("shipping.manage") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a shipment</CTAButton>}
       </div>
+      <ImportManagedNotice area="shipments" connection={owner} />
       <div className="flex flex-wrap items-center gap-3">
         <SlidingToggle ariaLabel="Which shipments" options={SHIPMENT_FILTERS} value={status} onChange={(v) => set({ status: v === "shipped" ? "" : v, page: "" })} />
         <SearchBox label="Search shipments" onSearch={onSearch} />

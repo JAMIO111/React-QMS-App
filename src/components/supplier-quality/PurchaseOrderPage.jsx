@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useImportManaged } from "../../hooks/useImportManaged";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { usePurchaseOrder, useReceivingMutation } from "../../hooks/useReceiving";
 import { formatDate } from "../../lib/ncr";
@@ -8,6 +9,7 @@ import { formatQuantity, lineLabel } from "../../lib/receiving";
 import { useBreadcrumbNames } from "../../lib/breadcrumbs";
 import Breadcrumb from "../Breadcrumb";
 import CTAButton from "../CTAButton";
+import ImportManagedNotice from "../integrations/ImportManagedNotice";
 import Callout from "../ui/Callout";
 import Dialog from "../ui/Dialog";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -28,6 +30,8 @@ const Fact = ({ label, children }) => (
 const PurchaseOrderPage = () => {
   const { id } = useParams();
   const { can } = usePermissions();
+  const { managed } = useImportManaged();
+  const owner = managed("receipts");
   const query = usePurchaseOrder(id);
   useBreadcrumbNames([{ path: `/Supplier-Quality/Purchase-Orders/${id}`, label: query.data?.poNumber }]);
   const [dialog, setDialog] = useState(null);
@@ -51,12 +55,13 @@ const PurchaseOrderPage = () => {
         </div>
         {manage && open && (
           <div className="flex flex-wrap items-center gap-2">
-            <CTAButton type="main" size="default" onClick={() => setDialog({ kind: "receive" })}>Record a delivery</CTAButton>
+            {!owner && <CTAButton type="main" size="default" onClick={() => setDialog({ kind: "receive" })}>Record a delivery</CTAButton>}
             <CTAButton type="secondary" size="default" onClick={() => setDialog({ kind: "close" })}>Close order</CTAButton>
             <CTAButton type="danger" size="default" onClick={() => setDialog({ kind: "cancel" })}>Cancel order</CTAButton>
           </div>
         )}
       </div>
+      {open && <ImportManagedNotice area="receipts" connection={owner} />}
       {o.status === "cancelled" && <Callout tone="warning" title="Cancelled">{o.cancelReason}</Callout>}
       {o.status === "closed" && <Callout tone="info" title="Closed">Nothing more is expected on this order{o.closedAt ? ` (closed ${formatDateTime(o.closedAt)})` : ""}.</Callout>}
       {open && o.lateLines > 0 && <Callout tone="error" title={`${o.lateLines} ${o.lateLines === 1 ? "line is" : "lines are"} late`}>Goods are still outstanding past the agreed (else requested) date. Chase the supplier, or record a new agreed date.</Callout>}

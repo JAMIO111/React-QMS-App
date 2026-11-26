@@ -161,6 +161,15 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       }
       return new ApiError(409, 'field_managed_by_import', pg.message ?? 'That field is managed by an import and cannot be changed here', details);
     }
+    case 'QM039': { // orders and deliveries a scheduled import owns: not entered by hand (the database puts {area, connection} in the detail)
+      let details: unknown;
+      try {
+        details = pg.detail ? JSON.parse(pg.detail) : undefined;
+      } catch {
+        details = undefined;
+      }
+      return new ApiError(409, 'record_managed_by_import', pg.message ?? 'These records come from an import and cannot be entered here', details);
+    }
     case 'QM034': // measurement system analysis rules: studies, design, readings, completion (messages are written for users)
       return new ApiError(409, 'msa_rule', pg.message ?? 'That change is not allowed for this study');
     case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)

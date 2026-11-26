@@ -1,6 +1,6 @@
 # Pay by invoice (self-serve) — plan
 
-Status: **planned, not built.** Decisions in §3 are proposed until the owner answers them. Written 2026-11-26.
+Status: **planned, not built.** I9 (abuse limits) agreed 2026-11-26; I1–I8 are proposed until the owner confirms them. Written 2026-11-26.
 Related: `docs/onboarding-plan.md` §13 (Stripe), `docs/stripe-setup.md`, `docs/subscription-plan.md`.
 
 ## 1. What this is
@@ -29,6 +29,19 @@ Self-serve invoicing means an owner can choose **Pay by invoice** on the plan st
 | I6 | Changing route | An organisation may move **from card to invoice and back** only at a renewal, from the Subscription page, by cancelling at period end and starting the other kind (no live switching of a running subscription's collection method in the first version). | Avoids half-states; Stripe supports switching but the edge cases (open invoices, proration) are not worth it yet. |
 | I7 | Purchase order | Optional **PO reference** on the form, put on every invoice (Stripe invoice custom field). | The most common thing accounts payable ask for. |
 | I8 | Seat changes | Extra seats are **added to the next invoice** (prorated), not invoiced instantly; removing seats credits the next invoice. | Matches how invoiced customers expect to be billed; avoids a surprise mid-month invoice. Cost: extra seats are in use before they are billed. |
+| I9 | Abuse limits (agreed 2026-11-26, see §3a) | Seat cap until the first invoice is paid; data-leaving features closed while it is unpaid; 3 days' grace for invoiced customers; one invoiced organisation per company; operator alerts. | Keeps the self-serve start while capping the worst case at the seats on one invoice. |
+
+## 3a. Abuse limits (I9)
+
+The worst case without limits is up to 21 days of use (14 to pay + 7 grace) with nothing paid, repeated with new organisations. The agreed limits:
+
+1. **Seat cap until the first invoice is paid.** An invoiced organisation can hold only the seats on its first invoice. While **any** invoice is open or overdue, `app.check_seat_change` refuses a seat increase (`QM009`, "pay the open invoice first"); decreases are always allowed. After the first invoice is paid the cap is lifted.
+2. **Data-leaving features closed while the first invoice is unpaid:** creating **reporting keys** (Power BI), **activating or running integrations that write out**, and **bulk CSV exports** answer "available once your first invoice is paid". Reading in the app, importing data in, and everything else stay open. Worked out by one database function, `app.invoice_first_payment_pending(org)` (true for an invoiced organisation whose first invoice is not yet paid), so every screen and route asks the same thing.
+3. **Shorter grace for invoiced customers: 3 days** after the due date (card customers keep 7). Stored as the organisation's `grace_period_days` when the invoice subscription is applied; the validity rule in §4.3 uses it.
+4. **One invoiced organisation per company.** The legal name (ignoring case and punctuation) and the VAT number are kept on the subscription; a second organisation choosing invoice with the same VAT number, or the same legal name, is refused with "an organisation for this company already exists: ask its owner to invite you". The VAT number must verify with Stripe (Stripe checks UK and EU numbers when a tax id is added) before the subscription is created. An operator can lift the block for a genuine second entity.
+5. **Operator alerts.** A notice to platform operators when an organisation starts an invoiced subscription, and when its **first** invoice passes its due date; both also appear on the `/platform` organisations tab (route, first invoice paid or not, overdue days). Never emailed to the customer.
+
+**Not built (kept for if real abuse appears):** refusing free-mail billing addresses, pay-first access (nothing until the first invoice is paid), operator approval of the first invoice, a card on file as a fallback, archiving unpaid invoiced organisations sooner than the existing job does.
 
 ## 4. Design
 
@@ -48,6 +61,7 @@ Invoice path: choose seats and interval as now → **Billing details** form (com
 
 ### 4.3 Database (one migration)
 - `organisation_subscriptions`: `collection_method text` (`card` default | `invoice`), `payment_terms_days`, `billing_contact_email`, `purchase_order`. `organisations`/settings: `invoice_billing_allowed boolean default true` (platform-owned; set by the operator).
+- `invoice_first_payment_pending(org)`, the one-per-company check (`billing_company_key` = normalised legal name, `vat_number`, unique among live invoiced subscriptions unless an operator lifts it with `app.set_invoice_company_exempt`), the seat rule in `app.check_seat_change` and the operator notices of §3a (event `platform_invoice_alerts`, written by `app.stripe_apply_subscription` and the daily reconcile).
 - `app.stripe_apply_subscription` takes the new snapshot fields (patched from its live definition with `pg_temp.patch_once`, marker-guarded, as the other migrations do).
 - **Validity for an invoiced subscription** (`app.organisation_subscription_valid`): valid while `active`, and **not valid when the oldest open invoice's due date + grace is in the past** — even if Stripe still says `active`. This makes access independent of exactly how Stripe labels an overdue send-invoice subscription (§6 step 0 tells us whether it is also needed for `past_due`). Needs `billing_invoices.due_on` (check it is stored; add if not) and an index for the lookup.
 - **Controller invariant and `QM009` seat rules are unchanged** (the first Controller seat goes to the owner who started it: record the starter as `stripe_start_checkout` does, with a synthetic checkout id, or add the user id parameter).
@@ -77,8 +91,8 @@ Invoice path: choose seats and interval as now → **Billing details** form (com
 | Slice | Content | Done when |
 |---|---|---|
 | **IV0 spike (sandbox, no app code)** | Create an invoiced subscription by script in the sandbox; record what Stripe does when unpaid (status, events, emails), bank-transfer details, proration on a seat change, cancel at period end. Settles §5 and decides whether the database rule in §4.3 is needed beyond `past_due`. | A short findings note added to this plan; I1–I8 confirmed or changed. |
-| **IV1 migration + SQL test** | Columns, `invoice_billing_allowed`, patched `stripe_apply_subscription`, validity rule, operator function, sweep seeds, guardrails. | `db:check` green incl. new test with deliberate breaks tried. |
-| **IV2 API** | Gateway methods (real + fake), snapshot mapping, `POST /billing/invoice-subscription`, overview fields, e2e with the fake gateway and real signature verification, tenancy sweep. | `api:test` and `api:test:e2e` green. |
+| **IV1 migration + SQL test** | Columns, `invoice_billing_allowed`, patched `stripe_apply_subscription`, validity rule, **the §3a limits** (`invoice_first_payment_pending`, seat rule, company key and VAT uniqueness, 3-day grace, operator alerts), operator functions, sweep seeds, guardrails. | `db:check` green incl. new test with deliberate breaks tried. |
+| **IV2 API** | Gateway methods (real + fake), snapshot mapping, `POST /billing/invoice-subscription` (VAT verified with Stripe first, duplicate company refused), reporting keys, write-out integrations and bulk exports refused while `invoice_first_payment_pending` (`403 payable_first`), overview fields, e2e with the fake gateway and real signature verification, tenancy sweep. | `api:test` and `api:test:e2e` green. |
 | **IV3 frontend** | Route choice, billing details form, subscription page and banner, wizard summary/review wording; tests; journey step (fake Stripe gateway in `scripts/journey/stack.cjs` learns send-invoice: subscription created, invoice open, then marked paid and, separately, overdue). | `npm test`, lint, build, journey green. |
 | **IVX exit check** | Live guardrails + advisors, sandbox end-to-end (invoice emailed, paid by test bank transfer, overdue then locked, paid then unlocked), docs (`stripe-setup.md` §5 invoice case, CLAUDE.md), exit note. | Written down with what was and was not exercised. |
 
@@ -88,7 +102,7 @@ Order of work: IV0 first (it can change the design), then IV1 → IV2 → IV3 �
 Custom payment terms per customer in the UI, credit notes and refunds screens, purchase-order approval workflows, statements, payment by direct debit (BACS Direct Debit is a separate Stripe payment method with its own mandate step and is a better long-term answer for monthly customers), multiple currencies, switching a running subscription between card and invoice, our own overdue emails (Stripe sends them).
 
 ## 8. Risks
-- **Free use before paying** (I1/I4): up to 14 + 7 days. Mitigations: company details required, operator switch, annual-first copy, the operator panel lists overdue invoices. If abuse appears, add a minimum first-invoice amount or require the first invoice paid before the second seat package.
+- **Free use before paying** (I1/I4): now up to 14 + 3 days, on the seats of one invoice, with no way to take data out, one organisation per company, and operators told (I9, §3a). If abuse still appears: free-mail refusal, pay-first access, a minimum first-invoice amount.
 - **Stripe dashboard settings are outside the code** and silently change behaviour (unpaid-invoice handling, reminder emails). They are written into `stripe-setup.md` and checked in IVX.
 - **Tax:** a wrong or missing address/VAT number produces wrong VAT on an invoice that cannot be edited once finalised; the form validates address completeness and the tax id with Stripe at entry.
 - **Bank transfer reconciliation** is Stripe's (customer balance); a payment that arrives without the invoice reference can sit unapplied. Stripe handles most cases automatically; the rest is a manual Stripe-dashboard task for the owner and is not built here.

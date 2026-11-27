@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CheckoutNotice from "../billing/CheckoutNotice";
-import SeatPicker from "../billing/SeatPicker";
+import OpenInvoiceCard from "../billing/OpenInvoiceCard";
+import StartSubscriptionPanel from "../billing/StartSubscriptionPanel";
 import ComboField from "../ui/ComboField";
 import MenuCard from "../ui/MenuCard";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -22,7 +23,6 @@ import {
   usePortalSession,
   useSeatAssignments,
   useSeatPreview,
-  useStartCheckout,
   useSubscriptionMutation,
   useSubscriptionOverview,
 } from "../../hooks/useSubscription";
@@ -103,6 +103,19 @@ const Overview = ({ overview, canManage }) => {
           {sub && <StatusBadge status={sub.status} />}
         </div>
       }>
+      {sub?.paymentRoute === "invoice" && (
+        <div className="mb-3 flex flex-col gap-2">
+          <OpenInvoiceCard sub={sub} />
+          {sub.billing && (
+            <p className="text-sm text-secondary-text">
+              Paid by invoice, payable within {sub.paymentTermsDays ?? 14} days. Billed to {sub.billing.legalName ?? "your company"}
+              {sub.billing.email ? ` (${sub.billing.email})` : ""}
+              {sub.billing.vatNumber ? `, VAT ${sub.billing.vatNumber}` : ""}
+              {sub.billing.purchaseOrder ? `, PO ${sub.billing.purchaseOrder}` : ""}. Change these details in Manage billing.
+            </p>
+          )}
+        </div>
+      )}
       {sub?.status === "trialing" && (
         <p role="status" className="mb-3 text-sm text-primary-text">
           Free trial until {date(sub.trialEnd)}. Your card is charged from then
@@ -415,55 +428,19 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
   );
 };
 
-/** For an organisation with no subscription yet, when Stripe is set up: choose seats and go to the secure checkout. */
+/** For an organisation with no subscription yet, when Stripe is set up: choose seats, then pay by card (secure checkout, free trial) or by invoice. */
 const StartSubscription = ({ catalogue }) => {
   const { organisationId } = useOrganisation();
   const [choice, setChoice] = useState(() => loadChoice(organisationId));
-  const start = useStartCheckout();
-  const { showToast } = useToast();
   const update = (next) => {
     setChoice(next);
     saveChoice(organisationId, next);
   };
-  const go = () =>
-    start.mutate(
-      {
-        interval: choice.interval,
-        seats: Object.fromEntries(
-          Object.entries(choice.seats).filter(([, q]) => q > 0),
-        ),
-        returnTo: "settings",
-      },
-      {
-        onSuccess: ({ url }) => window.location.assign(url),
-        onError: (e) =>
-          showToast({
-            type: "error",
-            title: "Could not start checkout",
-            message: describeApiError(e),
-          }),
-      },
-    );
   return (
     <MenuCard
       title="Start your subscription"
-      subtitle="14-day free trial, card required, cancel any time before it ends">
-      <SeatPicker
-        plans={catalogue.plans}
-        value={choice}
-        onChange={update}
-        disabled={start.isPending}
-      />
-      <div className="mt-4 flex justify-end">
-        <LoadingButton
-          variant="main"
-          className="px-2 py-1"
-          loading={start.isPending}
-          loadingText="Opening checkout…"
-          onClick={go}>
-          Continue to secure checkout
-        </LoadingButton>
-      </div>
+      subtitle="By card: 14-day free trial, cancel any time before it ends. By invoice: no trial, payable within 14 days">
+      <StartSubscriptionPanel plans={catalogue.plans} choice={choice} onChoice={update} returnTo="settings" />
     </MenuCard>
   );
 };

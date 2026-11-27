@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_CHOICE, clearChoice, formatDate, loadChoice, money, recurringTotal, saveChoice, seatChangeWords, seatCount, trialEnd, unitPrice } from "./billing";
+import { DEFAULT_CHOICE, EMPTY_COMPANY, INVOICE_TERMS_DAYS, clearChoice, companyProblems, invoiceBody, invoiceStartWords, loadRoute, newClientKey, owedWords, saveRoute, formatDate, loadChoice, money, recurringTotal, saveChoice, seatChangeWords, seatCount, trialEnd, unitPrice } from "./billing";
 
 const plans = [
   { slug: "observer", monthly: { unitAmount: 500 }, annual: { unitAmount: 5000 } },
@@ -63,5 +63,55 @@ describe("seatChangeWords", () => {
     const mixed = { currency: "gbp", tax: 0, amountDue: 1000, timing: "now", payment: "card", changes: [{ planSlug: "controller", from: 2, to: 3 }, { planSlug: "observer", from: 4, to: 1 }] };
     expect(seatChangeWords(mixed)).toMatch(/charged £10\.00 now.*Any reduction is credited to your next invoice$/);
     expect(seatChangeWords({ ...mixed, amountDue: 0, changes: [{ planSlug: "controller", from: 2, to: 2 }] })).toBe("Nothing is charged now");
+  });
+});
+
+describe("paying by invoice", () => {
+  beforeEach(() => sessionStorage.clear());
+  const company = { ...EMPTY_COMPANY, legalName: "Acme Ltd", billingEmail: "accounts@acme.test", addressLine1: "1 High Street", city: "Leeds", postcode: "LS1 1AA", country: "GB" };
+
+  it("remembers card or invoice for the tab, card by default", () => {
+    expect(loadRoute("org-1")).toBe("card");
+    saveRoute("org-1", "invoice");
+    expect(loadRoute("org-1")).toBe("invoice");
+    expect(loadRoute("org-2")).toBe("card");
+  });
+
+  it("says what is still needed for the company, one thing at a time and in the form's order", () => {
+    expect(companyProblems(EMPTY_COMPANY)[0]).toMatch(/legal name/);
+    expect(companyProblems({ ...company, billingEmail: "nope" })).toEqual(["Enter the email address invoices should be sent to."]);
+    expect(companyProblems({ ...company, postcode: " " })[0]).toMatch(/billing address/);
+    expect(companyProblems({ ...company, country: "" })[0]).toMatch(/billing address/);
+    expect(companyProblems(company)).toEqual([]);
+  });
+
+  it("builds the request: seats above zero, tidy text, empty optional fields left out", () => {
+    const body = invoiceBody({ choice: { interval: "year", seats: { controller: 2, contributor: 0, observer: 0 } }, company: { ...company, legalName: "  Acme Ltd ", vatNumber: " GB123 ", poReference: "" }, clientKey: "iv-abc" });
+    expect(body).toEqual({
+      interval: "year",
+      seats: { controller: 2 },
+      company: { legalName: "Acme Ltd", billingEmail: "accounts@acme.test", addressLine1: "1 High Street", city: "Leeds", postcode: "LS1 1AA", country: "GB", vatNumber: "GB123" },
+      clientKey: "iv-abc",
+    });
+    expect(newClientKey()).toMatch(/^iv-/);
+    expect(newClientKey()).not.toBe(newClientKey());
+  });
+
+  it("says what is owed and how late", () => {
+    const invoice = { number: "INV-0042", total: 7500, currency: "GBP", dueOn: "2026-12-03", overdueDays: 0 };
+    expect(owedWords(invoice)).toBe("Invoice INV-0042 for £75.00 is due on 3 Dec 2026");
+    expect(owedWords({ ...invoice, overdueDays: 1 })).toBe("Invoice INV-0042 for £75.00 was due on 3 Dec 2026 and is 1 day overdue");
+    expect(owedWords({ ...invoice, overdueDays: 5 })).toMatch(/5 days overdue/);
+    expect(owedWords({ ...invoice, number: null, dueOn: null })).toBe("An invoice for £75.00 is waiting to be paid");
+    expect(owedWords(null)).toBe("");
+  });
+
+  it("explains the invoice route before it starts: the amount, the address, the terms, no trial", () => {
+    const words = invoiceStartWords({ total: 7500, interval: "month", email: " accounts@acme.test " });
+    expect(words).toContain("£75.00");
+    expect(words).toContain("accounts@acme.test");
+    expect(words).toContain(`within ${INVOICE_TERMS_DAYS} days`);
+    expect(words).toContain("no free trial");
+    expect(invoiceStartWords({ total: 7500, interval: "year", email: "" })).toContain("your billing address");
   });
 });

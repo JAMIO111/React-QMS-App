@@ -9,6 +9,7 @@ import CTAButton from "@/components/CTAButton";
 import { ChartNoAxesCombinedIcon, KeyRoundIcon, PlusIcon } from "@/components/icons";
 import { TextAreaField } from "../master-data/shared";
 import { usePermissions } from "../../hooks/useQmsApi";
+import { useFirstInvoicePending } from "../../hooks/useSubscription";
 import { useReportingDatasets, useReportingKeyMutation, useReportingKeys } from "../../hooks/useReporting";
 import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
@@ -180,6 +181,7 @@ const PowerBiCard = () => {
   const [revoking, setRevoking] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const canManage = can("integrations.manage");
+  const firstInvoicePending = useFirstInvoicePending({ enabled: can("subscription.read") });
   const data = keys.data?.data ?? [];
   const live = data.filter((k) => k.status === "active");
   const past = data.filter((k) => k.status !== "active");
@@ -193,12 +195,17 @@ const PowerBiCard = () => {
             Connect Power BI
           </CTAButton>
           {canManage && (
-            <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setMaking(true)}>
+            <CTAButton type="main" size="default" icon={PlusIcon} disabled={firstInvoicePending} onClick={() => setMaking(true)}>
               Make a key
             </CTAButton>
           )}
         </div>
       }>
+      {firstInvoicePending && (
+        <Callout tone="info" title="Reporting keys wait for your first invoice">
+          Your first invoice has not been paid yet. Once it is, you can make a key to connect Power BI.
+        </Callout>
+      )}
       {keys.isError ? (
         <Callout tone="error" title="Reporting keys could not be loaded">
           Try again in a moment.

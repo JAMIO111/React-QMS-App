@@ -21,6 +21,8 @@ vi.mock("../../hooks/useQmsApi", () => ({
 }));
 let overview;
 const startMutate = vi.fn();
+const startInvoiceMutate = vi.fn();
+const checkCompanyMutate = vi.fn();
 const portalMutate = vi.fn();
 const checkoutReturn = { phase: "idle", error: null, retry: vi.fn(), dismiss: vi.fn() };
 const planCatalogue = {
@@ -34,6 +36,8 @@ vi.mock("../../hooks/useSubscription", () => ({
   useSubscriptionOverview: () => ({ data: overview }),
   usePlanCatalogue: () => ({ data: planCatalogue }),
   useStartCheckout: () => ({ mutate: startMutate, isPending: false, error: null }),
+  useStartInvoiceSubscription: () => ({ mutate: startInvoiceMutate, isPending: false, error: null }),
+  useCheckInvoiceCompany: () => ({ mutate: checkCompanyMutate, isPending: false }),
   usePortalSession: () => ({ mutate: portalMutate, isPending: false }),
 }));
 vi.mock("../../hooks/useCheckoutReturn", () => ({ useCheckoutReturn: () => checkoutReturn }));
@@ -74,6 +78,8 @@ const renderAt = (url) => render(tree(url));
 beforeEach(() => {
   mutate.mockReset();
   startMutate.mockReset();
+  startInvoiceMutate.mockReset();
+  checkCompanyMutate.mockReset();
   portalMutate.mockReset();
   checkoutReturn.phase = "idle";
   sessionStorage.clear();
@@ -208,7 +214,7 @@ describe("the set-up wizard", () => {
       await userEvent.click(screen.getByRole("button", { name: "Add Controller seat" }));
       await userEvent.click(screen.getByRole("button", { name: "Add Contributor seat" }));
       await userEvent.click(screen.getByRole("radio", { name: /Annual/ }));
-      expect(screen.getByText(/14-day free trial/)).toBeInTheDocument();
+      expect(screen.getByText(/Your 14-day free trial starts now/)).toBeInTheDocument();
       expect(screen.getByText(/£600\.00/)).toBeInTheDocument(); // 2 x 250 + 1 x 100 a year, excluding VAT
       await userEvent.click(screen.getByRole("button", { name: "Continue to secure checkout" }));
       expect(startMutate).toHaveBeenCalledWith({ interval: "year", seats: { controller: 2, contributor: 1 }, returnTo: "setup" }, expect.any(Object));
@@ -216,6 +222,19 @@ describe("the set-up wizard", () => {
       Object.defineProperty(window, "location", { value: { assign }, writable: true });
       startMutate.mock.calls[0][1].onSuccess({ url: "https://checkout.stripe.test/c/cs_1", sessionId: "cs_1" });
       expect(assign).toHaveBeenCalledWith("https://checkout.stripe.test/c/cs_1");
+    });
+
+    it("offers to pay by invoice instead: no trial text, the company form, and Start subscription instead of Stripe's checkout", async () => {
+      renderAt("/setup/plan");
+      expect(screen.getByRole("button", { name: "Continue to secure checkout" })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Pay by invoice" }));
+      expect(screen.queryByRole("button", { name: "Continue to secure checkout" })).toBeNull();
+      expect(screen.queryByText(/free trial starts now/)).toBeNull();
+      expect(screen.getByText(/is invoiced now for/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Legal company name/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Start subscription" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("radio", { name: "Pay by card" }));
+      expect(screen.getByRole("button", { name: "Continue to secure checkout" })).toBeInTheDocument();
     });
 
     it("remembers the choice for a cancelled checkout", async () => {

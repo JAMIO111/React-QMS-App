@@ -83,3 +83,65 @@ export const seatChangeWords = (quote) => {
   }
   return mixed && quote.timing !== "next_invoice" ? `${words}. Any reduction is credited to your next invoice` : words;
 };
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Paying by invoice (docs/invoice-billing-plan.md): the company an invoice is for, the route choice and the words for what is owed.
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+
+/** Days an invoice is payable within (the API fixes it too). */
+export const INVOICE_TERMS_DAYS = 14;
+
+export const EMPTY_COMPANY = { legalName: "", billingEmail: "", addressLine1: "", addressLine2: "", city: "", region: "", postcode: "", country: "GB", vatNumber: "", poReference: "" };
+
+const routeKey = (organisationId) => `qms.payRoute.${organisationId}`;
+/** Card or invoice, remembered for this tab so a trip away and back keeps the choice. */
+export const loadRoute = (organisationId) => {
+  try {
+    return sessionStorage.getItem(routeKey(organisationId)) === "invoice" ? "invoice" : "card";
+  } catch {
+    return "card";
+  }
+};
+export const saveRoute = (organisationId, route) => {
+  try {
+    sessionStorage.setItem(routeKey(organisationId), route);
+  } catch {
+    /* ignore */
+  }
+};
+
+/** What is wrong with the company details so far, in the order the form asks for them (nothing is said about a field that is still empty and optional). */
+export const companyProblems = (c) => {
+  const out = [];
+  if (c.legalName.trim().length < 2) out.push("Enter the legal name of the company the invoice is for.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.billingEmail.trim())) out.push("Enter the email address invoices should be sent to.");
+  if (c.addressLine1.trim().length < 2 || c.city.trim().length < 2 || c.postcode.trim().length < 2 || !/^[A-Z]{2}$/.test(c.country ?? "")) {
+    out.push("Enter the billing address: first line, town or city, postcode and country.");
+  }
+  return out;
+};
+
+/** The body of POST /billing/invoice-subscription: empty optional text is left out. */
+export const invoiceBody = ({ choice, company, clientKey }) => {
+  const clean = Object.fromEntries(Object.entries(company).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]).filter(([, v]) => v !== "" && v !== null && v !== undefined));
+  return { interval: choice.interval, seats: Object.fromEntries(Object.entries(choice.seats).filter(([, q]) => q > 0)), company: clean, clientKey };
+};
+
+/** A fresh key for one attempt at starting (a retry of the same attempt is the same subscription). */
+export const newClientKey = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID ? `iv-${crypto.randomUUID()}` : `iv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+/** One line about the invoice that is owed: "Invoice INV-0042 for £75.00 is due on 3 Dec 2026", or how late it is. */
+export const owedWords = (invoice, currency = "GBP") => {
+  if (!invoice) return "";
+  const what = `${invoice.number ? `Invoice ${invoice.number}` : "An invoice"} for ${money(invoice.total, invoice.currency ?? currency)}`;
+  if (!invoice.dueOn) return `${what} is waiting to be paid`;
+  if (invoice.overdueDays > 0) return `${what} was due on ${formatDate(invoice.dueOn)} and is ${invoice.overdueDays} ${invoice.overdueDays === 1 ? "day" : "days"} overdue`;
+  return `${what} is due on ${formatDate(invoice.dueOn)}`;
+};
+
+/** The plain-words summary shown before an invoiced subscription is started. */
+export const invoiceStartWords = ({ total, interval, email }) =>
+  `We will email an invoice for ${money(total)} (excluding VAT) to ${email.trim() || "your billing address"}, payable within ${INVOICE_TERMS_DAYS} days by bank transfer or card. Your seats are available now. ${
+    interval === "year" ? "It renews each year" : "A new invoice follows each month"
+  }; there is no free trial on this route.`;

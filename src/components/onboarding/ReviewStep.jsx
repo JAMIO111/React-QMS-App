@@ -193,7 +193,7 @@ const ReviewStep = ({ state, error }) => {
         <SummaryCard icon={CreditCardIcon} title="Plan and seats" tone={planTone} pill={planTone === "needs" ? "Not started" : undefined} to="/setup/plan">
           {planOk ? (
             <>
-              <p className="text-sm text-primary-text">{sub.status === "trialing" ? `Free trial until ${formatDate(sub.trialEnd)}` : `Status: ${sub.status.replace("_", " ")}`}</p>
+              <p className="text-sm text-primary-text">{sub.paymentRoute === "invoice" ? `Pay by invoice, payable within ${sub.paymentTermsDays ?? 14} days` : sub.status === "trialing" ? `Free trial until ${formatDate(sub.trialEnd)}` : `Status: ${sub.status.replace("_", " ")}`}</p>
               <ul aria-label="Seats" className="mt-1 flex flex-col gap-0.5 p-0 text-sm text-primary-text">
                 {overview.items.filter((i) => i.purchased > 0).map((i) => (
                   <li key={i.planSlug} className="list-none">{i.purchased} × {i.planName} <span className="text-secondary-text">({money(i.unitAmount, sub.currency)} per user per {sub.billingInterval === "year" ? "year" : "month"})</span></li>
@@ -201,7 +201,7 @@ const ReviewStep = ({ state, error }) => {
               </ul>
             </>
           ) : (
-            <p className="text-sm text-secondary-text">{state.billingRequired ? "Choose your seats to start your free trial. Fortress QMS stays locked until you do." : "Choose your plan when you are ready."}</p>
+            <p className="text-sm text-secondary-text">{state.billingRequired ? "Choose your seats and how to pay to start. Fortress QMS stays locked until you do." : "Choose your plan when you are ready."}</p>
           )}
         </SummaryCard>
 

@@ -30,6 +30,7 @@ const datasets = [
 ];
 
 let keys;
+let pendingInvoice;
 const calls = [];
 const renderCard = () =>
   render(
@@ -39,14 +40,16 @@ const renderCard = () =>
   );
 
 beforeEach(() => {
-  permissions = ["integrations.read", "integrations.manage"];
+  permissions = ["integrations.read", "integrations.manage", "subscription.read"];
   keys = [key()];
+  pendingInvoice = false;
   calls.length = 0;
   apiFetch.mockReset();
   showToast.mockReset();
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path}`;
     calls.push({ k, body: opts.body });
+    if (k === "GET /subscription") return { firstInvoicePending: pendingInvoice };
     if (k === "GET /reporting/keys") return { data: keys };
     if (k === "GET /reporting/v1/datasets") return { datasets };
     if (k === "POST /reporting/keys") {
@@ -86,6 +89,20 @@ describe("the Power BI script", () => {
 });
 
 describe("Power BI and reporting card", () => {
+  it("holds back Make a key, and says why, while an invoiced organisation's first invoice is unpaid", async () => {
+    pendingInvoice = true;
+    renderCard();
+    expect(await screen.findByText("Reporting keys wait for your first invoice")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make a key" })).toBeDisabled();
+  });
+
+  it("offers Make a key as usual when nothing is waiting", async () => {
+    renderCard();
+    await screen.findByRole("list", { name: "Reporting keys" });
+    expect(screen.queryByText("Reporting keys wait for your first invoice")).toBeNull();
+    expect(screen.getByRole("button", { name: "Make a key" })).toBeEnabled();
+  });
+
   it("lists keys by their first characters, who they act as and when they were last used, never the key", async () => {
     keys = [key({ lastUsedAt: "2026-11-23T10:00:00Z", lastUsedAddress: "203.0.113.5" }), key({ id: "k0", name: "Old", status: "revoked", revokedReason: "Replaced" })];
     renderCard();

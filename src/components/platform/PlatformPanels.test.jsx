@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "op-1" } }) }));
+vi.mock("../../contexts/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn(), show: vi.fn() }) }));
 vi.mock("../NotFound", () => ({ default: () => <p>not found page</p> }));
 
 import PlatformPage from "./PlatformPage";
@@ -24,6 +25,10 @@ const routes = () => ({
   "/platform/revenue": { currency: "GBP", mrrPence: 10500, arrPence: 126000, trialMrrPence: 2083, trialsEndingSoon: 2, pastDue: 1, cancelling: 3, cancelledLast30Days: 1, newLast30Days: 4, byStatus: { active: 5, trialing: 2, past_due: 1 }, payingByInterval: { month: 4, year: 2 }, seats: [{ slug: "observer", name: "Observer", purchased: 4, assigned: 3 }, { slug: "controller", name: "Controller", purchased: 6, assigned: 6 }] },
   "/platform/organisations": { total: 2, data: [org(), org({ organisationId: "o2", name: "Beta Co", ownerEmails: [], subscriptionStatus: null, billingProvider: null, billingInterval: null, currentPeriodEnd: null, setupFinishedAt: null, mrrPence: 0, seatsPurchased: 0, seatsAssigned: 0, status: "archived", cancelAtPeriodEnd: null })] },
   "/platform/payments": { invoices: [{ id: "i1", organisationId: "o1", organisation: "Acme Ltd", number: "FQ-1", status: "paid", currency: "gbp", subtotal: 8000, tax: 1600, total: 9600, invoiceDate: "2026-11-01", paidAt: "2026-11-01T10:00:00Z" }], failedPayments: [{ organisationId: "o3", organisation: "Gamma Ltd", invoice: "FQ-9", amount: 3000, currency: "gbp", at: "2026-11-05T10:00:00Z" }], paidLast30DaysPence: 9600, taxLast30DaysPence: 1600, failedLast30Days: 1 },
+  "/platform/invoice-accounts": { data: [
+    { organisationId: "o1", name: "Acme Ltd", subscriptionStatus: "active", billingInterval: "month", legalName: "Acme Manufacturing Ltd", billingEmail: "ap@acme.test", purchaseOrder: "PO-77", paymentTermsDays: 14, firstInvoicePaid: false, openInvoices: 1, openAmountPence: 8000, oldestOpenDueOn: "2026-11-20", overdueDays: 7, billingAllowed: true, companyExempt: false, startedAt: "2026-11-06T10:00:00Z", overdueAlertedAt: null },
+    { organisationId: "o2", name: "Beta Co", subscriptionStatus: "active", billingInterval: "year", legalName: null, billingEmail: null, purchaseOrder: null, paymentTermsDays: 14, firstInvoicePaid: true, openInvoices: 0, openAmountPence: 0, oldestOpenDueOn: null, overdueDays: 0, billingAllowed: false, companyExempt: false, startedAt: "2026-10-06T10:00:00Z", overdueAlertedAt: null },
+  ] },
   "/platform/email": { provider: "none", sending: false, counts: { sent: 0, unsent: 7, failed: 1 }, waiting: 0, oldestWaiting: null, lastSent: null, problems: [{ organisation: "Acme Ltd", event: "parts.created", status: "failed", attempts: 5, error: "Resend refused it (422): Invalid `to` field", at: "2026-11-06T10:00:00Z" }], byEvent: [{ event: "parts.created", count: 8 }] },
   "/platform/worker": {
     cronConfigured: true, jobKinds: ["reminders.digest"], lastTick: { id: 9, source: "pg_cron", startedAt: iso(30 * 1000), outcome: "done", durationMs: 812 },
@@ -58,10 +63,10 @@ beforeEach(() => {
 });
 
 describe("the platform tabs", () => {
-  it("offers nine tabs, opens the overview, and keeps the chosen tab in the address", async () => {
+  it("offers ten tabs, opens the overview, and keeps the chosen tab in the address", async () => {
     renderAt("/platform");
     const tabs = await screen.findByRole("tablist", { name: "Platform" });
-    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Webhooks", "Email", "Worker", "Agent releases", "Activity"]);
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Revenue", "Organisations", "Payments", "Invoices", "Webhooks", "Email", "Worker", "Agent releases", "Activity"]);
     expect(within(tabs).getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(within(tabs).getByRole("tab", { name: "Revenue" }));
     expect(within(tabs).getByRole("tab", { name: "Revenue" })).toHaveAttribute("aria-selected", "true");
@@ -211,6 +216,31 @@ describe("payments", () => {
     expect(failed).toHaveTextContent("FQ-9");
     const invoices = screen.getByRole("table", { name: "Latest invoices" });
     expect(within(invoices).getByText("FQ-1").closest("tr")).toHaveTextContent("£96.00");
+  });
+});
+
+describe("invoices", () => {
+  it("shows who pays by invoice, what is overdue, and lets the operator switch invoicing off with a reason", async () => {
+    renderAt("/platform?tab=invoices");
+    const tiles = await screen.findByRole("group", { name: "Invoiced organisations" });
+    expect(tiles).toHaveTextContent("First invoice unpaid");
+    expect(screen.getByText(/1 organisation has an overdue invoice/)).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Invoiced organisations" });
+    const acme = within(table).getByText("Acme Ltd").closest("tr");
+    expect(acme).toHaveTextContent("Unpaid");
+    expect(acme).toHaveTextContent("7 days late");
+    expect(acme).toHaveTextContent("£80.00");
+    responses["/platform/organisations/o1/invoice-billing"] = { organisationId: "o1", invoiceBillingAllowed: false };
+    // The server's own list changes once the switch is made, as it would after the refetch.
+    const list = responses["/platform/invoice-accounts"];
+    responses["/platform/invoice-accounts"] = { data: list.data.map((a) => (a.organisationId === "o1" ? { ...a, billingAllowed: false } : a)) };
+    await userEvent.click(within(acme).getByRole("button", { name: "Stop invoicing for Acme Ltd" }));
+    const send = screen.getByRole("button", { name: "Confirm" });
+    expect(send).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Why"), "Unpaid twice");
+    await userEvent.click(send);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/platform/organisations/o1/invoice-billing", { method: "POST", body: { allowed: false, reason: "Unpaid twice" } }));
+    expect(await within(table).findByRole("button", { name: "Allow invoicing for Acme Ltd" })).toBeInTheDocument();
   });
 });
 

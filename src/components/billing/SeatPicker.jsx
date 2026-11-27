@@ -7,7 +7,7 @@ const stepButton =
  * Chooses billing interval and seats per package before Stripe Checkout. `value` = { interval, seats: { planSlug: quantity } }.
  * Controller needs at least one seat (the owner takes it). Prices exclude VAT, which Stripe adds at checkout.
  */
-const SeatPicker = ({ plans, value, onChange, disabled = false, minimum = { controller: 1 } }) => {
+const SeatPicker = ({ plans, value, onChange, disabled = false, minimum = { controller: 1 }, trial = true }) => {
   const { interval, seats } = value;
   const set = (patch) => onChange({ ...value, ...patch });
   const step = (slug, delta) => set({ seats: { ...seats, [slug]: Math.max(minimum[slug] ?? 0, (seats[slug] ?? 0) + delta) } });
@@ -66,14 +66,23 @@ const SeatPicker = ({ plans, value, onChange, disabled = false, minimum = { cont
       </div>
 
       <div role="status" className="flex flex-col gap-1 rounded-xl border border-border-color bg-primary-bg/50 p-3 text-sm text-primary-text">
-        <p>
-          <strong>{money(0)} today.</strong> Your {TRIAL_DAYS}-day free trial starts now and ends on {formatDate(trialEnd())}. Cancel any time before then and you pay nothing.
-        </p>
-        <p>
-          Then <strong>{money(total)}</strong> per {interval === "year" ? "year" : "month"} for {seatCount(seats)} seat{seatCount(seats) === 1 ? "" : "s"}, plus VAT where it applies.
-          {perMonthWhenAnnual !== null && <span className="text-secondary-text"> ({money(perMonthWhenAnnual)} a month on average{saving > 0 ? `, saving ${money(saving)} a year` : ""}.)</span>}
-        </p>
-        <p className="text-xs text-secondary-text">Payment is taken securely by Stripe. We never see your card details.</p>
+        {trial ? (
+          <p>
+            <strong>{money(0)} today.</strong> Your {TRIAL_DAYS}-day free trial starts now and ends on {formatDate(trialEnd())}. Cancel any time before then and you pay nothing.
+          </p>
+        ) : (
+          <p>
+            <strong>{money(total)}</strong> is invoiced now for {seatCount(seats)} seat{seatCount(seats) === 1 ? "" : "s"}, plus VAT where it applies, and again each {interval === "year" ? "year" : "month"}.
+            {perMonthWhenAnnual !== null && <span className="text-secondary-text"> ({money(perMonthWhenAnnual)} a month on average{saving > 0 ? `, saving ${money(saving)} a year` : ""}.)</span>}
+          </p>
+        )}
+        {trial && (
+          <p>
+            Then <strong>{money(total)}</strong> per {interval === "year" ? "year" : "month"} for {seatCount(seats)} seat{seatCount(seats) === 1 ? "" : "s"}, plus VAT where it applies.
+            {perMonthWhenAnnual !== null && <span className="text-secondary-text"> ({money(perMonthWhenAnnual)} a month on average{saving > 0 ? `, saving ${money(saving)} a year` : ""}.)</span>}
+          </p>
+        )}
+        <p className="text-xs text-secondary-text">{trial ? "Payment is taken securely by Stripe. We never see your card details." : "Payment is handled by Stripe. We never see your card details if you pay by card."}</p>
       </div>
     </div>
   );

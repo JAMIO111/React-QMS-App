@@ -11,14 +11,15 @@ import TwoFactorCard from "../Settings/TwoFactorCard";
 import { describeApiError } from "../../lib/api-client";
 import { countryOptions, loadTeamDraft, seatsForDraft } from "../../lib/onboarding";
 import { useOrganisationDetails, usePermissions, useUpdateOrganisation } from "../../hooks/useQmsApi";
-import { useStartCheckout, usePlanCatalogue, usePortalSession, useSubscriptionOverview } from "../../hooks/useSubscription";
+import { usePlanCatalogue, usePortalSession, useSubscriptionOverview } from "../../hooks/useSubscription";
 import { PricingCards } from "../Settings/SettingsSubscription";
 import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { useToast } from "../../contexts/ToastProvider";
 import { DEFAULT_CHOICE, clearChoice, formatDate, hasSavedChoice, loadChoice, money, saveChoice } from "../../lib/billing";
 import CheckoutNotice from "../billing/CheckoutNotice";
-import SeatPicker from "../billing/SeatPicker";
+import OpenInvoiceCard from "../billing/OpenInvoiceCard";
+import StartSubscriptionPanel from "../billing/StartSubscriptionPanel";
 import TeamInvite from "./TeamInvite";
 import { ErrorNotice, FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
@@ -91,8 +92,11 @@ export const SubscriptionSummary = ({ overview, canManage }) => {
             <li key={i.planSlug}>{i.purchased} × {i.planName} ({money(i.unitAmount, sub.currency)} per user per {sub.billingInterval === "year" ? "year" : "month"})</li>
           ))}
         </ul>
+        <OpenInvoiceCard sub={sub} />
         <p className="text-secondary-text">
-          {sub.status === "trialing" ? `Your card is charged from ${formatDate(sub.trialEnd)}` : sub.currentPeriodEnd ? `Next billing date ${formatDate(sub.currentPeriodEnd)}` : ""}
+          {sub.paymentRoute === "invoice"
+            ? `Paid by invoice, payable within ${sub.paymentTermsDays ?? 14} days${sub.currentPeriodEnd ? `. Next invoice ${formatDate(sub.currentPeriodEnd)}` : ""}`
+            : sub.status === "trialing" ? `Your card is charged from ${formatDate(sub.trialEnd)}` : sub.currentPeriodEnd ? `Next billing date ${formatDate(sub.currentPeriodEnd)}` : ""}
           {sub.cancelAtPeriodEnd ? ". It is set to end then and not renew." : "."} Prices exclude VAT.
         </p>
         <p>The owner holds a Controller seat, so everything is available.</p>
@@ -108,14 +112,13 @@ export const SubscriptionSummary = ({ overview, canManage }) => {
   );
 };
 
-/** Step 2: the plan. Choose seats, go to Stripe's checkout (14-day trial, card required), come back and the app opens. */
+/** Step 2: the plan. Choose seats and how to pay: Stripe's checkout (14-day trial, card required) or an invoice; either way the app opens once it is active. */
 export const PlanStep = ({ state }) => {
   const { organisationId } = useOrganisation();
   const { can } = usePermissions();
   const overview = useSubscriptionOverview();
   const catalogue = usePlanCatalogue();
   const checkout = useCheckoutReturn();
-  const start = useStartCheckout();
   const portal = usePortalSession();
   const { showToast } = useToast();
   // Start from the team that was planned (its seats, plus the owner's Controller seat), unless a choice was already made on the way to Stripe and back.
@@ -138,11 +141,6 @@ export const PlanStep = ({ state }) => {
   const data = overview.data;
   const hasSubscription = !!sub && (open || sub.billingProvider === "stripe" || sub.status !== "cancelled");
 
-  const checkoutNow = () =>
-    start.mutate(
-      { interval: choice.interval, seats: Object.fromEntries(Object.entries(choice.seats).filter(([, q]) => q > 0)), returnTo: "setup" },
-      { onSuccess: ({ url }) => window.location.assign(url) },
-    );
   const openPortal = () =>
     portal.mutate(undefined, {
       onSuccess: ({ url }) => window.location.assign(url),
@@ -169,6 +167,7 @@ export const PlanStep = ({ state }) => {
           <div className="flex flex-col gap-4 text-sm text-primary-text">
             {hasSubscription ? (
               <>
+                <OpenInvoiceCard sub={sub} />
                 <p>
                   Your subscription is {sub.status.replace("_", " ")}, or no owner holds a Controller seat. Fix the payment in Stripe's billing portal and everything comes back at once.
                 </p>
@@ -196,15 +195,7 @@ export const PlanStep = ({ state }) => {
                   Fortress QMS is priced per seat: Observer (read only), Contributor (record and complete work) and Controller (full functionality). You need at least one <strong>Controller</strong> seat, and you, the owner, take it.
                 </p>
                 {canManage ? (
-                  <>
-                    <SeatPicker plans={catalogue.data.plans} value={choice} onChange={update} disabled={start.isPending} />
-                    <FormError error={start.error} />
-                    <div className="flex justify-end">
-                      <CTAButton buttonType="button" type="main" size="lg" disabled={start.isPending} loading={start.isPending} onClick={checkoutNow}>
-                        {start.isPending ? "Opening checkout…" : "Continue to secure checkout"}
-                      </CTAButton>
-                    </div>
-                  </>
+                  <StartSubscriptionPanel plans={catalogue.data.plans} choice={choice} onChoice={update} returnTo="setup" />
                 ) : (
                   <p className="text-secondary-text">Only an owner or administrator can start the subscription.</p>
                 )}

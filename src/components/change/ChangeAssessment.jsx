@@ -16,6 +16,7 @@ import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import SlidingToggle from "../ui/SlidingToggle";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -94,7 +95,7 @@ const BoardDialog = ({ change, onClose }) => {
   const functions = useChangeFunctions();
   const signers = useChangeSigners();
   const [chosen, setChosen] = useState(() => Object.fromEntries(change.board.map((b) => [b.function.id, b.signer?.id ?? null])));
-  const people = (signers.data ?? []).map((p) => ({ value: p.id, label: p.name, hint: p.canApprove ? undefined : "Cannot sign off changes", disabled: !p.canApprove }));
+  const people = (signers.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p), hint: p.canApprove ? undefined : "Cannot sign off changes", disabled: !p.canApprove }));
   const on = (id) => Object.prototype.hasOwnProperty.call(chosen, id);
   const toggle = (id) =>
     setChosen((c) => {

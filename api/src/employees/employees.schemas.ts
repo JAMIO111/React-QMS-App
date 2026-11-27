@@ -90,5 +90,5 @@ export type LinkLoginBody = z.infer<typeof LinkLoginBody>;
 /** Members that can be linked to an employee, and whether the caller may link at all (a Controller seat). */
 export const LoginCandidates = z.object({
   canLink: z.boolean(),
-  data: z.array(z.object({ userId: z.string().uuid(), name: z.string(), email: z.string().nullable(), employeeId: z.string().uuid().nullable() })),
+  data: z.array(z.object({ userId: z.string().uuid(), name: z.string(), email: z.string().nullable(), employeeId: z.string().uuid().nullable(), avatarPath: z.string().nullable() })),
 });

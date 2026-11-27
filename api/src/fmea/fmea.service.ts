@@ -278,8 +278,8 @@ export class FmeaService {
   /** Members who may be named on a team or as approver. */
   people(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
-      const rows = (await db.execute<Row>(sql`select * from app.fmea_people(${orgOf(ctx)}::uuid)`)).rows;
-      return { data: rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: !!r.can_approve })) };
+      const rows = (await db.execute<Row>(sql`select f.*, ap.avatar_path from app.fmea_people(${orgOf(ctx)}::uuid) f left join public.profiles ap on ap.id = f.user_id`)).rows;
+      return { data: rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: !!r.can_approve, avatarPath: (r.avatar_path as string) ?? null })) };
     });
   }
 

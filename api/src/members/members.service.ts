@@ -38,6 +38,7 @@ interface MemberRow {
   roles: z.infer<typeof RoleAssignment>[];
   departments: Member['departments'];
   invite: Member['invite'];
+  avatar_path?: string | null;
 }
 
 const toMember = (r: MemberRow): Member => ({
@@ -53,6 +54,7 @@ const toMember = (r: MemberRow): Member => ({
   roles: r.roles,
   departments: r.departments ?? [],
   invite: r.invite ?? null,
+  avatarPath: r.avatar_path ?? null,
 });
 
 /**
@@ -418,7 +420,7 @@ export class MembersService {
   }
 
   private async directory(db: Db, organisationId: string): Promise<Member[]> {
-    const res = await db.execute<MemberRow & Record<string, unknown>>(sql`select * from app.list_members(${organisationId}::uuid)`);
+    const res = await db.execute<MemberRow & Record<string, unknown>>(sql`select lm.*, ap.avatar_path from app.list_members(${organisationId}::uuid) lm left join public.profiles ap on ap.id = lm.user_id`);
     const company = await db.execute<{ id: string }>(sql`select id from app.member_company_accounts(${organisationId}::uuid) as id`);
     const ids = new Set(company.rows.map((r) => r.id));
     return res.rows.map(toMember).map((m) => ({ ...m, companyAccount: m.userId ? ids.has(m.userId) : false }));

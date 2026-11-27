@@ -11,6 +11,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import Switch from "../ui/Switch";
+import { avatarOf } from "@/lib/employees";
 
 /**
  * A new document and its first draft. Numbered from its type (`SOP-001`), or, when bringing an existing document across, with the number
@@ -37,7 +38,7 @@ const NewDocumentDialog = ({ onClose, onCreated }) => {
   const typeList = types.data?.data ?? [];
   const typeOptions = typeList.map((t) => ({ value: t.id, label: t.name, hint: t.prefix }));
   const chosenType = typeList.find((t) => t.id === typeId);
-  const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const owner = ownerId ?? user?.id ?? null;
   const letterOk = /^[A-Za-z]{1,3}$/.test(letter.trim());
   const contentKind = external ? "file" : kind;

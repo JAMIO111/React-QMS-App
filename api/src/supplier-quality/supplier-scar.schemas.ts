@@ -261,6 +261,6 @@ export const ScarDetail = ScarRow.extend({
 });
 export type ScarDetail = z.infer<typeof ScarDetail>;
 
-export const ScarPeople = z.object({ data: z.array(z.object({ userId: z.string().uuid(), name: z.string() })) });
+export const ScarPeople = z.object({ data: z.array(z.object({ userId: z.string().uuid(), name: z.string(), avatarPath: z.string().nullable() })) });
 export const ScarPeopleQuery = z.object({ q: z.string().trim().min(1).max(100).optional() });
 export type ScarPeopleQuery = z.infer<typeof ScarPeopleQuery>;

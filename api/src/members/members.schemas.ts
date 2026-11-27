@@ -53,6 +53,8 @@ export const Member = z.object({
   departments: z.array(DepartmentMembership),
   /** Only for a pending invitation. */
   invite: InviteDetail.nullable(),
+  /** Their profile picture in the avatars bucket (for initials-or-photo circles). */
+  avatarPath: z.string().nullable().optional(),
   /** Signs in with a company account (single sign-on). */
   companyAccount: z.boolean().optional(),
 });

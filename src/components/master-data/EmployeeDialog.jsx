@@ -16,6 +16,7 @@ import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFiel
 import { withCustomValues } from "../../lib/customFields";
 import { changesSince } from "../../lib/editConflicts";
 import { useImportLocks } from "../../hooks/useImportLocks";
+import { avatarOf } from "@/lib/employees";
 
 /**
  * The employee's sign-in account: who they are linked to, and (for people with a Controller seat only) link or unlink. The database enforces
@@ -33,6 +34,7 @@ const SignInLink = ({ employee, readOnly }) => {
     name: c.email && c.email !== c.name ? `${c.name} · ${c.email}` : c.name,
     hint: c.employeeId && c.employeeId !== employee.id ? "Already linked to another employee" : undefined,
     disabled: !!c.employeeId && c.employeeId !== employee.id,
+    avatar: avatarOf(c),
   }));
   /** Linked or unlinked at once; put back with a toast if the server refuses. */
   const change = (nextUserId) => {

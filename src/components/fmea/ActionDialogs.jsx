@@ -8,7 +8,7 @@ import { FormError, TextAreaField } from "../master-data/shared";
 import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
-import { employeeOption } from "@/lib/employees";
+import { employeeOption, avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -31,7 +31,7 @@ export const ActionDialog = ({ cause, existing, onClose }) => {
   const [owner, setOwner] = useState(actionOwnerValue(existing?.owner));
   const [dueOn, setDueOn] = useState(existing?.dueOn ?? todayIso(14));
   const options = [
-    ...(people.data ?? []).map((p) => ({ value: `u:${p.id}`, label: p.name, hint: "Member", avatar: { name: p.name, path: p.avatarPath ?? null } })),
+    ...(people.data ?? []).map((p) => ({ value: `u:${p.id}`, label: p.name, hint: "Member", avatar: avatarOf(p) })),
     ...(employees.data ?? []).filter((e) => e.active).map((e) => employeeOption(e, { as: "field", value: `e:${e.id}`, hint: e.jobTitle ?? "Employee" })),
   ];
   if (owner && !options.some((o) => o.value === owner)) options.push({ value: owner, label: existing?.owner?.name ?? "Unknown", hint: existing?.owner?.kind === "employee" ? "Employee" : "Member" });

@@ -93,3 +93,12 @@ describe("people and pictures in the combo box", () => {
     expect(plain.querySelector("[data-initials], img, svg")).toBeNull();
   });
 });
+
+describe("avatarOf", () => {
+  it("gives a member's name and picture path, or none", async () => {
+    const { avatarOf } = await import("@/lib/employees");
+    expect(avatarOf({ name: "Ada Lovelace", avatarPath: "users/u1/a.webp" })).toEqual({ name: "Ada Lovelace", path: "users/u1/a.webp" });
+    expect(avatarOf({ firstName: "Ada", avatarPath: null }, "Ada L")).toEqual({ name: "Ada L", path: null });
+    expect(avatarOf(null, "Someone")).toEqual({ name: "Someone", path: null });
+  });
+});

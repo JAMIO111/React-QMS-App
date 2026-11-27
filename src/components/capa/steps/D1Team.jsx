@@ -8,6 +8,7 @@ import { sendCommand } from "../../../lib/guessCommands";
 import { isPending } from "../../../lib/optimistic";
 import { TEAM_ROLES, roleLabel } from "../../../lib/capa";
 import CTAButton from "@/components/CTAButton";
+import { avatarOf } from "@/lib/employees";
 
 const roleOptions = (keys) => keys.map((k) => ({ id: k, name: TEAM_ROLES[k].label, hint: TEAM_ROLES[k].hint }));
 const MEMBER_ROLES = roleOptions(["leader", "champion", "member"]);
@@ -57,7 +58,7 @@ const D1Team = ({ capa, editable }) => {
   const active = capa.team.filter((t) => !t.endedAt);
   const left = capa.team.filter((t) => t.endedAt);
   const onTeam = new Set(active.map((t) => t.membershipId));
-  const choices = (people.data ?? []).filter((p) => !onTeam.has(p.membershipId)).map((p) => ({ id: p.membershipId, name: p.name }));
+  const choices = (people.data ?? []).filter((p) => !onTeam.has(p.membershipId)).map((p) => ({ id: p.membershipId, name: p.name, avatar: avatarOf(p) }));
 
   return (
     <MenuCard title="The team" subtitle={`${active.length} ${active.length === 1 ? "person" : "people"}`}

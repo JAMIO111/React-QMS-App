@@ -138,7 +138,8 @@ export class EmployeesService {
   loginCandidates(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       const seat = await db.execute<{ ok: boolean }>(sql`select app.holds_controller_seat(${orgOf(ctx)}::uuid) as ok`);
-      const rows = await db.execute<Row>(sql`select user_id, first_name, surname, email, employee_id from app.employee_login_candidates(${orgOf(ctx)}::uuid)`);
+      const rows = await db.execute<Row>(sql`select c.user_id, c.first_name, c.surname, c.email, c.employee_id, ap.avatar_path
+        from app.employee_login_candidates(${orgOf(ctx)}::uuid) c left join public.profiles ap on ap.id = c.user_id`);
       return {
         canLink: seat.rows[0].ok,
         data: rows.rows.map((r) => ({
@@ -146,6 +147,7 @@ export class EmployeesService {
           name: ([r.first_name, r.surname].filter(Boolean).join(' ') as string) || (r.email as string) || 'Unknown user',
           email: (r.email as string) ?? null,
           employeeId: (r.employee_id as string) ?? null,
+          avatarPath: (r.avatar_path as string) ?? null,
         })),
       };
     });

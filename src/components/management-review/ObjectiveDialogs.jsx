@@ -13,6 +13,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { changesSince } from "../../lib/editConflicts";
+import { avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -77,7 +78,7 @@ export const ObjectiveDialog = ({ existing, onClose, onSaved }) => {
   const chosen = list.find((m) => m.key === measure);
   const manual = measure === "manual";
   const options = list.map((m) => ({ value: m.key, label: m.label, hint: m.available ? m.description : "You may not read what this counts", disabled: !m.available && !existing }));
-  const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const targetNumber = numberOrNull(target);
   const targetOk = targetNumber !== null && !Number.isNaN(targetNumber) && (manual || chosen?.unit !== "%" || (targetNumber >= 0 && targetNumber <= 100));
   const ready = title.trim() && ownerId && targetOk;

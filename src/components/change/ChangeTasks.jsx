@@ -18,6 +18,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -52,7 +53,7 @@ const TaskDialog = ({ change, existing, onClose }) => {
     <Dialog title={existing ? "Change the task" : "Add a task"} onClose={onClose}>
       <form noValidate onSubmit={save} className="flex flex-col gap-3">
         <TextAreaField label="What has to be done" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={3} required />
-        <ComboField label="Who does it" required value={ownerId} onChange={setOwnerId} options={(people.data ?? []).map((p) => ({ value: p.id, label: p.name }))} placeholder="Choose a person" />
+        <ComboField label="Who does it" required value={ownerId} onChange={setOwnerId} options={(people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }))} placeholder="Choose a person" />
         <RHFDatePickerPopout label="By when" value={dueOn} onChange={(v) => setDueOn(v ?? "")} valueFormat="iso" clearable />
         <ComboField label="Impact area" value={areaId} onChange={setAreaId} options={areaOptions} sort={false} clearable hint="Optional: which part of the business this task is for" />
         <FormError error={mutation.error} />

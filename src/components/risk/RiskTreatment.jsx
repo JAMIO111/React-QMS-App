@@ -15,6 +15,7 @@ import Dialog from "../ui/Dialog";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { changesSince } from "../../lib/editConflicts";
+import { avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -106,7 +107,7 @@ export const ActionDialog = ({ risk, action, onClose }) => {
   const [description, setDescription] = useState(action?.description ?? "");
   const [ownerId, setOwnerId] = useState(action?.owner?.id ?? risk.owner?.id ?? null);
   const [dueDate, setDueDate] = useState(action?.dueDate ?? null);
-  const options = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const options = (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   // Someone who has since left stays on the action until it is given to someone else.
   if (action?.owner && !options.some((o) => o.value === action.owner.id)) options.push({ value: action.owner.id, label: action.owner.name, hint: "No longer a member" });
   const ready = description.trim() && ownerId;

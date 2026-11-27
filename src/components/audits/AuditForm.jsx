@@ -18,6 +18,7 @@ import CTAButton from "@/components/CTAButton";
 import Dialog from "../ui/Dialog";
 import Switch from "../ui/Switch";
 import { withVersion } from "../../lib/editConflicts";
+import { avatarOf } from "@/lib/employees";
 
 const fromAudit = (a) => ({
   title: a?.title ?? "",
@@ -237,7 +238,7 @@ const AuditFormBody = ({ audit }) => {
 
   const auditorOptions =
     f.auditorKind === "person"
-      ? (members.data?.data ?? []).filter((m) => m.status === "active" && m.userId).map((m) => ({ value: m.userId, label: [m.firstName, m.surname].filter(Boolean).join(" ") || m.email }))
+      ? (members.data?.data ?? []).filter((m) => m.status === "active" && m.userId).map((m) => { const label = [m.firstName, m.surname].filter(Boolean).join(" ") || m.email; return { value: m.userId, label, avatar: avatarOf(m, label) }; })
       : f.auditorKind === "role"
         ? (roles.data?.data ?? []).map((r) => ({ value: r.id, label: r.name }))
         : (departments.data?.data ?? []).map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));

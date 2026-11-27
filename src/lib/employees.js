@@ -20,3 +20,9 @@ export const initialsOf = (name) => {
   const last = words.length > 1 ? words[words.length - 1].charAt(0) : "";
   return (first + last).toUpperCase();
 };
+
+/**
+ * The circle for a member (someone with a sign-in) in a combo box option: `avatar: avatarOf(p)` where `p` has `name` (or pass the name) and the
+ * `avatarPath` the people lists return. Shows their profile picture when they have one, else their initials.
+ */
+export const avatarOf = (person, name) => ({ name: name ?? person?.name ?? "", path: person?.avatarPath ?? null });

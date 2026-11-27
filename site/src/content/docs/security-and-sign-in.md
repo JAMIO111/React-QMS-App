@@ -2,7 +2,7 @@
 title: Security and sign-in
 summary: Two-factor sign-in, single sign-on, network restrictions and the other controls under Settings → Security.
 group: Admin and security
-order: 8
+order: 44
 ---
 Everything here lives under **Settings → Security**, for people with security permissions (owners and admins).
 

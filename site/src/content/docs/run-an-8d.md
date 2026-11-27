@@ -2,7 +2,7 @@
 title: Run an 8D
 summary: The nine steps of an 8D, how steps lock, who can do what, and how to close it.
 group: Everyday work
-order: 5
+order: 11
 ---
 An 8D is a structured corrective action. Fortress keeps one record per 8D with nine steps, D0 to D8, and finds the stage from the steps rather than letting anyone set it.
 

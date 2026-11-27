@@ -2,7 +2,7 @@
 title: Inspections and jobs
 summary: How control plans drive inspections, how an inspector starts a job and what happens when a reading fails.
 group: Everyday work
-order: 6
+order: 12
 ---
 In-process inspection starts from a **control plan**: what to measure, with which limits, how often.
 

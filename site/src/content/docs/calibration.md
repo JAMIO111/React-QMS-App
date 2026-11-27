@@ -2,7 +2,7 @@
 title: Calibration
 summary: Set up gauge types and gauges, record calibrations and handle a gauge that fails.
 group: Everyday work
-order: 7
+order: 13
 ---
 The Calibration module tracks every gauge, when it is next due and the readings from each calibration.
 

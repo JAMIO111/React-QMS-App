@@ -2,7 +2,7 @@
 title: Start with a spreadsheet, connect your database later
 summary: Load your records from a file today, then hand them over to SQL Server on a schedule, with some fields owned by Fortress and some by the database.
 group: Admin and security
-order: 10
+order: 48
 ---
 A common path is to start from a spreadsheet and, once Fortress is working for you, let your own database keep some of the data up to date. Nothing has to be re-entered when you switch, and you choose, field by field, who is in charge.
 
@@ -31,7 +31,7 @@ On every mapped field you choose what happens when the record already exists:
 
 | Choice | What it means |
 | --- | --- |
-| **Source wins** | The database value replaces the Fortress value on every run. |
+| **Source wins** | The database value replaces the Fortress value on every run. While a schedule is on, people cannot edit those fields on records the import manages; the form shows them locked, and the connection's Schedule card lists them. |
 | **Fortress wins** | The database never changes this field on an existing record. |
 | **Review** | A different value waits on the Review page for a person to accept or reject. |
 
@@ -45,6 +45,6 @@ Choose how often the connection reads the table: every 5 minutes, every 15 minut
 
 ## Good to know
 
-- Non-conformances are always added as drafts and are never matched or updated by an import.
+- Non-conformances are only ever added, never matched or updated by an import. They arrive as drafts unless the source gives a stage.
 - The Review choice is not available for custom fields.
 - Integrations are managed by people holding a Controller seat, and whoever runs an import needs permission to write that kind of record.

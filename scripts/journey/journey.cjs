@@ -105,9 +105,12 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await page.getByRole('button', { name: 'Continue to secure checkout' }).click();
   await see(page.getByText(/free trial until/i));
   await shot(page, '05-subscribed');
-  const sub = (await stack.admin.query(`select s.status, (select sum(quantity) from public.organisation_subscription_items i where i.organisation_id = s.organisation_id) seats from public.organisation_subscriptions s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [`Journey Works ${RUN}`])).rows[0];
+  const sub = (await stack.admin.query(`select s.status,
+      (select sum(quantity) from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id and p.kind = 'seat' where i.organisation_id = s.organisation_id) seats,
+      (select sum(quantity) from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id and p.kind = 'fee' where i.organisation_id = s.organisation_id) fee
+      from public.organisation_subscriptions s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [`Journey Works ${RUN}`])).rows[0];
   log(`subscription: ${JSON.stringify(sub)}`);
-  if (sub.status !== 'trialing' || Number(sub.seats) !== 3) throw new Error('the subscription was not recorded as expected');
+  if (sub.status !== 'trialing' || Number(sub.seats) !== 3 || Number(sub.fee) !== 1) throw new Error('the subscription was not recorded as expected (three seats and the organisation fee once)');
 
   step('owner sends the planned invitation now the plan is active');
   await see(page.getByText(/Your plan is active/));

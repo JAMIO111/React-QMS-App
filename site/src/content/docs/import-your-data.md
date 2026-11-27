@@ -33,8 +33,8 @@ For each field you choose whether the **source wins**, **Fortress wins**, or a p
 
 ## Connecting other systems
 
-- **REST APIs** can be read on a schedule, with API key, bearer, basic or OAuth sign-in.
-- The **connector agent** is a small Windows service you install inside your network. It reads SQL Server, PostgreSQL and MySQL databases, network folders and internal APIs. It only connects outwards, and your database password stays on that machine.
+- **REST APIs** can be read on a schedule, with API key, bearer, basic or OAuth sign-in. See [Connect an API](/help/connect-an-api).
+- The **connector agent** is a small Windows service you install inside your network. It reads SQL Server, PostgreSQL and MySQL databases, network folders and internal APIs. It only connects outwards, and your database password stays on that machine. See [The connector agent](/help/connector-agent).
 
 Starting from a spreadsheet and moving to a database later is covered in [Start with a spreadsheet, connect your database later](/help/spreadsheet-then-database).
 

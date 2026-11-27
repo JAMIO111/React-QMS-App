@@ -2,9 +2,9 @@
 title: Power BI and reporting
 summary: Make a read-only reporting key and load your non-conformance and supplier quality data into Power BI on a schedule.
 group: Admin and security
-order: 51
+order: 52
 ---
-If you build reports in Power BI, you do not need to export files. A **reporting key** lets Power BI read your Fortress data on a schedule, without a person signing in each time. This guide covers making a key and connecting Power BI. Bringing data into Fortress is covered in [Connect an API or database](/help/connect-an-api-or-database).
+If you build reports in Power BI, you do not need to export files. A **reporting key** lets Power BI read your Fortress data on a schedule, without a person signing in each time. This guide covers making a key and connecting Power BI. Bringing data into Fortress is covered in [Connect an API](/help/connect-an-api) and [The connector agent](/help/connector-agent).
 
 Making and revoking keys needs a Controller seat and a role that allows integrations. Anyone who can see integrations can see the list of keys.
 

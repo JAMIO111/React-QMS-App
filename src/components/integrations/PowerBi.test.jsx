@@ -49,7 +49,7 @@ beforeEach(() => {
   apiFetch.mockImplementation(async (path, opts = {}) => {
     const k = `${opts.method ?? "GET"} ${path}`;
     calls.push({ k, body: opts.body });
-    if (k === "GET /subscription") return { firstInvoicePending: pendingInvoice };
+    if (k === "GET /subscription") return { subscription: { firstInvoicePending: pendingInvoice } };
     if (k === "GET /reporting/keys") return { data: keys };
     if (k === "GET /reporting/v1/datasets") return { datasets };
     if (k === "POST /reporting/keys") {

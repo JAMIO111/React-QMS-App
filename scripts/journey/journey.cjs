@@ -267,6 +267,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await run('recordFilters', () => recordFilters({ page, stack, APP, orgName, see, shot, step, log }));
   await run('networkRestrictions', () => networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
   await run('connectorAgent', () => connectorAgent({ page, stack, APP, orgName, see, shot, step, log }));
+  await run('payByInvoice', () => payByInvoice({ browser, stack, APP, see, shot, step, log, watch }));
   await run('singleSignOn', () => singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
 };
 
@@ -3296,6 +3297,101 @@ async function networkRestrictions({ browser, page, stack, APP, orgName, see, sh
   if (told.n < 4) throw new Error(`owners were not told of every change: ${JSON.stringify(told)}`);
   await ctx.close();
   await page.context().unroute(apiUrls);
+}
+
+/**
+ * Pay by invoice (docs/invoice-billing-plan.md IV3): a second organisation, so the first one's subscription is left as it is. Its owner chooses Pay by
+ * invoice in the wizard's plan step, gives the company, and the subscription is active at once with its first invoice open (the fake Stripe makes it).
+ * While that invoice is unpaid the Power BI key button is held back and the operator's list says so; once it is paid (the fake pays, the API reads the
+ * subscription again as a webhook would) the button works and the open-invoice card is gone.
+ */
+async function payByInvoice({ browser, stack, APP, see, shot, step, log, watch }) {
+  const ivan = { first: 'Ivan', surname: 'Invoice', email: `ivan.${RUN}@journey.test` };
+  const orgName = `Invoice Works ${RUN}`;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(15000);
+  watch(page, 'invoice-owner');
+
+  step('a second owner starts an organisation and goes to the plan step');
+  await signUp(page, APP, ivan);
+  await see(page.getByText(/check your email/i).first());
+  await verify(stack, ivan.email);
+  await signIn(page, APP, ivan.email);
+  await see(page.getByRole('heading', { name: /start your organisation/i }));
+  await page.getByLabel('Organisation name').fill(orgName);
+  await page.getByRole('button', { name: 'Create organisation' }).click();
+  await page.waitForURL(/\/setup/);
+  await page.goto(`${APP}/setup/plan`);
+  await see(page.getByRole('heading', { name: /plan and seats/i }).first());
+  await page.getByRole('button', { name: 'Add Contributor seat' }).click();
+
+  step('the owner chooses Pay by invoice and gives the company: no checkout, the subscription starts at once');
+  await page.getByRole('radio', { name: 'Pay by invoice' }).click();
+  await see(page.getByText(/No free trial/));
+  await see(page.getByLabel('Legal company name'));
+  await page.getByLabel('Legal company name').fill(`${orgName} Limited`);
+  await page.getByLabel('Send invoices to').fill(`accounts.${RUN}@journey.test`);
+  await page.getByLabel('Address line 1').fill('1 Foundry Lane');
+  await page.getByLabel('Town or city').fill('Sheffield');
+  await page.getByLabel('Postcode').fill('S1 1AA');
+  await page.getByRole('combobox', { name: 'Country' }).click();
+  await page.getByRole('option', { name: /^United Kingdom/ }).first().click();
+  await page.getByLabel('Purchase order reference').fill('PO-JOURNEY-1');
+  await shot(page, '150-invoice-details');
+  await page.getByRole('button', { name: 'Start subscription' }).click();
+  await see(page.getByText('Your first invoice is waiting to be paid'));
+  await see(page.getByRole('link', { name: /pay|view|invoice/i }).filter({ hasText: /./ }));
+  await shot(page, '151-first-invoice-waiting');
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const sub = (await stack.admin.query(
+    `select s.collection_method, s.status, st.grace_period_days, s.billing_legal_name, s.purchase_order, s.billing_company_key
+       from public.organisation_subscriptions s join public.organisation_settings st on st.organisation_id = s.organisation_id where s.organisation_id = $1`, [org.id])).rows[0];
+  log(`invoiced subscription: ${JSON.stringify(sub)}`);
+  if (sub?.collection_method !== 'invoice' || sub.status !== 'active' || sub.grace_period_days !== 3 || sub.purchase_order !== 'PO-JOURNEY-1') throw new Error(`the invoiced subscription was not recorded as expected: ${JSON.stringify(sub)}`);
+  const { subscriptionId, invoiceId } = [...stack.stripe.created.values()].pop();
+  if (stack.stripe.billing.size !== 1 || ![...stack.stripe.billing.values()][0].poReference) throw new Error('the company details did not reach the Stripe customer');
+
+  step('the owner finishes set-up; the Power BI key waits for the first invoice');
+  await page.goto(`${APP}/setup/review`);
+  await see(page.getByRole('heading', { name: /review and finish/i }).first());
+  await see(page.getByText(/Pay by invoice, payable within 14 days/));
+  await shot(page, '152-review-invoice');
+  await page.getByRole('button', { name: 'Finish set-up' }).click();
+  await page.waitForURL(/\/Dashboard/);
+  await page.goto(`${APP}/Settings/Integrations`);
+  await see(page.getByText('Reporting keys wait for your first invoice'));
+  if (!(await page.getByRole('button', { name: 'Make a key' }).isDisabled())) throw new Error('Make a key should wait for the first invoice');
+  await shot(page, '153-power-bi-waits');
+  await page.goto(`${APP}/Settings/Subscription`);
+  await see(page.getByText('Your first invoice is waiting to be paid'));
+  await shot(page, '154-subscription-open-invoice');
+
+  step('the operator lists the account as unpaid, then the invoice is paid and the limits lift');
+  const ownerRow = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [ivan.email])).rows[0];
+  await stack.admin.query(`insert into public.platform_admins (user_id, note) values ($1, 'journey operator') on conflict do nothing`, [ownerRow.id]);
+  const token = await stack.sign({ id: ownerRow.id, email: ivan.email }, { aal: 'aal2' });
+  const accounts = async () => {
+    const res = await fetch(`http://127.0.0.1:${stack.ports.api}/api/v1/platform/invoice-accounts`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`invoice accounts -> ${res.status} ${(await res.text()).slice(0, 300)}`);
+    return (await res.json()).data.find((a) => a.organisationId === org.id);
+  };
+  const before = await accounts();
+  if (!before || before.firstInvoicePaid !== false || before.openInvoices !== 1 || before.purchaseOrder !== 'PO-JOURNEY-1') throw new Error(`the operator's list is wrong: ${JSON.stringify(before)}`);
+  stack.stripe.pay(invoiceId);
+  await stack.syncSubscription(org.id, subscriptionId);
+  const after = await accounts();
+  if (after.firstInvoicePaid !== true || after.openInvoices !== 0) throw new Error(`the paid invoice was not applied: ${JSON.stringify(after)}`);
+  await stack.admin.query(`delete from public.platform_admins where user_id = $1`, [ownerRow.id]);
+  await page.goto(`${APP}/Settings/Integrations`);
+  await see(page.getByRole('button', { name: 'Make a key' }));
+  if (await page.getByRole('button', { name: 'Make a key' }).isDisabled()) throw new Error('Make a key should work once the first invoice is paid');
+  if ((await page.getByText('Reporting keys wait for your first invoice').count()) !== 0) throw new Error('the waiting notice should be gone');
+  await page.goto(`${APP}/Settings/Subscription`);
+  await see(page.getByRole('heading', { name: /subscription/i }).first());
+  if ((await page.getByText('Your first invoice is waiting to be paid').count()) !== 0) throw new Error('the open-invoice card should be gone once paid');
+  await shot(page, '155-invoice-paid');
+  await ctx.close();
 }
 
 /**

@@ -28,7 +28,7 @@ export const useSubscriptionOverview = ({ enabled = true } = {}) => useOrgQuery(
  */
 export const useFirstInvoicePending = ({ enabled = true } = {}) => {
   const overview = useSubscriptionOverview({ enabled });
-  return enabled && overview.data?.firstInvoicePending === true;
+  return enabled && overview.data?.subscription?.firstInvoicePending === true;
 };
 export const useSeatAssignments = ({ enabled = true } = {}) => useOrgQuery(["assignments"], "/subscription/assignments", { enabled, select: dataOf });
 export const useInvoices = ({ enabled = true } = {}) => useOrgQuery(["invoices"], "/billing/invoices", { enabled, select: dataOf });

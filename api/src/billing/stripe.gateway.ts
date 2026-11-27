@@ -16,6 +16,8 @@ export interface SubscriptionSnapshot {
   trialEnd: string | null;
   cancelAtPeriodEnd: boolean;
   canceledAt: string | null;
+  /** How Stripe collects: charges the card itself, or sends an invoice to be paid. */
+  collectionMethod: 'charge_automatically' | 'send_invoice';
   items: { itemId: string; priceId: string; quantity: number }[];
 }
 
@@ -54,7 +56,11 @@ export interface SeatPreview {
   subtotal: number;
   tax: number;
   total: number;
+  /** What this change collects (or credits, when negative) and when: `now` = charged or invoiced at once, `next_invoice` = a credit on the next invoice. */
   amountDue: number;
+  timing: 'now' | 'next_invoice';
+  /** How the money is collected: the card is charged, or an invoice is issued. */
+  payment: 'card' | 'invoice';
   lines: { description: string; amount: number }[];
 }
 
@@ -70,6 +76,8 @@ export interface SeatItemChange {
   itemId?: string;
   priceId: string;
   quantity: number;
+  /** The seats it has now (0 for a package not on the subscription yet), so an increase can be told from a decrease. */
+  from?: number;
   /** Take the package off the subscription (Stripe does not keep items at quantity 0). */
   remove?: boolean;
 }
@@ -79,6 +87,25 @@ const idOf = (x: string | { id: string } | null | undefined): string | null => (
 
 const itemParams = (i: SeatItemChange): { id?: string; price?: string; quantity?: number; deleted?: boolean } =>
   i.remove && i.itemId ? { id: i.itemId, deleted: true } : i.itemId ? { id: i.itemId, quantity: i.quantity } : { price: i.priceId, quantity: i.quantity };
+
+/**
+ * Seat increases are billed at once and decreases are credited (docs/invoice-billing-plan.md I10). A package going up is an increase; one going down or
+ * taken off is a decrease. Increases go first, so a payment that fails changes nothing, and decreases follow once the increases are in.
+ */
+export function splitSeatChange(items: SeatItemChange[]): { increases: SeatItemChange[]; decreases: SeatItemChange[] } {
+  const increases: SeatItemChange[] = [];
+  const decreases: SeatItemChange[] = [];
+  for (const i of items) (!i.remove && i.quantity > (i.from ?? 0) ? increases : decreases).push(i);
+  return { increases, decreases };
+}
+
+/** The proration lines of an invoice (preview) added up: what a change credits (negative) or adds. */
+const prorationTotal = (inv: Stripe.Invoice): number =>
+  inv.lines.data.filter((l) => l.parent?.subscription_item_details?.proration).reduce((n, l) => n + l.amount, 0);
+
+/** The seat change did not go through because the payment did not: nothing was changed. */
+export const seatPaymentFailed = (): ApiError =>
+  new ApiError(402, 'seat_payment_failed', 'The payment did not go through, so your seats are unchanged. Update your payment method in Manage billing and try again.');
 
 /** Pure mapping from Stripe's subscription to the snapshot the database takes. Period dates live on the items in current API versions. */
 export function toSubscriptionSnapshot(sub: Stripe.Subscription): SubscriptionSnapshot {
@@ -100,6 +127,7 @@ export function toSubscriptionSnapshot(sub: Stripe.Subscription): SubscriptionSn
     trialEnd: iso(sub.trial_end),
     cancelAtPeriodEnd: sub.cancel_at_period_end,
     canceledAt: iso(sub.canceled_at),
+    collectionMethod: sub.collection_method === 'send_invoice' ? 'send_invoice' : 'charge_automatically',
     items: items.map((i) => ({ itemId: i.id, priceId: i.price.id, quantity: i.quantity ?? 0 })),
   };
 }
@@ -153,8 +181,9 @@ export abstract class StripeGateway {
   abstract retrieveCheckoutSession(id: string): Promise<CheckoutSessionSnapshot>;
   abstract retrieveSubscription(id: string): Promise<SubscriptionSnapshot>;
   abstract retrieveInvoice(id: string): Promise<InvoiceSnapshot>;
-  abstract previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[] }): Promise<SeatPreview>;
-  abstract updateSeats(input: { subscriptionId: string; items: SeatItemChange[] }): Promise<void>;
+  abstract previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<SeatPreview>;
+  /** Increases are invoiced at once (a card subscription only applies them if the payment succeeds, else `seat_payment_failed`); decreases are credited. */
+  abstract updateSeats(input: { subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<void>;
   abstract createPortalSession(input: { customerId: string; returnUrl: string }): Promise<string>;
   /** Verifies Stripe's signature over the raw body and returns the event; throws ApiError 400 invalid_signature. */
   abstract constructEvent(rawBody: Buffer, signature: string | undefined): StripeEventEnvelope;
@@ -233,13 +262,16 @@ export class StripeSdkGateway extends StripeGateway {
     return toInvoiceSnapshot(await this.stripe().invoices.retrieve(id, { expand: ['payments'] }));
   }
 
-  async previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[] }): Promise<SeatPreview> {
+  async previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<SeatPreview> {
+    // The preview shows what the change itself collects: the increases when there are any (invoiced now), else the credit the decreases leave.
+    const { increases, decreases } = splitSeatChange(input.items);
+    const now = increases.length > 0;
     const preview = await this.stripe().invoices.createPreview({
       customer: input.customerId,
       subscription: input.subscriptionId,
       subscription_details: {
-        items: input.items.map(itemParams),
-        proration_behavior: 'create_prorations',
+        items: (now ? increases : decreases).map(itemParams),
+        proration_behavior: now ? 'always_invoice' : 'create_prorations',
       },
     });
     const snapshot = toInvoiceSnapshot(preview);
@@ -248,16 +280,44 @@ export class StripeSdkGateway extends StripeGateway {
       subtotal: snapshot.subtotal,
       tax: snapshot.tax,
       total: snapshot.total,
-      amountDue: preview.amount_due,
-      lines: preview.lines.data.map((l) => ({ description: l.description ?? 'Subscription', amount: l.amount })),
+      amountDue: now ? preview.amount_due : prorationTotal(preview),
+      timing: now ? 'now' : 'next_invoice',
+      payment: input.collectionMethod === 'send_invoice' ? 'invoice' : 'card',
+      lines: preview.lines.data.filter((l) => !now || l.parent?.subscription_item_details?.proration).map((l) => ({ description: l.description ?? 'Subscription', amount: l.amount })),
     };
   }
 
-  async updateSeats(input: { subscriptionId: string; items: SeatItemChange[] }): Promise<void> {
-    await this.stripe().subscriptions.update(input.subscriptionId, {
-      items: input.items.map(itemParams),
-      proration_behavior: 'create_prorations',
-    });
+  async updateSeats(input: { subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<void> {
+    const { increases, decreases } = splitSeatChange(input.items);
+    const stripe = this.stripe();
+    if (increases.length > 0) {
+      const card = input.collectionMethod === 'charge_automatically';
+      let sub: Stripe.Subscription;
+      try {
+        sub = await stripe.subscriptions.update(input.subscriptionId, {
+          items: increases.map(itemParams),
+          proration_behavior: 'always_invoice',
+          // A card is charged now and the seats follow only if it goes through. Stripe refuses this for an invoiced subscription, which is billed by invoice instead.
+          ...(card ? { payment_behavior: 'pending_if_incomplete' as const } : {}),
+        });
+      } catch (error) {
+        if ((error as { type?: string }).type === 'StripeCardError') throw seatPaymentFailed();
+        throw error;
+      }
+      if (sub.pending_update) throw seatPaymentFailed();
+      if (!card) await this.finaliseLatestInvoice(sub);
+    }
+    if (decreases.length > 0) {
+      await stripe.subscriptions.update(input.subscriptionId, { items: decreases.map(itemParams), proration_behavior: 'create_prorations' });
+    }
+  }
+
+  /** An invoiced subscription's new invoice is a draft that Stripe would finalise in about an hour; finalise it now so it can be paid. */
+  private async finaliseLatestInvoice(sub: Stripe.Subscription): Promise<void> {
+    const id = idOf(sub.latest_invoice as string | { id: string } | null);
+    if (!id) return;
+    const invoice = await this.stripe().invoices.retrieve(id);
+    if (invoice.status === 'draft') await this.stripe().invoices.finalizeInvoice(id);
   }
 
   async createPortalSession(input: { customerId: string; returnUrl: string }): Promise<string> {

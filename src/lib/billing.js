@@ -59,3 +59,27 @@ export const clearChoice = (organisationId) => {
     /* ignore */
   }
 };
+
+/**
+ * What a seat change does to the bill, in words (docs/invoice-billing-plan.md I10). Increases are billed at once (a card is charged, an invoiced
+ * subscription gets an invoice due in 14 days); decreases are only a credit on the next invoice. `quote` is the API's seat preview.
+ */
+export const seatChangeWords = (quote) => {
+  const code = (quote.currency ?? "gbp").toUpperCase();
+  const due = quote.amountDue ?? 0;
+  const changes = quote.changes ?? [];
+  const mixed = changes.some((c) => c.to > c.from) && changes.some((c) => c.to < c.from);
+  const vat = quote.tax > 0 ? `, ${money(quote.tax, code)} of it VAT` : "";
+  let words;
+  if (quote.timing === "next_invoice") {
+    words = due < 0 ? `A credit of ${money(-due, code)} is added to your next invoice` : "Nothing is charged now";
+  } else if (due > 0) {
+    words =
+      quote.payment === "invoice"
+        ? `An invoice for ${money(due, code)} is issued now, due in 14 days (prorated${vat})`
+        : `Your card is charged ${money(due, code)} now for the rest of this period (prorated${vat})`;
+  } else {
+    words = "Nothing is charged now";
+  }
+  return mixed && quote.timing !== "next_invoice" ? `${words}. Any reduction is credited to your next invoice` : words;
+};

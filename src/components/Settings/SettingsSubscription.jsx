@@ -14,7 +14,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
-import { formatDate, loadChoice, money, saveChoice } from "../../lib/billing";
+import { formatDate, loadChoice, money, saveChoice, seatChangeWords } from "../../lib/billing";
 import {
   useChangeSeats,
   useInvoices,
@@ -248,10 +248,9 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
     );
     try {
       const quote = await preview.mutateAsync({ seats });
-      const due = quote.amountDue;
       const ok = await confirm({
         title: "Apply seat changes?",
-        message: `${lines}. ${due > 0 ? `Stripe charges ${money(due, quote.currency.toUpperCase())} now for the rest of this period (prorated, ${money(quote.tax, quote.currency.toUpperCase())} of it VAT)` : due < 0 ? `Stripe credits ${money(-due, quote.currency.toUpperCase())} to your next invoice` : "Nothing is charged now"}. From the next billing date the recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
+        message: `${lines}. ${seatChangeWords(quote)}. From the next billing date the recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
         confirmText: "Apply",
         cancelText: "Cancel",
         type: "info",

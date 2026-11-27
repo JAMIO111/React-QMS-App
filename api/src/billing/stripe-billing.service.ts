@@ -119,21 +119,21 @@ export class StripeBillingService {
     return { url: await this.gateway.createPortalSession({ customerId, returnUrl: `${base}${returnTo === 'setup' ? '/setup/plan' : '/Settings/Subscription'}` }) };
   }
 
-  /** What changing these seats would cost right now (proration from Stripe), without changing anything. */
+  /** What changing these seats collects now (an increase) or credits to the next invoice (a decrease), from Stripe, without changing anything. */
   async previewSeats(ctx: RequestContext, body: SeatChangeBody): Promise<SeatPreviewResponse> {
     const plan = await this.planSeatChange(ctx, body.seats);
     if (plan.items.length === 0) {
-      return { currency: plan.snapshot.currency, subtotal: 0, tax: 0, total: 0, amountDue: 0, lines: [], changes: plan.changes };
+      return { currency: plan.snapshot.currency, subtotal: 0, tax: 0, total: 0, amountDue: 0, timing: 'now', payment: plan.snapshot.collectionMethod === 'send_invoice' ? 'invoice' : 'card', lines: [], changes: plan.changes };
     }
-    const preview = await this.gateway.previewSeatChange({ customerId: plan.snapshot.customerId, subscriptionId: plan.snapshot.id, items: plan.items });
+    const preview = await this.gateway.previewSeatChange({ customerId: plan.snapshot.customerId, subscriptionId: plan.snapshot.id, items: plan.items, collectionMethod: plan.snapshot.collectionMethod });
     return { ...preview, changes: plan.changes };
   }
 
-  /** Changes the seats on the Stripe subscription (prorated), then reads the result back and applies it. */
+  /** Changes the seats on the Stripe subscription (increases invoiced at once, decreases credited), then reads the result back and applies it. */
   async changeSeats(ctx: RequestContext, body: SeatChangeBody): Promise<SubscriptionOverview> {
     const plan = await this.planSeatChange(ctx, body.seats);
     if (plan.changes.some((c) => c.from !== c.to)) {
-      await this.gateway.updateSeats({ subscriptionId: plan.snapshot.id, items: plan.items });
+      await this.gateway.updateSeats({ subscriptionId: plan.snapshot.id, items: plan.items, collectionMethod: plan.snapshot.collectionMethod });
       await this.syncSubscription(ctx.organisationId!, plan.snapshot.id, undefined, ctx.correlationId);
     }
     return this.billing.overview(ctx);
@@ -295,8 +295,8 @@ export class StripeBillingService {
         const from = existing?.quantity ?? 0;
         changes.push({ planSlug: slug, from, to: quantity });
         if (from === quantity) continue;
-        if (quantity === 0 && existing) items.push({ itemId: existing.itemId, priceId, quantity: 0, remove: true });
-        else items.push({ itemId: existing?.itemId, priceId, quantity });
+        if (quantity === 0 && existing) items.push({ itemId: existing.itemId, priceId, quantity: 0, from, remove: true });
+        else items.push({ itemId: existing?.itemId, priceId, quantity, from });
       }
     }, ctx.correlationId);
     return { snapshot, items, changes };

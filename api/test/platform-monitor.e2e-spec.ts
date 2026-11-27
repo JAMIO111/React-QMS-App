@@ -242,7 +242,7 @@ describe('the scheduled jobs', () => {
   describe('reconcile', () => {
     const snapshot = (id: string, status: string): SubscriptionSnapshot => ({
       id, customerId: `cus_e2e3_00${id.slice(-1)}`, status, interval: 'month', currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 20 * 864e5).toISOString(),
-      trialStart: null, trialEnd: null, cancelAtPeriodEnd: false, canceledAt: null, items: [{ itemId: 'si_1', priceId: PRICES.controller, quantity: 1 }],
+      trialStart: null, trialEnd: null, cancelAtPeriodEnd: false, canceledAt: null, collectionMethod: 'charge_automatically', items: [{ itemId: 'si_1', priceId: PRICES.controller, quantity: 1 }],
     });
     const SUBS = [ORG(11), ORG(12), ORG(13)];
     beforeAll(async () => {

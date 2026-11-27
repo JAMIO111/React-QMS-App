@@ -37,6 +37,7 @@ class FakeStripe extends StripeGateway {
   subs = new Map<string, SubscriptionSnapshot>();
   invoices = new Map<string, InvoiceSnapshot>();
   calls: string[] = [];
+  lastChange?: { items: SeatItemChange[]; collectionMethod: string };
   failSubscriptionReads = 0;
   private n = 0;
 
@@ -71,6 +72,7 @@ class FakeStripe extends StripeGateway {
       trialEnd: new Date(Date.now() + 14 * 864e5).toISOString(),
       cancelAtPeriodEnd: false,
       canceledAt: null,
+      collectionMethod: 'charge_automatically',
       items: s.items.map((i, k) => ({ itemId: `si_e2e${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })),
     });
     s.status = 'complete';
@@ -95,13 +97,15 @@ class FakeStripe extends StripeGateway {
     this.calls.push(`retrieveInvoice:${id}`);
     return structuredClone(this.invoices.get(id)!);
   }
-  async previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[] }): Promise<SeatPreview> {
+  async previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[]; collectionMethod: string }): Promise<SeatPreview> {
     this.calls.push('preview');
+    this.lastChange = { items: input.items, collectionMethod: input.collectionMethod };
     const added = input.items.reduce((n, i) => n + (i.remove ? 0 : i.quantity), 0);
-    return { currency: 'gbp', subtotal: added * 100, tax: added * 20, total: added * 120, amountDue: added * 120, lines: [{ description: 'Prorated seats', amount: added * 100 }] };
+    return { currency: 'gbp', subtotal: added * 100, tax: added * 20, total: added * 120, amountDue: added * 120, timing: 'now', payment: 'card', lines: [{ description: 'Prorated seats', amount: added * 100 }] };
   }
-  async updateSeats(input: { subscriptionId: string; items: SeatItemChange[] }): Promise<void> {
+  async updateSeats(input: { subscriptionId: string; items: SeatItemChange[]; collectionMethod: string }): Promise<void> {
     this.calls.push('updateSeats');
+    this.lastChange = { items: input.items, collectionMethod: input.collectionMethod };
     const sub = this.subs.get(input.subscriptionId)!;
     for (const change of input.items) {
       const existing = sub.items.find((i) => (change.itemId ? i.itemId === change.itemId : i.priceId === change.priceId));
@@ -390,6 +394,9 @@ describe('seats afterwards', () => {
     const h = await as(ids.ownerA);
     const res = await api().put('/api/v1/billing/seats').set(h).send({ seats: { contributor: 5, observer: 4 } }).expect(200);
     expect(fake.calls).toContain('updateSeats');
+    // The service tells the gateway how Stripe collects and where each package stood, so it can bill increases at once and credit decreases.
+    expect(fake.lastChange?.collectionMethod).toBe('charge_automatically');
+    expect(fake.lastChange?.items.map((i) => [i.quantity, i.from])).toEqual(expect.arrayContaining([[5, expect.any(Number)], [4, 0]]));
     expect(await seatsOf()).toMatchObject({ controller: 2, contributor: 5, observer: 4 });
     const totals = res.body.totals;
     expect(totals.seatsPurchased).toBe(11);

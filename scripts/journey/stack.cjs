@@ -197,13 +197,13 @@ function makeFakeStripe(StripeGateway, ApiError) {
       const s = this.sessions.get(sessionId); const subId = `sub_journey${NONCE}${++this.n}`;
       const first = PLAN_OF[s.items[0].priceId];
       const interval = PRICES[`${first}:year`] === s.items[0].priceId ? 'year' : 'month';
-      this.subs.set(subId, { id: subId, customerId: s.customerId, status: 'trialing', interval, currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 14 * 864e5).toISOString(), trialStart: new Date().toISOString(), trialEnd: new Date(Date.now() + 14 * 864e5).toISOString(), cancelAtPeriodEnd: false, canceledAt: null, items: s.items.map((i, k) => ({ itemId: `si_journey${NONCE}${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })) });
+      this.subs.set(subId, { id: subId, customerId: s.customerId, status: 'trialing', interval, currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 14 * 864e5).toISOString(), trialStart: new Date().toISOString(), trialEnd: new Date(Date.now() + 14 * 864e5).toISOString(), cancelAtPeriodEnd: false, canceledAt: null, collectionMethod: 'charge_automatically', items: s.items.map((i, k) => ({ itemId: `si_journey${NONCE}${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })) });
       s.status = 'complete'; s.subscriptionId = subId;
     }
     async retrieveCheckoutSession(id) { const s = this.sessions.get(id); if (!s) throw new ApiError(502, 'billing_provider_error', 'no such session'); return { id, status: s.status, subscriptionId: s.subscriptionId, customerId: s.customerId, organisationId: s.organisationId }; }
     async retrieveSubscription(id) { return structuredClone(this.subs.get(id)); }
     async retrieveInvoice() { throw new Error('no invoices in the journey'); }
-    async previewSeatChange(input) { const added = input.items.reduce((n, i) => n + (i.remove ? 0 : i.quantity), 0); return { currency: 'gbp', subtotal: added * 100, tax: added * 20, total: added * 120, amountDue: added * 120, lines: [{ description: 'Prorated seats', amount: added * 100 }] }; }
+    async previewSeatChange(input) { const added = input.items.reduce((n, i) => n + (i.remove ? 0 : i.quantity), 0); return { currency: 'gbp', subtotal: added * 100, tax: added * 20, total: added * 120, amountDue: added * 120, timing: 'now', payment: 'card', lines: [{ description: 'Prorated seats', amount: added * 100 }] }; }
     async updateSeats() { /* not used */ }
     async createPortalSession() { return 'http://127.0.0.1/portal'; }
     constructEvent() { throw ApiError.badRequest('invalid_signature', 'webhooks are not part of the journey'); }

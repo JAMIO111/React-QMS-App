@@ -38,6 +38,8 @@ export const SeatPreviewResponse = z.object({
   tax: z.number().int(),
   total: z.number().int(),
   amountDue: z.number().int(),
+  timing: z.enum(['now', 'next_invoice']),
+  payment: z.enum(['card', 'invoice']),
   lines: z.array(z.object({ description: z.string(), amount: z.number().int() })),
   changes: z.array(z.object({ planSlug: z.string(), from: z.number().int(), to: z.number().int() })),
 });

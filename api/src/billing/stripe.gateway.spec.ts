@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { loadEnv } from '../config/env';
 import { appBaseUrl } from './stripe-billing.service';
-import { StripeSdkGateway, toInvoiceSnapshot, toSubscriptionSnapshot } from './stripe.gateway';
+import { SeatItemChange, splitSeatChange, StripeSdkGateway, toInvoiceSnapshot, toSubscriptionSnapshot } from './stripe.gateway';
 
 const item = (id: string, priceId: string, quantity: number, start: number, end: number, interval: 'month' | 'year' = 'month') =>
   ({ id, quantity, current_period_start: start, current_period_end: end, price: { id: priceId, recurring: { interval } } }) as unknown as Stripe.SubscriptionItem;
@@ -23,7 +23,7 @@ const subscription = (over: Partial<Record<string, unknown>> = {}) =>
 describe('toSubscriptionSnapshot', () => {
   it('maps the subscription, taking its period from the items (current API versions keep it there)', () => {
     const snap = toSubscriptionSnapshot(subscription());
-    expect(snap).toMatchObject({ id: 'sub_1', customerId: 'cus_1', status: 'trialing', interval: 'month', currency: 'gbp', cancelAtPeriodEnd: false, canceledAt: null });
+    expect(snap).toMatchObject({ id: 'sub_1', customerId: 'cus_1', status: 'trialing', interval: 'month', currency: 'gbp', cancelAtPeriodEnd: false, canceledAt: null, collectionMethod: 'charge_automatically' });
     expect(snap.currentPeriodStart).toBe(new Date(1_700_000_000 * 1000).toISOString());
     expect(snap.currentPeriodEnd).toBe(new Date(1_702_592_100 * 1000).toISOString());
     expect(snap.trialEnd).toBe(new Date(1_701_209_600 * 1000).toISOString());
@@ -36,6 +36,11 @@ describe('toSubscriptionSnapshot', () => {
   it('accepts an expanded customer object and a yearly interval', () => {
     const snap = toSubscriptionSnapshot(subscription({ customer: { id: 'cus_9' }, items: { data: [item('si_1', 'price_a', 1, 1, 2, 'year')] } }));
     expect(snap).toMatchObject({ customerId: 'cus_9', interval: 'year' });
+  });
+
+  it('says whether Stripe charges the card or sends an invoice', () => {
+    expect(toSubscriptionSnapshot(subscription({ collection_method: 'send_invoice' })).collectionMethod).toBe('send_invoice');
+    expect(toSubscriptionSnapshot(subscription({ collection_method: 'charge_automatically' })).collectionMethod).toBe('charge_automatically');
   });
 
   it('refuses a subscription with no items or an interval we do not sell', () => {
@@ -156,5 +161,80 @@ describe('StripeSdkGateway', () => {
     expect(bad(payload.replace('invoice.paid', 'invoice.voided'), sign(payload))).toMatchObject({ code: 'invalid_signature' });
     expect(bad(payload, Stripe.webhooks.generateTestHeaderString({ payload, secret, timestamp: Math.floor(Date.now() / 1000) - 3600 }))).toMatchObject({ code: 'invalid_signature' });
     expect(bad(payload, 'garbage')).toMatchObject({ code: 'invalid_signature' });
+  });
+});
+
+describe('seat billing: increases are billed at once, decreases are credited', () => {
+  const keys = { DATABASE_URL: 'postgres://x', SUPABASE_URL: 'https://p.supabase.co', STRIPE_SECRET_KEY: 'sk_test_abcdefghijklmnop' };
+  const up: SeatItemChange = { itemId: 'si_1', priceId: 'price_a', quantity: 5, from: 3 };
+  const newPackage: SeatItemChange = { priceId: 'price_n', quantity: 2, from: 0 };
+  const down: SeatItemChange = { itemId: 'si_2', priceId: 'price_b', quantity: 1, from: 4 };
+  const off: SeatItemChange = { itemId: 'si_3', priceId: 'price_c', quantity: 0, from: 2, remove: true };
+
+  const withStub = (stub: Record<string, unknown>) => {
+    const gateway = new StripeSdkGateway(loadEnv(keys));
+    (gateway as unknown as { client: unknown }).client = stub;
+    return gateway;
+  };
+
+  it('tells an increase from a decrease: more seats or a new package goes up; fewer seats or a package taken off goes down', () => {
+    expect(splitSeatChange([up, newPackage, down, off])).toEqual({ increases: [up, newPackage], decreases: [down, off] });
+    // With no earlier count the package is treated as new (0 seats before), so any seats are an increase.
+    expect(splitSeatChange([{ priceId: 'p', quantity: 3 }])).toEqual({ increases: [{ priceId: 'p', quantity: 3 }], decreases: [] });
+    expect(splitSeatChange([{ itemId: 'si_9', priceId: 'p', quantity: 2, from: 2 }])).toEqual({ increases: [], decreases: [{ itemId: 'si_9', priceId: 'p', quantity: 2, from: 2 }] });
+  });
+
+  it('a card is charged now for an increase and the seats follow only if it goes through; the decrease comes after', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'sub_1', pending_update: null, latest_invoice: 'in_1' });
+    await withStub({ subscriptions: { update } }).updateSeats({ subscriptionId: 'sub_1', items: [down, up], collectionMethod: 'charge_automatically' });
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(update.mock.calls[0][1]).toEqual({ items: [{ id: 'si_1', quantity: 5 }], proration_behavior: 'always_invoice', payment_behavior: 'pending_if_incomplete' });
+    expect(update.mock.calls[1][1]).toEqual({ items: [{ id: 'si_2', quantity: 1 }], proration_behavior: 'create_prorations' });
+  });
+
+  it('a declined card (a pending update, or a card error) changes nothing: the decrease is not applied and the answer says why', async () => {
+    const pending = jest.fn().mockResolvedValue({ id: 'sub_1', pending_update: { expires_at: 1 }, latest_invoice: 'in_1' });
+    await expect(withStub({ subscriptions: { update: pending } }).updateSeats({ subscriptionId: 'sub_1', items: [up, down], collectionMethod: 'charge_automatically' })).rejects.toMatchObject({ code: 'seat_payment_failed', status: 402 });
+    expect(pending).toHaveBeenCalledTimes(1);
+    const declined = jest.fn().mockRejectedValue(Object.assign(new Error('Your card was declined.'), { type: 'StripeCardError' }));
+    await expect(withStub({ subscriptions: { update: declined } }).updateSeats({ subscriptionId: 'sub_1', items: [up], collectionMethod: 'charge_automatically' })).rejects.toMatchObject({ code: 'seat_payment_failed' });
+    const other = jest.fn().mockRejectedValue(new Error('boom'));
+    await expect(withStub({ subscriptions: { update: other } }).updateSeats({ subscriptionId: 'sub_1', items: [up], collectionMethod: 'charge_automatically' })).rejects.toThrow('boom');
+  });
+
+  it('an invoiced subscription is not given a payment behaviour (Stripe refuses it) and its new invoice is finalised so it can be paid', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'sub_1', pending_update: null, latest_invoice: 'in_9' });
+    const retrieve = jest.fn().mockResolvedValue({ id: 'in_9', status: 'draft' });
+    const finalizeInvoice = jest.fn().mockResolvedValue({});
+    await withStub({ subscriptions: { update }, invoices: { retrieve, finalizeInvoice } }).updateSeats({ subscriptionId: 'sub_1', items: [up], collectionMethod: 'send_invoice' });
+    expect(update.mock.calls[0][1]).toEqual({ items: [{ id: 'si_1', quantity: 5 }], proration_behavior: 'always_invoice' });
+    expect(finalizeInvoice).toHaveBeenCalledWith('in_9');
+    retrieve.mockResolvedValue({ id: 'in_9', status: 'open' });
+    finalizeInvoice.mockClear();
+    await withStub({ subscriptions: { update }, invoices: { retrieve, finalizeInvoice } }).updateSeats({ subscriptionId: 'sub_1', items: [up], collectionMethod: 'send_invoice' });
+    expect(finalizeInvoice).not.toHaveBeenCalled();
+  });
+
+  it('a decrease on its own is one call that credits the next invoice and never touches payment', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'sub_1' });
+    await withStub({ subscriptions: { update } }).updateSeats({ subscriptionId: 'sub_1', items: [down, off], collectionMethod: 'charge_automatically' });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0][1]).toEqual({ items: [{ id: 'si_2', quantity: 1 }, { id: 'si_3', deleted: true }], proration_behavior: 'create_prorations' });
+  });
+
+  it('the preview shows what is collected now for an increase, and the credit for a decrease', async () => {
+    const line = (amount: number, proration: boolean) => ({ amount, description: 'x', parent: { subscription_item_details: { proration } } });
+    const preview = (over: Record<string, unknown>) => ({ currency: 'gbp', subtotal: 0, total: 0, total_taxes: [], status: 'draft', attempt_count: 0, created: 1_700_000_000, ...over });
+    const createPreview = jest
+      .fn()
+      .mockResolvedValueOnce(preview({ subtotal: 1000, total: 1200, amount_due: 1200, total_taxes: [{ amount: 200, tax_behavior: 'exclusive' }], lines: { data: [line(1000, true), line(2500, false)] } }))
+      .mockResolvedValueOnce(preview({ amount_due: 2500, lines: { data: [line(-1000, true), line(2500, false)] } }));
+    const gateway = withStub({ invoices: { createPreview } });
+    const now = await gateway.previewSeatChange({ customerId: 'cus_1', subscriptionId: 'sub_1', items: [up, down], collectionMethod: 'charge_automatically' });
+    expect(createPreview.mock.calls[0][0].subscription_details).toEqual({ items: [{ id: 'si_1', quantity: 5 }], proration_behavior: 'always_invoice' });
+    expect(now).toMatchObject({ timing: 'now', payment: 'card', amountDue: 1200, tax: 200, lines: [{ amount: 1000 }] });
+    const credit = await gateway.previewSeatChange({ customerId: 'cus_1', subscriptionId: 'sub_1', items: [down], collectionMethod: 'send_invoice' });
+    expect(createPreview.mock.calls[1][0].subscription_details.proration_behavior).toBe('create_prorations');
+    expect(credit).toMatchObject({ timing: 'next_invoice', payment: 'invoice', amountDue: -1000 });
   });
 });

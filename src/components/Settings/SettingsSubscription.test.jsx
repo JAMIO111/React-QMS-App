@@ -157,13 +157,13 @@ describe("SettingsSubscription", () => {
       permissions = ["subscription.read", "subscription.manage"];
       overview = stripeOverview();
       confirm.mockResolvedValue(true);
-      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 1200, tax: 200, subtotal: 1000, total: 1200, lines: [], changes: [] });
+      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 1200, tax: 200, subtotal: 1000, total: 1200, timing: "now", payment: "card", lines: [], changes: [] });
       renderPage();
       expect(screen.queryByRole("switch", { name: "Annual billing" })).toBeNull(); // the interval is fixed by the subscription
       await userEvent.click(screen.getByRole("button", { name: "Add Controller seat" }));
       await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
       expect(previewAsync).toHaveBeenCalledWith({ seats: { controller: 3 } });
-      expect(confirm.mock.calls[0][0].message).toMatch(/Stripe charges £12\.00 now/);
+      expect(confirm.mock.calls[0][0].message).toMatch(/Your card is charged £12\.00 now/);
       expect(confirm.mock.calls[0][0].message).toMatch(/£25\.00 per month/);
       expect(changeAsync).toHaveBeenCalledWith({ seats: { controller: 3 } });
     });
@@ -172,7 +172,7 @@ describe("SettingsSubscription", () => {
       permissions = ["subscription.read", "subscription.manage"];
       overview = stripeOverview();
       confirm.mockResolvedValue(false);
-      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 0, tax: 0, subtotal: 0, total: 0, lines: [], changes: [] });
+      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 0, tax: 0, subtotal: 0, total: 0, timing: "now", payment: "card", lines: [], changes: [] });
       renderPage();
       await userEvent.click(screen.getByRole("button", { name: "Add Controller seat" }));
       await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));

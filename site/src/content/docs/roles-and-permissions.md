@@ -19,7 +19,7 @@ Six roles come with every organisation and cannot be changed:
 | Inspector | Records inspections and raises non-conformances |
 | Viewer | Read-only access |
 
-Owners, admins and quality managers hold the manage and approve rights in most modules. Quality engineers can read and manage. Inspectors record. Viewers read. Only the Owner role can make or change roles.
+Owners, admins and quality managers hold the manage and approve rights in most modules. Quality engineers can read and manage. Inspectors record: they log inspections, raise non-conformances, add files and containment to non-conformances they raised, and record deliveries and shipments. They do not create or change purchase orders and customer orders, move their agreed dates, or acknowledge a failed reading. Viewers read. Only the Owner role can make or change roles.
 
 ## Give someone a role
 

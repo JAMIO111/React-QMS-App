@@ -46,7 +46,7 @@ export class NcrWorkflowController {
   /** Add a containment action (what is being done to stop suspect product going on). */
   @Post(':id/containment-actions')
   @HttpCode(201)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(CreateContainmentBody) })
   @ApiCreatedResponse({ schema: openApiSchema(ContainmentAction) })
   createAction(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -122,7 +122,7 @@ export class NcrContainmentActionsController {
   constructor(private readonly service: NcrWorkflowService) {}
 
   @Patch(':id')
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(UpdateContainmentBody) })
   @ApiOkResponse({ schema: openApiSchema(ContainmentAction) })
   @Versioned('ncr_containment_actions')
@@ -133,7 +133,7 @@ export class NcrContainmentActionsController {
   /** Mark it done: say what was done and found. */
   @Post(':id/complete')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(CompleteContainmentBody) })
   @ApiOkResponse({ schema: openApiSchema(ContainmentAction) })
   complete(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -142,7 +142,7 @@ export class NcrContainmentActionsController {
 
   @Post(':id/reopen')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(ContainmentAction) })
   reopen(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.reopenAction(ctx, parse(Uuid, id));
@@ -150,7 +150,7 @@ export class NcrContainmentActionsController {
 
   @Post(':id/cancel')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(ReasonBody) })
   @ApiOkResponse({ schema: openApiSchema(ContainmentAction) })
   cancel(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {

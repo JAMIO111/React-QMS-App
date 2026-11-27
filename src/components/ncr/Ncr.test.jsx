@@ -10,6 +10,7 @@ let orgProduction = {};
 const apiFetch = vi.fn();
 vi.mock("../../lib/api-client", async (importOriginal) => ({ ...(await importOriginal()), apiFetch: (...a) => apiFetch(...a) }));
 vi.mock("../../contexts/OrganisationProvider", () => ({ useOrganisation: () => ({ organisationId: "org-1" }) }));
+vi.mock("../../contexts/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("../../hooks/useQmsApi", () => ({
   usePermissions: () => ({ can: (p) => permissions.includes(p) }),
   useSites: () => ({ data: { data: [{ id: "s1", code: "MAIN", name: "Main site" }] } }),
@@ -1060,6 +1061,20 @@ describe("NC form", () => {
     expect(await screen.findByLabelText("Title")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Move to Contained" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
+  it("lets a person with only ncr.contribute add containment and files to a non-conformance they raised, and not to a colleague's", async () => {
+    permissions = ["ncr.read", "ncr.contribute"];
+    routeApi({ "GET /ncrs/n1": ncr({ createdBy: { id: "u1", name: "Ada Owner" } }) });
+    const mine = renderAt("/Non-Conformance/Register/n1");
+    expect(await screen.findByRole("button", { name: /Add containment action/ })).toBeInTheDocument();
+    expect(screen.queryByText("Or say why no containment is needed")).toBeNull();
+    expect(screen.getByLabelText("Title")).toBeDisabled();
+    mine.unmount();
+    routeApi({ "GET /ncrs/n1": ncr({ createdBy: { id: "u2", name: "Bob Other" } }) });
+    renderAt("/Non-Conformance/Register/n1");
+    await screen.findByLabelText("Title");
+    expect(screen.queryByRole("button", { name: /Add containment action/ })).toBeNull();
   });
 
   it("shows the history in plain words", async () => {

@@ -34,7 +34,7 @@ const MaterialCertificatesPage = () => {
   const rows = query.data?.data ?? [];
   const total = query.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const record = can("receiving.manage");
+  const record = can("receiving.record");
   const review = can("supplier_quality.manage");
   const close = () => setDialog(null);
 

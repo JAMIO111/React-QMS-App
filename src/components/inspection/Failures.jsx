@@ -481,7 +481,7 @@ const AddToNcrDialog = ({
  */
 const Failures = ({
   inspection,
-  canRecord,
+  canAcknowledge,
   canRaise,
   canUpdateNcr = false,
 }) => {
@@ -620,7 +620,7 @@ const Failures = ({
                       non-conformance.
                     </span>
                   )}
-                  {open && canRecord && !m.acknowledgement && (
+                  {open && canAcknowledge && !m.acknowledgement && (
                     <CTAButton
                       buttonType="button"
                       type="neutral" size="md"

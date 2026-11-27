@@ -11,6 +11,7 @@ import { ReceivingService } from './receiving.service';
 
 const READ = 'receiving.read';
 const MANAGE = 'receiving.manage';
+const RECORD = 'receiving.record';
 
 /** Minimal purchasing and goods receiving (SQ4a): what was ordered from a supplier, and what arrived. A receipt line that names a lot number makes the received lot. */
 @ApiTags('receiving')
@@ -87,7 +88,7 @@ export class ReceivingController {
 
   @Post('goods-receipts')
   @HttpCode(201)
-  @OrganisationScoped(MANAGE)
+  @OrganisationScoped(RECORD)
   @ApiBody({ schema: openApiSchema(RecordReceiptBody) })
   @ApiCreatedResponse({ description: 'Records what arrived. A line with a lot number makes the received lot. A retry with the same clientKey returns the same receipt.', schema: openApiSchema(ReceiptDetail) })
   recordReceipt(@Ctx() ctx: RequestContext, @Body() body: unknown) {
@@ -114,7 +115,7 @@ export class ReceivingController {
 
   @Post('goods-receipt-lines/:id/start-inspection')
   @HttpCode(200)
-  @OrganisationScoped(MANAGE)
+  @OrganisationScoped(RECORD)
   @ApiOkResponse({ description: 'Starts the incoming inspection of a line through the shared inspection engine (needs inspection.record; the line must need inspection)', schema: openApiSchema(ReceiptDetail) })
   startInspection(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
     return this.service.startInspection(ctx, parse(Uuid, id), parse(CustomValuesOnlyBody, body ?? {}).customValues);
@@ -122,7 +123,7 @@ export class ReceivingController {
 
   @Post('goods-receipt-lines/:id/disposition')
   @HttpCode(200)
-  @OrganisationScoped(MANAGE)
+  @OrganisationScoped(RECORD)
   @ApiBody({ schema: openApiSchema(DispositionBody) })
   @ApiOkResponse({ description: 'Holds, accepts, rejects or conditionally accepts a line. Accepting goods that need inspection needs a completed inspection with the required samples; conditional needs an approver and conditions; changing a rejection needs an approver.', schema: openApiSchema(ReceiptDetail) })
   disposition(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {

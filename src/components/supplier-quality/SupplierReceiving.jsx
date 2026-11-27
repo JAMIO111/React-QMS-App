@@ -23,6 +23,7 @@ const SupplierReceiving = ({ supplier }) => {
   const receipts = useReceipts({ supplierId: supplier.id, status: "received", pageSize: 10 }, { enabled: allowed });
   if (!allowed) return <MenuCard title="Incoming quality"><p className="text-sm text-secondary-text">You do not have access to purchasing and receiving.</p></MenuCard>;
   const manage = can("receiving.manage");
+  const record = can("receiving.record");
   const close = () => setDialog(null);
   return (
     <div className="flex flex-col gap-4">
@@ -35,7 +36,7 @@ const SupplierReceiving = ({ supplier }) => {
         {orders.isLoading ? <p className="text-sm text-secondary-text">Loading…</p> : (orders.data?.data ?? []).length === 0 ? <p className="text-sm text-secondary-text">No open purchase orders.</p> : <OrdersList rows={orders.data.data} showSupplier={false} />}
       </MenuCard>
       <MenuCard title="Latest deliveries" subtitle="The ten most recent. A delivery with a lot number makes the received lot."
-        action={manage && !deliveriesFrom ? <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setDialog("receipt")}>Record a delivery</CTAButton> : null}>
+        action={record && !deliveriesFrom ? <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setDialog("receipt")}>Record a delivery</CTAButton> : null}>
         {receipts.error && <ErrorNotice error={receipts.error} />}
         {receipts.isLoading ? <p className="text-sm text-secondary-text">Loading…</p> : (receipts.data?.data ?? []).length === 0 ? <p className="text-sm text-secondary-text">No deliveries recorded yet.</p> : <ReceiptsList rows={receipts.data.data} showSupplier={false} />}
       </MenuCard>

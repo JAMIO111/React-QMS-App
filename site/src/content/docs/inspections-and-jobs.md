@@ -29,7 +29,7 @@ Side panes show active **quality alerts**, **documents** in force and recent **n
 
 ## When a reading fails
 
-A failure is never ignored and never turned into an NC without you. Before the job can be completed, every failed reading must be either **acknowledged** with a note or **raised** as a non-conformance. You can raise one from the failed readings, with the details prefilled, or add later failures to an NC you already raised from the same inspection.
+A failure is never ignored and never turned into an NC without you. Before the job can be completed, every failed reading must be either **acknowledged** with a note or **raised** as a non-conformance. Raising one is open to the person recording. Acknowledging a failure instead is a quality decision, so it needs the acknowledge-failure permission, which the Inspector role does not hold: ask a quality engineer or manager. You can raise one from the failed readings, with the details prefilled, or add later failures to an NC you already raised from the same inspection.
 
 ## CMM files
 

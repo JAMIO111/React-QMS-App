@@ -110,7 +110,7 @@ const renderAt = (url) =>
 
 beforeEach(() => {
   apiFetch.mockReset();
-  permissions = ["inspection.read", "inspection.record", "inspection.correct", "inspection.override_gauge", "process_control.read"];
+  permissions = ["inspection.read", "inspection.record", "inspection.correct", "inspection.override_gauge", "inspection.acknowledge_failure", "process_control.read"];
 });
 
 describe("pass/fail preview", () => {
@@ -385,6 +385,15 @@ describe("Failures and non-conformances (PC5)", () => {
     await userEvent.type(within(dialog).getByLabelText("What is being done"), "Quarantined the tray");
     await userEvent.click(within(dialog).getByRole("button", { name: "Acknowledge" }));
     expect(body).toEqual({ note: "Quarantined the tray" });
+  });
+
+  it("does not offer to acknowledge a failed reading to the person who recorded it unless they hold the quality permission", async () => {
+    routeApi({ "GET /inspections/i1": failing(), "GET /gauges": gauges });
+    permissions = permissions.filter((p) => p !== "inspection.acknowledge_failure");
+    permissions.push("ncr.create");
+    renderAt("/Inspections/i1");
+    const list = await screen.findByRole("list", { name: "Failed readings" });
+    expect(within(list).queryByRole("button", { name: "Acknowledge" })).not.toBeInTheDocument();
   });
 
   it("raises a pre-filled NC for ticked readings and never without the permission", async () => {

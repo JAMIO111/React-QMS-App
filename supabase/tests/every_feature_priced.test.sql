@@ -98,20 +98,22 @@ DECLARE obs uuid := '5e000000-0000-0000-0000-000000000102'; con uuid := '5e00000
 BEGIN
   -- Observer: reads everything, does nothing
   FOREACH p IN ARRAY ARRAY['capa.read', 'audits.read', 'documentation.read', 'supplier_quality.read', 'receiving.read', 'spc.read', 'risk.read',
-                           'production.read', 'competence.read', 'management_review.read', 'workflows.read', 'master_data.read', 'audit.read'] LOOP
+                           'production.read', 'competence.read', 'management_review.read', 'workflows.read', 'master_data.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(obs, p), true, 'observer reads ' || p);
   END LOOP;
-  FOREACH p IN ARRAY ARRAY['capa.manage', 'audits.perform', 'competence.assess', 'receiving.manage', 'documentation.manage', 'master_data.manage'] LOOP
+  FOREACH p IN ARRAY ARRAY['capa.manage', 'audits.perform', 'competence.assess', 'receiving.manage', 'receiving.record', 'shipping.record', 'ncr.contribute', 'documentation.manage', 'master_data.manage', 'audit.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(obs, p), false, 'observer cannot ' || p);
   END LOOP;
 
   -- Contributor: works (records, carries out, assesses, edits NCs and runs 8Ds), does not sign off or set up
-  FOREACH p IN ARRAY ARRAY['audits.perform', 'competence.assess', 'receiving.manage', 'inspection.record', 'capa.read', 'capa.manage', 'ncr.update'] LOOP
+  FOREACH p IN ARRAY ARRAY['audits.perform', 'competence.assess', 'receiving.record', 'shipping.record', 'ncr.contribute', 'inspection.record', 'capa.read',
+                           'capa.manage', 'ncr.update'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(con, p), true, 'contributor may ' || p);
   END LOOP;
   FOREACH p IN ARRAY ARRAY['capa.verify', 'audits.manage', 'documentation.manage', 'documentation.issue', 'supplier_quality.manage',
                            'supplier_quality.approve', 'risk.manage', 'production.manage', 'competence.manage', 'management_review.manage',
-                           'workflows.manage', 'master_data.manage', 'custom_fields.manage', 'lookups.manage', 'ncr.approve_disposition', 'spc.manage'] LOOP
+                           'workflows.manage', 'master_data.manage', 'custom_fields.manage', 'lookups.manage', 'ncr.approve_disposition', 'spc.manage',
+                           'receiving.manage', 'shipping.manage', 'inspection.acknowledge_failure', 'change.approve', 'audit.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(con, p), false, 'contributor cannot ' || p);
   END LOOP;
   PERFORM pg_temp.assert_eq(pg_temp.shows(con, 'capa.verify'), false, 'and the screens do not offer it');
@@ -119,7 +121,8 @@ BEGIN
 
   -- Controller: everything the role holds
   FOREACH p IN ARRAY ARRAY['capa.manage', 'capa.verify', 'audits.manage', 'documentation.issue', 'supplier_quality.approve', 'risk.approve',
-                           'competence.manage', 'master_data.manage', 'ncr.approve_disposition'] LOOP
+                           'competence.manage', 'master_data.manage', 'ncr.approve_disposition', 'receiving.manage', 'shipping.manage',
+                           'inspection.acknowledge_failure', 'change.approve', 'audit.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(ctl, p), true, 'controller may ' || p);
   END LOOP;
 

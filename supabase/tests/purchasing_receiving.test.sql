@@ -18,7 +18,7 @@ BEGIN
   PERFORM pg_temp.login(eve); org2 := app.create_organisation('PR Beta'); PERFORM pg_temp.logout();
   FOREACH m IN ARRAY ARRAY[bob, cat] LOOP
     INSERT INTO public.organisation_users (organisation_id, user_id, status) VALUES (org, m, 'active');
-    SELECT id INTO role_id FROM public.roles WHERE organisation_id = org AND key = CASE m WHEN bob THEN 'viewer' ELSE 'inspector' END;
+    SELECT id INTO role_id FROM public.roles WHERE organisation_id = org AND key = CASE m WHEN bob THEN 'viewer' ELSE 'quality_engineer' END;
     INSERT INTO public.user_role_assignments (organisation_id, membership_id, role_id) SELECT org, ou.id, role_id FROM public.organisation_users ou WHERE ou.organisation_id = org AND ou.user_id = m;
   END LOOP;
   INSERT INTO public.suppliers (organisation_id, code, name) VALUES (org, 'ACME', 'Acme Metals') RETURNING id INTO s;

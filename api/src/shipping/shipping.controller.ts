@@ -11,6 +11,7 @@ import { ShippingService } from './shipping.service';
 
 const READ = 'shipping.read';
 const MANAGE = 'shipping.manage';
+const RECORD = 'shipping.record';
 
 /** Customer orders and shipments (docs/order-fulfilment-plan.md): what a customer asked for, and what left. A shipment never makes a lot; it may name one that exists. */
 @ApiTags('shipping')
@@ -87,7 +88,7 @@ export class ShippingController {
 
   @Post('shipments')
   @HttpCode(201)
-  @OrganisationScoped(MANAGE)
+  @OrganisationScoped(RECORD)
   @ApiBody({ schema: openApiSchema(RecordShipmentBody) })
   @ApiCreatedResponse({ description: 'Records what shipped. A line may name an existing lot (never makes one). A retry with the same clientKey returns the same shipment.', schema: openApiSchema(ShipmentDetail) })
   recordShipment(@Ctx() ctx: RequestContext, @Body() body: unknown) {

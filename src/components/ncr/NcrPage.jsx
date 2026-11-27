@@ -40,6 +40,7 @@ import FileDrop from "../ui/FileDrop";
 import SideMenuItem from "../SideMenuItem";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAllDepartments, usePermissions, useSites } from "../../hooks/useQmsApi";
+import { useAuth } from "../../contexts/AuthProvider";
 import { useClassifications, useEmployees, useNcr, useNcrMutation, useNcrNewDefaults } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, detectionApplies, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
@@ -120,6 +121,7 @@ const NcrPage = () => {
   });
   const navigate = useNavigate();
   const { can } = usePermissions();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const { data: ncr, isLoading, error } = useNcr(isNew ? null : routeId);
   const gates = useNcrGates(isNew ? null : routeId);
@@ -164,6 +166,10 @@ const NcrPage = () => {
 
   const locked = !isNew && ncr && (ncr.stage === "closed" || ncr.stage === "cancelled" || !!ncr.deletedAt);
   const canEdit = isNew ? can("ncr.create") : can("ncr.update") && !locked;
+  // A person with only ncr.contribute may add files and containment to a non-conformance they raised (the database checks it again).
+  const raisedById = (ncr?.createdBy ?? ncr?.raisedBy)?.id;
+  const raisedByMe = !!raisedById && raisedById === user?.id;
+  const canContribute = !isNew && !locked && (can("ncr.update") || (can("ncr.contribute") && raisedByMe));
   // A category can be taken off a draft, but not off a non-conformance that has been raised.
   const categoryClearable = isNew || ncr?.stage === "draft";
   const body = toBody(form, source);
@@ -580,7 +586,7 @@ const NcrPage = () => {
               <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">
                 <SectionHeading id="ncr-containment" title="Containment" sectionRef={refs.containment} />
                 <Card>
-                  <NcrContainment ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                  <NcrContainment ncrId={ncr.id} canEdit={canContribute} canReason={can("ncr.update") && !locked} />
                 </Card>
               </div>
             )}
@@ -599,7 +605,7 @@ const NcrPage = () => {
             <>
               <SectionHeading id="ncr-info" title="Additional Information" sectionRef={refs.info} />
               <Card>
-                <FileDrop ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                <FileDrop ncrId={ncr.id} canEdit={canContribute} />
                 <p className="pl-1 text-sm italic text-secondary-text">
                   {ncr.reference} raised by {ncr.createdBy?.name ?? "Unknown"} on{" "}
                   {new Date(ncr.createdAt).toLocaleString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}

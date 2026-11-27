@@ -138,10 +138,10 @@ export class InspectionsController {
 export class InspectionMeasurementsController {
   constructor(private readonly service: InspectionService) {}
 
-  /** A person has seen this failed reading and says what is being done (a note is required). */
+  /** A person has seen this failed reading and says what is being done (a note is required). Needs inspection.acknowledge_failure, a quality decision: the person who measured raises a non-conformance instead. */
   @Post(':id/acknowledge')
   @HttpCode(201)
-  @OrganisationScoped(RECORD)
+  @OrganisationScoped('inspection.acknowledge_failure')
   @ApiBody({ schema: openApiSchema(AcknowledgeBody) })
   @ApiCreatedResponse({ schema: openApiSchema(InspectionDetail) })
   acknowledge(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {

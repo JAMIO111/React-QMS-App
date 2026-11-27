@@ -40,7 +40,7 @@ const renderAt = (ui, at, route = "*") =>
   );
 
 beforeEach(() => {
-  permissions = ["receiving.read", "receiving.manage", "supplier_quality.manage", "master_data.read", "supplier_quality.read"];
+  permissions = ["receiving.read", "receiving.manage", "receiving.record", "supplier_quality.manage", "master_data.read", "supplier_quality.read"];
   calls.length = 0;
   apiFetch.mockReset();
 });
@@ -60,7 +60,7 @@ describe("material certificate register", () => {
   });
 
   it("hides review from people who only record", async () => {
-    permissions = ["receiving.read", "receiving.manage"];
+    permissions = ["receiving.read", "receiving.record"];
     routeApi({ "GET /material-certificates": { data: [cert()], page: 1, pageSize: 25, total: 1, reviewCount: 1 } });
     renderAt(<MaterialCertificatesPage />, "/x", "/x");
     await screen.findByText("MTR-100");

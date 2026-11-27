@@ -46,7 +46,7 @@ export class NcrChildRecordsController {
   /** Record a file already uploaded to the nc-files bucket at {organisationId}/ncr/{id}/… */
   @Post(':id/attachments')
   @HttpCode(201)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(CreateAttachmentBody) })
   @ApiCreatedResponse({ schema: openApiSchema(Attachment) })
   createAttachment(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -114,7 +114,7 @@ export class NcrAttachmentsController {
   /** Remove a file from the NCR (soft delete; the stored file is kept as evidence). */
   @Post(':id/delete')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(DeleteBody) })
   @ApiOkResponse({ schema: openApiSchema(Attachment) })
   remove(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -123,7 +123,7 @@ export class NcrAttachmentsController {
 
   @Post(':id/restore')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update', SITE_SCOPED)
+  @OrganisationScoped(['ncr.update', 'ncr.contribute'], SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(Attachment) })
   restore(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.restoreAttachment(ctx, parse(Uuid, id));

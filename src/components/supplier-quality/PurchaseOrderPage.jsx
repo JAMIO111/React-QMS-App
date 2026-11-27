@@ -40,6 +40,7 @@ const PurchaseOrderPage = () => {
   if (query.error) return <div className="p-4"><ErrorNotice error={query.error} /></div>;
   const o = query.data;
   const manage = can("receiving.manage");
+  const record = can("receiving.record");
   const open = o.status === "open";
 
   return (
@@ -53,11 +54,11 @@ const PurchaseOrderPage = () => {
           </div>
           <p className="text-sm text-secondary-text"><Link to={`/Suppliers/${o.supplier.id}`} className="text-link-color hover:underline">{o.supplier.code} · {o.supplier.name}</Link> · ordered {formatDate(o.orderedOn)}</p>
         </div>
-        {manage && open && (
+        {(manage || record) && open && (
           <div className="flex flex-wrap items-center gap-2">
-            {!owner && <CTAButton type="main" size="default" onClick={() => setDialog({ kind: "receive" })}>Record a delivery</CTAButton>}
-            <CTAButton type="secondary" size="default" onClick={() => setDialog({ kind: "close" })}>Close order</CTAButton>
-            <CTAButton type="danger" size="default" onClick={() => setDialog({ kind: "cancel" })}>Cancel order</CTAButton>
+            {record && !owner && <CTAButton type="main" size="default" onClick={() => setDialog({ kind: "receive" })}>Record a delivery</CTAButton>}
+            {manage && <CTAButton type="secondary" size="default" onClick={() => setDialog({ kind: "close" })}>Close order</CTAButton>}
+            {manage && <CTAButton type="danger" size="default" onClick={() => setDialog({ kind: "cancel" })}>Cancel order</CTAButton>}
           </div>
         )}
       </div>

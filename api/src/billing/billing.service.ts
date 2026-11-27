@@ -44,13 +44,18 @@ export class BillingService {
       const features = (await db.execute<Row>(sql`select * from public.features where status <> 'retired' order by slug`)).rows;
       const entitlements = (await db.execute<Row>(sql`
         select e.*, s.slug as plan_slug, m.slug as module_slug from public.subscription_entitlements e
-        join public.subscription_plans s on s.id = e.subscription_plan_id join public.modules m on m.id = e.module_id
-        where e.feature_id is null`)).rows;
+        join public.subscription_plans s on s.id = e.subscription_plan_id join public.modules m on m.id = e.module_id`)).rows;
 
       const levelOf = (planSlug: string, moduleSlug: string): AccessLevel => {
-        const e = entitlements.find((x) => x.plan_slug === planSlug && x.module_slug === moduleSlug);
+        const e = entitlements.find((x) => x.plan_slug === planSlug && x.module_slug === moduleSlug && x.feature_id == null);
         return e && e.enabled ? (e.access_level as AccessLevel) : 'none';
       };
+      // A package's feature row wins over its module row (the Operator records inspections while viewing the rest).
+      const featureLevel = (planSlug: string, moduleSlug: string, featureId: string): AccessLevel => {
+        const e = entitlements.find((x) => x.plan_slug === planSlug && x.feature_id === featureId);
+        return e ? (e.enabled ? (e.access_level as AccessLevel) : 'none') : levelOf(planSlug, moduleSlug);
+      };
+      const seatPlans = plans.filter((p) => (p.kind ?? 'seat') === 'seat');
 
       return {
         plans: plans.map((p) => {
@@ -63,6 +68,7 @@ export class BillingService {
           return {
             slug: p.slug as string,
             name: p.name as string,
+            kind: ((p.kind as string) ?? 'seat') as 'seat' | 'fee',
             description: (p.description as string) ?? null,
             monthly,
             annual,
@@ -81,8 +87,8 @@ export class BillingService {
               slug: f.slug as string,
               name: f.name as string,
               minLevel: f.min_access_level as AccessLevel,
-              includedIn: plans
-                .filter((p) => RANK[levelOf(p.slug as string, m.slug as string)] >= RANK[f.min_access_level as AccessLevel])
+              includedIn: seatPlans
+                .filter((p) => RANK[featureLevel(p.slug as string, m.slug as string, f.id as string)] >= RANK[f.min_access_level as AccessLevel])
                 .map((p) => p.slug as string),
             })),
         })),
@@ -96,11 +102,11 @@ export class BillingService {
       const sub = (await db.execute<Row>(sql`
         select s.*, o.entitlements_enforced, o.grace_period_days, o.vat_rate,
                (select g.billing_required from public.organisations g where g.id = o.organisation_id) as billing_required,
-               exists (select 1 from public.subscription_prices pr where pr.provider_price_id is not null and pr.active) as prices_ready
+               exists (select 1 from public.subscription_prices pr where pr.provider_price_id is not null and pr.active and pr.effective_to is null) as prices_ready
         from public.organisation_settings o left join public.organisation_subscriptions s on s.organisation_id = o.organisation_id
         where o.organisation_id = ${org}::uuid`)).rows[0];
       const items = (await db.execute<Row>(sql`
-        select p.slug, p.name, i.quantity, i.unit_amount_snapshot,
+        select p.slug, p.name, p.kind, i.quantity, i.unit_amount_snapshot,
                (select count(*) from public.user_subscription_assignments a where a.subscription_item_id = i.id and a.status = 'active') as assigned
         from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id
         where i.organisation_id = ${org}::uuid order by p.display_order`)).rows;
@@ -116,12 +122,14 @@ export class BillingService {
         : false;
       const rows = items.map((i) => ({
         planSlug: i.slug as string,
+        kind: ((i.kind as string) ?? 'seat') as 'seat' | 'fee',
         planName: i.name as string,
         purchased: Number(i.quantity),
         assigned: Number(i.assigned),
         available: Math.max(0, Number(i.quantity) - Number(i.assigned)),
         unitAmount: Number(i.unit_amount_snapshot),
       }));
+      const seatRows = rows.filter((r) => r.kind === 'seat');
       const interval = (sub?.billing_interval as 'month' | 'year' | undefined) ?? 'month';
       const recurring = items.reduce((t, i) => t + Number(i.quantity) * Number(i.unit_amount_snapshot), 0);
       return {
@@ -168,9 +176,9 @@ export class BillingService {
         providerManaged: !!sub?.billing_required || sub?.billing_provider === 'stripe',
         items: rows,
         totals: {
-          seatsPurchased: rows.reduce((t, r) => t + r.purchased, 0),
-          seatsAssigned: rows.reduce((t, r) => t + r.assigned, 0),
-          seatsAvailable: rows.reduce((t, r) => t + r.available, 0),
+          seatsPurchased: seatRows.reduce((t, r) => t + r.purchased, 0),
+          seatsAssigned: seatRows.reduce((t, r) => t + r.assigned, 0),
+          seatsAvailable: seatRows.reduce((t, r) => t + r.available, 0),
           monthlyEquivalent: interval === 'year' ? Math.round(recurring / 12) : recurring,
           annual: interval === 'year' ? recurring : recurring * 12,
           vatRate: Number(sub?.vat_rate ?? 0.2),

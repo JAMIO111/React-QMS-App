@@ -68,7 +68,7 @@ const InviteForm = ({ roles, sites, departments }) => {
   const mutation = useMemberMutation();
   const { can } = usePermissions();
   const seatOverview = useSubscriptionOverview();
-  const seatItems = seatOverview.data?.items ?? [];
+  const seatItems = (seatOverview.data?.items ?? []).filter((i) => (i.kind ?? "seat") === "seat");
   const canGivePackages = can("subscription.seats") && seatItems.length > 0;
 
   const roleKey = roles.find((r) => r.id === roleId)?.key;
@@ -452,7 +452,7 @@ const SettingsUsers = () => {
   const roleList = roles.data?.data ?? [];
   const siteList = sites.data?.data ?? [];
   const departmentList = departments.data?.data ?? [];
-  const seatItems = seatOverview.data?.items ?? [];
+  const seatItems = (seatOverview.data?.items ?? []).filter((i) => (i.kind ?? "seat") === "seat");
   const seatOf = new Map((seats.data ?? []).map((s) => [s.membershipId, s.plan]));
   const all = members.data?.data ?? [];
   const unassigned = all.filter(isUnassigned);

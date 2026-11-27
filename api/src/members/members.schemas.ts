@@ -137,7 +137,7 @@ export const Permission = z.object({
   code: z.string(),
   description: z.string(),
   module: z.string(),
-  needs: z.enum(['observer', 'contributor', 'controller']).nullable(),
+  needs: z.enum(['observer', 'operator', 'contributor', 'controller']).nullable(),
 });
 
 const RoleName = z.string().trim().min(1, 'Give the role a name').max(60, 'The role name is up to 60 characters');

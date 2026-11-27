@@ -3,7 +3,7 @@
 /** What the server never lets into a custom role (role administration stays with the Owner role). */
 export const NOT_IN_CUSTOM_ROLES = ["roles.manage"];
 
-export const SEAT_WORDS = { observer: "Observer", contributor: "Contributor", controller: "Controller" };
+export const SEAT_WORDS = { observer: "Observer", operator: "Operator", contributor: "Contributor", controller: "Controller" };
 
 /** The permissions a person may choose, grouped by module in the order the API gave them: [{ module, items: [permission] }]. */
 export const groupPermissions = (permissions = []) => {
@@ -41,7 +41,7 @@ export const holdersWords = (n) => (n === 0 ? "Nobody holds it yet" : n === 1 ? 
 
 /** The seat level the highest of the chosen permissions asks for (null when none asks): informs the owner, the server does not use it. */
 export const highestSeat = (permissions, selected) => {
-  const order = ["observer", "contributor", "controller"];
+  const order = ["observer", "operator", "contributor", "controller"];
   let top = -1;
   for (const p of permissions) if (selected.has(p.code) && p.needs) top = Math.max(top, order.indexOf(p.needs));
   return top < 0 ? null : order[top];

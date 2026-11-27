@@ -18,6 +18,7 @@ const field =
 const PACKAGES = [
   { slug: "controller", label: "Controller" },
   { slug: "contributor", label: "Contributor" },
+  { slug: "operator", label: "Operator" },
   { slug: "observer", label: "Observer" },
 ];
 
@@ -52,7 +53,7 @@ const outcomeText = (r) => {
 /** Seats left per package after what this list would take. */
 const useSeats = (rows) => {
   const overview = useSubscriptionOverview();
-  const items = overview.data?.items ?? [];
+  const items = (overview.data?.items ?? []).filter((i) => (i.kind ?? "seat") === "seat");
   const taken = (slug) => rows.filter((r) => r.packageSlug === slug).length;
   return {
     available: (slug) => items.find((i) => i.planSlug === slug)?.available ?? 0,

@@ -60,7 +60,7 @@ export const clearTeamDraft = (organisationId) => saveTeamDraft(organisationId, 
 
 /** Seats the planned team would take, by package, with the owner's Controller seat added: what the plan step starts from. */
 export const seatsForDraft = (rows) => {
-  const seats = { controller: 1, contributor: 0, observer: 0 };
+  const seats = { controller: 1, contributor: 0, operator: 0, observer: 0 };
   for (const r of rows) if (r.packageSlug && r.packageSlug in seats) seats[r.packageSlug] += 1;
   return seats;
 };

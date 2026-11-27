@@ -4,7 +4,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useOrganisationDetails } from "../../hooks/useQmsApi";
 import { useCheckInvoiceCompany, useStartCheckout, useStartInvoiceSubscription } from "../../hooks/useSubscription";
 import { describeApiError } from "../../lib/api-client";
-import { EMPTY_COMPANY, companyProblems, invoiceBody, invoiceStartWords, loadRoute, money, newClientKey, recurringTotal, saveRoute } from "../../lib/billing";
+import { EMPTY_COMPANY, companyProblems, invoiceBody, invoiceStartWords, loadRoute, money, newClientKey, observerProblem, recurringTotal, saveRoute } from "../../lib/billing";
 import { FormError } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
@@ -85,7 +85,7 @@ const StartSubscriptionPanel = ({ plans, choice, onChoice, returnTo = "setup" })
         <>
           <FormError error={card.error} />
           <div className="flex justify-end">
-            <CTAButton buttonType="button" type="main" size="lg" disabled={busy} loading={card.isPending} onClick={goCard}>
+            <CTAButton buttonType="button" type="main" size="lg" disabled={busy || !!observerProblem(choice.seats)} loading={card.isPending} onClick={goCard}>
               {card.isPending ? "Opening checkout…" : "Continue to secure checkout"}
             </CTAButton>
           </div>
@@ -107,7 +107,7 @@ const StartSubscriptionPanel = ({ plans, choice, onChoice, returnTo = "setup" })
           <FormError error={vatError ? null : invoice.error} />
           <div className="flex items-center justify-end gap-3">
             <span className="text-sm text-secondary-text">{money(recurringTotal(plans, choice))} per {choice.interval === "year" ? "year" : "month"}, excluding VAT</span>
-            <CTAButton buttonType="button" type="main" size="lg" disabled={busy || stillNeeded.length > 0} loading={invoice.isPending} loadingText="Starting…" onClick={goInvoice}>
+            <CTAButton buttonType="button" type="main" size="lg" disabled={busy || stillNeeded.length > 0 || !!observerProblem(choice.seats)} loading={invoice.isPending} loadingText="Starting…" onClick={goInvoice}>
               Start subscription
             </CTAButton>
           </div>

@@ -55,7 +55,7 @@ You can have up to 30 roles of your own.
 
 ## Seats cap what a role gives
 
-There are three seat packages. Observer gives view rights. Contributor adds everyday work. Controller gives everything. A permission that needs a Controller seat has no effect for someone with only a Contributor seat, even if their role includes it. On a person's card, the **Seat** section shows their package. People who manage seats can change it there.
+There are four seat packages. Observer gives view rights. Operator adds raising non-conformances and recording inspections. Contributor adds the rest of the everyday work, including editing non-conformances and running 8Ds. Controller adds signing off and set-up: approving dispositions, verifying and closing 8Ds, issuing documents and running integrations. A permission that needs a Controller seat has no effect for someone with only a Contributor seat, even if their role includes it. On a person's card, the **Seat** section shows their package. People who manage seats can change it there.
 
 Where seats are enforced, a person with no seat cannot use the product, apart from running the account itself if their role allows. Administration rights such as members, roles, security and billing are never tied to a seat. See [Billing and seats](/help/billing-and-seats).
 

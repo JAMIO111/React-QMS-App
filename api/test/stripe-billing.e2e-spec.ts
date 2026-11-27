@@ -24,6 +24,10 @@ const PRICES: Record<string, string> = {
   'contributor:year': 'price_e2e_contrib_year',
   'observer:month': 'price_e2e_obs_month',
   'observer:year': 'price_e2e_obs_year',
+  'operator:month': 'price_e2e_op_month',
+  'operator:year': 'price_e2e_op_year',
+  'organisation:month': 'price_e2e_org_month',
+  'organisation:year': 'price_e2e_org_year',
 };
 const PLAN_OF: Record<string, string> = Object.fromEntries(Object.entries(PRICES).map(([k, v]) => [v, k.split(':')[0]]));
 const verifier = new Stripe('sk_test_e2eTestKeyThatIsLongEnough1234');
@@ -151,10 +155,13 @@ const send = (type: string, object: Record<string, unknown>, opts: { id?: string
 };
 const events = async (orgOnly = true) =>
   (await admin.query(`select event_id, event_type, status, attempts, error, organisation_id from public.stripe_events ${orgOnly ? `where organisation_id = $1` : ''} order by received_at`, orgOnly ? [ids.orgA] : [])).rows;
+/** Seat items only; the organisation fee is checked on its own (`feeOf`). */
 const seatsOf = async () =>
   Object.fromEntries(
-    (await admin.query(`select p.slug, i.quantity from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id where i.organisation_id = $1`, [ids.orgA])).rows.map((r) => [r.slug, r.quantity]),
+    (await admin.query(`select p.slug, i.quantity from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id where i.organisation_id = $1 and p.kind = 'seat'`, [ids.orgA])).rows.map((r) => [r.slug, r.quantity]),
   );
+const feeOf = async () =>
+  (await admin.query(`select i.quantity from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id where i.organisation_id = $1 and p.kind = 'fee'`, [ids.orgA])).rows.map((r) => r.quantity);
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
@@ -234,6 +241,7 @@ describe('checkout', () => {
     expect(fake.sessions.get(res.body.sessionId)!.items).toEqual([
       { priceId: 'price_e2e_ctrl_month', quantity: 2 },
       { priceId: 'price_e2e_contrib_month', quantity: 3 },
+      { priceId: 'price_e2e_org_month', quantity: 1 }, // the organisation fee, once, never a seat
     ]);
     // A second attempt reuses the customer.
     await api().post('/api/v1/billing/checkout-session').set(h).send({ interval: 'month', seats: { controller: 2, contributor: 3 } }).expect(200);
@@ -279,6 +287,9 @@ describe('confirming a checkout', () => {
     expect(overview.subscription.trialEnd).not.toBeNull();
     expect(overview.providerManaged).toBe(true);
     expect(await seatsOf()).toEqual({ controller: 2, contributor: 3 });
+    expect(await feeOf()).toEqual([1]); // the organisation fee is on the subscription once, and is no seat
+    expect(overview.totals.seatsPurchased).toBe(5);
+    expect(overview.items.find((i: { planSlug: string }) => i.planSlug === 'organisation')).toMatchObject({ kind: 'fee', purchased: 1 });
     const seat = (await admin.query(`select p.slug from public.user_subscription_assignments a join public.subscription_plans p on p.id = a.subscription_plan_id join public.organisation_users m on m.id = a.organisation_membership_id where a.organisation_id = $1 and a.status = 'active' and m.user_id = $2`, [ids.orgA, ids.ownerA])).rows;
     expect(seat.map((r) => r.slug)).toEqual(['controller']);
   });
@@ -423,6 +434,27 @@ describe('seats afterwards', () => {
     fake.calls.length = 0;
     await api().put('/api/v1/billing/seats').set(await as(ids.ownerA)).send({ seats: { contributor: 5 } }).expect(200);
     expect(fake.calls).not.toContain('updateSeats');
+  });
+
+  it('keeps the price an item already has: a customer on an older price stays on it when seats change', async () => {
+    // The contributor item is on the 2025 price (ended in our catalogue, still in Stripe).
+    await admin.query(
+      `update public.subscription_prices set provider_price_id = 'price_e2e_contrib_old' where effective_to is not null and billing_interval = 'month'
+         and subscription_plan_id = (select id from public.subscription_plans where slug = 'contributor')`,
+    );
+    const sub = [...fake.subs.values()][0];
+    const item = sub.items.find((i) => i.priceId === 'price_e2e_contrib_month')!;
+    item.priceId = 'price_e2e_contrib_old';
+    fake.calls.length = 0;
+    await api().put('/api/v1/billing/seats').set(await as(ids.ownerA)).send({ seats: { contributor: 6 } }).expect(200);
+    expect(fake.lastChange?.items).toEqual([expect.objectContaining({ itemId: item.itemId, priceId: 'price_e2e_contrib_old', quantity: 6 })]);
+    expect(sub.items.filter((i) => i.priceId.startsWith('price_e2e_contrib')).map((i) => [i.priceId, i.quantity])).toEqual([['price_e2e_contrib_old', 6]]);
+    // a package the subscription did not have takes today's price
+    await api().put('/api/v1/billing/seats').set(await as(ids.ownerA)).send({ seats: { operator: 1 } }).expect(200);
+    expect(sub.items.find((i) => i.priceId === 'price_e2e_op_month')?.quantity).toBe(1);
+    // put things back for the tests that follow
+    item.priceId = 'price_e2e_contrib_month';
+    await api().put('/api/v1/billing/seats').set(await as(ids.ownerA)).send({ seats: { contributor: 5, operator: 0 } }).expect(200);
   });
 
   it('refuses the manual seat route for a Stripe-billed organisation', async () => {

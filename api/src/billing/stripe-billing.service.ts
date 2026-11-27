@@ -60,16 +60,7 @@ export class StripeBillingService {
       throw new ApiError(409, PROBLEM, 'This organisation already has a subscription. Change it from Subscription & billing.');
     }
 
-    const items = await this.database.asApi(async (client) => {
-      const out: { slug: string; priceId: string; quantity: number }[] = [];
-      for (const [slug, quantity] of Object.entries(body.seats)) {
-        if (quantity <= 0) continue;
-        const price = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, body.interval])).rows[0].id as string | null;
-        if (!price) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
-        out.push({ slug, priceId: price, quantity });
-      }
-      return out;
-    }, ctx.correlationId);
+    const items = await this.lineItems(ctx, body.seats, body.interval);
 
     const customerId = await this.customerFor(ctx, state.name);
     const where = body.returnTo === 'settings' ? '/Settings/Subscription' : '/setup/plan';
@@ -105,16 +96,7 @@ export class StripeBillingService {
       ctx.correlationId,
     );
 
-    const items = await this.database.asApi(async (client) => {
-      const out: { priceId: string; quantity: number }[] = [];
-      for (const [slug, quantity] of Object.entries(body.seats)) {
-        if (quantity <= 0) continue;
-        const price = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, body.interval])).rows[0].id as string | null;
-        if (!price) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
-        out.push({ priceId: price, quantity });
-      }
-      return out;
-    }, ctx.correlationId);
+    const items = (await this.lineItems(ctx, body.seats, body.interval)).map((i) => ({ priceId: i.priceId, quantity: i.quantity }));
 
     const customerId = await this.customerFor(ctx, body.company.legalName);
     const { vat } = await this.gateway.updateCustomerBilling(customerId, body.company);
@@ -319,6 +301,37 @@ export class StripeBillingService {
     return created;
   }
 
+  /**
+   * The Stripe line items for a new subscription: each seat package chosen, then the organisation fee once (any package of kind `fee` with a price this
+   * interval). A seat package or a fee with a price that has no Stripe price id yet is 503: Stripe has not been set up for it.
+   */
+  private async lineItems(ctx: RequestContext, seats: SeatCounts, interval: string): Promise<{ slug: string; priceId: string; quantity: number }[]> {
+    // Which packages are fees with a price this interval (read as the person: the catalogue is theirs to read), then their Stripe ids (API login).
+    const feeSlugs = await this.database.asUser(ctx, async (db) =>
+      (
+        await db.execute<Row>(sql`
+          select pl.slug from public.subscription_plans pl
+           where pl.kind = 'fee' and pl.status = 'active'
+             and exists (select 1 from public.subscription_prices pr where pr.subscription_plan_id = pl.id and pr.billing_interval = ${interval}
+                           and pr.active and pr.effective_to is null and pr.currency = 'GBP')
+           order by pl.display_order`)
+      ).rows.map((r) => r.slug as string),
+    );
+    return this.database.asApi(async (client) => {
+      const out: { slug: string; priceId: string; quantity: number }[] = [];
+      const priceFor = async (slug: string) => {
+        const id = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, interval])).rows[0].id as string | null;
+        if (!id) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
+        return id;
+      };
+      for (const [slug, quantity] of Object.entries(seats)) {
+        if (quantity > 0) out.push({ slug, priceId: await priceFor(slug), quantity });
+      }
+      for (const slug of feeSlugs) out.push({ slug, priceId: await priceFor(slug), quantity: 1 });
+      return out;
+    }, ctx.correlationId);
+  }
+
   private async assertNoSeatProblems(ctx: RequestContext, seats: SeatCounts): Promise<void> {
     const problems = await this.database.asUser(
       ctx,
@@ -344,9 +357,12 @@ export class StripeBillingService {
     const changes: { planSlug: string; from: number; to: number }[] = [];
     await this.database.asApi(async (client) => {
       for (const [slug, quantity] of Object.entries(seats)) {
-        const priceId = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, snapshot.interval])).rows[0].id as string | null;
+        // Every price the package has had, current first: an item already on the subscription keeps its price (a customer stays on the price they
+        // signed up at); a package added now takes today's price.
+        const known = ((await client.query(`select app.stripe_prices_for_plan($1, $2) as ids`, [slug, snapshot.interval])).rows[0].ids as string[] | null) ?? [];
+        const existing = snapshot.items.find((i) => known.includes(i.priceId));
+        const priceId = existing?.priceId ?? known[0];
         if (!priceId) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
-        const existing = snapshot.items.find((i) => i.priceId === priceId);
         const from = existing?.quantity ?? 0;
         changes.push({ planSlug: slug, from, to: quantity });
         if (from === quantity) continue;

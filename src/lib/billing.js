@@ -9,16 +9,32 @@ export const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-G
 
 export const trialEnd = (from = new Date()) => new Date(from.getTime() + TRIAL_DAYS * 864e5).toISOString();
 
-export const DEFAULT_CHOICE = { interval: "month", seats: { controller: 1, contributor: 0, observer: 0 } };
+export const DEFAULT_CHOICE = { interval: "month", seats: { controller: 1, contributor: 0, operator: 0, observer: 0 } };
+
+/** The packages given to people (Observer, Operator, Contributor, Controller), in the catalogue's order. */
+export const seatPlans = (plans = []) => plans.filter((p) => (p.kind ?? "seat") === "seat");
+/** The organisation fee (kind `fee`): one per subscription, never a seat, holds no access. */
+export const feePlans = (plans = []) => plans.filter((p) => p.kind === "fee");
 
 /** The price per seat for one package at an interval, in pence per month or per year. */
 export const unitPrice = (plan, interval) => (interval === "year" ? plan.annual : plan.monthly)?.unitAmount ?? null;
 
-/** What the choice costs per billing period (pence, excluding VAT). */
-export const recurringTotal = (plans, { interval, seats }) =>
-  plans.reduce((total, plan) => total + (seats[plan.slug] ?? 0) * (unitPrice(plan, interval) ?? 0), 0);
+/** The organisation fee at an interval (pence; 0 when there is none). */
+export const feeTotal = (plans, interval) => feePlans(plans).reduce((t, p) => t + (unitPrice(p, interval) ?? 0), 0);
 
-export const seatCount = (seats) => Object.values(seats).reduce((n, q) => n + q, 0);
+/** What the choice costs per billing period: the seats chosen plus the organisation fee once (pence, excluding VAT). */
+export const recurringTotal = (plans, { interval, seats }) =>
+  seatPlans(plans).reduce((total, plan) => total + (seats[plan.slug] ?? 0) * (unitPrice(plan, interval) ?? 0), 0) + feeTotal(plans, interval);
+
+/** Seats chosen (the organisation fee is not a seat). */
+export const seatCount = (seats) => Object.entries(seats).reduce((n, [slug, q]) => (slug === "organisation" ? n : n + q), 0);
+
+/** Observer seats are free up to twice the paid seats (the database refuses more; an organisation still paying for Observers at the old price is not limited). */
+export const freeObserverLimit = (seats) => 2 * Object.entries(seats).reduce((n, [slug, q]) => (slug === "observer" || slug === "organisation" ? n : n + (q ?? 0)), 0);
+export const observerProblem = (seats) => {
+  const limit = freeObserverLimit(seats);
+  return (seats.observer ?? 0) > limit ? `Observer seats are free up to twice the paid seats (${limit} here). Add paid seats or choose fewer Observers.` : null;
+};
 
 // The choice survives a trip to Stripe and back (cancelled checkout), per organisation and per browser tab.
 const draftKey = (organisationId) => `qms.checkoutChoice.${organisationId}`;

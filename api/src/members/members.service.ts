@@ -324,18 +324,27 @@ export class MembersService {
   /** What each permission is, which module it belongs to and which seat level that module asks for (information for the role editor). */
   permissions(ctx: RequestContext): Promise<z.infer<typeof Permission>[]> {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ code: string; description: string; module: string | null; level: string | null }>(sql`
-        select p.code, p.description, m.name as module, f.min_access_level as level
+      // `needs` = the cheapest seat package that gives the permission (its feature row if it has one, else its module row), so the Operator shows
+      // where it is enough (raising an NC, recording an inspection).
+      const res = await db.execute<{ code: string; description: string; module: string | null; needs: string | null }>(sql`
+        select p.code, p.description, m.name as module,
+               (select pl.slug from public.subscription_plans pl
+                 where f.id is not null and pl.kind = 'seat' and pl.status = 'active'
+                   and coalesce((select case when e.enabled then array_position(array['none', 'view', 'operational', 'full'], e.access_level) else 0 end
+                                   from public.subscription_entitlements e
+                                  where e.subscription_plan_id = pl.id and e.module_id = f.module_id and (e.feature_id = f.id or e.feature_id is null)
+                                  order by (e.feature_id is null) limit 1), 0) >= array_position(array['none', 'view', 'operational', 'full'], f.min_access_level)
+                 order by pl.display_order limit 1) as needs
         from public.permissions p
         left join public.features f on f.permission_code = p.code
         left join public.modules m on m.id = f.module_id
         order by coalesce(m.display_order, 9999), coalesce(m.name, 'Administration'), p.code`);
-      const needs = { view: 'observer', operational: 'contributor', full: 'controller' } as const;
+      const known = ['observer', 'operator', 'contributor', 'controller'] as const;
       return res.rows.map((r) => ({
         code: r.code,
         description: r.description,
         module: r.module ?? 'Administration',
-        needs: r.level && r.level in needs ? needs[r.level as keyof typeof needs] : null,
+        needs: r.needs && (known as readonly string[]).includes(r.needs) ? (r.needs as (typeof known)[number]) : null,
       }));
     });
   }

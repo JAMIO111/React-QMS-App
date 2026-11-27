@@ -54,8 +54,9 @@ describe('permissions grouped for the editor', () => {
     const res = await api().get('/api/v1/permissions').set(await as(ids.ownerA)).expect(200);
     const by = Object.fromEntries(res.body.data.map((p: { code: string }) => [p.code, p]));
     expect(by['ncr.read']).toMatchObject({ module: 'Nonconformance', needs: 'observer' });
-    expect(by['ncr.create']).toMatchObject({ module: 'Nonconformance', needs: 'contributor' });
-    expect(by['ncr.update']).toMatchObject({ module: 'Nonconformance', needs: 'controller' });
+    expect(by['ncr.create']).toMatchObject({ module: 'Nonconformance', needs: 'operator' });
+    expect(by['ncr.update']).toMatchObject({ module: 'Nonconformance', needs: 'contributor' });
+    expect(by['ncr.approve_disposition']).toMatchObject({ module: 'Nonconformance', needs: 'controller' });
     expect(by['members.manage']).toMatchObject({ module: 'Administration', needs: null });
     expect(res.body.data.length).toBeGreaterThan(60);
   });

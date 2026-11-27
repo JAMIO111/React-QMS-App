@@ -178,7 +178,7 @@ const ReviewStep = ({ state, error }) => {
           {draft.rows.length > 0 ? (
             <>
               <p className="text-sm text-primary-text"><strong>{draft.rows.length}</strong> {draft.rows.length === 1 ? "person is" : "people are"} planned and {open ? "ready to invite" : "will be invited once your plan is active"}.</p>
-              {needs && <p className="mt-1 text-xs text-secondary-text">Seats: Controller {needs.controller}, Contributor {needs.contributor}, Observer {needs.observer}.</p>}
+              {needs && <p className="mt-1 text-xs text-secondary-text">Seats: Controller {needs.controller}, Contributor {needs.contributor}, Operator {needs.operator}, Observer {needs.observer}.</p>}
             </>
           ) : open && pending.length + joined.length > 1 ? (
             <dl className="grid grid-cols-2 gap-3">
@@ -195,9 +195,13 @@ const ReviewStep = ({ state, error }) => {
             <>
               <p className="text-sm text-primary-text">{sub.paymentRoute === "invoice" ? `Pay by invoice, payable within ${sub.paymentTermsDays ?? 14} days` : sub.status === "trialing" ? `Free trial until ${formatDate(sub.trialEnd)}` : `Status: ${sub.status.replace("_", " ")}`}</p>
               <ul aria-label="Seats" className="mt-1 flex flex-col gap-0.5 p-0 text-sm text-primary-text">
-                {overview.items.filter((i) => i.purchased > 0).map((i) => (
-                  <li key={i.planSlug} className="list-none">{i.purchased} × {i.planName} <span className="text-secondary-text">({money(i.unitAmount, sub.currency)} per user per {sub.billingInterval === "year" ? "year" : "month"})</span></li>
-                ))}
+                {overview.items.filter((i) => i.purchased > 0).map((i) =>
+                  i.kind === "fee" ? (
+                    <li key={i.planSlug} className="list-none">{i.planName} fee <span className="text-secondary-text">({money(i.unitAmount, sub.currency)} per {sub.billingInterval === "year" ? "year" : "month"})</span></li>
+                  ) : (
+                    <li key={i.planSlug} className="list-none">{i.purchased} × {i.planName} <span className="text-secondary-text">({money(i.unitAmount, sub.currency)} per user per {sub.billingInterval === "year" ? "year" : "month"})</span></li>
+                  ),
+                )}
               </ul>
             </>
           ) : (

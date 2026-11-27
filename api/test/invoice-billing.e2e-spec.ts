@@ -33,6 +33,10 @@ const PRICES: Record<string, string> = {
   'contributor:year': 'price_iv_contrib_year',
   'observer:month': 'price_iv_obs_month',
   'observer:year': 'price_iv_obs_year',
+  'operator:month': 'price_iv_op_month',
+  'operator:year': 'price_iv_op_year',
+  'organisation:month': 'price_iv_org_month',
+  'organisation:year': 'price_iv_org_year',
 };
 const verifier = new Stripe('sk_test_e2eInvoiceKeyThatIsLongEnough1234');
 
@@ -267,6 +271,7 @@ describe('starting an invoiced subscription', () => {
       items: [
         { priceId: 'price_iv_ctrl_month', quantity: 1 },
         { priceId: 'price_iv_contrib_month', quantity: 2 },
+        { priceId: 'price_iv_org_month', quantity: 1 }, // the organisation fee, once
       ],
     });
     const sub = res.body.subscription.subscription;
@@ -279,7 +284,7 @@ describe('starting an invoiced subscription', () => {
       firstInvoicePending: true,
       billing: { legalName: 'Acme Fabrications Ltd', email: 'accounts@acme.test', vatNumber: 'GB123456789', purchaseOrder: 'PO-1234' },
     });
-    expect(sub.openInvoice).toMatchObject({ total: 7500, currency: 'GBP', overdueDays: 0, hostedUrl: expect.stringMatching(/^https:\/\/invoice\.stripe\.test\/i\/in_iv/) });
+    expect(sub.openInvoice).toMatchObject({ total: 10000, currency: 'GBP', overdueDays: 0, hostedUrl: expect.stringMatching(/^https:\/\/invoice\.stripe\.test\/i\/in_iv/) });
     expect(sub.openInvoice.dueOn).toBe(new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10));
     const row = (await admin.query(`select collection_method, billing_company_key from public.organisation_subscriptions where organisation_id = $1`, [ids.orgA])).rows[0];
     expect(row).toEqual({ collection_method: 'invoice', billing_company_key: 'acmefabrications' });
@@ -297,7 +302,7 @@ describe('starting an invoiced subscription', () => {
 
   it('lists the invoice with its payment page', async () => {
     const list = (await api().get('/api/v1/billing/invoices').set(await as(ids.ownerA)).expect(200)).body.data;
-    expect(list[0]).toMatchObject({ status: 'open', totalAmount: 7500, hostedInvoiceUrl: expect.stringContaining('/i/in_iv') });
+    expect(list[0]).toMatchObject({ status: 'open', totalAmount: 10000, hostedInvoiceUrl: expect.stringContaining('/i/in_iv') });
   });
 });
 

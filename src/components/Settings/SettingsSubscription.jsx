@@ -15,7 +15,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
-import { formatDate, loadChoice, money, saveChoice, seatChangeWords } from "../../lib/billing";
+import { formatDate, loadChoice, money, saveChoice, feePlans, seatChangeWords, seatPlans } from "../../lib/billing";
 import {
   useChangeSeats,
   useInvoices,
@@ -234,7 +234,7 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
   const seatsOf = (slug) => overview.items.find((i) => i.planSlug === slug);
   const purchased = (slug) => seatsOf(slug)?.purchased ?? 0;
   const wanted = (slug) => draft[slug] ?? purchased(slug);
-  const changes = catalogue.plans.filter(
+  const changes = seatPlans(catalogue.plans).filter(
     (p) => wanted(p.slug) !== purchased(p.slug),
   );
 
@@ -331,8 +331,8 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
           </Switch>
         )
       }>
-      <div className="grid gap-4 md:grid-cols-3">
-        {catalogue.plans.map((plan) => {
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {seatPlans(catalogue.plans).map((plan) => {
           const price = annual ? plan.annual : plan.monthly;
           const owned = seatsOf(plan.slug);
           const qty = wanted(plan.slug);
@@ -346,18 +346,29 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
                 {plan.name}
               </h3>
               <p className="text-sm text-secondary-text">{plan.description}</p>
-              <p className="text-2xl font-semibold text-primary-text">
-                {money(
-                  annual
-                    ? plan.annualMonthlyEquivalent
-                    : plan.monthly?.unitAmount,
-                  price?.currency,
-                )}
-                <span className="text-sm font-normal text-secondary-text">
-                  {" "}
-                  /user/month
-                </span>
-              </p>
+              {(price?.unitAmount ?? 0) === 0 ? (
+                <p className="text-2xl font-semibold text-primary-text">
+                  Free
+                  {plan.slug === "observer" && (
+                    <span className="block text-sm font-normal text-secondary-text">
+                      up to twice your paid seats
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-2xl font-semibold text-primary-text">
+                  {money(
+                    annual
+                      ? plan.annualMonthlyEquivalent
+                      : plan.monthly?.unitAmount,
+                    price?.currency,
+                  )}
+                  <span className="text-sm font-normal text-secondary-text">
+                    {" "}
+                    /user/month
+                  </span>
+                </p>
+              )}
               {annual && plan.annualSaving > 0 && (
                 <p className="text-xs text-green-700 dark:text-green-300">
                   Billed {money(plan.annual.unitAmount, plan.annual.currency)}
@@ -405,6 +416,18 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
           );
         })}
       </div>
+      {feePlans(catalogue.plans).map((f) => {
+        const owned = overview.items.find((i) => i.planSlug === f.slug);
+        const amount = owned?.unitAmount ?? (annual ? f.annual : f.monthly)?.unitAmount;
+        return (
+          <p key={f.slug} className="mt-3 text-sm text-secondary-text">
+            <strong className="text-primary-text">{f.name} fee:</strong>{" "}
+            {owned
+              ? `${money(amount)} per ${annual ? "year" : "month"}, one per organisation whatever the number of seats.`
+              : `${money(amount)} per ${annual ? "year" : "month"} on subscriptions started now, one per organisation. Your subscription does not include it.`}
+          </p>
+        );
+      })}
       {canManage && changes.length > 0 && (
         <div className="mt-4 flex items-center justify-end gap-2">
           <CTAButton
@@ -454,7 +477,7 @@ const Comparison = ({ catalogue }) => (
         <thead>
           <tr className="text-left text-secondary-text">
             <th className="py-1 pr-3 font-medium">Module / feature</th>
-            {catalogue.plans.map((p) => (
+            {seatPlans(catalogue.plans).map((p) => (
               <th key={p.slug} className="py-1 pr-3 font-medium">
                 {p.name}
               </th>
@@ -463,7 +486,7 @@ const Comparison = ({ catalogue }) => (
         </thead>
         <tbody>
           {catalogue.modules.map((m) => (
-            <ModuleRows key={m.slug} module={m} plans={catalogue.plans} />
+            <ModuleRows key={m.slug} module={m} plans={seatPlans(catalogue.plans)} />
           ))}
         </tbody>
       </table>
@@ -604,7 +627,7 @@ const Seats = ({ catalogue, overview, canAssign }) => {
                     onChange={(v) => (v ?? "") !== (m.plan?.slug ?? "") && change(m, v ?? "")}
                     placeholder="No package"
                     clearable
-                    options={catalogue.plans.map((p) => ({ value: p.slug, label: p.name, hint: `${freeOf(p.slug)} free` }))}
+                    options={seatPlans(catalogue.plans).map((p) => ({ value: p.slug, label: p.name, hint: `${freeOf(p.slug)} free` }))}
                     className="min-w-44 [&_label]:sr-only"
                   />
                 ) : (

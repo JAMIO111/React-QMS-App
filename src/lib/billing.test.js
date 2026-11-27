@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_CHOICE, EMPTY_COMPANY, INVOICE_TERMS_DAYS, clearChoice, companyProblems, invoiceBody, invoiceStartWords, loadRoute, newClientKey, owedWords, saveRoute, formatDate, loadChoice, money, recurringTotal, saveChoice, seatChangeWords, seatCount, trialEnd, unitPrice } from "./billing";
+import { DEFAULT_CHOICE, EMPTY_COMPANY, INVOICE_TERMS_DAYS, clearChoice, companyProblems, invoiceBody, invoiceStartWords, loadRoute, newClientKey, owedWords, saveRoute, formatDate, loadChoice, money, recurringTotal, saveChoice, seatChangeWords, seatCount, trialEnd, unitPrice, seatPlans, feeTotal, freeObserverLimit, observerProblem } from "./billing";
 
 const plans = [
   { slug: "observer", monthly: { unitAmount: 500 }, annual: { unitAmount: 5000 } },
@@ -25,6 +25,23 @@ describe("billing helpers", () => {
     expect(seatCount({ controller: 2, observer: 3 })).toBe(5);
   });
 
+  it("adds the organisation fee once, never as a seat, and limits free Observers to twice the paid seats", () => {
+    const withFee = [
+      { slug: "organisation", kind: "fee", monthly: { unitAmount: 9900 }, annual: { unitAmount: 99000 } },
+      { slug: "observer", kind: "seat", monthly: { unitAmount: 0 }, annual: { unitAmount: 0 } },
+      { slug: "operator", kind: "seat", monthly: { unitAmount: 600 }, annual: { unitAmount: 6000 } },
+      { slug: "controller", kind: "seat", monthly: { unitAmount: 4900 }, annual: { unitAmount: 49000 } },
+    ];
+    expect(seatPlans(withFee).map((p) => p.slug)).toEqual(["observer", "operator", "controller"]);
+    expect(feeTotal(withFee, "month")).toBe(9900);
+    expect(recurringTotal(withFee, { interval: "month", seats: { controller: 1, operator: 5, observer: 4 } })).toBe(9900 + 4900 + 5 * 600);
+    expect(recurringTotal(withFee, { interval: "year", seats: { controller: 1 } })).toBe(99000 + 49000);
+    expect(seatCount({ controller: 1, operator: 2, organisation: 1 })).toBe(3);
+    expect(freeObserverLimit({ controller: 1, operator: 2, observer: 9 })).toBe(6);
+    expect(observerProblem({ controller: 1, operator: 2, observer: 6 })).toBeNull();
+    expect(observerProblem({ controller: 1, operator: 2, observer: 7 })).toMatch(/free up to twice the paid seats \(6 here\)/);
+  });
+
   it("ends the trial 14 days from now", () => {
     const from = new Date("2026-01-01T00:00:00Z");
     expect(trialEnd(from)).toBe("2026-01-15T00:00:00.000Z");
@@ -33,7 +50,7 @@ describe("billing helpers", () => {
   it("remembers the choice per organisation, and survives damaged storage", () => {
     expect(loadChoice("org-1")).toEqual(DEFAULT_CHOICE);
     saveChoice("org-1", { interval: "year", seats: { controller: 3 } });
-    expect(loadChoice("org-1")).toEqual({ interval: "year", seats: { controller: 3, contributor: 0, observer: 0 } });
+    expect(loadChoice("org-1")).toEqual({ interval: "year", seats: { controller: 3, contributor: 0, operator: 0, observer: 0 } });
     expect(loadChoice("org-2")).toEqual(DEFAULT_CHOICE);
     sessionStorage.setItem("qms.checkoutChoice.org-3", "{not json");
     expect(loadChoice("org-3")).toEqual(DEFAULT_CHOICE);

@@ -22,6 +22,8 @@ const PRICES = {
   'controller:month': 'price_j_ctrl_month', 'controller:year': 'price_j_ctrl_year',
   'contributor:month': 'price_j_contrib_month', 'contributor:year': 'price_j_contrib_year',
   'observer:month': 'price_j_obs_month', 'observer:year': 'price_j_obs_year',
+  'operator:month': 'price_j_op_month', 'operator:year': 'price_j_op_year',
+  'organisation:month': 'price_j_org_month', 'organisation:year': 'price_j_org_year',
 };
 const PLAN_OF = Object.fromEntries(Object.entries(PRICES).map(([k, v]) => [v, k.split(':')[0]]));
 

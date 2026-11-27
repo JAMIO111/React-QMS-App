@@ -87,9 +87,13 @@ export const EntitlementQuery = z.object({
 
 const Price = z.object({ unitAmount: z.number().int(), currency: z.string() });
 
+export const PlanKind = z.enum(['seat', 'fee']);
+
 export const PlanWithPrices = z.object({
   slug: z.string(),
   name: z.string(),
+  /** `seat` = given to a person; `fee` = the organisation fee, one per subscription, never given to anyone and holding no access. */
+  kind: PlanKind,
   description: z.string().nullable(),
   monthly: Price.nullable(),
   annual: Price.nullable(),
@@ -147,6 +151,8 @@ export const SubscriptionOverview = z.object({
   items: z.array(
     z.object({
       planSlug: z.string(),
+      /** The organisation fee is an item too (quantity 1); it is never a seat and is left out of the seat totals. */
+      kind: PlanKind,
       planName: z.string(),
       purchased: z.number().int(),
       assigned: z.number().int(),

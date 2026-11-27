@@ -105,6 +105,15 @@ export class BillingService {
         from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id
         where i.organisation_id = ${org}::uuid order by p.display_order`)).rows;
 
+      const openInvoice = sub?.id && sub.collection_method === 'invoice'
+        ? (await db.execute<Row>(sql`
+            select id, invoice_number, total_amount, currency, due_date, hosted_invoice_url, invoice_pdf_url,
+                   greatest(0, (now() at time zone 'UTC')::date - due_date) as overdue_days
+              from public.billing_invoices where organisation_id = ${org}::uuid and status = 'open' order by due_date nulls last, created_at limit 1`)).rows[0]
+        : undefined;
+      const firstPending = sub?.id && sub.collection_method === 'invoice'
+        ? ((await db.execute<Row>(sql`select app.invoice_first_payment_pending(${org}::uuid) as pending`)).rows[0].pending as boolean)
+        : false;
       const rows = items.map((i) => ({
         planSlug: i.slug as string,
         planName: i.name as string,
@@ -129,6 +138,30 @@ export class BillingService {
               trialEnd: iso(sub.trial_end),
               entitlementsEnforced: sub.entitlements_enforced as boolean,
               gracePeriodDays: Number(sub.grace_period_days),
+              paymentRoute: (sub.collection_method as 'card' | 'invoice') ?? 'card',
+              paymentTermsDays: sub.payment_terms_days == null ? null : Number(sub.payment_terms_days),
+              billing:
+                sub.collection_method === 'invoice'
+                  ? {
+                      legalName: (sub.billing_legal_name as string) ?? null,
+                      email: (sub.billing_contact_email as string) ?? null,
+                      vatNumber: (sub.billing_vat_number as string) ?? null,
+                      purchaseOrder: (sub.purchase_order as string) ?? null,
+                    }
+                  : null,
+              openInvoice: openInvoice
+                ? {
+                    id: openInvoice.id as string,
+                    number: (openInvoice.invoice_number as string) ?? null,
+                    total: Number(openInvoice.total_amount),
+                    currency: openInvoice.currency as string,
+                    dueOn: openInvoice.due_date ? new Date(openInvoice.due_date as string).toISOString().slice(0, 10) : null,
+                    overdueDays: Number(openInvoice.overdue_days),
+                    hostedUrl: (openInvoice.hosted_invoice_url as string) ?? null,
+                    pdfUrl: (openInvoice.invoice_pdf_url as string) ?? null,
+                  }
+                : null,
+              firstInvoicePending: firstPending,
             }
           : null,
         checkoutAvailable: this.gateway.enabled && !!(sub?.prices_ready) && !!(this.env.APP_BASE_URL ?? corsOrigins(this.env).find((o) => typeof o === 'string')),
@@ -216,6 +249,8 @@ export class BillingService {
         status: r.status as string,
         paidAt: iso(r.paid_at),
         invoicePdfUrl: (r.invoice_pdf_url as string) ?? null,
+        dueDate: r.due_date ? new Date(r.due_date as string).toISOString().slice(0, 10) : null,
+        hostedInvoiceUrl: (r.hosted_invoice_url as string) ?? null,
       }));
     });
   }

@@ -157,6 +157,11 @@ BEGIN
   r := pg_temp.as_api_json(format($q$SELECT app.stripe_start_invoice(%L, %L, 'key-one', 'month', '{"controller":2}', %L)$q$, org, u_owner, details::text));
   PERFORM pg_temp.assert_eq((r ->> 'created')::boolean, false, 'a retry with the same key is the same start');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.stripe_checkout_sessions WHERE organisation_id = org), 1::bigint, 'not a second record');
+  -- Before the subscription exists, the same attempt with corrected details (a refused VAT number, say) replaces the stored ones.
+  r := pg_temp.as_api_json(format($q$SELECT app.stripe_start_invoice(%L, %L, 'key-one', 'month', '{"controller":2}', %L)$q$, org, u_owner, (details || '{"vatNumber":"GB 999 888 777"}')::text));
+  PERFORM pg_temp.assert_eq((r ->> 'created')::boolean, false, 'a corrected retry is still the same attempt');
+  PERFORM pg_temp.assert_eq((SELECT billing_details ->> 'vatNumber' FROM public.stripe_checkout_sessions WHERE provider_session_id = 'inv_key-one'), 'GB999888777', 'with the corrected VAT number');
+  PERFORM pg_temp.as_api_json(format($q$SELECT app.stripe_start_invoice(%L, %L, 'key-one', 'month', '{"controller":2}', %L)$q$, org, u_owner, details::text));
 
   -- Applying: the route, terms, company and PO are stored; 3 days' grace; the operators are told.
   PERFORM pg_temp.assert_eq((SELECT grace_period_days FROM public.organisation_settings WHERE organisation_id = org), 7, 'a new organisation has the usual 7 days');
@@ -229,6 +234,11 @@ BEGIN
   -- Reporting keys and the seat cap while the first invoice is unpaid. (An open invoice, due in ten days.)
   PERFORM pg_temp.api_invoice(org, 'in_iv1_first', 'open', 6000, 10);
   PERFORM pg_temp.assert_eq(app.invoice_first_payment_pending_internal(org), true, 'the first invoice is not paid');
+  -- The hosted payment page is kept on the invoice (an https address only), by the API login.
+  PERFORM pg_temp.assert_eq(pg_temp.as_api_int(format($q$SELECT 1 FROM (SELECT app.stripe_set_invoice_url(%L, 'in_iv1_first', 'https://invoice.stripe.test/i/in_iv1_first')) s$q$, org)), 1, 'the API can store the payment page address');
+  PERFORM pg_temp.assert_eq((SELECT hosted_invoice_url FROM public.billing_invoices WHERE provider_invoice_id = 'in_iv1_first'), 'https://invoice.stripe.test/i/in_iv1_first', 'on the invoice');
+  PERFORM pg_temp.assert_fails(format($q$SELECT pg_temp.as_api_int(format('SELECT 1 FROM (SELECT app.stripe_set_invoice_url(%%L, ''in_iv1_first'', ''http://insecure.test/'')) s', %L))$q$, org), 'an address that is not https is refused');
+  PERFORM pg_temp.assert_eq(has_function_privilege('authenticated', 'app.stripe_set_invoice_url(uuid, text, text)', 'EXECUTE'), false, 'and a signed-in person cannot store one');
   PERFORM pg_temp.login(u_owner);
   PERFORM pg_temp.assert_eq(app.invoice_first_payment_pending(org), true, 'a member can ask');
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'integrations.manage'), true, 'the owner holds a Controller seat, so reporting keys are theirs to make');

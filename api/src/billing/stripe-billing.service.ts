@@ -5,11 +5,13 @@ import type { RequestContext } from '../common/request-context';
 import { ENV, Env, corsOrigins } from '../config/env';
 import { DatabaseService } from '../database/database.service';
 import { Row } from '../calibration/calibration.service';
-import type { CheckoutBody, ConfirmCheckoutBody, SeatChangeBody, SeatCounts, SeatPreviewResponse, SubscriptionOverview } from './billing.schemas';
+import type { CheckoutBody, ConfirmCheckoutBody, InvoiceCompanyCheckBody, InvoiceSubscriptionBody, SeatChangeBody, SeatCounts, SeatPreviewResponse, SubscriptionOverview } from './billing.schemas';
 import { BillingService } from './billing.service';
 import { StripeEventEnvelope, StripeGateway, SeatItemChange, SubscriptionSnapshot } from './stripe.gateway';
 
 export const TRIAL_DAYS = 14;
+/** Days an invoice is payable within (docs/invoice-billing-plan.md I2). */
+export const INVOICE_TERMS_DAYS = 14;
 
 /** The web app's address for Stripe's return links: APP_BASE_URL, else the first plain (non-wildcard) CORS origin. */
 export function appBaseUrl(env: Env): string | null {
@@ -85,6 +87,49 @@ export class StripeBillingService {
       ctx.correlationId,
     );
     return { url: session.url, sessionId: session.id };
+  }
+
+  /**
+   * Starts an invoiced subscription (docs/invoice-billing-plan.md §4.2): no Checkout and no trial. The database records the start first and refuses what is not allowed (an owner only,
+   * no live subscription, the company rule, a billing address); then the company's details go on the Stripe customer (a VAT number must verify), the subscription is created with the
+   * first invoice finalised, and what Stripe says is applied. A retry with the same clientKey is the same subscription.
+   */
+  async startInvoice(ctx: RequestContext, body: InvoiceSubscriptionBody): Promise<{ subscription: SubscriptionOverview; vat: 'none' | 'verified' | 'pending' }> {
+    this.requireEnabled();
+    const org = ctx.organisationId!;
+    await this.assertNoSeatProblems(ctx, body.seats);
+    const started = await this.database.asApi(
+      async (client) =>
+        (await client.query(`select app.stripe_start_invoice($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::jsonb) as r`, [org, ctx.user.id, body.clientKey, body.interval, JSON.stringify(body.seats), JSON.stringify(body.company)])).rows[0]
+          .r as { sessionId: string },
+      ctx.correlationId,
+    );
+
+    const items = await this.database.asApi(async (client) => {
+      const out: { priceId: string; quantity: number }[] = [];
+      for (const [slug, quantity] of Object.entries(body.seats)) {
+        if (quantity <= 0) continue;
+        const price = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, body.interval])).rows[0].id as string | null;
+        if (!price) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
+        out.push({ priceId: price, quantity });
+      }
+      return out;
+    }, ctx.correlationId);
+
+    const customerId = await this.customerFor(ctx, body.company.legalName);
+    const { vat } = await this.gateway.updateCustomerBilling(customerId, body.company);
+    const created = await this.gateway.createInvoiceSubscription({ customerId, organisationId: org, userId: ctx.user.id, items, daysUntilDue: INVOICE_TERMS_DAYS, clientKey: body.clientKey });
+    await this.syncSubscription(org, created.subscriptionId, started.sessionId, ctx.correlationId);
+    return { subscription: await this.billing.overview(ctx), vat };
+  }
+
+  /** For the billing details form: what would stop this organisation choosing invoicing with this company (nothing is saved). */
+  async checkInvoiceCompany(ctx: RequestContext, body: InvoiceCompanyCheckBody): Promise<{ problems: string[] }> {
+    const problems = await this.database.asUser(
+      ctx,
+      async (db) => (await db.execute<Row>(sql`select app.check_invoice_company(${ctx.organisationId}::uuid, ${body.legalName}, ${body.vatNumber ?? null}) as problems`)).rows[0].problems as string[],
+    );
+    return { problems };
   }
 
   /**
@@ -178,6 +223,17 @@ export class StripeBillingService {
         client.query(`select app.stripe_apply_subscription($1::uuid, $2::jsonb, $3::timestamptz, $4)`, [organisationId, JSON.stringify(snapshot), fetchedAt, checkoutSessionId ?? null]),
       correlationId,
     );
+    // An invoiced subscription's newest invoice is what is owed: apply it now so the seat and access rules see it without waiting for the webhook.
+    if (snapshot.collectionMethod === 'send_invoice' && snapshot.latestInvoiceId) await this.applyInvoice(organisationId, snapshot.latestInvoiceId, correlationId);
+  }
+
+  /** Re-reads one invoice from Stripe and applies it (with its hosted payment page address). */
+  async applyInvoice(organisationId: string, invoiceId: string, correlationId: string): Promise<void> {
+    const invoice = await this.gateway.retrieveInvoice(invoiceId);
+    await this.database.asApi(async (client) => {
+      await client.query(`select app.stripe_apply_invoice($1::uuid, $2::jsonb)`, [organisationId, JSON.stringify(invoice)]);
+      if (invoice.hostedUrl) await client.query(`select app.stripe_set_invoice_url($1::uuid, $2, $3)`, [organisationId, invoice.id, invoice.hostedUrl]);
+    }, correlationId);
   }
 
   // ------------------------------------------------------------------ internals
@@ -231,11 +287,10 @@ export class StripeBillingService {
         const invoice = await this.gateway.retrieveInvoice(invoiceId);
         const organisationId = await orgFor(invoice.customerId, invoice.subscriptionId, null);
         if (!organisationId) return { handled: false, organisationId, note: 'unknown organisation' };
-        await this.database.asApi(
-          (client) =>
-            client.query(`select app.stripe_apply_invoice($1::uuid, $2::jsonb)`, [organisationId, JSON.stringify(invoice)]),
-          correlationId,
-        );
+        await this.database.asApi(async (client) => {
+          await client.query(`select app.stripe_apply_invoice($1::uuid, $2::jsonb)`, [organisationId, JSON.stringify(invoice)]);
+          if (invoice.hostedUrl) await client.query(`select app.stripe_set_invoice_url($1::uuid, $2, $3)`, [organisationId, invoice.id, invoice.hostedUrl]);
+        }, correlationId);
         // A payment result changes the subscription's status (past due / active): apply that too.
         if (invoice.subscriptionId) await this.syncSubscription(organisationId, invoice.subscriptionId, undefined, correlationId);
         return { handled: true, organisationId };

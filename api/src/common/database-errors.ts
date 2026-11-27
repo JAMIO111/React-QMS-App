@@ -170,6 +170,8 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       }
       return new ApiError(409, 'record_managed_by_import', pg.message ?? 'These records come from an import and cannot be entered here', details);
     }
+    case 'QM040': // a feature that lets data leave is closed until the first invoice of an invoiced subscription is paid
+      return new ApiError(403, 'payable_first', pg.message ?? 'This is available once your first invoice is paid');
     case 'QM034': // measurement system analysis rules: studies, design, readings, completion (messages are written for users)
       return new ApiError(409, 'msa_rule', pg.message ?? 'That change is not allowed for this study');
     case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)

@@ -26,7 +26,7 @@ const NEW_DELIVERY = () => ({ supplierId, receivedOn: day(0), deliveryNote: 'DN-
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: requireDb().adminUrl });
-  await seed(admin, ids, '-im');
+  await seed(admin, ids, '-imm');
   const env = testEnv({ RATE_LIMIT_PER_MINUTE: '10000' });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] }).compile();
   const nest = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, rawBody: true });

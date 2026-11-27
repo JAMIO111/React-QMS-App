@@ -23,6 +23,38 @@ export const CheckoutBody = z
   .strict();
 export type CheckoutBody = z.infer<typeof CheckoutBody>;
 
+/** The company an invoice is for (docs/invoice-billing-plan.md §4.2): a legal name, a billing address and an address to send it to; VAT number and PO reference are optional. */
+export const InvoiceCompany = z
+  .object({
+    legalName: z.string().trim().min(2).max(200),
+    billingEmail: z.string().trim().email().max(254),
+    addressLine1: z.string().trim().min(2).max(120),
+    addressLine2: z.string().trim().max(120).optional(),
+    city: z.string().trim().min(2).max(80),
+    region: z.string().trim().max(80).optional(),
+    postcode: z.string().trim().min(2).max(20),
+    country: z.string().regex(/^[A-Z]{2}$/, 'Use the two-letter country code, in capitals'),
+    vatNumber: z.string().trim().max(30).optional(),
+    poReference: z.string().trim().max(100).optional(),
+  })
+  .strict();
+export type InvoiceCompany = z.infer<typeof InvoiceCompany>;
+
+export const InvoiceSubscriptionBody = z
+  .object({
+    interval: z.enum(['month', 'year']),
+    seats: SeatCounts.refine((v) => (v.controller ?? 0) >= 1, 'At least one Controller seat is needed: an owner must hold one'),
+    company: InvoiceCompany,
+    /** Made once by the browser per attempt: a retry with the same key is the same subscription. */
+    clientKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/),
+  })
+  .strict();
+export type InvoiceSubscriptionBody = z.infer<typeof InvoiceSubscriptionBody>;
+
+export const InvoiceCompanyCheckBody = z.object({ legalName: z.string().trim().max(200), vatNumber: z.string().trim().max(30).optional() }).strict();
+export type InvoiceCompanyCheckBody = z.infer<typeof InvoiceCompanyCheckBody>;
+export const InvoiceCompanyCheck = z.object({ problems: z.array(z.string()) });
+
 export const ConfirmCheckoutBody = z.object({ sessionId: z.string().regex(/^cs_[A-Za-z0-9_]{4,200}$/) }).strict();
 export type ConfirmCheckoutBody = z.infer<typeof ConfirmCheckoutBody>;
 
@@ -95,6 +127,17 @@ export const SubscriptionOverview = z.object({
       trialEnd: z.string().nullable(),
       entitlementsEnforced: z.boolean(),
       gracePeriodDays: z.number().int(),
+      /** How it is paid: the card is charged, or an invoice is emailed. */
+      paymentRoute: z.enum(['card', 'invoice']),
+      /** Invoiced subscriptions only. */
+      paymentTermsDays: z.number().int().nullable(),
+      billing: z.object({ legalName: z.string().nullable(), email: z.string().nullable(), vatNumber: z.string().nullable(), purchaseOrder: z.string().nullable() }).nullable(),
+      /** The oldest invoice still owed (invoiced subscriptions; for anyone who may read invoices). */
+      openInvoice: z
+        .object({ id: z.string().uuid(), number: z.string().nullable(), total: z.number().int(), currency: z.string(), dueOn: z.string().nullable(), overdueDays: z.number().int(), hostedUrl: z.string().nullable(), pdfUrl: z.string().nullable() })
+        .nullable(),
+      /** An invoiced organisation whose first invoice is not paid yet: seats cannot go up and reporting keys wait. */
+      firstInvoicePending: z.boolean(),
     })
     .nullable(),
   /** Stripe can take a purchase on this server (keys and prices are set up). */
@@ -164,6 +207,8 @@ export const Invoice = z.object({
   status: z.string(),
   paidAt: z.string().nullable(),
   invoicePdfUrl: z.string().nullable(),
+  dueDate: z.string().nullable(),
+  hostedInvoiceUrl: z.string().nullable(),
 });
 export type Invoice = z.infer<typeof Invoice>;
 

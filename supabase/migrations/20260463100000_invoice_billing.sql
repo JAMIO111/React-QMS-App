@@ -50,6 +50,13 @@ CREATE INDEX organisation_subscriptions_vat_idx ON public.organisation_subscript
 -- The access rule below and the seat rule look for an organisation's open invoices.
 CREATE INDEX billing_invoices_open_due_idx ON public.billing_invoices (organisation_id, due_date) WHERE status = 'open';
 
+-- Stripe's hosted payment page for an invoice (bank details, pay by card): shown to people who may read invoices. Set by the API after it applies an invoice.
+ALTER TABLE public.billing_invoices ADD COLUMN hosted_invoice_url text CHECK (hosted_invoice_url IS NULL OR (length(hosted_invoice_url) <= 500 AND hosted_invoice_url ~ '^https://'));
+CREATE FUNCTION app.stripe_set_invoice_url(p_organisation_id uuid, p_provider_invoice_id text, p_url text) RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$
+  UPDATE public.billing_invoices SET hosted_invoice_url = p_url WHERE organisation_id = p_organisation_id AND provider_invoice_id = p_provider_invoice_id
+$$;
+
 -- An invoice start is recorded like a checkout (who started it, with which seats), under an id we make: inv_<client key>.
 ALTER TABLE public.stripe_checkout_sessions DROP CONSTRAINT stripe_checkout_sessions_provider_session_id_check;
 ALTER TABLE public.stripe_checkout_sessions
@@ -219,7 +226,7 @@ $new$  -- invoice_open: on an invoiced subscription seats can go up only when no
 CREATE FUNCTION app.stripe_start_invoice(p_organisation_id uuid, p_user_id uuid, p_client_key text, p_interval text, p_seats jsonb, p_details jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
-  v_member uuid; v_sub public.organisation_subscriptions%ROWTYPE; v_id uuid; v_session text := 'inv_' || coalesce(p_client_key, '');
+  v_member uuid; v_sub public.organisation_subscriptions%ROWTYPE; v_id uuid; v_status text; v_session text := 'inv_' || coalesce(p_client_key, '');
   v_name text := btrim(coalesce(p_details ->> 'legalName', '')); v_email text := lower(btrim(coalesce(p_details ->> 'billingEmail', '')));
   v_problems text[]; v_clean jsonb;
 BEGIN
@@ -231,9 +238,9 @@ BEGIN
   IF v_member IS NULL THEN
     RAISE EXCEPTION 'Only an owner can start the subscription: they hold the first Controller seat.' USING ERRCODE = 'QM009';
   END IF;
-  -- A retry of the same start: the same record.
-  SELECT c.id INTO v_id FROM public.stripe_checkout_sessions c WHERE c.organisation_id = p_organisation_id AND c.provider_session_id = v_session;
-  IF FOUND THEN RETURN jsonb_build_object('id', v_id, 'sessionId', v_session, 'created', false); END IF;
+  -- A retry of the same attempt: once it has led to a subscription it is the same start; before that (a refused VAT number, say) the corrected details replace the old ones below.
+  SELECT c.id, c.status INTO v_id, v_status FROM public.stripe_checkout_sessions c WHERE c.organisation_id = p_organisation_id AND c.provider_session_id = v_session;
+  IF FOUND AND v_status = 'completed' THEN RETURN jsonb_build_object('id', v_id, 'sessionId', v_session, 'created', false); END IF;
 
   SELECT * INTO v_sub FROM public.organisation_subscriptions WHERE organisation_id = p_organisation_id;
   IF FOUND AND (v_sub.billing_provider = 'manual' OR v_sub.status NOT IN ('cancelled', 'incomplete')) THEN
@@ -257,6 +264,10 @@ BEGIN
     'postcode', btrim(p_details ->> 'postcode'), 'country', p_details ->> 'country',
     'vatNumber', app.vat_key(p_details ->> 'vatNumber'), 'poReference', nullif(left(btrim(coalesce(p_details ->> 'poReference', '')), 100), '')));
 
+  IF v_id IS NOT NULL THEN
+    UPDATE public.stripe_checkout_sessions SET billing_interval = p_interval, seats = p_seats, billing_details = v_clean WHERE id = v_id;
+    RETURN jsonb_build_object('id', v_id, 'sessionId', v_session, 'created', false, 'details', v_clean);
+  END IF;
   INSERT INTO public.stripe_checkout_sessions (organisation_id, provider_session_id, membership_id, billing_interval, seats, billing_details)
   VALUES (p_organisation_id, v_session, v_member, p_interval, p_seats, v_clean) RETURNING id INTO v_id;
   RETURN jsonb_build_object('id', v_id, 'sessionId', v_session, 'created', true, 'details', v_clean);
@@ -375,8 +386,8 @@ END $$;
 -- 9. Privileges
 -- ---------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION app.company_key(text), app.vat_key(text), app.invoice_company_problems(uuid, text, text), app.check_invoice_company(uuid, text, text), app.invoice_company_unique(),
-  app.invoice_first_payment_pending_internal(uuid), app.invoice_first_payment_pending(uuid), app.stripe_start_invoice(uuid, uuid, text, text, jsonb, jsonb), app.system_invoice_overdue_alerts(),
+  app.invoice_first_payment_pending_internal(uuid), app.invoice_first_payment_pending(uuid), app.stripe_start_invoice(uuid, uuid, text, text, jsonb, jsonb), app.stripe_set_invoice_url(uuid, text, text), app.system_invoice_overdue_alerts(),
   app.set_invoice_billing_allowed(uuid, boolean, text), app.set_invoice_company_exempt(uuid, boolean, text), app.platform_invoice_accounts(integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.check_invoice_company(uuid, text, text), app.invoice_first_payment_pending(uuid),
   app.set_invoice_billing_allowed(uuid, boolean, text), app.set_invoice_company_exempt(uuid, boolean, text), app.platform_invoice_accounts(integer) TO authenticated;
-GRANT EXECUTE ON FUNCTION app.stripe_start_invoice(uuid, uuid, text, text, jsonb, jsonb), app.system_invoice_overdue_alerts(), app.invoice_first_payment_pending_internal(uuid) TO qms_api;
+GRANT EXECUTE ON FUNCTION app.stripe_start_invoice(uuid, uuid, text, text, jsonb, jsonb), app.stripe_set_invoice_url(uuid, text, text), app.system_invoice_overdue_alerts(), app.invoice_first_payment_pending_internal(uuid) TO qms_api;

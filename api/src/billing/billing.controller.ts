@@ -13,6 +13,9 @@ import {
   CheckoutBody,
   CheckoutResponse,
   ConfirmCheckoutBody,
+  InvoiceCompanyCheck,
+  InvoiceCompanyCheckBody,
+  InvoiceSubscriptionBody,
   PortalResponse,
   SeatChangeBody,
   SeatPreviewResponse,
@@ -120,6 +123,24 @@ export class BillingController {
   @HttpCode(200)
   checkout(@Ctx() ctx: RequestContext, @Body() body: unknown) {
     return this.stripe.checkout(ctx, parse(CheckoutBody, body));
+  }
+
+  @Post('billing/invoice-subscription')
+  @OrganisationScoped('subscription.manage')
+  @ApiBody({ schema: openApiSchema(InvoiceSubscriptionBody) })
+  @ApiOkResponse({ description: 'Starts a subscription paid by invoice (no trial: seats now, the first invoice is emailed and due in 14 days). The VAT number, when given, must verify with Stripe (400 vat_number_invalid). 409 subscription_rule for a non-owner, a live subscription, seat problems, invoicing switched off for the organisation or a company that already has an organisation; 503 billing_unavailable without Stripe set up. A retry with the same clientKey is the same subscription.' })
+  @HttpCode(200)
+  invoiceSubscription(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.stripe.startInvoice(ctx, parse(InvoiceSubscriptionBody, body));
+  }
+
+  @Post('billing/invoice-company/check')
+  @OrganisationScoped('subscription.manage')
+  @ApiBody({ schema: openApiSchema(InvoiceCompanyCheckBody) })
+  @ApiOkResponse({ description: 'What would stop this organisation paying by invoice as this company (empty when nothing); changes nothing.', schema: openApiSchema(InvoiceCompanyCheck) })
+  @HttpCode(200)
+  checkInvoiceCompany(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.stripe.checkInvoiceCompany(ctx, parse(InvoiceCompanyCheckBody, body));
   }
 
   @Post('billing/checkout-session/confirm')

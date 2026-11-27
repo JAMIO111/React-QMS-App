@@ -47,6 +47,12 @@ class FakeStripe extends StripeGateway {
     this.calls.push('createCustomer');
     return id;
   }
+  async updateCustomerBilling(): Promise<{ vat: 'none' | 'verified' | 'pending' }> {
+    throw new Error('not used here');
+  }
+  async createInvoiceSubscription(): Promise<{ subscriptionId: string; invoiceId: string | null }> {
+    throw new Error('not used here');
+  }
   async createCheckoutSession(input: Parameters<StripeGateway['createCheckoutSession']>[0]): Promise<{ id: string; url: string }> {
     const id = `cs_test_e2e${++this.n}`;
     this.sessions.set(id, { status: 'open', customerId: input.customerId, organisationId: input.organisationId, items: input.items, subscriptionId: null });
@@ -73,6 +79,8 @@ class FakeStripe extends StripeGateway {
       cancelAtPeriodEnd: false,
       canceledAt: null,
       collectionMethod: 'charge_automatically',
+      daysUntilDue: null,
+      latestInvoiceId: null,
       items: s.items.map((i, k) => ({ itemId: `si_e2e${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })),
     });
     s.status = 'complete';
@@ -344,7 +352,7 @@ describe('the webhook', () => {
     fake.invoices.set('in_e2e_1', {
       id: 'in_e2e_1', customerId: customerId(), subscriptionId: subscriptionId(), number: 'FQ-E2E-1', status: 'paid', currency: 'gbp', subtotal: 12500, tax: 2500, total: 15000,
       periodStart: new Date().toISOString(), periodEnd: new Date(Date.now() + 30 * 864e5).toISOString(), created: new Date().toISOString().slice(0, 10), dueDate: null, paidAt: new Date().toISOString(),
-      pdfUrl: 'https://pay.stripe.test/in_e2e_1.pdf', paymentIntentId: 'pi_e2e_1', paymentStatus: 'succeeded',
+      pdfUrl: 'https://pay.stripe.test/in_e2e_1.pdf', hostedUrl: null, paymentIntentId: 'pi_e2e_1', paymentStatus: 'succeeded',
     });
     await send('invoice.paid', { id: 'in_e2e_1', customer: customerId() }).expect(200);
     const invoices = (await api().get('/api/v1/billing/invoices').set(await as(ids.ownerA)).expect(200)).body.data;

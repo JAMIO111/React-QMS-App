@@ -46,6 +46,9 @@ const UNSCOPED = new Set([
   'GET /api/v1/platform/agent-releases', // connector agent releases (AG6b): global, admin-only in the database (allow-list + MFA)
   'POST /api/v1/platform/agent-releases',
   'POST /api/v1/platform/agent-releases/{id}/withdraw',
+  'GET /api/v1/platform/invoice-accounts', // operator list of invoiced organisations (invoice billing plan): admin-only in the database (allow-list + MFA); counts and billing, never business data
+  'POST /api/v1/platform/organisations/{id}/invoice-billing', // operator switch for paying by invoice: admin-only in the database (allow-list + MFA); spans organisations by design
+  'POST /api/v1/platform/organisations/{id}/invoice-company-exempt', // operator lifts the one-invoiced-organisation-per-company block: admin-only in the database (allow-list + MFA)
   'POST /api/v1/platform/organisations/{id}/recover-network-policy', // operator recovery (security plan SE5): admin-only in the database (allow-list + MFA); spans organisations by design
   'POST /api/v1/platform/organisations/{id}/recover-sso', // operator recovery (sso plan SS8): admin-only in the database (allow-list + MFA); spans organisations by design
   // /internal/cron/* (scheduled jobs: CRON_SECRET, only database functions made for them) is left out of the OpenAPI document, so it is not seen here; platform-monitor.e2e-spec covers it.

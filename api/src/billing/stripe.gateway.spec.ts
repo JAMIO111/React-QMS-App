@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { loadEnv } from '../config/env';
 import { appBaseUrl } from './stripe-billing.service';
-import { SeatItemChange, splitSeatChange, StripeSdkGateway, toInvoiceSnapshot, toSubscriptionSnapshot } from './stripe.gateway';
+import { InvoiceBillingDetails, SeatItemChange, splitSeatChange, StripeSdkGateway, taxIdFor, toInvoiceSnapshot, toSubscriptionSnapshot } from './stripe.gateway';
 
 const item = (id: string, priceId: string, quantity: number, start: number, end: number, interval: 'month' | 'year' = 'month') =>
   ({ id, quantity, current_period_start: start, current_period_end: end, price: { id: priceId, recurring: { interval } } }) as unknown as Stripe.SubscriptionItem;
@@ -236,5 +236,110 @@ describe('seat billing: increases are billed at once, decreases are credited', (
     const credit = await gateway.previewSeatChange({ customerId: 'cus_1', subscriptionId: 'sub_1', items: [down], collectionMethod: 'send_invoice' });
     expect(createPreview.mock.calls[1][0].subscription_details.proration_behavior).toBe('create_prorations');
     expect(credit).toMatchObject({ timing: 'next_invoice', payment: 'invoice', amountDue: -1000 });
+  });
+});
+
+describe('invoiced subscriptions', () => {
+  const keys = { DATABASE_URL: 'postgres://x', SUPABASE_URL: 'https://p.supabase.co', STRIPE_SECRET_KEY: 'sk_test_abcdefghijklmnop' };
+  const withStub = (stub: Record<string, unknown>) => {
+    const gateway = new StripeSdkGateway(loadEnv(keys));
+    gateway.vatChecks = 2;
+    gateway.vatCheckMs = 0;
+    (gateway as unknown as { client: unknown }).client = stub;
+    return gateway;
+  };
+  const details: InvoiceBillingDetails = { legalName: 'Acme Ltd', billingEmail: 'accounts@acme.test', addressLine1: '1 High Street', city: 'Leeds', postcode: 'LS1 1AA', country: 'GB', vatNumber: 'GB 123 456 789', poReference: 'PO-1' };
+
+  it('works out the Stripe tax id from a VAT number: UK, EU (Greece is EL), Northern Ireland, and nothing else', () => {
+    expect(taxIdFor('GB 123 456 789', 'GB')).toEqual({ type: 'gb_vat', value: 'GB123456789' });
+    expect(taxIdFor('123456789', 'GB')).toEqual({ type: 'gb_vat', value: 'GB123456789' });
+    expect(taxIdFor('de123456789', 'DE')).toEqual({ type: 'eu_vat', value: 'DE123456789' });
+    expect(taxIdFor('GR123456789', 'GR')).toEqual({ type: 'eu_vat', value: 'EL123456789' });
+    expect(taxIdFor('XI123456789', 'GB')).toEqual({ type: 'eu_vat', value: 'XI123456789' });
+    expect(taxIdFor('US123456789', 'US')).toBeNull();
+    expect(taxIdFor('   ', 'GB')).toBeNull();
+  });
+
+  it('maps an invoiced subscription: collection method, terms and the newest invoice', () => {
+    const snap = toSubscriptionSnapshot(subscription({ status: 'active', collection_method: 'send_invoice', days_until_due: 14, latest_invoice: 'in_7', trial_end: null, trial_start: null }));
+    expect(snap).toMatchObject({ collectionMethod: 'send_invoice', daysUntilDue: 14, latestInvoiceId: 'in_7' });
+    expect(toSubscriptionSnapshot(subscription({ latest_invoice: { id: 'in_8' } })).latestInvoiceId).toBe('in_8');
+    expect(toSubscriptionSnapshot(subscription()).daysUntilDue).toBeNull();
+  });
+
+  it('puts the company on the customer, with the PO number on every invoice, and adds a VAT number that Stripe verifies', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const listTaxIds = jest.fn().mockResolvedValue({ data: [] });
+    const createTaxId = jest.fn().mockResolvedValue({ id: 'txi_1', verification: { status: 'verified' } });
+    const out = await withStub({ customers: { update, listTaxIds, createTaxId } }).updateCustomerBilling('cus_1', details);
+    expect(out).toEqual({ vat: 'verified' });
+    expect(update).toHaveBeenCalledWith('cus_1', {
+      name: 'Acme Ltd',
+      email: 'accounts@acme.test',
+      address: { line1: '1 High Street', line2: undefined, city: 'Leeds', state: undefined, postal_code: 'LS1 1AA', country: 'GB' },
+      invoice_settings: { custom_fields: [{ name: 'PO number', value: 'PO-1' }] },
+    });
+    expect(createTaxId).toHaveBeenCalledWith('cus_1', { type: 'gb_vat', value: 'GB123456789' });
+  });
+
+  it('without a VAT number or a PO number it adds no tax id and clears the custom field', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const createTaxId = jest.fn();
+    const out = await withStub({ customers: { update, createTaxId } }).updateCustomerBilling('cus_1', { ...details, vatNumber: undefined, poReference: undefined });
+    expect(out).toEqual({ vat: 'none' });
+    expect(update.mock.calls[0][1].invoice_settings).toEqual({ custom_fields: '' });
+    expect(createTaxId).not.toHaveBeenCalled();
+  });
+
+  it('a VAT number Stripe cannot verify is refused and taken off the customer again; a number it has not finished checking is accepted as pending', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const listTaxIds = jest.fn().mockResolvedValue({ data: [] });
+    const createTaxId = jest.fn().mockResolvedValue({ id: 'txi_1', verification: { status: 'pending' } });
+    const retrieveTaxId = jest.fn().mockResolvedValue({ id: 'txi_1', verification: { status: 'unverified' } });
+    const deleteTaxId = jest.fn().mockResolvedValue({});
+    await expect(withStub({ customers: { update, listTaxIds, createTaxId, retrieveTaxId, deleteTaxId } }).updateCustomerBilling('cus_1', details)).rejects.toMatchObject({ code: 'vat_number_invalid', status: 400 });
+    expect(deleteTaxId).toHaveBeenCalledWith('cus_1', 'txi_1');
+    retrieveTaxId.mockResolvedValue({ id: 'txi_1', verification: { status: 'pending' } });
+    expect(await withStub({ customers: { update, listTaxIds, createTaxId, retrieveTaxId, deleteTaxId } }).updateCustomerBilling('cus_1', details)).toEqual({ vat: 'pending' });
+    // Stripe refusing the number outright, and a number that is not a UK or EU one, are form errors too.
+    const refuse = jest.fn().mockRejectedValue(Object.assign(new Error('Invalid value'), { type: 'StripeInvalidRequestError' }));
+    await expect(withStub({ customers: { update, listTaxIds, createTaxId: refuse } }).updateCustomerBilling('cus_1', details)).rejects.toMatchObject({ code: 'vat_number_invalid' });
+    await expect(withStub({ customers: { update } }).updateCustomerBilling('cus_1', { ...details, vatNumber: 'US123', country: 'US' })).rejects.toMatchObject({ code: 'vat_number_invalid' });
+  });
+
+  it('a tax id the customer already has is not added twice (a retry)', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const listTaxIds = jest.fn().mockResolvedValue({ data: [{ id: 'txi_1', type: 'gb_vat', value: 'GB123456789', verification: { status: 'verified' } }] });
+    const createTaxId = jest.fn();
+    expect(await withStub({ customers: { update, listTaxIds, createTaxId } }).updateCustomerBilling('cus_1', details)).toEqual({ vat: 'verified' });
+    expect(createTaxId).not.toHaveBeenCalled();
+  });
+
+  it('creates the subscription by invoice with no trial, bank transfer or card, payable in the given days, under an idempotency key, and finalises its first invoice', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'sub_9', latest_invoice: 'in_9' });
+    const retrieve = jest.fn().mockResolvedValue({ id: 'in_9', status: 'draft' });
+    const finalizeInvoice = jest.fn().mockResolvedValue({});
+    const out = await withStub({ subscriptions: { create }, invoices: { retrieve, finalizeInvoice } }).createInvoiceSubscription({
+      customerId: 'cus_1',
+      organisationId: 'org-1',
+      userId: 'user-1',
+      items: [{ priceId: 'price_a', quantity: 2 }],
+      daysUntilDue: 14,
+      clientKey: 'attempt-1',
+    });
+    expect(out).toEqual({ subscriptionId: 'sub_9', invoiceId: 'in_9' });
+    const [params, options] = create.mock.calls[0];
+    expect(params).toMatchObject({
+      customer: 'cus_1',
+      items: [{ price: 'price_a', quantity: 2 }],
+      collection_method: 'send_invoice',
+      days_until_due: 14,
+      automatic_tax: { enabled: true },
+      payment_settings: { payment_method_types: ['customer_balance', 'card'], payment_method_options: { customer_balance: { funding_type: 'bank_transfer', bank_transfer: { type: 'gb_bank_transfer' } } } },
+      metadata: { organisation_id: 'org-1', user_id: 'user-1' },
+    });
+    expect(params.trial_period_days).toBeUndefined();
+    expect(options).toEqual({ idempotencyKey: 'invoice-subscription:org-1:attempt-1' });
+    expect(finalizeInvoice).toHaveBeenCalledWith('in_9');
   });
 });

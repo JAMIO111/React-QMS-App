@@ -6,7 +6,7 @@ import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { WorkerJobRegistry } from '../worker/job-registry';
 import { manifestProblem, parseReleaseKeys, verifyRelease } from '../integrations/agents/agent-release';
-import type { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformOrganisations } from './platform.schemas';
+import type { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformInvoiceAccounts, PlatformOrganisations } from './platform.schemas';
 
 type Status = 'none' | 'needs_mfa' | 'ok';
 
@@ -75,6 +75,55 @@ export class PlatformService {
           sso: sso.get(r.organisation_id as string) ?? { mode: 'off' as const, connected: false },
         })),
       };
+    });
+  }
+
+  /** Invoiced organisations for the operator: route, first invoice paid or not, what is open and how late (docs/invoice-billing-plan.md §3a.5). */
+  invoiceAccounts(ctx: RequestContext): Promise<PlatformInvoiceAccounts> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      const res = await db.execute<Record<string, unknown>>(sql`select * from app.platform_invoice_accounts(200)`);
+      const day = (v: unknown) => (v ? new Date(v as string).toISOString().slice(0, 10) : null);
+      const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
+      return {
+        data: res.rows.map((r) => ({
+          organisationId: r.organisation_id as string,
+          name: r.name as string,
+          subscriptionStatus: r.subscription_status as string,
+          billingInterval: r.billing_interval as string,
+          legalName: (r.legal_name as string) ?? null,
+          billingEmail: (r.billing_email as string) ?? null,
+          purchaseOrder: (r.purchase_order as string) ?? null,
+          paymentTermsDays: r.payment_terms_days == null ? null : Number(r.payment_terms_days),
+          firstInvoicePaid: r.first_invoice_paid as boolean,
+          openInvoices: Number(r.open_invoices),
+          openAmountPence: Number(r.open_amount_pence),
+          oldestOpenDueOn: day(r.oldest_open_due_on),
+          overdueDays: Number(r.overdue_days),
+          billingAllowed: r.billing_allowed as boolean,
+          companyExempt: r.company_exempt as boolean,
+          startedAt: iso(r.started_at),
+          overdueAlertedAt: iso(r.overdue_alerted_at),
+        })),
+      };
+    });
+  }
+
+  /** Switch paying by invoice off (or on) for one organisation. Existing subscriptions carry on; only a new start is refused. */
+  setInvoiceBillingAllowed(ctx: RequestContext, organisationId: string, body: { allowed: boolean; reason: string }) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      await db.execute(sql`select app.set_invoice_billing_allowed(${organisationId}::uuid, ${body.allowed}, ${body.reason})`);
+      return { organisationId, invoiceBillingAllowed: body.allowed };
+    });
+  }
+
+  /** Lift (or restore) the one-invoiced-organisation-per-company block for a genuine second entity. */
+  setInvoiceCompanyExempt(ctx: RequestContext, organisationId: string, body: { exempt: boolean; reason: string }) {
+    return this.database.asUser(ctx, async (db) => {
+      await this.requireOperator(db);
+      await db.execute(sql`select app.set_invoice_company_exempt(${organisationId}::uuid, ${body.exempt}, ${body.reason})`);
+      return { organisationId, invoiceCompanyExempt: body.exempt };
     });
   }
 

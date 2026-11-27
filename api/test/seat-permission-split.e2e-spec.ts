@@ -116,7 +116,7 @@ describe('what the packages say', () => {
   it('lists the new permissions with the level they need', async () => {
     const list = (await api().get('/api/v1/permissions').set(await manager()).expect(200)).body.data as { code: string; needs: string | null }[];
     const needs = (code: string) => list.find((p) => p.code === code)?.needs;
-    expect(needs('ncr.contribute')).toBe('contributor');
+    expect(needs('ncr.contribute')).toBe('operator'); // the Operator seat raises NCs, so it adds files to its own
     expect(needs('receiving.record')).toBe('contributor');
     expect(needs('shipping.record')).toBe('contributor');
     expect(needs('inspection.acknowledge_failure')).toBe('controller');

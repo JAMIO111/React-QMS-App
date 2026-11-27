@@ -30,15 +30,17 @@ describe('catalogue', () => {
   it('serves packages, prices in pence and the feature comparison from the database', async () => {
     const res = await api().get('/api/v1/subscription-plans').set(await as(ids.ownerA)).expect(200);
     const plans = Object.fromEntries(res.body.plans.map((p: { slug: string }) => [p.slug, p]));
-    expect(Object.keys(plans)).toEqual(['observer', 'contributor', 'controller']);
-    expect(plans.controller.monthly.unitAmount).toBe(2500);
-    expect(plans.controller.annual.unitAmount).toBe(25000);
-    expect(plans.controller.annualSaving).toBe(5000);
-    expect(plans.controller.annualMonthlyEquivalent).toBe(2083);
-    expect(plans.observer.annualMonthlyEquivalent).toBe(417);
+    expect(Object.keys(plans)).toEqual(['organisation', 'observer', 'operator', 'contributor', 'controller']);
+    expect(plans.organisation).toMatchObject({ kind: 'fee', monthly: { unitAmount: 9900 } });
+    expect(plans.controller.kind).toBe('seat');
+    expect(plans.controller.monthly.unitAmount).toBe(4900);
+    expect(plans.controller.annual.unitAmount).toBe(49000);
+    expect(plans.controller.annualSaving).toBe(9800);
+    expect(plans.controller.annualMonthlyEquivalent).toBe(4083);
+    expect(plans.observer.annualMonthlyEquivalent).toBe(0);
     const inspections = res.body.modules.find((m: { slug: string }) => m.slug === 'inspections');
     const record = inspections.features.find((f: { slug: string }) => f.slug === 'record_inspections');
-    expect(record.includedIn).toEqual(['contributor', 'controller']);
+    expect(record.includedIn).toEqual(['operator', 'contributor', 'controller']); // the Operator's own feature row; the fee is never listed
   });
 
   it('is limited to people with billing permissions', async () => {
@@ -58,7 +60,7 @@ describe('seats and assignments', () => {
     await api().put('/api/v1/subscription/seats').set(h).send({ planSlug: 'observer', quantity: 10 }).expect(200);
     await api().put('/api/v1/subscription/seats').set(h).send({ planSlug: 'contributor', quantity: 15 }).expect(200);
     const res = await api().put('/api/v1/subscription/seats').set(h).send({ planSlug: 'controller', quantity: 5 }).expect(200);
-    expect(res.body.totals).toMatchObject({ seatsPurchased: 30, monthlyEquivalent: 32500, annual: 390000, seatsAssigned: 0, seatsAvailable: 30 });
+    expect(res.body.totals).toMatchObject({ seatsPurchased: 30, monthlyEquivalent: 53000, annual: 636000, seatsAssigned: 0, seatsAvailable: 30 });
     expect(res.body.subscription.billingInterval).toBe('month');
   });
 
@@ -132,7 +134,7 @@ describe('entitlement enforcement (RBAC AND subscription)', () => {
       // Observer: view only, even though the Inspector role may record.
       await api().put(`/api/v1/subscription/assignments/${inspector}`).set(h).send({ planSlug: 'observer' }).expect(200);
       await api().get('/api/v1/inspections').set(inspectorH).expect(200);
-      expect(await check('record_inspections')).toMatchObject({ allowed: false, reason: 'feature_not_included', currentPlan: 'Observer', requiredPlan: 'Contributor' });
+      expect(await check('record_inspections')).toMatchObject({ allowed: false, reason: 'feature_not_included', currentPlan: 'Observer', requiredPlan: 'Operator' });
       const access = (await api().get('/api/v1/subscription/access').set(inspectorH).expect(200)).body;
       expect(access).toMatchObject({ enforced: true, reason: null, plan: { slug: 'observer' } });
       expect(access.modules.inspections).toBe('view');

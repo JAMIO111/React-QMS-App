@@ -66,7 +66,7 @@ describe('directory, roles and permissions', () => {
     expect(roles.body.data.map((r: { key: string }) => r.key).sort()).toEqual(['admin', 'inspector', 'owner', 'quality_engineer', 'quality_manager', 'viewer']);
     expect(roles.body.data.find((r: { key: string }) => r.key === 'viewer').permissions).toEqual(['audits.read', 'calibration.read', 'capa.read', 'change.read', 'documentation.read', 'fmea.read', 'inspection.read', 'master_data.read', 'ncr.read', 'ppap.read', 'process_control.read', 'production.read', 'receiving.read', 'risk.read', 'shipping.read', 'spc.read', 'supplier_quality.read']);
     const perms = await api().get('/api/v1/permissions').set(await as(ids.ownerA, ids.orgA)).expect(200);
-    expect(perms.body.data).toContainEqual({ code: 'members.manage', description: expect.any(String) });
+    expect(perms.body.data).toContainEqual({ code: 'members.manage', description: expect.any(String), module: 'Administration', needs: null });
   });
 });
 

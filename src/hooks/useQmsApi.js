@@ -296,6 +296,42 @@ export const useRoles = ({ enabled = true } = {}) => {
   });
 };
 
+/** Every permission with the module it belongs to and the seat level it needs (for the role editor). */
+export const usePermissionList = ({ enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  return useQuery({
+    queryKey: orgKey(organisationId, "permissions"),
+    queryFn: () => apiFetch("/permissions", { organisationId }),
+    enabled: !!organisationId && enabled,
+    retry: false,
+    staleTime: 1000 * 60 * 30,
+  });
+};
+
+/**
+ * Custom roles: `action` is create, update or delete. The database decides (names, what a role may carry, who holds it), so these wait for the
+ * answer. Roles decide what people may do, so permissions are refreshed too.
+ */
+export const useRoleMutation = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, roleId, body }) => {
+      switch (action) {
+        case "create":
+          return apiFetch("/roles", { method: "POST", body, organisationId });
+        case "update":
+          return apiFetch(`/roles/${roleId}`, { method: "PATCH", body, organisationId });
+        case "delete":
+          return apiFetch(`/roles/${roleId}`, { method: "DELETE", organisationId });
+        default:
+          throw new Error(`Unknown role action ${action}`);
+      }
+    },
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
+  });
+};
+
 /**
  * Member administration. `action` is one of: invite, status, assign, unassign.
  * Every change refreshes the directory (and /me, in case the caller changed their own roles).

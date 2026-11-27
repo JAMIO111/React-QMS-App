@@ -42,6 +42,7 @@ const SettingsOrganisation = lazy(() =>
   import("./components/Settings/SettingsOrganisation.jsx")
 );
 const SettingsUsers = lazy(() => import("./components/Settings/SettingsUsers.jsx"));
+const SettingsRoles = lazy(() => import("./components/Settings/SettingsRoles.jsx"));
 const SettingsSecurity = lazy(() => import("./components/Settings/SettingsSecurity.jsx"));
 const SettingsExternalAccess = lazy(() => import("./components/Settings/SettingsExternalAccess.jsx"));
 const SettingsAccount = lazy(() =>
@@ -324,6 +325,7 @@ const router = createBrowserRouter([
               { index: true, element: <Navigate to="Organisation" replace /> },
               { path: "Organisation", element: <SettingsOrganisation /> },
               { path: "Users", element: <SettingsUsers /> },
+              { path: "Roles", element: <SettingsRoles /> },
               { path: "Security", element: <SettingsSecurity /> },
               { path: "External-Access", element: <SettingsExternalAccess /> },
               { path: "General", element: <Navigate to="../Organisation" replace /> },

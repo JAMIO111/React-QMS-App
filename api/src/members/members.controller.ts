@@ -3,8 +3,9 @@ import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNoContentResponse, ApiOk
 import { z } from 'zod';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
+import { Versioned, VersionedRows } from '../common/versioned';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
-import { AddDepartmentBody, AssignRoleBody, BulkInviteBody, BulkInviteResponse, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody, MoveToSsoBody, DismissSsoMatchBody } from './members.schemas';
+import { AddDepartmentBody, AssignRoleBody, BulkInviteBody, CreateRoleBody, UpdateRoleBody, BulkInviteResponse, Invitation, InviteBody, InviteResponse, Member, Permission, Role, UpdateDepartmentMembershipBody, UpdateMemberBody, MoveToSsoBody, DismissSsoMatchBody } from './members.schemas';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -137,9 +138,39 @@ export class MembersController {
 
   @Get('roles')
   @OrganisationScoped('members.read')
+  @VersionedRows('roles')
   @ApiOkResponse({ schema: openApiSchema(z.object({ data: z.array(Role) })) })
   async roles(@Ctx() ctx: RequestContext) {
     return { data: await this.members.roles(ctx) };
+  }
+
+  @Post('roles')
+  @HttpCode(201)
+  @OrganisationScoped('roles.manage')
+  @ApiBody({ schema: openApiSchema(CreateRoleBody) })
+  @ApiCreatedResponse({
+    description: 'A custom role. 409 role_rule: a name already used, roles.manage in a role, a permission the caller does not hold, or the limit of 30 custom roles.',
+    schema: openApiSchema(Role),
+  })
+  createRole(@Ctx() ctx: RequestContext, @Body() body: unknown) {
+    return this.members.createRole(ctx, parse(CreateRoleBody, body));
+  }
+
+  @Versioned('roles')
+  @Patch('roles/:id')
+  @OrganisationScoped('roles.manage')
+  @ApiBody({ schema: openApiSchema(UpdateRoleBody) })
+  @ApiOkResponse({ description: 'The changed role. Built-in roles answer 409 role_rule.', schema: openApiSchema(Role) })
+  updateRole(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.members.updateRole(ctx, parse(Uuid, id), parse(UpdateRoleBody, body));
+  }
+
+  @Delete('roles/:id')
+  @HttpCode(204)
+  @OrganisationScoped('roles.manage')
+  @ApiNoContentResponse({ description: 'Deleted. 409 role_rule while anyone holds the role, and for the built-in roles.' })
+  async deleteRole(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    await this.members.deleteRole(ctx, parse(Uuid, id));
   }
 
   @Get('permissions')

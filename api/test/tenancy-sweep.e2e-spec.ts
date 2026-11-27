@@ -93,6 +93,8 @@ const sampleBody = (op: Op): object | undefined =>
     'PATCH /api/v1/department-memberships/{id}': { primary: true },
     'DELETE /api/v1/department-memberships/{id}': undefined,
     'DELETE /api/v1/role-assignments/{id}': undefined,
+    'PATCH /api/v1/roles/{id}': { name: 'Hijacked' },
+    'DELETE /api/v1/roles/{id}': undefined,
     'PATCH /api/v1/saved-filters/{id}': { name: 'Hijacked' },
     'DELETE /api/v1/saved-filters/{id}': undefined,
     'PATCH /api/v1/custom-fields/{id}': { label: 'Hijacked' },
@@ -735,6 +737,8 @@ const hasSample = (op: Op) =>
     'PATCH /api/v1/members/{id}',
     'POST /api/v1/members/{id}/role-assignments',
     'POST /api/v1/members/{id}/departments',
+    'PATCH /api/v1/roles/{id}',
+    'DELETE /api/v1/roles/{id}',
     'PATCH /api/v1/competence/categories/{id}',
     'PATCH /api/v1/risk-categories/{id}',
     'PATCH /api/v1/change-types/{id}',
@@ -1404,6 +1408,7 @@ const foreignIdFor = (path: string) => {
   if (path.startsWith('/api/v1/departments/')) return a.department;
   if (path.startsWith('/api/v1/members/')) return a.ownerMembership;
   if (path.startsWith('/api/v1/role-assignments/')) return a.ownerAssignment;
+  if (path.startsWith('/api/v1/roles/')) return a.customRole;
   if (path.startsWith('/api/v1/department-memberships/')) return a.departmentMember;
   if (path.startsWith('/api/v1/customer-contacts/')) return a.customerContact;
   if (path.startsWith('/api/v1/external-access/lots/')) return a.lot;
@@ -1578,6 +1583,7 @@ beforeAll(async () => {
   a.ownerAssignment = (await one('select id from public.user_role_assignments where membership_id = $1', [a.ownerMembership])).id;
   a.departmentMember = (await one(`insert into public.department_members (organisation_id, department_id, membership_id) values ($1, $2, $3) returning id`, [ids.orgA, a.department, a.ownerMembership])).id;
   a.ownerRole = (await one(`select id from public.roles where organisation_id = $1 and key = 'owner'`, [ids.orgA])).id;
+  a.customRole = (await one(`insert into public.roles (organisation_id, key, name, is_system) values ($1, 'custom_sweep', 'Sweep role', false) returning id`, [ids.orgA])).id;
   a.ownerUser = ids.ownerA;
   a.customer = (await one(`insert into public.customers (organisation_id, code, name) values ($1, 'ACUST', 'Alpha customer') returning id`, [ids.orgA])).id;
   a.supplier = (await one(`insert into public.suppliers (organisation_id, code, name) values ($1, 'ASUPP', 'Alpha supplier') returning id`, [ids.orgA])).id;

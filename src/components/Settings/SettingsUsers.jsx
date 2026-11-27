@@ -524,7 +524,7 @@ const SettingsUsers = () => {
         )}
       </MenuCard>
 
-      <MenuCard aria-label="Roles" title="Roles" subtitle="What each role can do" bodyClassName="flex flex-col gap-2">
+      <MenuCard aria-label="Roles" title="Roles" subtitle={can("roles.manage") ? "What each role can do. To make your own, open Roles in the settings menu." : "What each role can do"} bodyClassName="flex flex-col gap-2">
         {roleList.map((r) => (
           <details key={r.id} className="text-primary-text">
             <summary className="cursor-pointer">

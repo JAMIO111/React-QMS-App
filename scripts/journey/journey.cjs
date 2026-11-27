@@ -268,6 +268,7 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await run('networkRestrictions', () => networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
   await run('connectorAgent', () => connectorAgent({ page, stack, APP, orgName, see, shot, step, log }));
   await run('payByInvoice', () => payByInvoice({ browser, stack, APP, see, shot, step, log, watch }));
+  await run('customRoles', () => customRoles({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }));
   await run('singleSignOn', () => singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
 };
 
@@ -3400,6 +3401,61 @@ async function payByInvoice({ browser, stack, APP, see, shot, step, log, watch }
  * through it is made, the password is typed in the browser and sealed there, and the agent opens exactly what was typed (Fortress only passed it on:
  * the job keeps no sealed bytes once done); finally the agent is revoked and stops.
  */
+/** Custom roles (docs/custom-roles-plan.md): the owner makes a role in the browser, gives it to Colin, sees it cannot be deleted while he holds it, changes it, then deletes it. */
+async function customRoles({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }) {
+  const { rows: [org] } = await stack.admin.query(`select id from public.organisations where name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+
+  step('the owner opens Settings → Roles and makes a role that can only view calibration');
+  await page.goto(`${APP}/Settings/Roles`);
+  await see(page.getByRole('heading', { level: 2, name: 'Roles' }));
+  await see(page.getByRole('region', { name: 'Built-in roles' }).getByText('Owner'));
+  await page.getByRole('button', { name: /New role/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'New role' });
+  await see(dialog);
+  if ((await dialog.getByText('Manage roles', { exact: true }).count()) !== 0) throw new Error('roles.manage must not be offered to a custom role');
+  await dialog.getByLabel('Name').fill('Calibration reader');
+  await dialog.getByRole('button', { name: 'Choose only the viewing permissions of Calibration' }).click();
+  await shot(page, 'custom-role-new');
+  await dialog.getByRole('button', { name: 'Make the role' }).click();
+  const mine = page.getByRole('region', { name: 'Your roles' });
+  await see(mine.getByText('Calibration reader', { exact: true }));
+  await see(mine.getByText(/Nobody holds it yet/));
+
+  step('the role is given to Colin: it is held, so it cannot be deleted, and a change warns who it reaches');
+  const members = (await api('GET', '/members')).data;
+  const colin = members.find((m) => (m.email ?? '').toLowerCase() === colleague.email.toLowerCase());
+  const role = (await api('GET', '/roles')).data.find((r) => r.name === 'Calibration reader');
+  const assigned = await api('POST', `/members/${colin.membershipId}/role-assignments`, { roleId: role.id });
+  const assignmentId = assigned.roles.find((r) => r.roleId === role.id).assignmentId;
+  await page.reload();
+  const row = page.getByText('Calibration reader', { selector: 'p' }).locator('xpath=ancestor::li[1]');
+  await see(row.getByText(/1 person holds it/));
+  await row.getByRole('button', { name: 'Actions' }).click();
+  const del = page.getByRole('menuitem', { name: /Delete \(1 person holds it\)/ });
+  await see(del);
+  if ((await del.getAttribute('aria-disabled')) !== 'true') throw new Error('a role someone holds must not be deletable');
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const edit = page.getByRole('dialog', { name: 'Change Calibration reader' });
+  await see(edit.getByText(/1 person holds it\. What you change here takes effect for them as soon as you save/));
+  await shot(page, 'custom-role-edit');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await edit.waitFor({ state: 'detached' });
+
+  step('Colin lets go of it, and the owner deletes the role');
+  await api('DELETE', `/role-assignments/${assignmentId}`);
+  await page.reload();
+  const idle = page.getByText('Calibration reader', { selector: 'p' }).locator('xpath=ancestor::li[1]');
+  await see(idle.getByText(/Nobody holds it yet/));
+  await idle.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByText('Calibration reader', { selector: 'p' }).waitFor({ state: 'detached' });
+  await shot(page, 'custom-role-deleted');
+  log('custom roles: made in the browser, held, change warned, delete refused while held, deleted once free');
+}
+
 async function connectorAgent({ page, stack, APP, orgName, see, shot, step, log }) {
   const { fakeAgent } = require('./fake-agent.cjs');
   step('the owner adds a connector agent, an agent registers with the token and answers a check');

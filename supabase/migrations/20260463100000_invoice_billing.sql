@@ -279,8 +279,8 @@ END $$;
 -- After the subscription row is written (before the seats): set the route, terms and billing details; an organisation that becomes invoiced gets 3 days' grace (card keeps what it had: 7, unless an
 -- operator changed it) and the operators are told. Snapshot keys used: collectionMethod (send_invoice | charge_automatically), daysUntilDue.
 SELECT pg_temp.patch_once('app.stripe_apply_subscription(uuid, jsonb, timestamptz, text)'::regprocedure, 'collectionMethod',
-$old$  -- Seats: exactly what Stripe says. A package missing from the snapshot goes to 0; nothing is unassigned automatically.$old$,
-$new$  -- The payment route (collectionMethod): invoice or card, with the terms and billing details of an invoice start.
+$old$FOR it IN SELECT * FROM jsonb_array_elements(coalesce(p_snapshot -> 'items', '[]'::jsonb)) LOOP$old$,
+$new$-- The payment route (collectionMethod): invoice or card, with the terms and billing details of an invoice start.
   DECLARE
     v_method text := CASE WHEN p_snapshot ->> 'collectionMethod' = 'send_invoice' THEN 'invoice' ELSE 'card' END;
     v_prev text := v_sub.collection_method; v_details jsonb;
@@ -310,7 +310,8 @@ $new$  -- The payment route (collectionMethod): invoice or card, with the terms 
     END IF;
   END;
 
-  -- Seats: exactly what Stripe says. A package missing from the snapshot goes to 0; nothing is unassigned automatically.$new$);
+  -- Seats: exactly what Stripe says. A package missing from the snapshot goes to 0; nothing is unassigned automatically.
+  FOR it IN SELECT * FROM jsonb_array_elements(coalesce(p_snapshot -> 'items', '[]'::jsonb)) LOOP$new$);
 
 -- ---------------------------------------------------------------------------
 -- 8. Operator alerts and controls

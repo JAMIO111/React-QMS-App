@@ -177,14 +177,34 @@ export const useAuditRecord = (id) => {
   });
 };
 
+/**
+ * Saves to one address go out one after another, in the order they were made. Choosing "carried out on" replaces the whole list each time, so two quick
+ * ticks sent together could reach the server the wrong way round and the first would undo the second.
+ */
+const queues = new Map();
+export const inOrder = (queueKey, run) => {
+  const before = queues.get(queueKey);
+  // Nothing waiting: start at once. Something still saving: start when it has finished, whether it worked or not.
+  const next = before ? before.catch(() => {}).then(run) : new Promise((resolve) => resolve(run()));
+  queues.set(queueKey, next);
+  next.catch(() => {}).finally(() => {
+    if (queues.get(queueKey) === next) queues.delete(queueKey);
+  });
+  return next;
+};
+
 /** Change one record's cached detail straight away; put it back if the save fails; then refresh everything. */
-const useRecordEdit = (recordId, request, patch) => {
+const useRecordEdit = (recordId, request, patch, { ordered = false } = {}) => {
   const { organisationId } = useOrganisation();
   const queryClient = useQueryClient();
   const toast = useToast();
   const detailKey = key(organisationId, "records", "detail", recordId);
   return useMutation({
-    mutationFn: (arg) => apiFetch(request(arg).path, { method: request(arg).method, body: request(arg).body, organisationId }),
+    mutationFn: (arg) => {
+      const r = request(arg);
+      const send = () => apiFetch(r.path, { method: r.method, body: r.body, organisationId });
+      return ordered ? inOrder(`${r.method} ${r.path}`, send) : send();
+    },
     onMutate: async (arg) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const previous = queryClient.getQueryData(detailKey);
@@ -225,6 +245,7 @@ export const useSetAuditTargets = (recordId) =>
       body: { targets: chosen.map((t) => (t.kind === "machine" ? { kind: "machine", machineId: t.id } : t.kind === "operation" ? { kind: "operation", operationCode: t.id } : { kind: "department", departmentId: t.id })) },
     }),
     (record, chosen) => ({ ...record, targets: chosen.map(({ kind, id, label }) => ({ kind, id, label })) }),
+    { ordered: true },
   );
 
 /** The operation codes to choose from when saying what an audit is relevant to (control plan operations plus those already on an audit). */

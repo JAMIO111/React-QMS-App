@@ -182,10 +182,30 @@ export const useAuditRecord = (id) => {
  * ticks sent together could reach the server the wrong way round and the first would undo the second.
  */
 const queues = new Map();
+/** The longest a save waits for the one before it: a request that hangs must not hold every later save for ever (after this it goes anyway). */
+export const MAX_ORDER_WAIT_MS = 20_000;
+/** For tests: forget saves still in the queue. */
+export const resetSaveOrder = () => queues.clear();
 export const inOrder = (queueKey, run) => {
   const before = queues.get(queueKey);
-  // Nothing waiting: start at once. Something still saving: start when it has finished, whether it worked or not.
-  const next = before ? before.catch(() => {}).then(run) : new Promise((resolve) => resolve(run()));
+  let next;
+  if (before) {
+    // Something still saving: start when it has finished (worked or not), or when it has taken too long.
+    next = new Promise((resolve, reject) => {
+      let started = false;
+      const go = () => {
+        if (started) return;
+        started = true;
+        clearTimeout(timer);
+        Promise.resolve().then(run).then(resolve, reject);
+      };
+      const timer = setTimeout(go, MAX_ORDER_WAIT_MS);
+      before.then(go, go);
+    });
+  } else {
+    // Nothing waiting: start at once.
+    next = new Promise((resolve) => resolve(run()));
+  }
   queues.set(queueKey, next);
   next.catch(() => {}).finally(() => {
     if (queues.get(queueKey) === next) queues.delete(queueKey);
@@ -203,7 +223,9 @@ const useRecordEdit = (recordId, request, patch, { ordered = false } = {}) => {
     mutationFn: (arg) => {
       const r = request(arg);
       const send = () => apiFetch(r.path, { method: r.method, body: r.body, organisationId });
-      return ordered ? inOrder(`${r.method} ${r.path}`, send) : send();
+      // `ordered`: saves of the same thing go one after another, so an older one can never arrive last and win. A function names the thing within the
+      // address (one question's answer), so other questions are not held up.
+      return ordered ? inOrder(`${r.method} ${r.path}${typeof ordered === "function" ? `#${ordered(arg)}` : ""}`, send) : send();
     },
     onMutate: async (arg) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
@@ -233,6 +255,8 @@ export const useAnswerAudit = (recordId) =>
         return { ...q, response: { id: q.response?.id ?? "pending", ncrs: q.response?.ncrs ?? [], finding: q.response?.finding ?? null, answer: body.answer ?? null, value: body.value ?? null, choice: body.choice ?? null, note: body.note ?? null, result: provisionalResult(q, body) } };
       }),
     }),
+    // Each save sends the whole answer and note, so two quick saves for one question must reach the server in the order they were made.
+    { ordered: (body) => body.questionId },
   );
 
 /** Choose what the audit was carried out on: an array of the available targets. */

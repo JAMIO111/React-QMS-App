@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { inOrder } from "./useAudits";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MAX_ORDER_WAIT_MS, inOrder, resetSaveOrder } from "./useAudits";
 
 const later = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
@@ -25,5 +25,26 @@ describe("saves to the same address", () => {
     const after = inOrder("PUT /a", async () => "saved");
     await expect(failed).rejects.toThrow("refused");
     await expect(after).resolves.toBe("saved");
+  });
+});
+
+describe("a save that never finishes", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    resetSaveOrder();
+  });
+
+  it("does not hold the next save for ever", async () => {
+    vi.useFakeTimers();
+    inOrder("PUT /a", () => new Promise(() => {}));
+    const second = inOrder("PUT /a", async () => "went anyway");
+    await vi.advanceTimersByTimeAsync(MAX_ORDER_WAIT_MS + 1);
+    await expect(second).resolves.toBe("went anyway");
+  });
+
+  it("is forgotten by resetSaveOrder, so a test cannot hold up the next one", async () => {
+    inOrder("PUT /b", () => new Promise(() => {}));
+    resetSaveOrder();
+    await expect(inOrder("PUT /b", async () => "free")).resolves.toBe("free");
   });
 });

@@ -80,10 +80,19 @@ export class EmployeesService {
   lookup(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       const result = await db.execute<Row>(sql`
-        select id, ${sql.raw(personName('e'))} as name, job_title, coalesce(active, true) as active
-        from public."Employees" e where e.organisation_id = ${orgOf(ctx)}::uuid
+        select e.id, ${sql.raw(personName('e'))} as name, e.job_title, coalesce(e.active, true) as active, p.avatar_path
+        from public."Employees" e
+        left join public.profiles p on p.id = e.auth_id
+        where e.organisation_id = ${orgOf(ctx)}::uuid
         order by lower(e.surname), lower(e.first_name)`);
-      return result.rows.map((r) => ({ id: r.id as string, name: (r.name as string) ?? 'Unnamed', jobTitle: (r.job_title as string) ?? null, active: r.active as boolean }));
+      return result.rows.map((r) => ({
+        id: r.id as string,
+        name: (r.name as string) ?? 'Unnamed',
+        jobTitle: (r.job_title as string) ?? null,
+        active: r.active as boolean,
+        // The linked sign-in's profile picture, for the initials-or-photo circle in pickers (null when not linked or no picture).
+        avatarPath: (r.avatar_path as string) ?? null,
+      }));
     });
   }
 

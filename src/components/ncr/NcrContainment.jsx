@@ -17,6 +17,7 @@ import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
 import CTAButton from "@/components/CTAButton";
 import { changesSince } from "../../lib/editConflicts";
+import { employeeOption } from "@/lib/employees";
 
 const STATUS = {
   open: { label: "Open", tone: "bg-warning-color/15 text-primary-text" },
@@ -76,7 +77,7 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
           clearable
           value={form.ownerEmployeeId}
           onChange={(v) => setForm((f) => ({ ...f, ownerEmployeeId: v || null }))}
-          options={(employees.data ?? []).filter((e) => e.active || e.id === form.ownerEmployeeId).map((e) => ({ value: e.id, label: e.name }))}
+          options={(employees.data ?? []).filter((e) => e.active || e.id === form.ownerEmployeeId).map((e) => employeeOption(e, { as: "field" }))}
           placeholder="Not assigned"
         />
         {lots.length > 0 && (

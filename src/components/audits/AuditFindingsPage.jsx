@@ -14,6 +14,7 @@ import TableWrapper from "../TableWrapper";
 import ColumnVisibilityMenu from "../ui/ColumnVisibilityMenu";
 import ComboField from "../ui/ComboField";
 import { DEFAULT_HIDDEN, findingColumns } from "./findingColumns";
+import { employeeOption } from "@/lib/employees";
 
 const rowLabel = (f) => `${f.reference} ${f.title}`;
 const toCsvRow = (f) => ({
@@ -136,7 +137,7 @@ const AuditFindingsPage = () => {
         <ComboField label="Status" value={filters.status || null} onChange={(v) => updateFilters({ status: v ?? "" })} options={FINDING_STATUSES} placeholder="Any status" />
         <ComboField label="Classification" value={filters.classification || null} onChange={(v) => updateFilters({ classification: v ?? "" })} options={classItems.map((c) => ({ value: c.id, label: c.label, hint: c.active ? undefined : "Switched off" }))} placeholder="Any classification" />
         <ComboField label="Kind" value={filters.kind || null} onChange={(v) => updateFilters({ kind: v ?? "" })} options={FINDING_KINDS} placeholder="Any kind" />
-        <ComboField label="Owner" value={filters.owner || null} onChange={(v) => updateFilters({ owner: v ?? "", ownerLabel: "" })} options={employeeItems.map((x) => ({ value: x.id, label: x.name }))} placeholder="Anyone" />
+        <ComboField label="Owner" value={filters.owner || null} onChange={(v) => updateFilters({ owner: v ?? "", ownerLabel: "" })} options={employeeItems.map((x) => employeeOption(x, { as: "field" }))} placeholder="Anyone" />
         <ComboField label="Audit" value={filters.audit || null} onChange={(v) => updateFilters({ audit: v ?? "", auditLabel: "" })} options={auditItems.map((a) => ({ value: a.id, label: `${a.reference} · ${a.title}` }))} placeholder="Any audit" />
       </div>
       <label className="flex w-fit cursor-pointer items-center gap-2 px-1 text-sm text-primary-text">

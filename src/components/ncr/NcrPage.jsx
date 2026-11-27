@@ -81,6 +81,7 @@ import { withCustomValues } from "../../lib/customFields";
 import { withVersion } from "../../lib/editConflicts";
 import LinkedChanges from "../change/LinkedChanges";
 import RaisedFmeas from "../fmea/RaisedFmeas";
+import { employeeOption } from "@/lib/employees";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -237,8 +238,8 @@ const NcrPage = () => {
   const allSites = (sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }));
   // People from the Employees register (active ones, plus whoever is already named) and the organisation's departments (site code as the hint).
   const employeeOptions = (current, saved) => {
-    const list = (employees ?? []).filter((e) => e.active || e.id === current).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }));
-    return saved && current === saved.id && !list.some((e) => e.id === saved.id) ? [...list, { id: saved.id, name: saved.name || "Employee" }] : list;
+    const list = (employees ?? []).filter((e) => e.active || e.id === current).map((e) => employeeOption(e));
+    return saved && current === saved.id && !list.some((e) => e.id === saved.id) ? [...list, { id: saved.id, name: saved.name || "Employee", avatar: { name: saved.name } }] : list;
   };
   const siteCode = new Map((sites?.data ?? []).map((s) => [s.id, s.code]));
   const departmentOptions = (departments?.data ?? [])

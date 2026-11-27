@@ -18,6 +18,7 @@ import { useMsaMutation } from "../../hooks/useMsa";
 import { withVersion } from "../../lib/editConflicts";
 import { ALPHA_OPTIONS, DEFAULT_DESIGN, SIGMA_OPTIONS, STUDY_TYPES, designProblem, isNumberText, toNumberText, typeOf } from "../../lib/msa";
 import { msaPath } from "../../lib/msa";
+import { employeeOption } from "@/lib/employees";
 
 /** The shared text box hands over the change event; the forms here work with the value. */
 const Field = ({ onChange, ...props }) => <FieldBase {...props} onChange={(e) => onChange?.(e.target.value)} />;
@@ -126,7 +127,7 @@ const SpecChooser = ({ partId, value, onPick, autoKey }) => {
 
 const AppraiserRows = ({ rows, onChange }) => {
   const employees = useEmployees();
-  const options = (employees.data ?? []).filter((e) => e.active).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }));
+  const options = (employees.data ?? []).filter((e) => e.active).map((e) => employeeOption(e));
   return (
     <fieldset className="flex flex-col gap-3">
       <legend className="text-sm font-medium">Appraisers</legend>

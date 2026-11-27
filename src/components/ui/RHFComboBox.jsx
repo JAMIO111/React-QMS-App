@@ -3,6 +3,21 @@ import { createPortal } from "react-dom";
 import { useFloatingList } from "./useFloatingList";
 import { ChevronDownIcon, CircleAlertIcon, XIcon } from "@/components/icons";
 import LockedMark from "./LockedMark";
+import PersonAvatar from "./PersonAvatar";
+
+/**
+ * What an option shows to the left of its words, if anything: `avatar: { name?, path? }` a person's circle (their profile picture, else
+ * initials), `image` a picture's URL, or `icon` an icon component.
+ */
+const hasLeading = (option) => !!(option && (option.avatar || option.image || option.icon));
+const Leading = ({ option, inverted = false }) => {
+  if (option.avatar)
+    return <PersonAvatar name={option.avatar.name ?? option.name} path={option.avatar.path} inverted={inverted} />;
+  if (option.image)
+    return <img src={option.image} alt="" aria-hidden="true" className="h-6 w-6 shrink-0 rounded object-cover" />;
+  const OptionIcon = option.icon;
+  return OptionIcon ? <OptionIcon aria-hidden="true" className="h-4 w-4 shrink-0" /> : null;
+};
 
 /**
  * Searchable single-select, controlled by `value` (an option id) and `onChange(id | null)`, so it
@@ -11,8 +26,10 @@ import LockedMark from "./LockedMark";
  *   <Controller name="failureModeId" control={control}
  *     render={({ field, fieldState }) => <RHFComboBox {...field} error={fieldState.error} label="Failure mode" options={…} />} />
  *
- * Options: [{ id, name, hint?, keywords?, disabled? }] (`keywords` are extra words the search matches). `name` is shown and searched; `hint` is a muted second
- * line in the list. Options are sorted by name unless `sort={false}`.
+ * Options: [{ id, name, hint?, keywords?, disabled?, avatar?, image?, icon? }] (`keywords` are extra words the search matches). `name` is shown and searched; `hint`
+ * is a muted second line in the list. `avatar: { name?, path? }` (a person: profile picture from the avatars bucket, else initials), `image` (a URL) or `icon`
+ * (an icon component) is drawn to the left of the words, in the list and in the box once chosen (see `employeeOption` in `lib/employees.js`).
+ * Options are sorted by name unless `sort={false}`.
  *
  * Server-side search: pass `onSearchChange(term)` and `filterLocally={false}`; keep the selected
  * option in `options` (or pass `selectedOption`) so its name still shows when it is not in the results.
@@ -251,6 +268,10 @@ const RHFComboBox = ({
                 title={errorMessage}
                 className="w-5 h-5 text-error-color mr-3 flex-shrink-0"
               />
+            ) : !isOpen && hasLeading(selectedOption) ? (
+              <span className="mr-2 flex flex-shrink-0 items-center pointer-events-none">
+                <Leading option={selectedOption} />
+              </span>
             ) : Icon ? (
               <Icon className="w-5 h-5 text-primary-text mr-3 flex-shrink-0 pointer-events-none" />
             ) : null}
@@ -345,18 +366,21 @@ const RHFComboBox = ({
                     onClick={() => handleSelect(option)}
                     className="px-2 py-1">
                     <div
-                      className={`rounded-md px-4 py-1 ${option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
+                      className={`rounded-md py-1 ${hasLeading(option) ? "flex items-center gap-2.5 px-3" : "px-4"} ${option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
                         highlightedIndex === index
                           ? "bg-brand-primary text-white"
                           : "text-primary-text hover:bg-brand-primary/10"
                       }`}>
-                      {optionText(option)}
-                      {option.hint && (
-                        <span
-                          className={`block text-xs ${highlightedIndex === index ? "text-white/80" : "text-secondary-text"}`}>
-                          {option.hint}
-                        </span>
-                      )}
+                      {hasLeading(option) && <Leading option={option} inverted={highlightedIndex === index} />}
+                      <span className={hasLeading(option) ? "min-w-0 flex-1" : undefined}>
+                        {optionText(option)}
+                        {option.hint && (
+                          <span
+                            className={`block text-xs ${highlightedIndex === index ? "text-white/80" : "text-secondary-text"}`}>
+                            {option.hint}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </li>
                 ))

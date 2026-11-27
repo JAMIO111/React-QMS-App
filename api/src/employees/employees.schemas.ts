@@ -81,7 +81,7 @@ export const UpdateEmployeeBody = z
 export type UpdateEmployeeBody = z.infer<typeof UpdateEmployeeBody>;
 
 /** Everyone, for pickers (e.g. the responsible employee on a non-conformance). */
-export const EmployeeOption = z.object({ id: z.string().uuid(), name: z.string(), jobTitle: z.string().nullable(), active: z.boolean() });
+export const EmployeeOption = z.object({ id: z.string().uuid(), name: z.string(), jobTitle: z.string().nullable(), active: z.boolean(), avatarPath: z.string().nullable() });
 
 /** Link an employee to a member's sign-in, or remove the link with `userId: null`. */
 export const LinkLoginBody = z.object({ userId: z.string().uuid().nullable() }).strict();

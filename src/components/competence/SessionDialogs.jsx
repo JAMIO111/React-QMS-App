@@ -12,6 +12,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { employeeOption } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, saveLabel }) => (
   <div className="flex justify-end gap-2">
@@ -90,7 +91,7 @@ export const SessionDialog = ({ existing, onClose, onSaved }) => {
   const [skillIds, setSkillIds] = useState(existing?.skills.map((s) => s.id) ?? []);
   const [attendeeIds, setAttendeeIds] = useState([]);
 
-  const active = (employees.data ?? []).filter((e) => e.active).map((e) => ({ value: e.id, label: e.name, hint: e.jobTitle ?? undefined }));
+  const active = (employees.data ?? []).filter((e) => e.active).map((e) => employeeOption(e, { as: "field" }));
   const skillOptions = (skills.data?.data ?? []).map((s) => ({ value: s.id, label: s.name, hint: s.code }));
   const internal = providerType === "internal";
   const ready = title.trim() && kind && providerType && startsOn && (internal ? trainerId : providerName.trim());
@@ -213,7 +214,7 @@ export const AddAttendeeDialog = ({ session, onClose }) => {
   const employees = useEmployees();
   const [employeeId, setEmployeeId] = useState(null);
   const live = new Set(session.attendees.filter((a) => !["removed", "voided"].includes(a.status)).map((a) => a.employee.id));
-  const options = (employees.data ?? []).filter((e) => e.active && !live.has(e.id)).map((e) => ({ value: e.id, label: e.name, hint: e.jobTitle ?? undefined }));
+  const options = (employees.data ?? []).filter((e) => e.active && !live.has(e.id)).map((e) => employeeOption(e, { as: "field" }));
   const save = (e) => {
     e.preventDefault();
     if (employeeId) run({ action: "addAttendee", id: session.id, body: { employeeId }, show: { name: options.find((o) => o.value === employeeId)?.label }, failed: "Not added" });

@@ -14,6 +14,7 @@ import { PartPicker, PartyPicker } from "./ncr/Pickers";
 import { LotPicker, OrderPicker } from "./production/pickers";
 import { useProductionSettings } from "../hooks/useProduction";
 import CTAButton from "@/components/CTAButton";
+import { employeeOption } from "@/lib/employees";
 
 const DELETED_OPTIONS = [
   { id: "exclude", name: "Hide deleted" },
@@ -77,7 +78,7 @@ const FilterPane = ({ onClose }) => {
   const departmentOptions = (departments?.data ?? []).map((d) => ({
     id: d.id, name: d.active === false ? `${d.name} (inactive)` : d.name, hint: [d.code, siteCode.get(d.siteId)].filter(Boolean).join(" · ") || undefined,
   }));
-  const employeeOptions = (employees ?? []).map((e) => ({ id: e.id, name: e.active === false ? `${e.name} (left)` : e.name, hint: e.jobTitle ?? undefined }));
+  const employeeOptions = (employees ?? []).map((e) => employeeOption(e, e.active === false ? { name: `${e.name} (left)` } : {}));
   const production = useProductionSettings();
   const [order, setOrder] = useState(filters.order ? { id: filters.order, name: filters.orderLabel } : null);
   const [lot, setLot] = useState(filters.lot ? { id: filters.lot, name: filters.lotLabel } : null);

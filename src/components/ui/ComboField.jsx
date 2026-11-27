@@ -1,7 +1,7 @@
 import RHFComboBox from "./RHFComboBox";
 
 /**
- * The custom combo box for a plain list: options are `{ value, label, hint?, disabled? }` (the shape the native `SelectField` took), the value is an option's `value`, and `onChange`
+ * The custom combo box for a plain list: options are `{ value, label, hint?, disabled?, avatar?, image?, icon? }` (the shape the native `SelectField` took), the value is an option's `value`, and `onChange`
  * gets the chosen `value` or `null` when it is cleared. The order of the options is kept. A required field cannot be cleared.
  */
 const ComboField = ({ label, value, onChange, options, required = false, disabled = false, placeholder = "Select...", hint, error, className = "", clearable, ...rest }) => (
@@ -9,7 +9,7 @@ const ComboField = ({ label, value, onChange, options, required = false, disable
     label={label}
     value={value ?? null}
     onChange={(id) => onChange(id ?? null)}
-    options={options.map((o) => ({ id: o.value, name: o.label, hint: o.hint, disabled: o.disabled }))}
+    options={options.map((o) => ({ id: o.value, name: o.label, hint: o.hint, disabled: o.disabled, avatar: o.avatar, image: o.image, icon: o.icon }))}
     required={required}
     disabled={disabled}
     placeholder={placeholder}

@@ -17,6 +17,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { employeeOption } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -148,8 +149,8 @@ export const TeamDialog = ({ revision, onClose }) => {
   const employees = useEmployees();
   const [rows, setRows] = useState(() => revision.team.map((m) => ({ person: `${m.kind === "employee" ? "e" : "u"}:${m.personId}`, role: m.role })));
   const options = [
-    ...(people.data ?? []).map((p) => ({ value: `u:${p.id}`, label: p.name, hint: "Member" })),
-    ...(employees.data ?? []).filter((e) => e.active).map((e) => ({ value: `e:${e.id}`, label: e.name, hint: e.jobTitle ?? "Employee" })),
+    ...(people.data ?? []).map((p) => ({ value: `u:${p.id}`, label: p.name, hint: "Member", avatar: { name: p.name, path: p.avatarPath ?? null } })),
+    ...(employees.data ?? []).filter((e) => e.active).map((e) => employeeOption(e, { as: "field", value: `e:${e.id}`, hint: e.jobTitle ?? "Employee" })),
   ];
   // Someone already on the team stays offered even if they are no longer in the lists.
   revision.team.forEach((m) => {

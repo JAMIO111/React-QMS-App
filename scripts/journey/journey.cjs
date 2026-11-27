@@ -3415,12 +3415,12 @@ async function customRoles({ page, stack, APP, orgName, see, shot, step, log, ow
   const dialog = page.getByRole('dialog', { name: 'New role' });
   await see(dialog);
   if ((await dialog.getByText('Manage roles', { exact: true }).count()) !== 0) throw new Error('roles.manage must not be offered to a custom role');
-  await dialog.getByLabel('Name').fill('Calibration reader');
+  await dialog.getByRole('textbox', { name: /^Name\b/ }).fill('Calibration reader');
   await dialog.getByRole('button', { name: 'Choose only the viewing permissions of Calibration' }).click();
   await shot(page, 'custom-role-new');
   await dialog.getByRole('button', { name: 'Make the role' }).click();
   const mine = page.getByRole('region', { name: 'Your roles' });
-  await see(mine.getByText('Calibration reader', { exact: true }));
+  await see(mine.getByText(/^Calibration reader/));
   await see(mine.getByText(/Nobody holds it yet/));
 
   step('the role is given to Colin: it is held, so it cannot be deleted, and a change warns who it reaches');

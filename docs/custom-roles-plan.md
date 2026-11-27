@@ -1,6 +1,6 @@
 # Custom roles — plan
 
-Status: **agreed 2026-11-27. RL1 (database), RL2 (API) and RL3 (screens, journey step) built; the migration is not yet applied live; RLX (exit check) still to do.**
+Status: **agreed 2026-11-27. RL1 (database), RL2 (API) and RL3 (screens, journey step) built; all checks pass locally (SQL, API e2e, unit, journey step); the migration is not yet applied live; RLX (live guardrails and advisors, the full journey) still to do.**
 
 ## 1. What this is
 

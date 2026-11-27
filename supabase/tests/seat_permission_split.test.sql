@@ -1,5 +1,5 @@
 -- Seat permissions: the split of ncr.contribute, receiving.record, shipping.record and inspection.acknowledge_failure from their bundles, and the three
--- permissions moved to the full level (migration 20260465100000). Checks the package levels, who holds what, and what each person can now do.
+-- permissions moved to the full level (migration 20260466100000). Checks the package levels, who holds what, and what each person can now do.
 \set ON_ERROR_STOP 1
 BEGIN;
 \ir helpers.sql

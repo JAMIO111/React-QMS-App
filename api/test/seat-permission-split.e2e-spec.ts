@@ -1,5 +1,5 @@
 /**
- * The split of bundled permissions through the API (migration 20260465100000): an inspector records deliveries and shipments but does not manage orders or their
+ * The split of bundled permissions through the API (migration 20260466100000): an inspector records deliveries and shipments but does not manage orders or their
  * dates, adds files and containment only to non-conformances they raised, and does not acknowledge a failed reading; a manager does all of it.
  */
 import { INestApplication } from '@nestjs/common';

@@ -1,10 +1,10 @@
 # Seat permissions review
 
-Seats are meant to be: **Controller (full)** = management and quality, **Contributor (operational)** = shop-floor operators, **Observer (view)** = other stakeholders who want to see data. A review of the live package levels (2026-11-27) compared that intent with what each permission needs, and found operational permissions doing a manager's job, operators who could start a record but not finish it, and sensitive reads at the view level.
+Seats are meant to be: **Controller (full)** = management and quality, **Contributor (operational)** = the people who do the work (the Operator seat, added in seats and prices 2026, is the shop floor: it raises NCs, records inspections and adds files to its own NCs), **Observer (view)** = other stakeholders who want to see data. A review of the live package levels (2026-11-27) compared that intent with what each permission needs, and found operational permissions doing a manager's job, operators who could start a record but not finish it, and sensitive reads at the view level.
 
 What a person can do is their role's permissions **and** their seat's level (`app.has_permission`); a permission is tied to a module and a level in `public.features` (`min_access_level`). Administration rights (members, roles, security, billing, external access) are never tied to a seat (`app.unpriced_permissions()`).
 
-## Changed (migration `20260465100000_seat_permission_split.sql`)
+## Changed (migration `20260466100000_seat_permission_split.sql`)
 
 | Permission | Level | What it covers |
 |---|---|---|

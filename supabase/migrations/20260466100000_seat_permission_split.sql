@@ -100,6 +100,14 @@ ON CONFLICT DO NOTHING;
 UPDATE public.features SET min_access_level = 'full'
  WHERE permission_code IN ('change.approve', 'integrations.run', 'audit.read');
 
+-- The Operator (seats and prices 2026) raises non-conformances, so it also adds files and containment to its own: an explicit feature row, because the
+-- Operator's module rows stop at view (app.subscription_entitlement_rules).
+INSERT INTO public.subscription_entitlements (subscription_plan_id, module_id, feature_id, access_level)
+SELECT p.id, f.module_id, f.id, 'operational'
+  FROM public.subscription_plans p CROSS JOIN public.features f
+ WHERE p.slug = 'operator' AND f.permission_code = 'ncr.contribute'
+   AND NOT EXISTS (SELECT 1 FROM public.subscription_entitlements e WHERE e.subscription_plan_id = p.id AND e.feature_id = f.id);
+
 -- Nothing may be left unpriced (the same check as every_feature_priced).
 DO $$
 DECLARE v_missing text;

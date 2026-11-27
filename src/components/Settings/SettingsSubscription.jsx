@@ -331,7 +331,7 @@ export const PricingCards = ({ catalogue, overview, canManage }) => {
           </Switch>
         )
       }>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         {seatPlans(catalogue.plans).map((plan) => {
           const price = annual ? plan.annual : plan.monthly;
           const owned = seatsOf(plan.slug);

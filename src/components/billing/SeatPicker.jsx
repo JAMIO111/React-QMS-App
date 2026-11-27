@@ -40,7 +40,7 @@ const SeatPicker = ({ plans, value, onChange, disabled = false, minimum = { cont
         ))}
       </fieldset>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         {seatPlans(plans).map((plan) => {
           const qty = seats[plan.slug] ?? 0;
           const price = unitPrice(plan, interval);

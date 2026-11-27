@@ -348,6 +348,8 @@ export const NcrInspectionSource = z.object({
 });
 
 export const GaugeUsage = z.object({
+  /** False when the caller may not read inspections at all: the list is then not known, which is different from "none used it". */
+  available: z.boolean(),
   calibration: z.object({ id: z.string().uuid(), reference: z.string(), calibratedOn: z.string(), outcome: z.string() }),
   gauge: z.object({ id: z.string().uuid(), assetNumber: z.string() }),
   /** The calibration before this one; the period starts on its date (null: from the start). */

@@ -45,9 +45,11 @@ BEGIN
   PERFORM pg_temp.assert_eq((SELECT interval_value || ' ' || interval_unit || '|' || status FROM public.gauges WHERE id = g), '6 months|active', 'interval from the type');
   PERFORM pg_temp.assert_eq((SELECT string_agg(name, ',' ORDER BY sort_order) FROM public.gauge_characteristics WHERE gauge_id = g), '25 mm block,100 mm block', 'active template characteristics copied');
   PERFORM pg_temp.assert_eq((SELECT created_by FROM public.gauge_characteristics WHERE gauge_id = g LIMIT 1), '31000000-0000-0000-0000-000000000101'::uuid, 'copies stamped with the creator');
-  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauges (organisation_id, asset_number, description) VALUES (%L, 'g-001', 'Duplicate')$q$, org), 'asset numbers are unique ignoring case');
-  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauges (organisation_id, asset_number, description, range_min, range_max) VALUES (%L, 'G-X', 'Bad range', 10, 1)$q$, org), 'range max at least min');
-  INSERT INTO public.gauges (organisation_id, asset_number, description, site_id) VALUES (org, 'G-002', 'Plant B micrometer', site_b) RETURNING id INTO g2;
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id) VALUES (%L, 'g-001', 'Duplicate', %L)$q$, org, t), 'asset numbers are unique ignoring case');
+  PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id, range_min, range_max) VALUES (%L, 'G-X', 'Bad range', %L, 10, 1)$q$, org, t), 'range max at least min');
+  -- A type of its own with no interval of its own: the gauge gets the default interval.
+  WITH pt AS (INSERT INTO public.gauge_types (organisation_id, name) VALUES (org, 'Plain micrometer') RETURNING id)
+    INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id, site_id) SELECT org, 'G-002', 'Plant B micrometer', pt.id, site_b FROM pt RETURNING id INTO g2;
   PERFORM pg_temp.assert_eq((SELECT interval_value || ' ' || interval_unit FROM public.gauges WHERE id = g2), '12 months', 'default interval without a type');
   INSERT INTO public.gauge_characteristics (organisation_id, gauge_id, name, nominal, tolerance_minus, tolerance_plus, unit_code) VALUES (org, g2, 'Zero', 0, 0.002, 0.002, 'mm');
   INSERT INTO public.departments (organisation_id, site_id, code, name) VALUES (org, site_b, 'QB', 'Quality B');
@@ -147,7 +149,7 @@ BEGIN
   PERFORM pg_temp.login('31000000-0000-0000-0000-000000000102');
   PERFORM pg_temp.assert_eq((SELECT string_agg(asset_number, ',') FROM public.gauges), 'G-002', 'site-scoped gauges');
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.calibrations WHERE gauge_id = g), 0::bigint, 'no Plant A calibrations');
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.gauge_types), 1::bigint, 'types are visible to members');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.gauge_types), 2::bigint, 'types are visible to members');
   PERFORM pg_temp.assert_ok(format($q$INSERT INTO public.calibrations (organisation_id, gauge_id, reference, calibrated_on, outcome) VALUES (%L, %L, 'x', current_date, 'pass')$q$, org, g2), 'inspector records a calibration');
   PERFORM pg_temp.assert_fails(format($q$INSERT INTO public.calibrations (organisation_id, gauge_id, reference, outcome) VALUES (%L, %L, 'x', 'pass')$q$, org, g), 'not at another site');
   PERFORM pg_temp.assert_eq(pg_temp.affected(format($q$UPDATE public.gauges SET location = 'Bench' WHERE id = %L$q$, g2)), 0::bigint, 'inspector cannot edit gauges');

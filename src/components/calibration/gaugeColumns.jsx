@@ -62,6 +62,7 @@ export const gaugeColumns = [
     accessor: (r) => r.intervalValue,
   }),
   col("site", "Site", head(HouseIcon, "Site"), (i) => <div className="table-row-item">{i.getValue() ? i.getValue().name : "—"}</div>, { size: 140, sortKey: "site" }),
+  col("machine", "Machine", head(FactoryIcon, "Machine"), (i) => <div className="table-row-item">{i.getValue() ? i.getValue().name : "—"}</div>, { size: 150, sortKey: "machine" }),
   col("location", "Location", head(HouseIcon, "Location"), text, { size: 150, sortKey: "location" }),
   col("custodian", "Custodian", head(UsersIcon, "Custodian"), nameOf, { size: 150 }),
   col("manufacturer", "Manufacturer", head(FactoryIcon, "Manufacturer"), text, { size: 150, sortKey: "manufacturer" }),
@@ -83,4 +84,4 @@ export const gaugeColumns = [
 ];
 
 /** Shown until a user changes the column set. */
-export const DEFAULT_HIDDEN = { dueState: false, daysUntilDue: false, model: false, range: false, calibrationSource: false, supplier: false, calibrationCount: false, custodian: false };
+export const DEFAULT_HIDDEN = { machine: false, dueState: false, daysUntilDue: false, model: false, range: false, calibrationSource: false, supplier: false, calibrationCount: false, custodian: false };

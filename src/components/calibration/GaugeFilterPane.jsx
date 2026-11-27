@@ -8,7 +8,7 @@ import { useGaugeFilters } from "../../hooks/useUrlFilters";
 import { DUE_FILTERS, GAUGE_STATUSES, OUTCOMES } from "../../lib/calibration";
 import RHFComboBox from "../ui/RHFComboBox";
 import DateRangeFilter from "../ui/DateRangeFilter";
-import { PartyPicker } from "../ncr/Pickers";
+import { MachinePicker, PartyPicker } from "../ncr/Pickers";
 import CTAButton from "@/components/CTAButton";
 
 const DELETED_OPTIONS = [
@@ -57,6 +57,7 @@ const GaugeFilterPane = ({ onClose }) => {
   const [to, setTo] = useState(filters.to || null);
   const [type, setType] = useState(filters.type || null);
   const [site, setSite] = useState(filters.site || null);
+  const [machine, setMachine] = useState(filters.machine ? { id: filters.machine, name: filters.machineLabel } : null);
   const [source, setSource] = useState(filters.source || null);
   const [supplier, setSupplier] = useState(filters.supplier ? { id: filters.supplier, name: filters.supplierLabel } : null);
   const [deleted, setDeleted] = useState(filters.deleted || "exclude");
@@ -92,12 +93,14 @@ const GaugeFilterPane = ({ onClose }) => {
       to: to ?? "",
       type: type ?? "",
       site: site ?? "",
+      machine: machine?.id ?? "",
+      machineLabel: machine?.id ? machine.name ?? "" : "",
       source: source ?? "",
       supplier: supplier?.id ?? "",
       supplierLabel: supplier?.id ? supplier.name ?? "" : "",
       deleted: deleted === "exclude" ? "" : deleted,
     });
-  const resetAll = () => apply(Object.fromEntries(["due", "status", "outcome", "from", "to", "type", "site", "source", "supplier", "supplierLabel", "deleted"].map((k) => [k, ""])));
+  const resetAll = () => apply(Object.fromEntries(["due", "status", "outcome", "from", "to", "type", "site", "machine", "machineLabel", "source", "supplier", "supplierLabel", "deleted"].map((k) => [k, ""])));
 
   return createPortal(
     <div className="fixed inset-0 z-[9000]">
@@ -124,6 +127,8 @@ const GaugeFilterPane = ({ onClose }) => {
           <DateRangeFilter label="Next due" direction="future" from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <RHFComboBox label="Gauge type" icon={TagIcon} placeholder="All types" options={(types ?? []).map((t) => ({ id: t.id, name: t.name, hint: t.active ? t.code : `${t.code} · Inactive` }))} value={type} onChange={setType} />
           <RHFComboBox label="Site" icon={HouseIcon} placeholder="All sites" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} value={site} onChange={setSite} />
+          <MachinePicker label="Machine" icon={FactoryIcon} value={machine?.id ?? null} current={machine?.id ? { id: machine.id, name: machine.name ?? "" } : undefined}
+            onChange={(id, item) => setMachine(id ? { id, name: item?.name ?? machine?.name } : null)} />
           <RHFComboBox label="Calibrated" icon={FactoryIcon} placeholder="In-house or external" options={SOURCES} value={source} onChange={setSource} sort={false} />
           <PartyPicker kind="suppliers" label="Calibration supplier" icon={UsersIcon} value={supplier?.id ?? null} current={supplier?.id ? { id: supplier.id, name: supplier.name ?? "" } : undefined}
             onChange={(id, item) => setSupplier(id ? { id, name: item?.name ?? supplier?.name } : null)} />

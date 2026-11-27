@@ -92,7 +92,8 @@ BEGIN
   UPDATE public.organisation_users SET status = 'suspended' WHERE id = m_member;
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($q$UPDATE public.nonconformances SET owner_id = %L WHERE id = %L$q$, u_member, nc)), 5), 'QM005', 'a suspended member cannot be named either');
   UPDATE public.organisation_users SET status = 'active' WHERE id = m_member;
-  INSERT INTO public.gauges (organisation_id, asset_number, description) VALUES (org, 'G-1', 'Caliper') RETURNING id INTO g;
+  WITH gt AS (INSERT INTO public.gauge_types (organisation_id, name) VALUES (org, 'Caliper') RETURNING id)
+    INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id) SELECT org, 'G-1', 'Caliper', gt.id FROM gt RETURNING id INTO g;
   PERFORM pg_temp.assert_eq(left(pg_temp.fails(format($q$UPDATE public.gauges SET custodian_id = %L WHERE id = %L$q$, u_other, g)), 5), 'QM006', 'a gauge custodian from another organisation is refused');
   PERFORM pg_temp.assert_eq(pg_temp.fails(format($q$UPDATE public.gauges SET custodian_id = %L WHERE id = %L$q$, u_member, g)), 'ok', 'a member is accepted');
   PERFORM pg_temp.logout();

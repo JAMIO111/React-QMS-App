@@ -28,7 +28,7 @@ import CalibrationDashboard from "./CalibrationDashboard";
 import CalibrationRecordPage from "./CalibrationRecordPage";
 import GaugePage from "./GaugePage";
 import GaugeRegister from "./GaugeRegister";
-import { shouldPromptForStatus, statusAfterCalibration } from "../../lib/calibration";
+import { outcomeFromReadings, shouldPromptForStatus, statusAfterCalibration } from "../../lib/calibration";
 import SettingsCalibration, { appliedMessage } from "../Settings/SettingsCalibration";
 
 const ALL = ["calibration.read", "calibration.manage", "calibration.record", "ncr.create"];
@@ -167,6 +167,38 @@ describe("gauge page", () => {
     expect(lastCall("POST /gauges").body).not.toHaveProperty("intervalValue");
   });
 
+  it("needs a gauge type: marked required, and Add gauge waits for one", async () => {
+    routeApi({});
+    renderAt("/Calibration/Gauges/new");
+    await userEvent.type(await screen.findByLabelText(/Asset number/), "G-010");
+    await userEvent.type(screen.getByLabelText(/^Description/), "Depth gauge");
+    expect(screen.getByRole("combobox", { name: "Gauge type" })).toHaveAttribute("aria-required", "true");
+    expect(screen.getByRole("combobox", { name: "Status" })).toHaveAttribute("aria-required", "true");
+    expect(screen.getByRole("button", { name: "Add gauge" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("combobox", { name: "Gauge type" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Digital caliper/ }));
+    expect(screen.getByRole("button", { name: "Add gauge" })).toBeEnabled();
+  });
+
+  it("fixes a gauge to a machine, and the machine brings its site", async () => {
+    routeApi({
+      "GET /machines": { data: [{ id: "m1", code: "LATHE-1", name: "Lathe 1", site: { id: "s1", name: "Main site" }, active: true }], nextCursor: null },
+      "POST /gauges": (path, { body }) => gauge({ id: "g9", assetNumber: body.assetNumber }),
+      "GET /gauges/g9": gauge({ id: "g9" }), "GET /gauges/g9/characteristics": { data: [] }, "GET /gauges/g9/calibrations": [],
+    });
+    renderAt("/Calibration/Gauges/new");
+    await userEvent.type(await screen.findByLabelText(/Asset number/), "G-011");
+    await userEvent.type(screen.getByLabelText(/^Description/), "Probe");
+    await userEvent.click(screen.getByRole("combobox", { name: "Gauge type" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Digital caliper/ }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Machine" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Lathe 1/ }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Site" }).value).toContain("Main site"));
+    await userEvent.click(screen.getByRole("button", { name: "Add gauge" }));
+    await waitFor(() => expect(lastCall("POST /gauges")).toBeTruthy());
+    expect(lastCall("POST /gauges").body).toMatchObject({ gaugeTypeId: "t1", machineId: "m1", siteId: "s1" });
+  });
+
   it("shows characteristics and the calibration history of a gauge", async () => {
     routeApi({ "GET /gauges/g1/calibrations": { data: [{ ...record(), nonconformance: { id: "n1", reference: "NCM-26-004", source: "internal" } }] } });
     renderAt("/Calibration/Gauges/g1");
@@ -244,6 +276,19 @@ describe("gauge status after a calibration", () => {
   });
 });
 
+describe("the outcome the page shows", () => {
+  const r = (asFoundOk, asLeftOk) => ({ asFoundOk, asLeftOk });
+  it("looks at where each reading ended up", () => {
+    expect(outcomeFromReadings([])).toBeNull();
+    expect(outcomeFromReadings([r(true, undefined), r(true, undefined)])).toBe("pass");
+    expect(outcomeFromReadings([r(true, undefined), r(false, true)])).toBe("adjusted");
+    expect(outcomeFromReadings([r(true, undefined), r(false, undefined)])).toBe("fail");
+    expect(outcomeFromReadings([r(false, false)])).toBe("fail");
+    // In tolerance as found but out as left is a fail: that is where the gauge was left.
+    expect(outcomeFromReadings([r(true, false)])).toBe("fail");
+  });
+});
+
 describe("calibration record", () => {
   it("judges readings as they are typed and saves them", async () => {
     routeApi({ "POST /gauges/g1/calibrations": () => record({ id: "c9", outcome: "adjusted" }), "GET /calibrations/c9": record({ id: "c9", outcome: "adjusted" }), "GET /calibrations/c9/attachments": { data: [] } });
@@ -276,6 +321,27 @@ describe("calibration record", () => {
         { characteristicId: "k2", asFound: 100.05, asLeft: 100.01 },
       ],
     });
+  });
+
+  it("needs a reading for every check once one is entered, and names the ones missing", async () => {
+    routeApi({});
+    renderAt("/Calibration/Gauges/g1/calibrations/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "25 mm block as found" }), "25.01");
+    expect(screen.getByRole("button", { name: "Save calibration" })).toBeDisabled();
+    expect(screen.getByText("Every check needs a reading")).toBeInTheDocument();
+    expect(screen.getByText(/Still to enter: 100 mm block/)).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("textbox", { name: "100 mm block as found" }), "100.01");
+    expect(screen.getByRole("button", { name: "Save calibration" })).toBeEnabled();
+    expect(screen.queryByText("Every check needs a reading")).not.toBeInTheDocument();
+  });
+
+  it("is read-only for someone who may record but not manage once it is saved", async () => {
+    permissions = ["calibration.read", "calibration.record"];
+    routeApi({ "GET /calibrations/c1": record({ outcome: "pass" }), "GET /calibrations/c1/attachments": { data: [] } });
+    renderAt("/Calibration/Gauges/g1/calibrations/c1");
+    expect(await screen.findByText(/Only a calibration manager can correct or delete a saved calibration/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "25 mm block as found" })).toBeDisabled();
   });
 
   it("needs an outcome when there are no readings", async () => {

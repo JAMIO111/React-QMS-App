@@ -109,10 +109,11 @@ describe('gauges', () => {
     expect(ch.body.data.map((c: { name: string }) => c.name)).toEqual(['25 mm block', '100 mm block']);
     expect(ch.body.data[0].templateId).toBeTruthy();
 
-    gaugeB = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-002', description: 'Micrometer', siteId: plantB, nextDueOn: isoDaysFromToday(60) }).expect(201)).body.id;
+    const plainType = (await api().post('/api/v1/gauge-types').set(h).send({ code: 'MIC', name: 'Plain micrometer' }).expect(201)).body.id;
+    gaugeB = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-002', description: 'Micrometer', gaugeTypeId: plainType, siteId: plantB, nextDueOn: isoDaysFromToday(60) }).expect(201)).body.id;
     await api().post(`/api/v1/gauges/${gaugeB}/characteristics`).set(h).send({ name: 'Zero', nominal: 0, toleranceMinus: 0.002, tolerancePlus: 0.002, unitCode: 'mm' }).expect(201);
-    await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'g-001', description: 'Duplicate' }).expect(409);
-    await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-X', description: 'Bad range', rangeMin: 10, rangeMax: 1 }).expect(400);
+    await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'g-001', description: 'Duplicate', gaugeTypeId: typeId }).expect(409);
+    await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-X', description: 'Bad range', gaugeTypeId: typeId, rangeMin: 10, rangeMax: 1 }).expect(400);
   });
 
   it('filters, searches and sorts the register', async () => {
@@ -385,5 +386,71 @@ describe("applying a type's checks to gauges made before them", () => {
 
     await api().patch(`/api/v1/gauge-types/${type.id}`).set(h).send({ active: false }).expect(200);
     expect((await api().post(`/api/v1/gauge-types/${type.id}/apply-characteristics`).set(h).expect(409)).body.error.code).toBe('calibration_rule');
+  });
+});
+
+describe('gauge machine, required type and dates (module audit)', () => {
+  it('needs a gauge type, and a type once chosen cannot be cleared', async () => {
+    const h = await as(ids.ownerA);
+    const none = await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-NOTYPE', description: 'No type' }).expect(400);
+    expect(JSON.stringify(none.body)).toContain('Choose a gauge type');
+    await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-NOTYPE', description: 'No type', gaugeTypeId: null }).expect(400);
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-TYPED', description: 'Typed', gaugeTypeId: typeId, siteId: ids.siteA }).expect(201)).body;
+    await api().patch(`/api/v1/gauges/${g.id}`).set(h).send({ gaugeTypeId: null }).expect(400);
+  });
+
+  it('links a gauge to a machine: the machine brings the site, shows on the row, filters and refuses another site', async () => {
+    const h = await as(ids.ownerA);
+    const lathe = (await api().post('/api/v1/machines').set(h).send({ code: 'LATHE-1', name: 'Lathe 1', siteId: ids.siteA }).expect(201)).body;
+    const other = (await api().post('/api/v1/machines').set(h).send({ code: 'MILL-B', name: 'Mill at B', siteId: plantB }).expect(201)).body;
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-MACH', description: 'Probe', gaugeTypeId: typeId, machineId: lathe.id }).expect(201)).body;
+    expect(g.machine).toEqual({ id: lathe.id, code: 'LATHE-1', name: 'Lathe 1', siteId: ids.siteA });
+    expect(g.site.id).toBe(ids.siteA);
+
+    const refused = await api().patch(`/api/v1/gauges/${g.id}`).set(h).send({ machineId: other.id }).expect(409);
+    expect(refused.body.error.code).toBe('calibration_rule');
+
+    const list = await api().get(`/api/v1/gauges?machineId=${lathe.id}`).set(h).expect(200);
+    expect(list.body.data.map((x: { assetNumber: string }) => x.assetNumber)).toEqual(['G-MACH']);
+    expect((await api().get('/api/v1/gauges?q=LATHE').set(h).expect(200)).body.total).toBe(1);
+
+    await api().patch(`/api/v1/machines/${lathe.id}`).set(h).send({ active: false }).expect(200);
+    const off = await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-OFF', description: 'On a retired machine', gaugeTypeId: typeId, machineId: lathe.id }).expect(409);
+    expect(off.body.error.code).toBe('calibration_rule');
+    const cleared = await api().patch(`/api/v1/gauges/${g.id}`).set(h).send({ machineId: null }).expect(200);
+    expect(cleared.body.machine).toBeNull();
+  });
+
+  it('refuses a date that is not a real day', async () => {
+    const h = await as(ids.ownerA);
+    await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-DATE', description: 'Bad date', gaugeTypeId: typeId, nextDueOn: '2026-02-31' }).expect(400);
+    await api().post(`/api/v1/gauges/${gauge}/calibrations`).set(h).send({ calibratedOn: '2026-13-01', outcome: 'pass' }).expect(400);
+  });
+
+  it('a gauge that is not in use has no days to due, and "no due date" leaves it out', async () => {
+    const h = await as(ids.ownerA);
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-RET', description: 'Retired', gaugeTypeId: typeId, siteId: ids.siteA, nextDueOn: isoDaysFromToday(-10) }).expect(201)).body;
+    await api().patch(`/api/v1/gauges/${g.id}`).set(h).send({ status: 'retired', statusReason: 'Scrapped' }).expect(200);
+    const row = (await api().get(`/api/v1/gauges/${g.id}`).set(h).expect(200)).body;
+    expect(row.dueState).toBe('not_in_use');
+    expect(row.daysUntilDue).toBeNull();
+    const unset = await api().get('/api/v1/gauges?due=not_set&status=retired').set(h).expect(200);
+    expect(unset.body.data.find((x: { id: string }) => x.id === g.id)).toBeUndefined();
+  });
+
+  it('a readings edit changes only the fields it sends', async () => {
+    const h = await as(ids.ownerA);
+    const mt = (await api().post('/api/v1/gauge-types').set(h).send({ code: 'MERGE', name: 'Merge type' }).expect(201)).body;
+    await api().post(`/api/v1/gauge-types/${mt.id}/characteristics`).set(h).send({ name: '10 mm', nominal: 10, toleranceMinus: 0.05, tolerancePlus: 0.05, unitCode: 'mm' }).expect(201);
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-MERGE', description: 'Merge', gaugeTypeId: mt.id, siteId: ids.siteA }).expect(201)).body;
+    const ch = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data;
+    const cal = (await api().post(`/api/v1/gauges/${g.id}/calibrations`).set(h)
+      .send({ readings: ch.map((c: { id: string; nominal: number }) => ({ characteristicId: c.id, asFound: c.nominal, asLeft: c.nominal, notes: 'first' })) }).expect(201)).body;
+    const version = cal.rowVersion;
+    const after = (await api().patch(`/api/v1/calibrations/${cal.id}`).set(h)
+      .send({ readings: [{ characteristicId: ch[0].id, asFound: ch[0].nominal + 0.001 }], rowVersion: version }).expect(200)).body;
+    const edited = after.readings.find((r: { characteristicId: string }) => r.characteristicId === ch[0].id);
+    expect(edited).toMatchObject({ asFound: edited.nominal + 0.001, asLeft: edited.nominal, notes: 'first' }); // as-left and the note were not sent, so they stay
+    expect(after.rowVersion).not.toBe(version); // a readings-only edit still moves the record's version
   });
 });

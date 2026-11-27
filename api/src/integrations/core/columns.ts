@@ -103,7 +103,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
     fields: {
       assetNumber: { column: 'asset_number' }, description: { column: 'description' }, gaugeType: { column: 'gauge_type_id' }, manufacturer: { column: 'manufacturer' },
       model: { column: 'model' }, serialNumber: { column: 'serial_number' }, site: { column: 'site_id' }, department: { column: 'department_id' },
-      location: { column: 'location' }, rangeMin: { column: 'range_min' }, rangeMax: { column: 'range_max' }, unit: { column: 'unit_code' },
+      machine: { column: 'machine_id' }, location: { column: 'location' }, rangeMin: { column: 'range_min' }, rangeMax: { column: 'range_max' }, unit: { column: 'unit_code' },
       resolution: { column: 'resolution' }, calibrationSource: { column: 'calibration_source' }, supplier: { column: 'supplier_id' },
       intervalValue: { column: 'interval_value' }, intervalUnit: { column: 'interval_unit' }, commissionedOn: { column: 'commissioned_on' }, notes: { column: 'notes' },
     },

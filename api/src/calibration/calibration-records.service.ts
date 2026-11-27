@@ -157,6 +157,7 @@ export class CalibrationRecordsService {
       const sets = assignments(fields, CALIBRATION_COLUMNS);
       // Readings-only edits leave the record row alone (RLS on the readings still applies).
       if (sets.length) await this.update1(db, ctx, id, sql.join(sets, sql`, `));
+      else if (readings?.length) await this.update1(db, ctx, id, sql`notes = notes`); // an unchanged write still moves the record's version, so a second editor of the readings is told
       else await this.assertVisible(db, ctx, id);
       await this.saveReadings(db, ctx, id, readings ?? []);
       await db.execute(sql`set constraints calibrations_after, calibration_readings_complete immediate`);
@@ -254,17 +255,30 @@ export class CalibrationRecordsService {
   // ---- internals -----------------------------------------------------------------------------
 
   /** Adds or updates one reading per characteristic (readings are never removed, only corrected). */
+  /**
+   * Saves readings by characteristic. Only the fields a reading actually sends are changed (an omitted as-left is left as it was,
+   * not cleared); a reading that does not exist yet is made with what was sent.
+   */
   private async saveReadings(db: Db, ctx: RequestContext, id: string, readings: NonNullable<CreateCalibrationBody['readings']>) {
+    const COLS = [
+      ['asFound', 'as_found'], ['asLeft', 'as_left'], ['asFoundPass', 'as_found_pass'], ['asLeftPass', 'as_left_pass'], ['notes', 'notes'],
+    ] as const;
     for (const r of readings) {
-      const [found, left, foundPass, leftPass, notes] = [r.asFound ?? null, r.asLeft ?? null, r.asFoundPass ?? null, r.asLeftPass ?? null, r.notes ?? null];
-      const updated = await db.execute(sql`
-        update public.calibration_readings
-        set as_found = ${found}, as_left = ${left}, as_found_pass = ${foundPass}, as_left_pass = ${leftPass}, notes = ${notes}
-        where calibration_id = ${id}::uuid and characteristic_id = ${r.characteristicId}::uuid returning id`);
-      if (updated.rows.length) continue;
+      const sent = COLS.filter(([key]) => key in r);
+      const value = (key: (typeof COLS)[number][0]) => (r as Record<string, unknown>)[key] ?? null;
+      if (sent.length) {
+        const updated = await db.execute(sql`
+          update public.calibration_readings
+          set ${sql.join(sent.map(([key, col]) => sql`${sql.raw(col)} = ${value(key)}`), sql`, `)}
+          where calibration_id = ${id}::uuid and characteristic_id = ${r.characteristicId}::uuid returning id`);
+        if (updated.rows.length) continue;
+      } else {
+        const exists = await db.execute(sql`select 1 from public.calibration_readings where calibration_id = ${id}::uuid and characteristic_id = ${r.characteristicId}::uuid`);
+        if (exists.rows.length) continue;
+      }
       await db.execute(sql`
         insert into public.calibration_readings (organisation_id, calibration_id, characteristic_id, as_found, as_left, as_found_pass, as_left_pass, notes)
-        values (${ctx.organisationId!}::uuid, ${id}::uuid, ${r.characteristicId}::uuid, ${found}, ${left}, ${foundPass}, ${leftPass}, ${notes})`);
+        values (${ctx.organisationId!}::uuid, ${id}::uuid, ${r.characteristicId}::uuid, ${value('asFound')}, ${value('asLeft')}, ${value('asFoundPass')}, ${value('asLeftPass')}, ${value('notes')})`);
     }
   }
 

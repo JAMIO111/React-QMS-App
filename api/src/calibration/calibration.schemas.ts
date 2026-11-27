@@ -12,7 +12,14 @@ export const DueState = z.enum(['overdue', 'due_soon', 'ok', 'not_set', 'not_in_
 export const DueFilter = z.enum(['overdue', 'due_30', 'due_90', 'not_set']);
 
 const Ref = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
-export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+/** A real calendar day, not just the right shape (2026-02-31 is refused rather than left for the database to reject). */
+export const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'That is not a real date');
 const dateTime = z.string().datetime({ offset: true });
 
 const text = (max: number) =>
@@ -166,6 +173,8 @@ export const GaugeSummary = z.object({
   serialNumber: z.string().nullable(),
   site: z.object({ id: z.string().uuid(), code: z.string(), name: z.string() }).nullable(),
   department: Ref,
+  /** The machine the gauge is fixed to (optional), beside the typed location. */
+  machine: z.object({ id: z.string().uuid(), code: z.string(), name: z.string(), siteId: z.string().uuid().nullable() }).nullable(),
   location: z.string().nullable(),
   custodian: Ref,
   rangeMin: z.number().nullable(),
@@ -206,7 +215,7 @@ export const GaugePage = z.object({ data: z.array(GaugeSummary), page: z.number(
 
 export const GAUGE_SORTABLE = [
   'assetNumber', 'description', 'type', 'status', 'nextDueOn', 'lastCalibratedOn', 'site', 'location', 'manufacturer',
-  'serialNumber', 'lastOutcome', 'interval', 'createdAt',
+  'serialNumber', 'lastOutcome', 'interval', 'machine', 'createdAt',
 ] as const;
 
 export const GaugeListQuery = z.object({
@@ -215,6 +224,7 @@ export const GaugeListQuery = z.object({
   due: csv(DueFilter),
   typeId: z.string().uuid().optional(),
   siteId: z.string().uuid().optional(),
+  machineId: z.string().uuid().optional(),
   supplierId: z.string().uuid().optional(),
   source: CalibrationSource.optional(),
   outcome: csv(Outcome),
@@ -238,6 +248,7 @@ const gaugeFields = {
   serialNumber: text(100),
   siteId: id,
   departmentId: id,
+  machineId: id,
   location: text(200),
   custodianId: id,
   rangeMin: value.nullable().optional(),
@@ -255,10 +266,18 @@ const gaugeFields = {
   commissionedOn: isoDate.nullable().optional(),
   notes: text(5000),
 };
-export const CreateGaugeBody = z.object({ ...gaugeFields, customValues: CustomValuesInput.optional() }).strict();
+export const CreateGaugeBody = z
+  .object({ ...gaugeFields, gaugeTypeId: z.string({ required_error: 'Choose a gauge type', invalid_type_error: 'Choose a gauge type' }).uuid({ message: 'Choose a gauge type' }), customValues: CustomValuesInput.optional() })
+  .strict();
 export type CreateGaugeBody = z.infer<typeof CreateGaugeBody>;
 export const UpdateGaugeBody = z
-  .object({ ...gaugeFields, assetNumber: gaugeFields.assetNumber.optional(), description: gaugeFields.description.optional() })
+  .object({
+    ...gaugeFields,
+    assetNumber: gaugeFields.assetNumber.optional(),
+    description: gaugeFields.description.optional(),
+    // A gauge type, once chosen, can be changed but not cleared (the database holds the same rule).
+    gaugeTypeId: z.string().uuid().optional(),
+  })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 export type UpdateGaugeBody = z.infer<typeof UpdateGaugeBody>;

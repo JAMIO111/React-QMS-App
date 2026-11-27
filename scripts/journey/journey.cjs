@@ -2608,7 +2608,8 @@ async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, own
   const family = (await stack.admin.query(`select id from public.part_families where organisation_id = $1 and code = 'JRN'`, [org.id])).rows[0];
   const part = await api('POST', '/parts', { partNumber: 'JRN-200', name: 'Journey housing', partFamilyId: family.id, initialRevision: { revision: 'A' } });
   const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
-  const cmm = await api('POST', '/gauges', { assetNumber: 'CMM-J1', description: 'Bridge CMM', siteId: org.site });
+  const cmmType = await api('POST', '/gauge-types', { code: 'CMM-J', name: 'Coordinate measuring machine' });
+  const cmm = await api('POST', '/gauges', { assetNumber: 'CMM-J1', description: 'Bridge CMM', gaugeTypeId: cmmType.id, siteId: org.site });
   const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-200', title: 'Journey housing' });
   await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });
   const planRev = plan.revisions[0].id;
@@ -2724,7 +2725,8 @@ async function gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner 
   const api = apiAs(stack, user.id, owner.email, org.id);
   const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
   const part = await api('POST', '/parts', { partNumber: 'JRN-300', name: 'Journey shaft', initialRevision: { revision: 'A' } });
-  const gauge = await api('POST', '/gauges', { assetNumber: 'GRR-J1', description: 'Journey micrometer', siteId: org.site });
+  const micType = await api('POST', '/gauge-types', { code: 'MIC-J', name: 'Micrometer' });
+  const gauge = await api('POST', '/gauges', { assetNumber: 'GRR-J1', description: 'Journey micrometer', gaugeTypeId: micType.id, siteId: org.site });
   await stack.admin.query(`update public.gauges set resolution = 0.001, unit_code = 'mm' where id = $1`, [gauge.id]);
   const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-300', title: 'Journey shaft' });
   await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });

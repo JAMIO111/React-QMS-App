@@ -73,7 +73,8 @@ BEGIN
   UPDATE public.control_plan_revisions SET status = 'pending_approval' WHERE id = rev;
   UPDATE public.control_plan_revisions SET status = 'approved' WHERE id = rev;
   UPDATE public.control_plan_revisions SET status = 'effective' WHERE id = rev;
-  INSERT INTO public.gauges (organisation_id, asset_number, description, site_id) VALUES (org, 'CMM-01', 'Bridge CMM', site) RETURNING id INTO cmm;
+  WITH gt AS (INSERT INTO public.gauge_types (organisation_id, name) VALUES (org, 'Bridge CMM') RETURNING id)
+    INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id, site_id) SELECT org, 'CMM-01', 'Bridge CMM', gt.id, site FROM gt RETURNING id INTO cmm;
   rec := app.start_inspection(site, part);
   PERFORM pg_temp.logout();
 

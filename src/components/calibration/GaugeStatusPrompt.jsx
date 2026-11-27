@@ -20,6 +20,9 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
   const [reason, setReason] = useState(status === current ? gauge.statusReason ?? "" : "");
   const outcome = outcomeOf(calibration.outcome);
   const changed = status !== current;
+  // Putting a quarantined gauge back into use by hand is a decision the database wants a reason for.
+  const needsReason = current === "quarantined" && status === "active";
+  const askReason = status !== "active" || needsReason;
 
   return (
     <Dialog title="Update gauge status?" onClose={onSkip}>
@@ -27,7 +30,7 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          onApply(status, status === "active" ? null : reason.trim() || null);
+          onApply(status, askReason ? reason.trim() || null : null);
         }}>
         <p className="text-sm text-secondary-text">
           {calibration.reference} {outcome ? `finished with result ${outcome.label.toLowerCase()}` : "was recorded"}. {gauge.assetNumber} is currently{" "}
@@ -45,7 +48,7 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
                 checked={status === s.key}
                 onChange={() => {
                   setStatus(s.key);
-                  if (s.key === "active") setReason("");
+                  if (s.key === "active" && current !== "quarantined") setReason("");
                 }}
               />
               <span className="flex flex-col">
@@ -59,9 +62,9 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
             </label>
           ))}
         </div>
-        {status !== "active" && (
-          <label className="flex flex-col gap-1 text-xs text-secondary-text">
-            Reason (optional)
+        {askReason && (
+          <label className="flex flex-col gap-1 text-xs text-secondary-text" data-required={needsReason || undefined}>
+            {needsReason ? "Why is it back in use?" : "Reason (optional)"}
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -75,7 +78,7 @@ const GaugeStatusPrompt = ({ gauge, calibration, onApply, onSkip }) => {
           <CTAButton buttonType="button" onClick={onSkip} type="neutral" size="md">
             Keep {statusOf(current).label.toLowerCase()}
           </CTAButton>
-          <CTAButton buttonType="submit" disabled={!changed} type="main" size="md" className="font-medium">
+          <CTAButton buttonType="submit" disabled={!changed || (needsReason && !reason.trim())} type="main" size="md" className="font-medium">
             Update status
           </CTAButton>
         </div>

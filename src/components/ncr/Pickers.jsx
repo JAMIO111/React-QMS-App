@@ -56,12 +56,12 @@ export const RemoteComboBox = ({ items, isFetching, onSearch, current, value, on
   );
 };
 
-const machineOption = (m) => ({ id: m.id, name: m.name, hint: m.code });
+const machineOption = (m) => ({ id: m.id, name: m.name, hint: m.code, site: m.site ?? null });
 
 /** Machine search (server-side): where a non-conformance was detected or what caused it. `current` is the saved machine ({ id, name }). */
-export const MachinePicker = ({ current, label = "Machine", ...props }) => {
+export const MachinePicker = ({ current, label = "Machine", includeInactive = true, ...props }) => {
   const [q, setSearch] = useDebouncedSearch();
-  const machines = useMachines({ q, includeInactive: true });
+  const machines = useMachines({ q, includeInactive });
   return (
     <RemoteComboBox
       {...props}

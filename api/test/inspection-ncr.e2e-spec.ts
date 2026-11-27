@@ -276,6 +276,7 @@ describe('gauge impact assessment', () => {
     await api().post(`/api/v1/gauges/${ctx.mic}/calibrations`).set(h).send({ outcome: 'pass', calibratedOn: day(-1) }).expect(201);
     const failing = (await api().post(`/api/v1/gauges/${ctx.mic}/calibrations`).set(h).send({ outcome: 'fail', calibratedOn: day(0) }).expect(201)).body;
     const usage = (await api().get(`/api/v1/calibrations/${failing.id}/gauge-usage`).set(h).expect(200)).body;
+    expect(usage.available).toBe(true);
     expect(usage).toMatchObject({
       calibration: { id: failing.id, outcome: 'fail', calibratedOn: day(0) },
       gauge: { assetNumber: 'MIC-1' },

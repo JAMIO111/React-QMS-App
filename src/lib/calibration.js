@@ -63,13 +63,18 @@ export const inTolerance = (value, { nominal, toleranceMinus, tolerancePlus }) =
   return round(v) >= round(Number(nominal) - Number(toleranceMinus)) && round(v) <= round(Number(nominal) + Number(tolerancePlus));
 };
 
-/** Outcome the server will work out from readings: pass, adjusted or fail (null without readings). */
+/**
+ * Outcome the server will work out from readings, looking at where each reading ended up: fail when any reading is out of tolerance in its
+ * final state (as left when it was adjusted, else as found), pass when every reading was in tolerance as found, otherwise adjusted.
+ * Null without readings.
+ */
 export const outcomeFromReadings = (readings) => {
   const judged = readings.filter((r) => r.asFoundOk !== undefined);
   if (!judged.length) return null;
+  const finalOk = (r) => (r.asLeftOk !== undefined && r.asLeftOk !== null ? r.asLeftOk : r.asFoundOk);
+  if (!judged.every(finalOk)) return "fail";
   if (judged.every((r) => r.asFoundOk)) return "pass";
-  if (judged.every((r) => r.asFoundOk || r.asLeftOk)) return "adjusted";
-  return "fail";
+  return "adjusted";
 };
 
 /** "in 12 days", "3 days overdue", "due today". */
@@ -96,6 +101,7 @@ export const GAUGE_FIELD_LABELS = {
   serial_number: "Serial number",
   site_id: "Site",
   department_id: "Department",
+  machine_id: "Machine",
   location: "Location",
   custodian_id: "Custodian",
   range_min: "Range from",

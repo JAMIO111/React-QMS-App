@@ -50,13 +50,15 @@ BEGIN
   INSERT INTO public.part_revisions (organisation_id, part_id, revision) VALUES (org, part2, 'A') RETURNING id INTO rev_p2;
   UPDATE public.part_revisions SET status = 'released' WHERE id = rev_p2;
   INSERT INTO public.customers (organisation_id, code, name) VALUES (org, 'PL-C1', 'Acme Motors') RETURNING id INTO cust;
-  INSERT INTO public.gauges (organisation_id, asset_number, description) VALUES (org, 'PL-G1', 'Micrometer') RETURNING id INTO g_ok;
+  WITH gt AS (INSERT INTO public.gauge_types (organisation_id, name) VALUES (org, 'Micrometer') RETURNING id)
+    INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id) SELECT org, 'PL-G1', 'Micrometer', gt.id FROM gt RETURNING id INTO g_ok;
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(eve);
   INSERT INTO public.parts (organisation_id, part_number, name) VALUES (org2, 'PL-X1', 'Other') RETURNING id INTO part_other;
   INSERT INTO public.part_revisions (organisation_id, part_id, revision) VALUES (org2, part_other, 'A') RETURNING id INTO rev_other;
   UPDATE public.part_revisions SET status = 'released' WHERE id = rev_other;
-  INSERT INTO public.gauges (organisation_id, asset_number, description) VALUES (org2, 'PL-GX', 'Other gauge') RETURNING id INTO g_other;
+  WITH gt AS (INSERT INTO public.gauge_types (organisation_id, name) VALUES (org2, 'Other type') RETURNING id)
+    INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id) SELECT org2, 'PL-GX', 'Other gauge', gt.id FROM gt RETURNING id INTO g_other;
   PERFORM pg_temp.logout();
 
   PERFORM pg_temp.login(cat);
@@ -156,7 +158,7 @@ BEGIN
   PERFORM pg_temp.assert_eq(probs @> ARRAY['Design records: mark it ready'], true, 'a linked element that is good still needs marking ready');
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(ann);
-  UPDATE public.gauges SET status = 'active', status_reason = NULL WHERE id = g_ok;
+  UPDATE public.gauges SET status = 'active', status_reason = 'Returned to use for the test' WHERE id = g_ok;
   PERFORM pg_temp.logout();
   PERFORM pg_temp.login(cat);
   PERFORM pg_temp.assert_eq((app.ppap_problems(s1)) @> ARRAY['Checking aids: PL-G1 — Micrometer is quarantined'], false, 'the line goes when the gauge is back in service');

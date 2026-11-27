@@ -94,9 +94,10 @@ describe('with things late, critical and waiting', () => {
     await post('/capas', { title: 'Loose fixture', problemStatement: 'Fixture moves' });
     await admin.query(`update public.capas set due_date = current_date - 3 where id = $1`, [late.id]);
     // Gauges: one overdue, one due soon, one far off.
-    await post('/gauges', { assetNumber: 'G-1', description: 'Caliper', siteId: ids.siteA, nextDueOn: day(-3) });
-    await post('/gauges', { assetNumber: 'G-2', description: 'Micrometer', siteId: ids.siteA, nextDueOn: day(10) });
-    await post('/gauges', { assetNumber: 'G-3', description: 'Height gauge', siteId: ids.siteA, nextDueOn: day(200) });
+    const gaugeType = (await post('/gauge-types', { code: 'CAL', name: 'Calibrated gauge' })).id;
+    await post('/gauges', { assetNumber: 'G-1', description: 'Caliper', gaugeTypeId: gaugeType, siteId: ids.siteA, nextDueOn: day(-3) });
+    await post('/gauges', { assetNumber: 'G-2', description: 'Micrometer', gaugeTypeId: gaugeType, siteId: ids.siteA, nextDueOn: day(10) });
+    await post('/gauges', { assetNumber: 'G-3', description: 'Height gauge', gaugeTypeId: gaugeType, siteId: ids.siteA, nextDueOn: day(200) });
     // Master data with gaps: a part with no released revision, family or customer; a machine with no site; an employee with no department (and never assessed).
     await post('/parts', { partNumber: 'P-1', name: 'One', initialRevision: { revision: 'A' } });
     const machine = await post('/machines', { code: 'M-1', name: 'Mill' });

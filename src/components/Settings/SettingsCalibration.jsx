@@ -47,7 +47,7 @@ const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
   // The procedure as it was when the pop-up opened, so the picker shows it whatever the list does behind.
   const [procedure] = useState(type?.procedureDocument);
   const { lock } = useImportLocks("gauge_type", type?.id);
-  const ok = name.trim() && shownCode.trim() && Number.isInteger(Number(intervalValue)) && Number(intervalValue) >= 1;
+  const ok = name.trim() && shownCode.trim() && Number.isInteger(Number(intervalValue)) && Number(intervalValue) >= 1 && Number(intervalValue) <= 3650;
   const submit = (e) => {
     e.preventDefault();
     if (!ok) return;

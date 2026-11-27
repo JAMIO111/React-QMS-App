@@ -59,7 +59,7 @@ export const DUE_STATE = `case when not (${IN_USE}) then 'not_in_use'
 
 const GAUGE_COLUMNS: Record<string, string> = {
   assetNumber: 'asset_number', description: 'description', gaugeTypeId: 'gauge_type_id', manufacturer: 'manufacturer',
-  model: 'model', serialNumber: 'serial_number', siteId: 'site_id', departmentId: 'department_id', location: 'location',
+  model: 'model', serialNumber: 'serial_number', siteId: 'site_id', departmentId: 'department_id', machineId: 'machine_id', location: 'location',
   custodianId: 'custodian_id', rangeMin: 'range_min', rangeMax: 'range_max', unitCode: 'unit_code', resolution: 'resolution',
   calibrationSource: 'calibration_source', supplierId: 'supplier_id', intervalValue: 'interval_value', intervalUnit: 'interval_unit',
   status: 'status', statusReason: 'status_reason', lastCalibratedOn: 'last_calibrated_on', nextDueOn: 'next_due_on',
@@ -82,6 +82,7 @@ const SORT_SQL: Record<GaugeListQuery['sort'], string> = {
   lastCalibratedOn: 'g.last_calibrated_on',
   site: 'lower(s.name)',
   location: 'lower(g.location)',
+  machine: 'lower(m.name)',
   manufacturer: 'lower(g.manufacturer)',
   serialNumber: 'upper(g.serial_number)',
   lastOutcome: `array_position(array['pass','adjusted','fail'], lc.outcome)`,
@@ -93,10 +94,10 @@ const GAUGE_SELECT = `
   g.id, g.asset_number, g.description, g.manufacturer, g.model, g.serial_number, g.location, g.range_min, g.range_max,
   g.unit_code, g.resolution, g.calibration_source, g.interval_value, g.interval_unit, g.status, g.status_reason,
   to_char(g.last_calibrated_on, 'YYYY-MM-DD') as last_calibrated_on, to_char(g.next_due_on, 'YYYY-MM-DD') as next_due_on,
-  (g.next_due_on - current_date) as days_until_due, ${DUE_STATE} as due_state,
+  case when ${IN_USE} then (g.next_due_on - current_date) end as days_until_due, ${DUE_STATE} as due_state,
   g.deleted_at, g.created_at,
   t.id as type_id, t.name as type_name, t.code as type_code, s.id as site_id, s.code as site_code, s.name as site_name,
-  d.id as department_id, d.name as department_name,
+  d.id as department_id, d.name as department_name, m.id as machine_id, m.code as machine_code, m.name as machine_name, m.site_id as machine_site_id,
   g.custodian_id, ${personName('cu')} as custodian_name,
   sp.id as supplier_id, coalesce(sp.display_name, sp.name) as supplier_name,
   lc.outcome as last_outcome, coalesce(cc.n, 0) as calibration_count`;
@@ -105,11 +106,12 @@ const GAUGE_FROM = `
   left join public.gauge_types t on t.id = g.gauge_type_id
   left join public.sites s on s.id = g.site_id
   left join public.departments d on d.id = g.department_id
+  left join public.machines m on m.id = g.machine_id
   left join public.profiles cu on cu.id = g.custodian_id
   left join public.suppliers sp on sp.id = g.supplier_id
   left join lateral (
     select c.outcome from public.calibrations c where c.gauge_id = g.id and c.deleted_at is null
-    order by c.calibrated_on desc, c.created_at desc limit 1
+    order by c.calibrated_on desc, c.created_at desc, c.reference desc limit 1
   ) lc on true
   left join lateral (select count(*) as n from public.calibrations c where c.gauge_id = g.id and c.deleted_at is null) cc on true`;
 
@@ -123,6 +125,7 @@ const toGaugeSummary = (r: Row): GaugeSummary => ({
   serialNumber: (r.serial_number as string) ?? null,
   site: r.site_id ? { id: r.site_id as string, code: r.site_code as string, name: r.site_name as string } : null,
   department: ref(r.department_id, r.department_name),
+  machine: r.machine_id ? { id: r.machine_id as string, code: r.machine_code as string, name: r.machine_name as string, siteId: (r.machine_site_id as string) ?? null } : null,
   location: (r.location as string) ?? null,
   custodian: ref(r.custodian_id, r.custodian_name, 'Unknown user'),
   rangeMin: num(r.range_min),
@@ -166,7 +169,7 @@ const CHARACTERISTIC_SELECT = (table: string) =>
   `select k.*, k.nominal - k.tolerance_minus as lower_limit, k.nominal + k.tolerance_plus as upper_limit from public.${table} k`;
 
 /** Gauge columns that hold ids of other records (named in the history). */
-const HISTORY_ID_FIELDS = ['gauge_type_id', 'site_id', 'department_id', 'custodian_id', 'supplier_id', 'deleted_by'] as const;
+const HISTORY_ID_FIELDS = ['gauge_type_id', 'site_id', 'department_id', 'machine_id', 'custodian_id', 'supplier_id', 'deleted_by'] as const;
 
 /**
  * Gauges, their characteristics and gauge types of the current organisation. RLS applies the
@@ -195,12 +198,13 @@ export class CalibrationService {
               ? sql.raw(`(${IN_USE} and g.next_due_on between current_date and current_date + 30)`)
               : d === 'due_90'
                 ? sql.raw(`(${IN_USE} and g.next_due_on between current_date and current_date + 90)`)
-                : sql.raw(`(g.next_due_on is null)`),
+                : sql.raw(`(${IN_USE} and g.next_due_on is null)`),
         );
         where.push(sql`(${sql.join(due, sql` or `)})`);
       }
       if (q.typeId) where.push(sql`g.gauge_type_id = ${q.typeId}::uuid`);
       if (q.siteId) where.push(sql`g.site_id = ${q.siteId}::uuid`);
+      if (q.machineId) where.push(sql`g.machine_id = ${q.machineId}::uuid`);
       if (q.supplierId) where.push(sql`g.supplier_id = ${q.supplierId}::uuid`);
       if (q.source) where.push(sql`g.calibration_source = ${q.source}`);
       if (q.from) where.push(sql`g.next_due_on >= ${q.from}::date`);
@@ -208,7 +212,8 @@ export class CalibrationService {
       if (q.q) {
         const like = likePattern(q.q);
         where.push(sql`(g.asset_number ilike ${like} or g.description ilike ${like} or g.serial_number ilike ${like}
-          or g.manufacturer ilike ${like} or g.model ilike ${like} or g.location ilike ${like} or t.name ilike ${like} or t.code ilike ${like})`);
+          or g.manufacturer ilike ${like} or g.model ilike ${like} or g.location ilike ${like} or t.name ilike ${like} or t.code ilike ${like}
+          or m.name ilike ${like} or m.code ilike ${like})`);
       }
       const cf = await customFilterSql(db, ctx.organisationId!, 'gauge', sql`g.id`, custom);
       if (cf) where.push(cf);
@@ -290,6 +295,7 @@ export class CalibrationService {
         select t.id, t.name from public.gauge_types t join ids using (id)
         union all select s.id, s.name from public.sites s join ids using (id)
         union all select d.id, d.name from public.departments d join ids using (id)
+        union all select mc.id, mc.name from public.machines mc join ids using (id)
         union all select sp.id, coalesce(sp.display_name, sp.name) from public.suppliers sp join ids using (id)
         union all select u.id, ${sql.raw(personName('u'))} from public.profiles u join ids using (id)`);
       const names = new Map(named.rows.filter((r) => r.name).map((r) => [r.id as string, r.name as string]));
@@ -412,6 +418,7 @@ export class CalibrationService {
         ${missing}
           and app.has_permission(g.organisation_id, 'calibration.manage', g.site_id)
         order by g.id, k.sort_order
+        on conflict (gauge_id, template_id) where template_id is not null do nothing
         returning gauge_id`);
       return {
         gaugesUpdated: new Set(added.rows.map((r) => r.gauge_id)).size,

@@ -80,6 +80,9 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
     case '22P02': // invalid_text_representation
     case '22001': // string_data_right_truncation
       return ApiError.badRequest('invalid_value', 'A value is not allowed');
+    case '22007': // invalid_datetime_format
+    case '22008': // datetime_field_overflow (e.g. 2026-02-31)
+      return ApiError.badRequest('invalid_value', 'A date is not a real date');
     case '42501': // insufficient_privilege, incl. "new row violates row-level security policy"
       return ApiError.forbidden();
     case '54000': // program_limit_exceeded (abuse limits)

@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import SettingMenuStructure from "../../SettingMenuStructure";
 import { useCanSee } from "../../hooks/useQmsApi";
-import { ChevronLeftIcon, DatabaseIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DatabaseIcon } from "@/components/icons";
 import { DATA_PATH, dataTabPath, useDataTabs } from "./dataTabs";
 
 /**
@@ -15,13 +15,20 @@ import { DATA_PATH, dataTabPath, useDataTabs } from "./dataTabs";
 const LEVEL_MOVE = "transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none";
 
 const itemClass = (active) =>
-  `flex flex-row cursor-pointer items-center gap-2 rounded-xl px-3 py-1 ${active ? "bg-cta-color" : "hover:bg-border-color/50"}`;
+  `group flex flex-row cursor-pointer items-center gap-2 rounded-xl px-3 py-1 ${active ? "bg-cta-color" : "hover:bg-border-color/50"}`;
 
-const Item = ({ to, icon: Icon, label, active, replace, style, className = "" }) => (
+/** `nested` marks an entry that opens a menu of its own: a small arrow on the right says so, and nudges along on hover. */
+const Item = ({ to, icon: Icon, label, active, replace, nested, style, className = "" }) => (
   <Link to={to} replace={replace} style={style} aria-current={active ? "page" : undefined} className={`mx-2 mt-2 block rounded-xl ${className}`}>
     <div className={itemClass(active)}>
       <Icon className={`${active ? "text-white" : "text-primary-text"} h-4 w-4 shrink-0`} />
       <h2 className={`${active ? "font-semibold text-white" : "text-primary-text"} text-left`}>{label}</h2>
+      {nested && (
+        <ChevronRightIcon
+          aria-hidden="true"
+          className={`ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none ${active ? "text-white" : "text-secondary-text"}`}
+        />
+      )}
     </div>
   </Link>
 );
@@ -37,21 +44,24 @@ const Settings = () => {
   return (
     <div className="flex w-full grow flex-row overflow-y-hidden bg-primary-bg pr-0">
       <div className="flex w-65 min-w-65 flex-col overflow-hidden border-r border-border-color">
-        {/* The header: the back button grows in and the title changes as the nested menu opens. */}
-        <div className="mt-2 flex h-9 items-center border-b border-border-color pb-2 pl-3 pr-3">
+        {/* The header: the whole row goes back once the nested menu is open (the button lies under it, and the words let clicks through); the arrow grows in and the title changes as it opens. */}
+        <div className="relative mt-2 flex h-9 items-center border-b border-border-color pb-2 pl-3 pr-3">
           <button
             type="button"
             onClick={() => navigate("/Settings")}
             aria-label="Back to Settings"
             aria-hidden={!inData}
             inert={!inData}
-            className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg text-secondary-text hover:bg-border-color/50 hover:text-primary-text ${LEVEL_MOVE} ${
-              inData ? "mr-1 h-7 w-7 opacity-100" : "pointer-events-none mr-0 h-7 w-0 opacity-0"
-            }`}
+            tabIndex={inData ? 0 : -1}
+            className={`absolute inset-x-1 inset-y-0 mb-2 cursor-pointer rounded-lg hover:bg-border-color/50 ${inData ? "" : "pointer-events-none"}`}
+          />
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none relative flex shrink-0 items-center justify-center overflow-hidden text-secondary-text ${LEVEL_MOVE} ${inData ? "mr-1 h-7 w-7 opacity-100" : "mr-0 h-7 w-0 opacity-0"}`}
           >
             <ChevronLeftIcon className="h-5 w-5" />
-          </button>
-          <div className={`grid min-w-0 flex-1 ${inData ? "" : "pl-2"} transition-[padding] duration-300 motion-reduce:transition-none`}>
+          </span>
+          <div className={`pointer-events-none relative grid min-w-0 flex-1 ${inData ? "" : "pl-2"} transition-[padding] duration-300 motion-reduce:transition-none`}>
             <h1 aria-hidden={inData} className={`col-start-1 row-start-1 text-primary-text ${LEVEL_MOVE} ${inData ? "-translate-x-3 opacity-0" : "translate-x-0 opacity-100"}`}>
               Settings
             </h1>
@@ -74,6 +84,7 @@ const Settings = () => {
                 to={item.path}
                 icon={item.icon ?? DatabaseIcon}
                 label={item.name}
+                nested={item.path === "Data-Management"}
                 active={pathname.toLowerCase().startsWith(`/settings/${item.path.toLowerCase()}`)}
               />
             ))}

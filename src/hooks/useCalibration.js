@@ -65,7 +65,9 @@ export const useTypePreview = (typeId, range, { enabled = true } = {}) => {
     queryFn: () => apiFetch(`/gauge-types/${typeId}/preview-points`, { method: "POST", body, organisationId }),
     enabled: !!organisationId && ready,
     retry: false,
-    placeholderData: keepPreviousData,
+    // Keep the last answer on screen only while a new one is being fetched for a valid range; an incomplete or backwards range shows nothing
+    // (an old table beside boxes that no longer match it looked as if the preview had stopped updating).
+    placeholderData: ready ? keepPreviousData : undefined,
     staleTime: 30_000,
   });
 };

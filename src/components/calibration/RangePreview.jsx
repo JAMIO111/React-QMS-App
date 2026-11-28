@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useUnits } from "../../hooks/useMasterData";
 import { useTypePreview } from "../../hooks/useCalibration";
 import { useDebouncedValue } from "../../hooks/useDebounce";
@@ -64,8 +64,12 @@ export const PreviewTable = ({ preview, label = "Checks worked out for this rang
 export const RangeTry = ({ typeId }) => {
   const units = useUnits();
   const [f, setF] = useState({ rangeMin: "0", rangeMax: "25", unitCode: "mm", resolution: "0.001" });
-  const range = useDebouncedValue(toRange(f), 400);
+  // One object per change of the boxes: a new object on every render made the debounce start over again and again.
+  const typed = useMemo(() => toRange(f), [f]);
+  const range = useDebouncedValue(typed, 400);
   const preview = useTypePreview(typeId, range);
+  const complete = Number.isFinite(typed.rangeMin) && Number.isFinite(typed.rangeMax) && typed.rangeMax > typed.rangeMin && !!typed.unitCode;
+  const updating = complete && (range !== typed || preview.isFetching);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const rangeBad = isNum(f.rangeMin) && isNum(f.rangeMax) && Number(f.rangeMax) <= Number(f.rangeMin);
   return (
@@ -80,7 +84,15 @@ export const RangeTry = ({ typeId }) => {
         <Field label="Resolution" inputMode="decimal" value={f.resolution} onChange={set("resolution")} hint="Optional" />
       </div>
       {preview.error && <Callout tone="error" role="alert">{describeApiError(preview.error)}</Callout>}
-      {preview.data && <PreviewTable preview={preview.data} />}
+      {!complete && !preview.error && (
+        <p className="text-sm text-secondary-text">Give a range (the end above the start) and a unit to see the checks.</p>
+      )}
+      {complete && preview.data && (
+        <div className={updating ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={updating}>
+          {updating && <p className="pb-1 text-xs text-secondary-text" role="status">Working it out…</p>}
+          <PreviewTable preview={preview.data} />
+        </div>
+      )}
     </div>
   );
 };

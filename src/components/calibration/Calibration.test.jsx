@@ -711,6 +711,30 @@ describe("gauge type checks across the gauge's range", () => {
     expect(within(table).getByText("A fixed check: the same on every gauge")).toBeInTheDocument();
   });
 
+  it("follows every change of the range, and shows no stale table while the range is incomplete or backwards", async () => {
+    const worked = (min, max) => ({ ...preview, checks: [{ ...preview.checks[0], nominal: min + (max - min) / 2, lower: min + (max - min) / 2 - 0.01, upper: min + (max - min) / 2 + 0.01 }] });
+    routeApi(typeRoutes({ "POST /gauge-types/t1/preview-points": (path, { body }) => worked(body.rangeMin, body.rangeMax) }));
+    await openChecks();
+    await userEvent.click(screen.getByRole("button", { name: "Try it with a range" }));
+    const table = () => screen.queryByRole("table", { name: "Checks worked out for this range" });
+    expect(await screen.findByText("12.5 mm", {}, { timeout: 3000 })).toBeInTheDocument(); // the starting 0 to 25
+    // The start moves above the end: nothing can be worked out, so the old answer must not stay on screen.
+    await userEvent.clear(screen.getByRole("textbox", { name: "Range from" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Range from" }), "50");
+    expect(table()).toBeNull();
+    expect(screen.getByText(/Give a range/)).toBeInTheDocument();
+    await userEvent.clear(screen.getByRole("textbox", { name: "Range to" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Range to" }), "100");
+    expect(await screen.findByText("75 mm", {}, { timeout: 3000 })).toBeInTheDocument();
+    // A further change is followed too.
+    await userEvent.clear(screen.getByRole("textbox", { name: "Range to" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Range to" }), "150");
+    expect(await screen.findByText("100 mm", {}, { timeout: 3000 })).toBeInTheDocument();
+    // Emptying a box takes the table away again.
+    await userEvent.clear(screen.getByRole("textbox", { name: "Range to" }));
+    expect(table()).toBeNull();
+  });
+
   it("names the gauges that could not be given a check, and why", () => {
     const result = { gaugesUpdated: 1, characteristicsAdded: 2, gaugesSkipped: 0, gaugesWithProblems: 1, problems: [{ gaugeId: "g7", assetNumber: "G-007", checkId: "tk9", name: "50 % of range", problem: "Give the gauge a range and a unit" }] };
     expect(appliedMessage(result)).toBe("2 checks added to 1 gauge. 1 gauge could not be given every check: see below.");

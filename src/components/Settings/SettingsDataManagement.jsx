@@ -1,183 +1,33 @@
-import { lazy, Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
-import { usePermissions } from "../../hooks/useQmsApi";
+import { Suspense } from "react";
+import { useDataTabs } from "./dataTabs";
 import LoadingScreen from "../ui/LoadingScreen";
-import { ChartNoAxesCombinedIcon, ClipboardCheckIcon, FileTextIcon, GaugeIcon, GitPullRequestArrowIcon, GraduationCapIcon, BadgeCheckIcon, ListTreeIcon, TriangleAlertIcon, TruckIcon, ShieldAlertIcon } from "@/components/icons";
-import SlidingToggle from "../ui/SlidingToggle";
-
-const SettingsNonConformance = lazy(() => import("./SettingsNonConformance"));
-const SettingsCalibration = lazy(() => import("./SettingsCalibration"));
-const SettingsProcessControl = lazy(() => import("./SettingsProcessControl"));
-const SettingsAudits = lazy(() => import("./SettingsAudits"));
-const SettingsSupplierQuality = lazy(() => import("./SettingsSupplierQuality"));
-const SettingsCompetence = lazy(() => import("./SettingsCompetence"));
-const SettingsDocuments = lazy(() => import("./SettingsDocuments"));
-const SettingsRisk = lazy(() => import("./SettingsRisk"));
-const SettingsChange = lazy(() => import("./SettingsChange"));
-const SettingsFmea = lazy(() => import("./SettingsFmea"));
-const SettingsPpap = lazy(() => import("./SettingsPpap"));
-const CustomFieldsSettings = lazy(() => import("../custom-fields/CustomFieldsSettings"));
+import Callout from "../ui/Callout";
 
 /**
- * The module lists and set-up, one tab per module. A tab shows only to people who may read that module; `manage` decides whether the
- * description says they can change it. The tab is kept in the address (`?tab=`), so a link can open a module directly.
+ * Settings → Data Management: the list and set-up of the module the settings menu has chosen. The menu (Settings.jsx) shows the modules as its nested
+ * "Data" level, so there is no header or tab bar here, only the chosen module. `?tab=` in the address says which one.
  */
-const DATA_TABS = [
-  {
-    value: "non-conformance",
-    icon: TriangleAlertIcon,
-    label: "Non-conformance",
-    read: "ncr.read",
-    manage: "lookups.manage",
-    description: "Lists used when recording non-conformances. Switch an entry off to retire it without losing history.",
-    Component: SettingsNonConformance,
-  },
-  {
-    value: "calibration",
-    icon: GaugeIcon,
-    label: "Calibration",
-    read: "calibration.read",
-    manage: "calibration.manage",
-    description:
-      "Gauge types set the default calibration interval and the characteristics checked at each calibration. A new gauge copies them; each gauge can then be adjusted.",
-    Component: SettingsCalibration,
-  },
-  {
-    value: "process-control",
-    icon: ChartNoAxesCombinedIcon,
-    label: "Process control",
-    read: "process_control.read",
-    manage: "process_control.manage",
-    description:
-      "Characteristic templates are reusable checks you choose when adding a characteristic to a draft control plan revision. Choosing one copies its values, so later changes here never alter existing plans.",
-    Component: SettingsProcessControl,
-  },
-  {
-    value: "audits",
-    icon: ClipboardCheckIcon,
-    label: "Audits",
-    read: "audits.read",
-    manage: "audits.manage",
-    description: "How audit findings are classified.",
-    Component: SettingsAudits,
-  },
-  {
-    value: "supplier-quality",
-    icon: TruckIcon,
-    label: "Supplier quality",
-    read: "supplier_quality.read",
-    manage: "supplier_quality.configure",
-    description: "Supplier classifications, qualification questionnaires, the risk model and the performance scoring model.",
-    Component: SettingsSupplierQuality,
-  },
-  {
-    value: "competence",
-    icon: GraduationCapIcon,
-    label: "Competence",
-    read: "competence.read",
-    manage: "competence.manage",
-    description: "Skill categories, the skills people can be assessed on, and the positions that say which skills at which level each one needs.",
-    Component: SettingsCompetence,
-  },
-  {
-    value: "documents",
-    icon: FileTextIcon,
-    label: "Documents",
-    read: "documentation.manage",
-    manage: "documentation.manage",
-    description: "Document types: each has a prefix and its own numbering (SOP-001, WI-014), a review interval and whether its documents are usually a file or written here.",
-    Component: SettingsDocuments,
-  },
-  {
-    value: "risk",
-    icon: ShieldAlertIcon,
-    label: "Risk",
-    read: "risk.read",
-    manage: "risk.manage",
-    description: "The matrix risks are scored on (likelihood × consequence, with a band for each cell) and the categories of risk.",
-    Component: SettingsRisk,
-  },
-  {
-    value: "fmea",
-    icon: ListTreeIcon,
-    label: "FMEA",
-    read: "fmea.read",
-    manage: "fmea.approve",
-    description: "How FMEAs are rated: the ten-level scales for severity, occurrence and detection, whether priority comes from the RPN or from your own action priority grid, and the versions of the model.",
-    Component: SettingsFmea,
-  },
-  {
-    value: "ppap",
-    icon: BadgeCheckIcon,
-    label: "PPAP",
-    read: "ppap.read",
-    manage: "ppap.approve",
-    description: "Which of the 18 PPAP elements a submission needs at each level, the study minimums, and each customer's own rules. Saved as versions; submissions keep the version they started with.",
-    Component: SettingsPpap,
-  },
-  {
-    value: "change",
-    icon: GitPullRequestArrowIcon,
-    label: "Change",
-    read: "change.read",
-    manage: "change.manage",
-    description: "The types of change (and which usually need the customer), the functions that will sign them off and the areas a change is assessed for.",
-    Component: SettingsChange,
-  },
-  {
-    value: "custom-fields",
-    label: "Custom fields",
-    read: "custom_fields.manage",
-    manage: "custom_fields.manage",
-    description: "Your organisation's own fields on parts, machines, gauges, suppliers, non-conformances, 8Ds and other records. Everyone who can see a record sees its fields.",
-    Component: CustomFieldsSettings,
-  },
-];
-
-/** Settings → Data Management: the module lists and set-up, with a sticky header and a tab per module. */
 const SettingsDataManagement = () => {
-  const { can } = usePermissions();
-  const [params, setParams] = useSearchParams();
-  const tabs = DATA_TABS.filter((t) => can(t.read));
-  const current = tabs.find((t) => t.value === params.get("tab")) ?? tabs[0];
+  const { current, can } = useDataTabs();
 
   if (!current) {
     return <p className="p-4 text-secondary-text">You have no access to any module's lists. Ask an administrator for the permission you need.</p>;
   }
-  const choose = (value) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("tab", value);
-        return next;
-      },
-      { replace: true },
-    );
   const { Component } = current;
 
   return (
-    <div className="flex w-full flex-col">
-      <header className="sticky -top-5 z-20 -mx-5 -mt-5 mb-4 flex flex-col gap-3 border-b border-border-color bg-primary-bg/95 px-5 pb-3 pt-5 backdrop-blur">
-        <div>
-          <h2 className="text-2xl font-semibold text-primary-text">Data Management</h2>
-          <p className="text-sm text-secondary-text">
-            {current.description}
-            {can(current.manage) ? "" : " You can view these; someone with the right permission can change them."}
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <SlidingToggle
-            mode="tabs"
-            ariaLabel="Data Management sections"
-            value={current.value}
-            onChange={choose}
-            options={tabs.map((t) => ({ value: t.value, label: t.label, icon: t.icon, id: `data-tab-${t.value}`, controls: "data-tab-panel" }))}
-          />
-        </div>
-      </header>
-      <section id="data-tab-panel" role="tabpanel" aria-labelledby={`data-tab-${current.value}`}>
+    <div className="flex w-full flex-col gap-4">
+      {!can(current.manage) && (
+        <Callout tone="info">You can view these; someone with the right permission can change them.</Callout>
+      )}
+      <section
+        key={current.value}
+        id="data-tab-panel"
+        aria-label={current.label}
+        className="animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none"
+      >
         <Suspense fallback={<LoadingScreen size="sm" />}>
-          <Component key={current.value} />
+          <Component />
         </Suspense>
       </section>
     </div>

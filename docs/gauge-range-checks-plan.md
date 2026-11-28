@@ -1,6 +1,6 @@
 # Gauge type check points as a percentage of the gauge's range, and how their tolerance is worked out
 
-Status: **RC1 (the migration and its SQL test) is built and committed locally, not applied live**; **RC2 (API) is built and committed locally** (2026-11-28); **RC3 (screens, help guide) is built and committed locally.** RCX (apply live) waits for the owner's go. Decisions R1–R12 below were **agreed by the owner on 2026-11-28 as proposed**.
+Status: **RC1 (the migration and its SQL test) is built and committed locally, and applied live 2026-11-28 (RCX)**; **RC2 (API) is built and committed locally** (2026-11-28); **RC3 (screens, help guide) is built and committed locally.** RCX done: applied live on the owner's go, history row added, live checks clean. Decisions R1–R12 below were **agreed by the owner on 2026-11-28 as proposed**.
 Builds on `docs/calibration-plan.md`. Read that first for the tables named here.
 
 ## 1. The problem

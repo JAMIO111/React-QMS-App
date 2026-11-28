@@ -23,7 +23,7 @@ fix should start with a failing test that shows the problem.
 | ID | What | Where | Status |
 |---|---|---|---|
 | API-2 | The dashboard narrows to "the only readable site" when the organisation has one active site, and filters every figure by it. NCs with no site (portal complaints, imports, gauges without a site) or at a deactivated site vanish from the dashboard while the register and home page count them. | `ncr-dashboard.ts:87-93, 107` | Fixed, see below |
-| API-3 | "Raised" and "open NC" are defined five different ways: the NC dashboard (drafts and cancelled count), supplier dashboard, customer dashboard, quality objective `ncr_count`, supplier register. These feed management-review inputs. | `ncr-dashboard.ts`, `supplier-dashboard.ts:177`, `customer-dashboard.ts:147`, `quality-objectives.service.ts:52`, `supplier-quality.service.ts:50` | **Open: needs a decision** |
+| API-3 | "Raised" and "open NC" are defined five different ways: the NC dashboard (drafts and cancelled count), supplier dashboard, customer dashboard, quality objective `ncr_count`, supplier register. These feed management-review inputs. | `ncr-dashboard.ts`, `supplier-dashboard.ts:177`, `customer-dashboard.ts:147`, `quality-objectives.service.ts:52`, `supplier-quality.service.ts:50` | Fixed, see below |
 | API-4 | Routes on the NC page need organisation-wide permission while the NC routes admit site-scoped people: inspection-source, audit-source, receipt-source / link / unlink, raise from a receipt line, raise / add from an inspection. A site-limited quality engineer opens an NC and the cards answer 403. | `inspection.controller.ts:106-170`, `audit-findings.controller.ts:234`, `requirements.controller.ts:84-103`, `receiving.controller.ts:133` | Fixed, see below |
 | API-5 | `GET /exchange-rates/preview` needs no permission, has no date window and writes to the global rate cache (including "not published" rows for a week). Any member can loop pairs and dates. | `currency.controller.ts:28-34`, `exchange-rate.service.ts:97-117` | Fixed, see below |
 | API-6 | Reporting NC datasets miss a deleted cost line on incremental pulls: the NC's `updated_at` does not move when a line is soft-deleted. | `20260425100000_reporting_keys.sql:131-163` | Fixed, see below |
@@ -89,7 +89,7 @@ dialogs' limits; permission gating on the NC page.
 
 ## Fixed so far (the five high findings)
 
-Fixed on 28 Nov 2026. The high-findings migration (`20260469100000`) is applied live. **The medium-findings migration (`20260470100000`) is not applied live** (it waits for the owner's go).
+Fixed on 28 Nov 2026. The high-findings migration (`20260469100000`) and the medium-findings migration (`20260470100000`) are applied live. The client-key migration (`20260471100000`, API-13) is written and tested but **not applied live** (it waits for the owner's go).
 
 | ID | Fix | Test |
 |---|---|---|
@@ -116,4 +116,15 @@ Fixed on 28 Nov 2026. The high-findings migration (`20260469100000`) is applied 
 | UI-6 | Choosing another part clears the revision, production order, lot and serial number chosen for the old one. | `Ncr.test.jsx` "clears the production order and lot when the part is changed…" |
 | UI-7 | **Raise NC** stays disabled until what the database needs to open is filled in (`openingProblems` in `formModel.js`, the same list as `assert_ncr_openable`) and its tooltip says what is missing; a part or a description is marked as needed; "Needed to open" hints show only on new and draft NCs; a draft's **Open this NC** says what it still needs and waits. | `Ncr.test.jsx` (four tests) |
 
-**Open:** API-3 needs an owner decision (below). Everything in the Low list is untouched.
+## Decided and fixed (API-3 and API-13)
+
+Decided by the owner on 28 Nov 2026: **raised** = the NC has left draft, is not cancelled and is not deleted, counted in the period of the day it was detected; **open** = raised and not closed. DB-9 (quantity affected 0 and the disposition gate) is left as it is for now. Client keys (API-13) are wanted.
+
+| ID | Fix | Test |
+|---|---|---|
+| API-3 | `api/src/ncr/nc-definitions.ts` (`ncRaised`, `ncOpen`, `NC_OPEN_STAGES`) is the one rule. The NC dashboard (raised, open, critical open, trend, sources, categories, failure modes, severities, parts, cost, the stage pipeline, which no longer has a Draft step), the home page's NC area, the supplier dashboard, the supplier register's open count and the profile's totals, the customer dashboard and the quality objective `ncr_count` (now by detected date, not the day typed in) all use it. The customer dashboard, its SQL function, the job hub and the FMEA evidence already did. The NC dashboard's "Open NCs" link in the browser no longer asks for drafts. | `api/test/nc-definitions.e2e-spec.ts` puts the same records (open, awaiting closure, closed, draft, cancelled, deleted, for a supplier and a customer) in front of all of them and compares; existing dashboard, home, supplier, quality-objective and NC register tests now raise their NCs properly |
+| API-13 | Migration `20260471100000_ncr_client_keys.sql`: `client_key` (optional, 8–100 characters, unique per organisation) on non-conformances, cost lines and dispositions, never changed once made (the UPDATE grants are column by column); `app.generate_ncr_rma` takes `p_client_key` and answers the disposition already made for the key before it takes a number. API: `clientKey` on `POST /ncrs`, `POST /ncrs/{id}/costs`, `POST /ncrs/{id}/dispositions` and `POST /ncrs/{id}/rma` (`api/src/common/client-key.ts`: the key is looked up first as the caller, a key used for another non-conformance is `409 client_key_in_use`, and the unique index is the backstop for two retries that arrive together). Screens: the NC page, the cost dialog, the disposition dialog and the RMA dialog make a key when they open and send it. | `supabase/tests/ncr_client_keys.test.sql`, `api/test/ncr-client-keys.e2e-spec.ts` (incl. concurrent retries and no RMA number burnt), `Ncr.test.jsx`, `NcrWorkflow.test.jsx` |
+
+**Not changed (found while doing API-3):** the supplier scorecard's NC count (`app.supplier_performance_metrics`, and the NC-based PPM link rule in the same function) still counts every NC that is not cancelled, so a draft naming a supplier is counted in that supplier's score. It is a scoring input, so changing it changes scores; it needs its own migration and the owner's go.
+
+Everything in the Low list is untouched.

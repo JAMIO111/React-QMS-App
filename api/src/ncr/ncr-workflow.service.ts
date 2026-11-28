@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
+import { onceByKey } from '../common/client-key';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import {
@@ -173,24 +174,45 @@ export class NcrWorkflowService {
   }
 
   createDisposition(ctx: RequestContext, ncrId: string, body: z.infer<typeof CreateDispositionBody>): Promise<Disposition> {
-    return this.database.asUser(ctx, async (db) => {
-      await this.assertVisible(db, ctx, ncrId);
-      const result = await db.execute<{ id: string }>(sql`
-        insert into public.ncr_dispositions (organisation_id, nonconformance_id, decision, quantity, instructions, reference, lot_id)
-        values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.decision}, ${body.quantity}, ${body.instructions}, ${body.reference ?? null}, ${body.lotId ?? null}::uuid)
-        returning id`);
-      return this.loadDisposition(db, ctx, result.rows[0].id);
+    return onceByKey({
+      database: this.database,
+      ctx,
+      table: 'ncr_dispositions',
+      key: body.clientKey,
+      parent: ncrId,
+      make: () =>
+        this.database.asUser(ctx, async (db) => {
+          await this.assertVisible(db, ctx, ncrId);
+          const result = await db.execute<{ id: string }>(sql`
+            insert into public.ncr_dispositions (organisation_id, nonconformance_id, decision, quantity, instructions, reference, lot_id, client_key)
+            values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.decision}, ${body.quantity}, ${body.instructions}, ${body.reference ?? null}, ${body.lotId ?? null}::uuid, ${body.clientKey ?? null})
+            returning id`);
+          return this.loadDisposition(db, ctx, result.rows[0].id);
+        }),
+      read: (id) => this.database.asUser(ctx, (db) => this.loadDisposition(db, ctx, id)),
     });
   }
 
-  /** Gives the next RMA number and proposes a customer return for that quantity (customer non-conformances only; the database decides). */
+  /**
+   * Gives the next RMA number and proposes a customer return for that quantity (customer non-conformances only; the database decides). With a client key, a retry
+   * answers the disposition already made and takes no second number (the function looks the key up before it takes one).
+   */
   generateRma(ctx: RequestContext, ncrId: string, body: z.infer<typeof GenerateRmaBody>): Promise<Disposition> {
-    return this.database.asUser(ctx, async (db) => {
-      await this.assertVisible(db, ctx, ncrId);
-      const result = await db.execute<{ id: string }>(
-        sql`select app.generate_ncr_rma(${ncrId}::uuid, ${body.quantity}::numeric, ${body.instructions ?? null}, ${body.lotId ?? null}::uuid) as id`,
-      );
-      return this.loadDisposition(db, ctx, result.rows[0].id);
+    return onceByKey({
+      database: this.database,
+      ctx,
+      table: 'ncr_dispositions',
+      key: body.clientKey,
+      parent: ncrId,
+      make: () =>
+        this.database.asUser(ctx, async (db) => {
+          await this.assertVisible(db, ctx, ncrId);
+          const result = await db.execute<{ id: string }>(
+            sql`select app.generate_ncr_rma(${ncrId}::uuid, ${body.quantity}::numeric, ${body.instructions ?? null}, ${body.lotId ?? null}::uuid, ${body.clientKey ?? null}) as id`,
+          );
+          return this.loadDisposition(db, ctx, result.rows[0].id);
+        }),
+      read: (id) => this.database.asUser(ctx, (db) => this.loadDisposition(db, ctx, id)),
     });
   }
 

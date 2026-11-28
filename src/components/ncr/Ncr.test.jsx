@@ -725,7 +725,7 @@ describe("NC form", () => {
 
     await userEvent.type(screen.getByLabelText("Title"), "Burr on edge");
     await userEvent.click(screen.getByRole("button", { name: "Save as draft" }));
-    expect(lastCall("POST /ncrs").body).toMatchObject({ source: "internal", severity: "minor", categoryId: "cat2", siteId: "s1" });
+    expect(lastCall("POST /ncrs").body).toMatchObject({ source: "internal", severity: "minor", categoryId: "cat2", siteId: "s1", clientKey: expect.any(String) });
   });
 
   it("starts who detected it as the person's own employee record, next to where detected; the responsible department is in Investigation", async () => {
@@ -1308,7 +1308,7 @@ describe("NC page layout, costs and files", () => {
     expect(preview).toHaveTextContent("£10.00");
     expect(preview).toHaveTextContent("£60.00");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
-    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, quantity: 2, unitCost: 25 }));
+    await waitFor(() => expect(lastCall("POST /ncrs/n1/costs").body).toMatchObject({ costType: "labour", currency: "GBP", vatTreatment: "exclusive", vatRate: 0.2, quantity: 2, unitCost: 25, clientKey: expect.any(String) }));
     expect(lastCall("POST /ncrs/n1/costs").body).not.toHaveProperty("exchangeRate");
   });
 

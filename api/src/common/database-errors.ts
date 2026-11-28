@@ -8,7 +8,7 @@ interface PgError {
   detail?: string;
 }
 
-function pgErrorOf(error: unknown): PgError | undefined {
+export function pgErrorOf(error: unknown): PgError | undefined {
   const candidates = [error, (error as { cause?: unknown })?.cause];
   for (const c of candidates) {
     if (c && typeof c === 'object' && typeof (c as PgError).code === 'string' && /^[0-9A-Z]{5}$/.test((c as PgError).code!)) {

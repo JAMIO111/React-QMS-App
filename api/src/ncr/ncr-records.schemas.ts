@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ClientKey } from './ncr.schemas';
 
 /** Cost categories (keep in step with the CHECK on public.ncr_costs.cost_type). */
 export const COST_TYPES = [
@@ -100,7 +101,7 @@ const costFields = {
   quantity: z.number().gt(0).lt(1e9).default(1),
   unitCost: z.number().min(0).lt(1e12),
 };
-export const CreateCostBody = z.object(costFields).strict();
+export const CreateCostBody = z.object({ ...costFields, clientKey: ClientKey.optional() }).strict();
 export const UpdateCostBody = z
   .object({
     costType: costFields.costType.optional(),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CheckIcon, PencilIcon, PlusIcon, Undo2Icon } from "@/components/icons";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
@@ -15,6 +15,7 @@ import { dispositionCancel } from "../../lib/ncrGuesses";
 import { useNcrAffectedLots, useNcrDispositions, useNcrMutation } from "../../hooks/useNcr";
 import { DISPOSITION_DECISIONS, RMA_DECISION, decisionLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
+import { newClientKey } from "../../lib/clientKey";
 import CTAButton from "@/components/CTAButton";
 
 const STATUS = {
@@ -25,6 +26,8 @@ const STATUS = {
 
 /** Propose or change a disposition (only a proposed one can be changed). */
 const DispositionDialog = ({ ncrId, disposition, remaining: remainingNow, lots: lotsNow, onClose }) => {
+  // One key for this dialog: a retry or a second click answers the disposition already proposed (its quantity is not counted twice).
+  const clientKey = useRef(newClientKey());
   const { organisationId } = useOrganisation();
   const submitOptimistically = useOptimisticSubmit();
   // What is left to decide is fixed when the dialog opens: the saved result changes the numbers behind it, and that must never make a valid entry look wrong.
@@ -55,7 +58,7 @@ const DispositionDialog = ({ ncrId, disposition, remaining: remainingNow, lots: 
     // The list shows the proposal at once; the dialog closes; the server's version replaces it a moment later (or the list goes back and a message says why).
     onClose();
     submitOptimistically({
-      request: () => apiFetch(disposition ? `/ncr-dispositions/${disposition.id}` : `/ncrs/${ncrId}/dispositions`, { method: disposition ? "PATCH" : "POST", body, organisationId }),
+      request: () => apiFetch(disposition ? `/ncr-dispositions/${disposition.id}` : `/ncrs/${ncrId}/dispositions`, { method: disposition ? "PATCH" : "POST", body: disposition ? body : { ...body, clientKey: clientKey.current }, organisationId }),
       patches: [{
         queryKey: ["api", "org", organisationId, "ncr", "dispositions", ncrId],
         update: (d) => ({
@@ -127,6 +130,8 @@ const DispositionDialog = ({ ncrId, disposition, remaining: remainingNow, lots: 
 
 /** Generate an RMA number for all or part of what is still to decide: it becomes a proposed "customer return" disposition. The database gives the number. */
 const RmaDialog = ({ ncrId, remaining: remainingNow, lots: lotsNow, onClose }) => {
+  // One key for this dialog: a retry answers the RMA already made instead of taking another number.
+  const clientKey = useRef(newClientKey());
   const mutation = useNcrMutation();
   const { showToast } = useToast();
   const [{ remaining, lots }] = useState({ remaining: remainingNow, lots: lotsNow });
@@ -139,7 +144,7 @@ const RmaDialog = ({ ncrId, remaining: remainingNow, lots: lotsNow, onClose }) =
     e.preventDefault();
     if (!qtyOk) return;
     mutation.mutate(
-      { path: `/ncrs/${ncrId}/rma`, body: { quantity: qty, instructions: form.instructions.trim() || null, lotId: form.lotId } },
+      { path: `/ncrs/${ncrId}/rma`, body: { quantity: qty, instructions: form.instructions.trim() || null, lotId: form.lotId, clientKey: clientKey.current } },
       {
         onSuccess: (made) => {
           showToast({ type: "success", title: made?.reference ?? "RMA number generated", message: `Customer return of ${qty} proposed${made?.reference ? ` under ${made.reference}` : ""}.` });

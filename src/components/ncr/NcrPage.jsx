@@ -46,6 +46,7 @@ import { useClassifications, useEmployees, useNcr, useNcrMutation, useNcrNewDefa
 import { describeApiError } from "../../lib/api-client";
 import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, detectionApplies, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
 import { ncrRestore } from "../../lib/ncrGuesses";
+import { newClientKey } from "../../lib/clientKey";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
 import { MachinePicker, PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
@@ -148,6 +149,11 @@ const NcrPage = () => {
   // The form follows the record, but never takes away what the person has typed: when the NC changes under them (a cost added, an 8D linked, a custom
   // value saved, a colleague's save), the fields they have edited keep their words and every other field takes the new value.
   const adopted = useRef({ id: undefined, values: null });
+  // Made when a new NC is opened and kept for retries, so a double click or a resend answers the NC already made instead of making another.
+  const createKey = useRef(newClientKey());
+  useEffect(() => {
+    createKey.current = newClientKey();
+  }, [routeId]);
   useEffect(() => {
     const id = ncr?.id ?? (isNew ? "new" : undefined);
     const was = adopted.current;
@@ -210,7 +216,7 @@ const NcrPage = () => {
   const save = (open) => {
     if (isNew) {
       mutation.mutate(
-        { path: "/ncrs", body: { source, ...body, ...withCustomValues(customValues), ...(open ? { open: true } : {}) } },
+        { path: "/ncrs", body: { source, ...body, ...withCustomValues(customValues), ...(open ? { open: true } : {}), clientKey: createKey.current } },
         {
           onSuccess: (created) => {
             showToast({ type: "success", title: "Saved", message: `${created.reference} was ${open ? "raised" : "saved as a draft"}.` });

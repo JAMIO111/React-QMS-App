@@ -207,8 +207,11 @@ const fields = {
   ownerId: id,
 };
 
+/** Made once by the screen and kept on a retry: the same key answers the record already made (docs/audit-nc-2026-11.md API-13). */
+export const ClientKey = z.string().trim().min(8).max(100);
+
 export const CreateNcrBody = z
-  .object({ source: NcrSource, ...fields, /** Create straight into "open" (needs the minimum content). */ open: z.boolean().optional(), customValues: CustomValuesInput.optional() })
+  .object({ source: NcrSource, ...fields, /** Create straight into "open" (needs the minimum content). */ open: z.boolean().optional(), customValues: CustomValuesInput.optional(), clientKey: ClientKey.optional() })
   .strict();
 export type CreateNcrBody = z.infer<typeof CreateNcrBody>;
 

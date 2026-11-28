@@ -7,6 +7,7 @@ import { mergeResponse } from "./lib/optimistic";
 import { ToastProvider } from "./contexts/ToastProvider.jsx";
 import { ConfirmProvider } from "./contexts/ConfirmationModalProvider.jsx";
 import EditConflictHost from "./components/ui/EditConflictDialog.jsx";
+import SettingsIndex from "./components/Settings/SettingsIndex.jsx";
 import { AuthProvider } from "./contexts/AuthProvider.jsx";
 import { UserProvider } from "./contexts/UserProvider.jsx";
 import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
@@ -322,7 +323,7 @@ const router = createBrowserRouter([
             path: "Settings",
             element: <Settings />,
             children: [
-              { index: true, element: <Navigate to="Organisation" replace /> },
+              { index: true, element: <SettingsIndex /> },
               { path: "Organisation", element: <SettingsOrganisation /> },
               { path: "Users", element: <SettingsUsers /> },
               { path: "Roles", element: <SettingsRoles /> },

@@ -87,4 +87,29 @@ describe("the settings pane", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/Settings/Organisation");
     expect(screen.getByText("Organisation page")).toBeInTheDocument();
   });
+
+  // Below the md width the menu and the page are one pane at a time; the markup always has both, the classes decide which shows.
+  describe("on a phone (one pane at a time)", () => {
+    it("shows the menu alone at /Settings and the page alone with a back bar once a page is chosen", () => {
+      permissions = ["ncr.read"];
+      const { container, unmount } = renderAt("/Settings/Organisation");
+      const menu = container.querySelector("nav[aria-label='Settings']").closest("div.border-r");
+      const page = screen.getByText("Organisation page").parentElement;
+      expect(menu.className).toMatch(/\bhidden\b/);
+      expect(menu.className).toMatch(/md:flex/);
+      expect(page.className).toMatch(/\bflex\b/);
+      expect(page.className).not.toMatch(/\bhidden\b/);
+      expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+      unmount();
+    });
+
+    it("the back bar goes to the menu: Settings from a page, the Data menu from a module", async () => {
+      permissions = ["ncr.read", "calibration.read"];
+      renderAt("/Settings/Data-Management?tab=calibration");
+      const back = screen.getAllByRole("button").find((b) => b.textContent === "Data");
+      await userEvent.click(back);
+      expect(screen.getByTestId("where")).toHaveTextContent("/Settings/Data-Management");
+      expect(screen.getByTestId("where")).not.toHaveTextContent("tab=");
+    });
+  });
 });

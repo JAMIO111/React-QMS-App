@@ -14,7 +14,8 @@ import SubscriptionBanner from "./components/SubscriptionBanner";
 import SubscriptionNeeded from "./components/onboarding/SubscriptionNeeded";
 import { setupDeferred } from "./lib/onboarding";
 import ThemeColourSync from "./components/ThemeColourSync";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import MobileNav from "./components/MobileNav";
 import NetworkBlocked from "./components/NetworkBlocked";
 import SsoRequired from "./components/SsoRequired";
 import { useNetworkAccess } from "./hooks/useSecurity";
@@ -39,6 +40,9 @@ function App() {
   // A request refused with 403 sso_required (sso plan SS6), e.g. after an owner required single sign-on during this session.
   const [ssoRequired, setSsoRequired] = useState(null); // { organisationId, providerId, breakGlass }
   const [signOutNow] = useSignOut();
+  // The phone's menu drawer (below the md width the side rail is hidden).
+  const [navOpen, setNavOpen] = useState(false);
+  const closeNav = useCallback(() => setNavOpen(false), []);
   // The organisation's maximum session age (security plan SE6): sign out, and the sign-in page says why.
   useEffect(() => {
     const onReauth = (e) => {
@@ -142,8 +146,9 @@ function App() {
             <div className="hidden md:block">
               <Navbar />
             </div>
+            <MobileNav open={navOpen} onClose={closeNav} />
             <main className="flex flex-col flex-1 h-full min-w-0 min-h-0">
-              <Header />
+              <Header onOpenMenu={() => setNavOpen(true)} />
               <div className="relative flex flex-col flex-1 overflow-clip min-w-0 min-h-0">
                 {ssoHere ? (
                   <SsoRequired organisations={[{ id: organisation.id, name: organisation.name, providerId: ssoRequired.providerId, breakGlass: ssoRequired.breakGlass }]} />

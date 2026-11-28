@@ -58,6 +58,7 @@ import {
   Lock as LucideLock,
   LogOut as LucideLogOut,
   Mail as LucideMail,
+  Menu as LucideMenu,
   Minus as LucideMinus,
   MonitorCog as LucideMonitorCog,
   MoonStar as LucideMoonStar,
@@ -232,6 +233,7 @@ export const ListIcon = withDefaults(LucideList);
 export const LockIcon = withDefaults(LucideLock);
 export const LogOutIcon = withDefaults(LucideLogOut);
 export const MailIcon = withDefaults(LucideMail);
+export const MenuIcon = withDefaults(LucideMenu);
 export const MinusIcon = withDefaults(LucideMinus);
 export const MonitorCogIcon = withDefaults(LucideMonitorCog);
 export const MoonStarIcon = withDefaults(LucideMoonStar);

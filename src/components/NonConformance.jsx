@@ -68,7 +68,8 @@ const NonConformance = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
   const [activeModalType, setActiveModalType] = useState(null);
-  const [viewGrid, setViewGrid] = useState(false);
+  // A phone shows cards (a table has room for about two columns there); the person can still switch to the list.
+  const [viewGrid, setViewGrid] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches === true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [deleting, setDeleting] = useState(null);
   const [choosingSource, setChoosingSource] = useState(false);

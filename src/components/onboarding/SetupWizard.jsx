@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams, Link, Navigate } from "react-router-dom";
 import { CheckIcon, LockIcon } from "@/components/icons";
 import FortressMark from "../../assets/fortress-qms.png";
@@ -14,8 +14,14 @@ import CTAButton from "@/components/CTAButton";
 
 const PAGES = { organisation: OrganisationStep, sites: SitesStep, security: SecurityStep, team: TeamStep, plan: PlanStep, review: ReviewStep };
 
-const Rail = ({ state, active, lockedFrom }) => (
-  <nav aria-label="Set-up steps" className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+// On a phone the rail is one row of numbered circles that scrolls sideways, and only the step you are on shows its name; from `sm` up every step does.
+const Rail = ({ state, active, lockedFrom }) => {
+  const nav = useRef(null);
+  useEffect(() => {
+    nav.current?.querySelector('[aria-current="step"]')?.scrollIntoView?.({ block: "nearest", inline: "center" });
+  }, [active]);
+  return (
+  <nav ref={nav} aria-label="Set-up steps" className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
     {SETUP_STEPS.map((s, i) => {
       const st = pageStatus(state, s.key);
       const locked = lockedFrom !== null && i >= lockedFrom;
@@ -25,13 +31,13 @@ const Rail = ({ state, active, lockedFrom }) => (
           <span className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors ${st.status === "done" ? "bg-success-color text-white" : isActive ? "bg-brand-primary text-cta-btn-text shadow-md" : "border border-border-color bg-primary-bg text-secondary-text"}`}>
             {st.status === "done" ? <CheckIcon className="h-4 w-4" aria-label="Done" /> : locked ? <LockIcon className="h-3.5 w-3.5" aria-label="Locked" /> : i + 1}
           </span>
-          <span className="flex min-w-0 flex-col leading-tight">
+          <span className={`flex min-w-0 flex-col leading-tight ${isActive ? "" : "sr-only sm:not-sr-only"}`}>
             <span className={`truncate ${isActive ? "font-semibold text-primary-text" : ""}`}>{s.label}</span>
             <span className="text-xs text-secondary-text">{s.key === "review" ? "Final step" : st.status === "skipped" ? "Skipped" : st.required ? "Required" : "Optional"}</span>
           </span>
         </>
       );
-      const cls = `relative flex min-w-[9rem] items-center gap-3 rounded-xl border px-3 py-2 text-sm transition-colors lg:min-w-0 ${isActive ? "border-brand-primary/50 bg-brand-primary/10 text-primary-text" : "border-transparent text-secondary-text"}`;
+      const cls = `relative flex shrink-0 items-center gap-3 rounded-xl border px-2 py-2 text-sm transition-colors sm:min-w-[9rem] sm:px-3 lg:min-w-0 ${isActive ? "min-w-[9rem]" : ""} ${isActive ? "border-brand-primary/50 bg-brand-primary/10 text-primary-text" : "border-transparent text-secondary-text"}`;
       // A thin line joins each step to the next on wide screens, so the steps read as one path.
       const line = i < SETUP_STEPS.length - 1 ? <span aria-hidden="true" className={`absolute left-[1.75rem] top-[2.4rem] hidden h-[calc(100%-1.4rem)] w-px lg:block ${st.status === "done" ? "bg-success-color/60" : "bg-border-color"}`} /> : null;
       return locked ? (
@@ -41,7 +47,8 @@ const Rail = ({ state, active, lockedFrom }) => (
       );
     })}
   </nav>
-);
+  );
+};
 
 /**
  * The owner's first-run wizard (/setup, /setup/:step). Progress is saved by the server, so it resumes anywhere. Every step can be left and come back to;
@@ -101,10 +108,10 @@ const SetupWizard = () => {
             <img src={FortressMark} alt="" className="h-9 w-9 rounded-lg" />
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold text-primary-text">Set up {organisation?.name ?? "your organisation"}</h1>
-              <p className="text-xs text-secondary-text">Step {index + 1} of {SETUP_STEPS.length}. Your progress is saved: come back to any step at any time.</p>
+              <p className="text-xs text-secondary-text">Step {index + 1} of {SETUP_STEPS.length}.<span className="hidden sm:inline"> Your progress is saved: come back to any step at any time.</span></p>
             </div>
           </div>
-          <CTAButton buttonType="button" type="neutral" size="md" onClick={() => { deferSetup(); navigate("/Dashboard"); }}>
+          <CTAButton buttonType="button" type="neutral" size="md" className="shrink-0 whitespace-nowrap" onClick={() => { deferSetup(); navigate("/Dashboard"); }}>
             Finish later
           </CTAButton>
         </div>
@@ -114,8 +121,8 @@ const SetupWizard = () => {
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[16rem_minmax(0,1fr)] lg:grid-rows-1">
         <div className="relative overflow-y-auto border-border-color p-3 lg:border-r"><Rail state={state} active={active} lockedFrom={lockedFrom} /></div>
-        <div className="relative min-h-0 overflow-y-auto p-4">
-          <section key={active} aria-label={def.title} className={`mx-auto flex flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-5 ${active === "review" || active === "team" ? "max-w-5xl" : "max-w-3xl"}`}>
+        <div className="relative min-h-0 overflow-y-auto p-3 sm:p-4">
+          <section key={active} aria-label={def.title} className={`mx-auto flex flex-col gap-4 rounded-2xl border border-border-color bg-secondary-bg p-4 sm:p-5 ${active === "review" || active === "team" ? "max-w-5xl" : "max-w-3xl"}`}>
             <div>
               <h2 className="text-xl font-semibold text-primary-text">{def.title}</h2>
               <p className="mt-1 text-sm text-secondary-text">{def.help}</p>

@@ -62,7 +62,7 @@ import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
 import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
 import { useNcrInspectionSource } from "../../hooks/useInspection";
-import { EMPTY, NEW_NC, changedFields, toBody, toForm } from "./formModel";
+import { EMPTY, NEW_NC, changedFields, openingProblems, toBody, toForm } from "./formModel";
 import { useProductionSettings } from "../../hooks/useProduction";
 import { LotPicker, OrderPicker, SerialPicker } from "../production/pickers";
 import LinkNotices from "../production/LinkNotices";
@@ -203,6 +203,10 @@ const NcrPage = () => {
     if (!form.lotId) put("lotId", lotId);
   };
 
+  // A new or draft NC still needs these to be opened; once it is open the hints go and nothing is asked again.
+  const opening = isNew || ncr?.stage === "draft";
+  const stillNeeded = isNew ? openingProblems(form, source) : [];
+
   const save = (open) => {
     if (isNew) {
       mutation.mutate(
@@ -339,7 +343,8 @@ const NcrPage = () => {
               <CTAButton type="neutral" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()} loading={mutation.isPending}>
                 Save as draft
               </CTAButton>
-              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} loading={mutation.isPending} type="success" size="default" className="px-3">
+              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim() || stillNeeded.length > 0} loading={mutation.isPending} type="success" size="default" className="px-3"
+                title={stillNeeded.length > 0 ? `To raise it, fill in: ${stillNeeded.join(", ")}. Or save it as a draft.` : undefined}>
                 <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Raise NC"}
               </CTAButton>
             </>
@@ -414,6 +419,7 @@ const NcrPage = () => {
                 gates={gates.data}
                 ncr={ncr}
                 canUpdate={can("ncr.update")}
+                openingNeeded={ncr.stage === "draft" ? openingProblems(toForm(ncr), ncr.source) : []}
                 dirty={dirty}
                 pending={mutation.isPending}
                 onMove={(to) => transition(to)}
@@ -428,7 +434,7 @@ const NcrPage = () => {
                 <div className="lg:col-span-2">{text("title", "Title", { required: true, maxLength: 200, icon: FileTextIcon, placeholder: "Short summary of the problem" })}</div>
                 {controlled("detectedAt", (f) => <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />)}
                 {controlled("severity", (f) => (
-                  <RHFComboBox {...f} label="Severity" required icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
+                  <RHFComboBox {...f} label="Severity" required icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint={opening ? "Needed to open" : undefined} options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
                 ))}
                 {isNew ? (
                   <RHFComboBox label="Source" required icon={InboxIcon} placeholder="Select a source" sort={false} clearable={false} hint="Where it came from or was detected"
@@ -450,7 +456,7 @@ const NcrPage = () => {
                 {controlled("categoryId", (f) => (
                   <RHFComboBox {...f} label="Category" required icon={TagsIcon} placeholder={isNew || ncr?.stage === "draft" ? "Select a category" : "Uncategorised"} sort={false}
                     clearable={categoryClearable} options={categories}
-                    hint={!form.categoryId ? "What the problem is. Needed to open" : suggestedCategory ? "Suggested from the source; change it if the problem is something else" : "What the problem is"} />
+                    hint={!form.categoryId ? (opening ? "What the problem is. Needed to open" : "What the problem is") : suggestedCategory ? "Suggested from the source; change it if the problem is something else" : "What the problem is"} />
                 ), () => { categoryChosen.current = true; })}
                 {source === "customer" && (
                   <>
@@ -465,7 +471,10 @@ const NcrPage = () => {
                   </>
                 )}
                 {source !== "supplier" && source !== "goods_receiving" && text("workOrder", "Work order", { maxLength: 60, icon: BoxIcon, disabled: !canEdit || !!form.productionOrderId, hint: form.productionOrderId ? "From the production order" : undefined })}
-                {controlled("partId", (f) => <PartPicker {...f} icon={QrCodeIcon} current={ncr?.part} />, () => setValue("partRevisionId", null, { shouldDirty: true }))}
+                {controlled("partId", (f) => <PartPicker {...f} icon={QrCodeIcon} current={ncr?.part} hint={opening && !form.partId && !String(form.description ?? "").trim() ? "A part or a description is needed to open" : undefined} />, () => {
+                  // Another part: the revision, order, lot and serial number chosen for the old one no longer fit it, and the server would refuse them.
+                  for (const name of ["partRevisionId", "productionOrderId", "lotId", "serialId"]) setValue(name, null, { shouldDirty: true });
+                })}
                 {canLinkProduction && source !== "supplier" && source !== "goods_receiving" && controlled("productionOrderId", (f) => (
                   <OrderPicker {...f} partId={form.partId} current={ncr?.links?.productionOrder} label="Production order" />
                 ), (id, item) => pickedProduction({ orderNumber: item?.name, partId: item?.part?.id }))}
@@ -481,7 +490,7 @@ const NcrPage = () => {
                 <div className="flex w-full flex-col gap-1">
                   <div className="flex w-full items-start gap-5">
                     {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
-                    {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
+                    {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: opening ? "Needed to open" : undefined })}
                   </div>
                   {moreAffectedThanInspected && (
                     <p role="status" className="flex items-start gap-1.5 text-xs text-secondary-text">
@@ -509,7 +518,8 @@ const NcrPage = () => {
                 ), () => { detectorChosen.current = true; })}
                 </div>
                 <div className="lg:col-span-2">
-                  <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance" />
+                  <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance"
+                    hint={opening && !form.partId && !String(form.description ?? "").trim() ? "A part or a description is needed to open" : undefined} />
                 </div>
                 <RHFTextArea label="Requirement / specification" icon={ClipboardListIcon} value={form.requirement} onChange={set("requirement")} disabled={!canEdit} max={2000} rows={3} placeholder="What it should have been" />
                 <RHFTextArea label="Actual result" icon={AlignCenterIcon} value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} max={2000} rows={3} placeholder="What was found" />

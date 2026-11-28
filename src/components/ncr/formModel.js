@@ -45,3 +45,15 @@ export const toBody = (form, source) => {
 
 export const changedFields = (body, original) => Object.fromEntries(Object.entries(body).filter(([k, v]) => JSON.stringify(v ?? null) !== JSON.stringify(original[k] ?? null)));
 
+
+/** What an NC still lacks before it can be opened: the same list the database checks (app.assert_ncr_openable), in the person's words. */
+export const openingProblems = (form, source) => {
+  const missing = [];
+  if (!form.severity) missing.push("severity");
+  if (form.quantityAffected === "" || form.quantityAffected === null || form.quantityAffected === undefined) missing.push("quantity affected");
+  if (!form.partId && !String(form.description ?? "").trim()) missing.push("a part or a description");
+  if (!form.categoryId) missing.push("category");
+  if (source === "customer" && !form.customerId) missing.push("customer");
+  if (source === "supplier" && !form.supplierId) missing.push("supplier");
+  return missing;
+};

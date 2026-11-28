@@ -83,12 +83,15 @@ export class NcrDashboardService {
     return this.database.asUser(ctx, async (db) => {
       const one = async (query: ReturnType<typeof sql>) => (await db.execute<Row>(query)).rows;
 
-      // The sites the caller may read; with no site chosen and only one readable, that one is shown.
+      // The sites the caller may read.
       const sites = (await one(sql`
         select s.id, s.code, s.name, s.currency from public.sites s
         where s.organisation_id = ${org}::uuid and s.active and app.has_permission(${org}::uuid, 'ncr.read', s.id) order by s.code`))
         .map((r) => ({ id: String(r.id), code: String(r.code), name: String(r.name), currency: String(r.currency) }));
-      const siteId = q.siteId ?? (sites.length === 1 ? sites[0].id : undefined);
+      // A person who can read non-conformances organisation-wide sees every one of them (also those with no site or at a switched-off site) unless
+      // they choose a site; only someone limited to a single site is shown that site, so their figures are in its currency.
+      const [orgWide] = await one(sql`select app.has_permission(${org}::uuid, 'ncr.read') as ok`);
+      const siteId = q.siteId ?? (!orgWide?.ok && sites.length === 1 ? sites[0].id : undefined);
       const site = siteId ? sites.find((s) => s.id === siteId) ?? null : null;
       if (siteId && !site) throw ApiError.notFound('site_not_found', 'Site not found');
       const [settings] = await one(sql`select base_currency from public.organisation_settings where organisation_id = ${org}::uuid`);

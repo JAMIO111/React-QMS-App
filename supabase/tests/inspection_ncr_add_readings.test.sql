@@ -10,10 +10,13 @@ INSERT INTO auth.users (id, email) VALUES
 CREATE TEMP TABLE ids (k text PRIMARY KEY, v uuid);
 GRANT SELECT ON ids TO authenticated;
 
+CREATE FUNCTION pg_temp.fails_with(p_sql text, p_state text) RETURNS boolean LANGUAGE plpgsql AS $$
+BEGIN EXECUTE p_sql; RETURN false; EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE = p_state; END $$;
+
 DO $$
 DECLARE
   org uuid; site uuid; fam uuid; part uuid; plan uuid; rev uuid; op uuid; od uuid; od2 uuid;
-  rec uuid; rec2 uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; m_good uuid; m_a uuid; m_b uuid; m_c uuid; m_d uuid; m_other uuid; m_e uuid; ncr uuid; ncr2 uuid; ncr3 uuid; ncr4 uuid; ncr5 uuid; ncr6 uuid; m uuid;
+  rec uuid; rec2 uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; m_good uuid; m_a uuid; m_b uuid; m_c uuid; m_d uuid; m_other uuid; m_e uuid; m_x uuid; m_y uuid; ncr uuid; ncr2 uuid; ncr3 uuid; ncr4 uuid; ncr5 uuid; ncr6 uuid; m uuid;
 BEGIN
   PERFORM pg_temp.login('39000000-0000-0000-0000-000000000101');
   org := app.create_organisation('NCR Add Works', 'Plant A', 'PA', NULL);
@@ -144,6 +147,18 @@ BEGIN
 
   -- A whole-inspection NC (no reading) is never blocked by this rule.
   PERFORM app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Another whole-inspection NC');
+
+  -- A corrected reading cannot be raised on (add_readings_to_ncr refuses it too): the current reading is the one that counts.
+  INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (org, rec) RETURNING id INTO s5;
+  INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric) VALUES (org, rec, s5, od, 25.6) RETURNING id INTO m_x;
+  INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric, supersedes_id, correction_reason)
+    VALUES (org, rec, s5, od, 25.7, m_x, 'Re-read') RETURNING id INTO m_y;
+  PERFORM pg_temp.assert_eq(pg_temp.fails_with(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[%L]::uuid[], %L)', rec, m_x, 'On a corrected reading'), 'QM008'), true, 'a corrected reading cannot start an NC');
+  PERFORM app.raise_ncr_from_inspection(rec, ARRAY[m_y], 'On the current reading', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
+  -- An abandoned inspection cannot start an NC.
+  rec2 := app.start_inspection(site, part, NULL, NULL, 'WO-3', 'LOT-3', NULL, 'first_off');
+  UPDATE public.inspection_records SET status = 'abandoned', abandon_reason = 'Wrong part' WHERE id = rec2;
+  PERFORM pg_temp.assert_eq(pg_temp.fails_with(format('SELECT app.raise_ncr_from_inspection(%L, ARRAY[]::uuid[], %L)', rec2, 'From an abandoned job'), 'QM008'), true, 'an abandoned inspection cannot start an NC');
 
   -- History: who linked which readings, and when (grouped by transaction in the API).
   PERFORM pg_temp.assert_eq((SELECT count(*) FROM app.ncr_link_history(ncr) WHERE measurement_id IN (m_a, m_b, m_c)), 3::bigint, 'link events for the readings on the first NC');

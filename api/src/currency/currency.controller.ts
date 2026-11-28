@@ -7,9 +7,18 @@ import { OrganisationScoped } from '../tenancy/organisation.guard';
 import { CostCurrencyService } from './cost-currency.service';
 import { ExchangeRateService } from './exchange-rate.service';
 
+const SITE_SCOPED = { anyScope: true };
 const code = z.string().trim().regex(/^[A-Za-z]{3}$/, 'Use a 3-letter ISO currency code').transform((v) => v.toUpperCase());
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
-export const PreviewQuery = z.object({ from: code, to: code, date: isoDate.optional() }).strict();
+/** The oldest day a preview asks for: far enough back for any cost being entered, and it keeps the shared rate cache from being filled with old days. */
+const MAX_PREVIEW_AGE_DAYS = 3660;
+export const PreviewQuery = z
+  .object({ from: code, to: code, date: isoDate.optional() })
+  .strict()
+  .refine((q) => !q.date || q.date >= new Date(Date.now() - MAX_PREVIEW_AGE_DAYS * 86_400_000).toISOString().slice(0, 10), {
+    message: 'That date is too far back for an exchange rate',
+    path: ['date'],
+  });
 export const RestateBody = z.object({ siteId: Uuid, confirm: z.boolean().default(false) }).strict();
 
 @ApiTags('costs')
@@ -23,7 +32,7 @@ export class CurrencyController {
 
   /** The automatic rate a conversion would use (for the cost form). Nothing is saved. */
   @Get('exchange-rates/preview')
-  @OrganisationScoped()
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
   @ApiQuery({ name: 'from', required: true, description: 'Currency of the cost' })
   @ApiQuery({ name: 'to', required: true, description: 'Currency to convert to' })
   @ApiQuery({ name: 'date', required: false, description: 'The day the cost was incurred (YYYY-MM-DD); default today' })

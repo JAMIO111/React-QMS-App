@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PlusIcon, ShareIcon, SlidersHorizontalIcon } from "@/components/icons";
-import { useNcrs } from "../hooks/useNcr";
+import { useNcrRanges, useNcrs } from "../hooks/useNcr";
 import { FILTER_KEYS, useNCMFilters } from "../hooks/useNCMFilters";
 import { usePermissions } from "../hooks/useQmsApi";
 import { useGlobalSearch } from "../contexts/SearchProvider";
@@ -160,11 +160,14 @@ const NonConformance = () => {
   });
   const rows = data?.data ?? [];
   const totalCount = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  // The selection belongs to the rows on screen: a new page, filter, search or sort order starts it again.
+  const shownKey = JSON.stringify([page, pageSize, filters, sorting, customFilters.params]);
   useEffect(() => {
     setRowSelection({});
     setSelectedRows([]);
-  }, [page, pageSize]);
+  }, [shownKey]);
 
   // The header search box feeds the register search.
   const currentSearch = filters.search;
@@ -185,10 +188,17 @@ const NonConformance = () => {
   const openRecord = (record) => navigate(ncrPath(record.id));
 
   const totalQuantity = selectedRows.reduce((acc, r) => acc + (Number(r.quantityAffected) || 0), 0);
-  // Costs are kept in the organisation's base currency, so the rows add up.
-  const totalCost = selectedRows.reduce((acc, r) => acc + (Number(r.totalCost) || 0), 0);
+  // Each row's cost is in its own site's currency, so the selection is added up per currency and never as one sum of mixed ones.
+  const selectionCost = (() => {
+    const byCurrency = new Map();
+    for (const r of selectedRows) byCurrency.set(r.costCurrency || "GBP", (byCurrency.get(r.costCurrency || "GBP") ?? 0) + (Number(r.totalCost) || 0));
+    return [...byCurrency].map(([currency, total]) => formatMoney(total, currency)).join(" + ") || formatMoney(0, "GBP");
+  })();
+  // The cost filter works on the organisation-currency figure (the slider and the server both do), so its chip says that currency.
+  const { data: ranges } = useNcrRanges(filters.source || undefined);
+  const organisationCurrency = ranges?.baseCurrency ?? "GBP";
   const filterCount = [
-    "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier", "department", "detectedBy",
+    "source", "category", "uncategorised", "stage", "severity", "failureMode", "subFailureMode", "deleted", "part", "customer", "supplier", "department", "detectedBy", "order", "lot",
   ].filter((k) => filters[k]).length + customFilters.count + (filters.from || filters.to ? 1 : 0) + (filters.raisedFrom || filters.raisedTo ? 1 : 0) + (filters.costMin || filters.costMax ? 1 : 0) + (filters.qtyMin || filters.qtyMax ? 1 : 0);
   const between = (lo, hi, fmt = (v) => v) => (lo && hi ? `${fmt(lo)} – ${fmt(hi)}` : lo ? `from ${fmt(lo)}` : `up to ${fmt(hi)}`);
   const nameOf = (id) => (lists?.all ?? []).find((c) => c.id === id)?.name ?? "…";
@@ -209,7 +219,7 @@ const NonConformance = () => {
     ...(filters.source ? [{ key: "source", label: `Source: ${filters.source.split(",").map(sourceLabel).join(", ")}`, clear: { source: "" } }] : []),
     ...(filters.category ? [{ key: "category", label: `Category: ${filters.categoryLabel || nameOf(filters.category)}`, clear: { category: "", categoryLabel: "" } }] : []),
     ...(filters.uncategorised ? [{ key: "uncategorised", label: "Uncategorised", clear: { uncategorised: "" } }] : []),
-    ...(filters.costMin || filters.costMax ? [{ key: "cost", label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), rows[0]?.costCurrency ?? "GBP").replace(/\.00$/, ""))}`, clear: { costMin: "", costMax: "" } }] : []),
+    ...(filters.costMin || filters.costMax ? [{ key: "cost", label: `Total cost ${between(filters.costMin, filters.costMax, (v) => formatMoney(Number(v), organisationCurrency).replace(/\.00$/, ""))}`, clear: { costMin: "", costMax: "" } }] : []),
     ...(filters.qtyMin || filters.qtyMax ? [{ key: "qty", label: `Quantity ${between(filters.qtyMin, filters.qtyMax)}`, clear: { qtyMin: "", qtyMax: "" } }] : []),
     ...(filters.failureMode ? [{ key: "failureMode", label: `Failure mode: ${nameOf(filters.failureMode)}`, clear: { failureMode: "", subFailureMode: "" } }] : []),
     ...(filters.subFailureMode ? [{ key: "subFailureMode", label: `Sub-failure mode: ${nameOf(filters.subFailureMode)}`, clear: { subFailureMode: "" } }] : []),
@@ -230,7 +240,7 @@ const NonConformance = () => {
               <Breadcrumb />
             </Suspense>
             <p className="text-sm h-4 text-primary-text" aria-live="polite">
-              {selectedRows.length > 0 && `${selectedRows.length} selected · Qty ${totalQuantity.toLocaleString()} · Cost ${formatMoney(totalCost, selectedRows[0]?.costCurrency || "GBP")}`}
+              {selectedRows.length > 0 && `${selectedRows.length} selected · Qty ${totalQuantity.toLocaleString()} · Cost ${selectionCost}`}
               {selectedRows.length === 0 && !isLoading && `${totalCount.toLocaleString()} ${totalCount === 1 ? "record" : "records"}${filters.deleted === "only" ? " (deleted)" : ""}`}
             </p>
           </div>
@@ -346,15 +356,26 @@ const NonConformance = () => {
             )
           }>
           {viewGrid ? (
-            <NonConformanceGrid
-              selectedItem={selectedItem}
-              setSelectedItem={setSelectedItem}
-              items={rows}
-              isLoading={isLoading}
-              error={error}
-              rowActions={rowActions}
-              onOpen={openRecord}
-            />
+            <>
+              <NonConformanceGrid
+                selectedItem={selectedItem}
+                setSelectedItem={setSelectedItem}
+                items={rows}
+                isLoading={isLoading}
+                error={error}
+                rowActions={rowActions}
+                onOpen={openRecord}
+              />
+              {pageCount > 1 && (
+                <nav aria-label="Pages" className="flex flex-row items-center justify-center gap-3 py-4">
+                  <CTAButton type="neutral" text="Previous" disabled={page <= 1 || isFetching} callbackFn={() => setPage(page - 1)} />
+                  <span className="text-sm text-secondary-text" aria-live="polite">
+                    Page {page} of {pageCount}
+                  </span>
+                  <CTAButton type="neutral" text="Next" disabled={page >= pageCount || isFetching} callbackFn={() => setPage(page + 1)} />
+                </nav>
+              )}
+            </>
           ) : (
             <TableWrapper
               data={rows}

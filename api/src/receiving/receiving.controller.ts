@@ -9,6 +9,9 @@ import {
 } from './receiving.schemas';
 import { ReceivingService } from './receiving.service';
 
+/** Admit people limited to one site: the database decides, per record, which site they may touch. */
+const SITE_SCOPED = { anyScope: true };
+
 const READ = 'receiving.read';
 const MANAGE = 'receiving.manage';
 const RECORD = 'receiving.record';
@@ -132,7 +135,7 @@ export class ReceivingController {
 
   @Post('goods-receipt-lines/:id/raise-ncr')
   @HttpCode(200)
-  @OrganisationScoped('ncr.create')
+  @OrganisationScoped('ncr.create', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(RaiseNcrBody) })
   @ApiOkResponse({ description: 'Raises a central goods-receiving non-conformance from the line (a draft, or open when a category is given). A live one already raised is returned with created: false.' })
   raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {

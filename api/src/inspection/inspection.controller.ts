@@ -25,6 +25,9 @@ import {
 } from './inspection.schemas';
 import { InspectionService } from './inspection.service';
 
+/** Admit people limited to one site: the database decides, per record, which site they may touch. */
+const SITE_SCOPED = { anyScope: true };
+
 const READ = 'inspection.read';
 const RECORD = 'inspection.record';
 
@@ -105,7 +108,7 @@ export class InspectionsController {
   /** Raise an NC (source internal) for failed readings — or for the inspection as a whole — linked permanently. */
   @Post(':id/raise-ncr')
   @HttpCode(201)
-  @OrganisationScoped('ncr.create')
+  @OrganisationScoped('ncr.create', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(RaiseNcrBody) })
   @ApiCreatedResponse({ schema: openApiSchema(RaisedNcr) })
   raiseNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -115,7 +118,7 @@ export class InspectionsController {
   /** Add later failed readings to an NC already raised from this inspection (draft … awaiting closure; refused when closed or cancelled). */
   @Post(':id/add-to-ncr')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update')
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(AddToNcrBody) })
   @ApiOkResponse({ schema: openApiSchema(InspectionDetail) })
   addToNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -167,7 +170,7 @@ export class NcrInspectionSourceController {
   constructor(private readonly service: InspectionService) {}
 
   @Get(':id/inspection-source')
-  @OrganisationScoped('ncr.read')
+  @OrganisationScoped('ncr.read', SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(NcrInspectionSource) })
   get(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.ncrSource(ctx, parse(Uuid, id));

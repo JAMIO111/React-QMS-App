@@ -116,6 +116,15 @@ describe('costs', () => {
     await api().patch(`/api/v1/ncr-costs/${costId}`).set(site).send({ unitCost: 1 }).expect(404);
     await api().post(`/api/v1/ncrs/${ncrAtB}/costs`).set(site).send({ costType: 'sorting', currency: 'GBP', unitCost: 25 }).expect(201);
   });
+
+  it('answers the side cards of an NC at their own site to a site-limited person (not 403)', async () => {
+    const site = await as(SITE_USER);
+    for (const card of ['inspection-source', 'audit-source', 'receipt-source']) {
+      await api().get(`/api/v1/ncrs/${ncrAtB}/${card}`).set(site).expect(200);
+    }
+    // At the other site the NC is simply not theirs.
+    await api().get(`/api/v1/ncrs/${ncr}/inspection-source`).set(site).expect(404);
+  });
 });
 
 describe('register filters', () => {
@@ -228,6 +237,23 @@ describe('NC dashboard', () => {
 
     await api().get('/api/v1/ncr-dashboard?from=2026-12-01&to=2026-01-01').set(h).expect(400);
     await api().get('/api/v1/ncr-dashboard').set(h).expect(400);
+  });
+
+  it('shows an organisation-wide reader every non-conformance, also when only one site is active', async () => {
+    const h = await as(ids.ownerA);
+    // One NC at plant B and one with no site, then plant B switched off: only site A stays readable, which used to narrow the whole dashboard to it.
+    await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'At B, April', siteId: plantB, detectedAt: '2024-04-02' }).expect(201);
+    await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'At A, April', siteId: ids.siteA, detectedAt: '2024-04-03' }).expect(201);
+    await admin.query(`update public.sites set active = false where id = $1`, [plantB]);
+    try {
+      const all = await api().get('/api/v1/ncr-dashboard?from=2024-04-01&to=2024-04-30').set(h).expect(200);
+      expect(all.body.kpis.raised).toBe(2);
+      expect(all.body.site).toBeNull();
+      const one = await api().get(`/api/v1/ncr-dashboard?from=2024-04-01&to=2024-04-30&siteId=${ids.siteA}`).set(h).expect(200);
+      expect(one.body.kpis.raised).toBe(1);
+    } finally {
+      await admin.query(`update public.sites set active = true where id = $1`, [plantB]);
+    }
   });
 
   it('counts every non-conformance of a week in the trend, not one for each source', async () => {

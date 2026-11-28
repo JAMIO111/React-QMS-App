@@ -22,19 +22,19 @@ fix should start with a failing test that shows the problem.
 
 | ID | What | Where | Status |
 |---|---|---|---|
-| API-2 | The dashboard narrows to "the only readable site" when the organisation has one active site, and filters every figure by it. NCs with no site (portal complaints, imports, gauges without a site) or at a deactivated site vanish from the dashboard while the register and home page count them. | `ncr-dashboard.ts:87-93, 107` | Checked |
-| API-3 | "Raised" and "open NC" are defined five different ways: the NC dashboard (drafts and cancelled count), supplier dashboard, customer dashboard, quality objective `ncr_count`, supplier register. These feed management-review inputs. | `ncr-dashboard.ts`, `supplier-dashboard.ts:177`, `customer-dashboard.ts:147`, `quality-objectives.service.ts:52`, `supplier-quality.service.ts:50` | Reported |
-| API-4 | Routes on the NC page need organisation-wide permission while the NC routes admit site-scoped people: inspection-source, audit-source, receipt-source / link / unlink, raise from a receipt line, raise / add from an inspection. A site-limited quality engineer opens an NC and the cards answer 403. | `inspection.controller.ts:106-170`, `audit-findings.controller.ts:234`, `requirements.controller.ts:84-103`, `receiving.controller.ts:133` | Reported |
-| API-5 | `GET /exchange-rates/preview` needs no permission, has no date window and writes to the global rate cache (including "not published" rows for a week). Any member can loop pairs and dates. | `currency.controller.ts:28-34`, `exchange-rate.service.ts:97-117` | Reported |
-| API-6 | Reporting NC datasets miss a deleted cost line on incremental pulls: the NC's `updated_at` does not move when a line is soft-deleted. | `20260425100000_reporting_keys.sql:131-163` | Reported, plausible |
-| DB-3 | Disposition, affected-lot and containment limits and the stage gates are check-then-write with no row lock. Two proposals of 8 against 10 both pass; closing while someone adds an open action can commit both. | `20251212100000:207-330` | Reported |
-| DB-4 | Changing an NC's part does not revalidate its order, lot, serial or affected lots (the production-links trigger returns early unless a link changed). | `20251211100000:84-95`, `20251212100000:78-82` | Reported |
-| DB-5 | `raise_ncr_from_inspection` accepts corrected (superseded) readings and an abandoned inspection; `add_readings_to_ncr` refuses superseded ones. | `20251218100000:297-319` | Reported |
-| UI-3 | Register selection goes stale: filter, search or sort changes keep the selected rows, so the header totals and "Export CSV" use rows no longer shown. | `NonConformance.jsx:164-167`, `TableWrapper.jsx:130-135` | Reported |
-| UI-4 | Grid view has no paging: more than one page of NCs cannot be reached. | `NonConformance.jsx:348-357` | Reported |
-| UI-5 | The selection's cost adds mixed currencies and labels the sum with the first row's currency; the cost-filter chip uses the row currency for an organisation-currency value. | `NonConformance.jsx:187-233` | Reported |
-| UI-6 | Changing the part does not clear order, lot and serial; the server then refuses the save (and, with UI-2, the person's other edits go too). | `NcrPage.jsx:444` | Reported, plausible |
-| UI-7 | The form does not say everything needed to open: "part or description" has no mark, Raise NC is enabled with only a title, "Needed to open" hints stay on an NC that is already open. | `NcrPage.jsx:313-321, 407, 444, 460, 488`, `StageBar.jsx:15` | Reported |
+| API-2 | The dashboard narrows to "the only readable site" when the organisation has one active site, and filters every figure by it. NCs with no site (portal complaints, imports, gauges without a site) or at a deactivated site vanish from the dashboard while the register and home page count them. | `ncr-dashboard.ts:87-93, 107` | Fixed, see below |
+| API-3 | "Raised" and "open NC" are defined five different ways: the NC dashboard (drafts and cancelled count), supplier dashboard, customer dashboard, quality objective `ncr_count`, supplier register. These feed management-review inputs. | `ncr-dashboard.ts`, `supplier-dashboard.ts:177`, `customer-dashboard.ts:147`, `quality-objectives.service.ts:52`, `supplier-quality.service.ts:50` | **Open: needs a decision** |
+| API-4 | Routes on the NC page need organisation-wide permission while the NC routes admit site-scoped people: inspection-source, audit-source, receipt-source / link / unlink, raise from a receipt line, raise / add from an inspection. A site-limited quality engineer opens an NC and the cards answer 403. | `inspection.controller.ts:106-170`, `audit-findings.controller.ts:234`, `requirements.controller.ts:84-103`, `receiving.controller.ts:133` | Fixed, see below |
+| API-5 | `GET /exchange-rates/preview` needs no permission, has no date window and writes to the global rate cache (including "not published" rows for a week). Any member can loop pairs and dates. | `currency.controller.ts:28-34`, `exchange-rate.service.ts:97-117` | Fixed, see below |
+| API-6 | Reporting NC datasets miss a deleted cost line on incremental pulls: the NC's `updated_at` does not move when a line is soft-deleted. | `20260425100000_reporting_keys.sql:131-163` | Fixed, see below |
+| DB-3 | Disposition, affected-lot and containment limits and the stage gates are check-then-write with no row lock. Two proposals of 8 against 10 both pass; closing while someone adds an open action can commit both. | `20251212100000:207-330` | Fixed, see below |
+| DB-4 | Changing an NC's part does not revalidate its order, lot, serial or affected lots (the production-links trigger returns early unless a link changed). | `20251211100000:84-95`, `20251212100000:78-82` | Fixed, see below |
+| DB-5 | `raise_ncr_from_inspection` accepts corrected (superseded) readings and an abandoned inspection; `add_readings_to_ncr` refuses superseded ones. | `20251218100000:297-319` | Fixed, see below |
+| UI-3 | Register selection goes stale: filter, search or sort changes keep the selected rows, so the header totals and "Export CSV" use rows no longer shown. | `NonConformance.jsx:164-167`, `TableWrapper.jsx:130-135` | Fixed, see below |
+| UI-4 | Grid view has no paging: more than one page of NCs cannot be reached. | `NonConformance.jsx:348-357` | Fixed, see below |
+| UI-5 | The selection's cost adds mixed currencies and labels the sum with the first row's currency; the cost-filter chip uses the row currency for an organisation-currency value. | `NonConformance.jsx:187-233` | Fixed, see below |
+| UI-6 | Changing the part does not clear order, lot and serial; the server then refuses the save (and, with UI-2, the person's other edits go too). | `NcrPage.jsx:444` | Fixed, see below |
+| UI-7 | The form does not say everything needed to open: "part or description" has no mark, Raise NC is enabled with only a title, "Needed to open" hints stay on an NC that is already open. | `NcrPage.jsx:313-321, 407, 444, 460, 488`, `StageBar.jsx:15` | Fixed, see below |
 
 ## Low
 
@@ -85,11 +85,11 @@ dialogs' limits; permission gating on the NC page.
 2. **API, no migration:** API-1, API-2, API-3 (one shared "live NC" fragment and a comparison test), API-4, API-5, API-10.
 3. **One migration:** DB-1, DB-2, DB-3, DB-4, DB-5, DB-6, DB-8 (and DB-7 if wanted), with SQL tests that fail first. Applying it live
    waits for the owner's go.
-4. Decisions for the owner: DB-9 (quantity 0), API-3 (what "raised" and "open" mean everywhere), API-13 (client keys).
+4. Decisions for the owner: DB-9 (quantity 0), API-3 (what "raised" and "open" mean everywhere: the NC dashboard counts drafts and cancelled NCs as raised; the other four places each use their own rule, and they feed management-review inputs), API-13 (client keys).
 
 ## Fixed so far (the five high findings)
 
-Fixed in the working tree on 28 Nov 2026; **the migration is not applied live** (it waits for the owner's go).
+Fixed on 28 Nov 2026. The high-findings migration (`20260469100000`) is applied live. **The medium-findings migration (`20260470100000`) is not applied live** (it waits for the owner's go).
 
 | ID | Fix | Test |
 |---|---|---|
@@ -99,4 +99,21 @@ Fixed in the working tree on 28 Nov 2026; **the migration is not applied live** 
 | DB-1 | `20260469100000_ncr_audit_high_fixes.sql`: reopening a cancelled NC runs `assert_ncr_openable`; `ncr_keep_opening_fields` also keeps the customer of an open customer NC and the supplier of an open supplier NC. | `ncr_core.test.sql` |
 | DB-2 | Same migration: `app.assert_ncr_links_free` re-checks on reopen and restore that none of the NC's readings or audit findings is on another live NC; `raise_ncr_from_inspection` and `add_readings_to_ncr` take a lock per inspection (`pg_advisory_xact_lock`) before checking, so two simultaneous raises cannot both pass. | `inspection_ncr_add_readings.test.sql` (reopen and restore). The race itself needs two sessions and is not covered by a test. |
 
-Still open: everything else in the lists above.
+## Fixed so far (the medium findings, except API-3)
+
+| ID | Fix | Test |
+|---|---|---|
+| API-2 | `ncr-dashboard.ts`: a person who may read NCs organisation-wide sees every NC (also those with no site or at a switched-off site) unless they choose a site; only someone limited to a single site is narrowed to it. | `ncr-records.e2e-spec.ts` "shows an organisation-wide reader every non-conformance, also when only one site is active" |
+| API-4 | The side cards of the NC page (inspection, audit and receipt source, link and unlink a receipt line, raise from a receipt line or an inspection, add readings) admit site-limited people (`anyScope`); the database still decides per record. | `ncr-records.e2e-spec.ts` "answers the side cards of an NC at their own site to a site-limited person" |
+| API-5 | `GET /exchange-rates/preview` needs `ncr.update` (anyone who can enter costs) and refuses a day more than ten years back, so it cannot be used to fill the shared rate cache. | `cost-currency.e2e-spec.ts` (403 for a viewer, 400 for 1999) |
+| API-6 | `20260470100000`: `report_non_conformances.updated_at` counts the latest change of any cost line, deleted ones too. | `ncr_audit_medium_fixes.test.sql` |
+| DB-3 | Same migration: writing to dispositions, containment actions or affected lots takes the NC's row lock first (trigger `a_ncr_lock_parent`, before the rule triggers, SECURITY DEFINER so people who may not update the NC can still write), which is the lock the stage-gate trigger holds while it checks. | `ncr_audit_medium_fixes.test.sql` checks the triggers and their order; **the race itself needs two sessions and is not tested** |
+| DB-4 | Same migration: changing an NC's part is refused when its production order, lot, serial number or a live affected lot belongs to another part (`nonconformances_part_change`). | `ncr_audit_medium_fixes.test.sql` |
+| DB-5 | Same migration: `raise_ncr_from_inspection` refuses a corrected (superseded) reading and an abandoned inspection. | `inspection_ncr_add_readings.test.sql` |
+| UI-3 | `NonConformance.jsx`: the register's selection is cleared when the page, page size, filters, search or sort change. | `Ncr.test.jsx` "forgets the selection when the rows on screen change" |
+| UI-4 | The card view has Previous / Next with "Page N of M". | `Ncr.test.jsx` "pages through the cards when there is more than one page" |
+| UI-5 | The selection's cost is added per currency ("£292.40 + €100.50"); the cost-filter chip uses the organisation currency (what the filter works on). Also UI-13: the filter count includes the order and lot filters. | `Ncr.test.jsx` "adds the selected rows' costs per currency…" |
+| UI-6 | Choosing another part clears the revision, production order, lot and serial number chosen for the old one. | `Ncr.test.jsx` "clears the production order and lot when the part is changed…" |
+| UI-7 | **Raise NC** stays disabled until what the database needs to open is filled in (`openingProblems` in `formModel.js`, the same list as `assert_ncr_openable`) and its tooltip says what is missing; a part or a description is marked as needed; "Needed to open" hints show only on new and draft NCs; a draft's **Open this NC** says what it still needs and waits. | `Ncr.test.jsx` (four tests) |
+
+**Open:** API-3 needs an owner decision (below). Everything in the Low list is untouched.

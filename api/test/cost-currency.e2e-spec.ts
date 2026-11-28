@@ -220,6 +220,9 @@ describe('the preview for the cost form', () => {
     await api().get('/api/v1/exchange-rates/preview?from=EURO&to=GBP').set(h).expect(400);
     await api().get('/api/v1/exchange-rates/preview?from=EUR').set(h).expect(400);
     await api().get('/api/v1/exchange-rates/preview?from=EUR&to=GBP').expect(401);
+    // Not for anyone who cannot enter costs, and not for days long ago (they would fill the shared rate cache).
+    await api().get(`/api/v1/exchange-rates/preview?from=EUR&to=GBP&date=${DAY}`).set(await as(ids.dual)).expect(403);
+    await api().get('/api/v1/exchange-rates/preview?from=EUR&to=GBP&date=1999-01-04').set(h).expect(400);
   });
 });
 

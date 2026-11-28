@@ -16,10 +16,10 @@ BEGIN
   END IF;
   SELECT string_agg(f.permission_code, ', ') INTO v_both FROM public.features f WHERE f.permission_code = ANY (app.unpriced_permissions());
   IF v_both IS NOT NULL THEN RAISE EXCEPTION 'FAILED: admin rights must not be priced: %', v_both; END IF;
-  -- every module a feature uses has a level in every package
+  -- every module a feature uses has a level in every seat package (the organisation fee is not a seat and holds none)
   SELECT string_agg(DISTINCT m.slug || '/' || p.slug, ', ') INTO v_missing
     FROM public.features f JOIN public.modules m ON m.id = f.module_id CROSS JOIN public.subscription_plans p
-   WHERE NOT EXISTS (SELECT 1 FROM public.subscription_entitlements e WHERE e.subscription_plan_id = p.id AND e.module_id = m.id AND e.feature_id IS NULL);
+   WHERE p.kind = 'seat' AND NOT EXISTS (SELECT 1 FROM public.subscription_entitlements e WHERE e.subscription_plan_id = p.id AND e.module_id = m.id AND e.feature_id IS NULL);
   IF v_missing IS NOT NULL THEN RAISE EXCEPTION 'FAILED: modules without a level in a package: %', v_missing; END IF;
 END $$;
 
@@ -98,28 +98,31 @@ DECLARE obs uuid := '5e000000-0000-0000-0000-000000000102'; con uuid := '5e00000
 BEGIN
   -- Observer: reads everything, does nothing
   FOREACH p IN ARRAY ARRAY['capa.read', 'audits.read', 'documentation.read', 'supplier_quality.read', 'receiving.read', 'spc.read', 'risk.read',
-                           'production.read', 'competence.read', 'management_review.read', 'workflows.read', 'master_data.read', 'audit.read'] LOOP
+                           'production.read', 'competence.read', 'management_review.read', 'workflows.read', 'master_data.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(obs, p), true, 'observer reads ' || p);
   END LOOP;
-  FOREACH p IN ARRAY ARRAY['capa.manage', 'audits.perform', 'competence.assess', 'receiving.manage', 'documentation.manage', 'master_data.manage'] LOOP
+  FOREACH p IN ARRAY ARRAY['capa.manage', 'audits.perform', 'competence.assess', 'receiving.manage', 'receiving.record', 'shipping.record', 'ncr.contribute', 'documentation.manage', 'master_data.manage', 'audit.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(obs, p), false, 'observer cannot ' || p);
   END LOOP;
 
-  -- Contributor: works (records, carries out, assesses), does not manage
-  FOREACH p IN ARRAY ARRAY['audits.perform', 'competence.assess', 'receiving.manage', 'inspection.record', 'capa.read'] LOOP
+  -- Contributor: works (records, carries out, assesses, edits NCs and runs 8Ds), does not sign off or set up
+  FOREACH p IN ARRAY ARRAY['audits.perform', 'competence.assess', 'receiving.record', 'shipping.record', 'ncr.contribute', 'inspection.record', 'capa.read',
+                           'capa.manage', 'ncr.update'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(con, p), true, 'contributor may ' || p);
   END LOOP;
-  FOREACH p IN ARRAY ARRAY['capa.manage', 'capa.verify', 'audits.manage', 'documentation.manage', 'documentation.issue', 'supplier_quality.manage',
+  FOREACH p IN ARRAY ARRAY['capa.verify', 'audits.manage', 'documentation.manage', 'documentation.issue', 'supplier_quality.manage',
                            'supplier_quality.approve', 'risk.manage', 'production.manage', 'competence.manage', 'management_review.manage',
-                           'workflows.manage', 'master_data.manage', 'custom_fields.manage', 'lookups.manage', 'ncr.approve_disposition', 'spc.manage'] LOOP
+                           'workflows.manage', 'master_data.manage', 'custom_fields.manage', 'lookups.manage', 'ncr.approve_disposition', 'spc.manage',
+                           'receiving.manage', 'shipping.manage', 'inspection.acknowledge_failure', 'change.approve', 'audit.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(con, p), false, 'contributor cannot ' || p);
   END LOOP;
-  PERFORM pg_temp.assert_eq(pg_temp.shows(con, 'capa.manage'), false, 'and the screens do not offer it');
+  PERFORM pg_temp.assert_eq(pg_temp.shows(con, 'capa.verify'), false, 'and the screens do not offer it');
   PERFORM pg_temp.assert_eq(pg_temp.shows(con, 'audits.perform'), true, 'but do offer what they may do');
 
   -- Controller: everything the role holds
   FOREACH p IN ARRAY ARRAY['capa.manage', 'capa.verify', 'audits.manage', 'documentation.issue', 'supplier_quality.approve', 'risk.approve',
-                           'competence.manage', 'master_data.manage', 'ncr.approve_disposition'] LOOP
+                           'competence.manage', 'master_data.manage', 'ncr.approve_disposition', 'receiving.manage', 'shipping.manage',
+                           'inspection.acknowledge_failure', 'change.approve', 'audit.read'] LOOP
     PERFORM pg_temp.assert_eq(pg_temp.can(ctl, p), true, 'controller may ' || p);
   END LOOP;
 

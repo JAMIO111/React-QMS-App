@@ -163,7 +163,9 @@ describe('the register', () => {
     await api().patch(`${base}/suppliers/${ctx.s3}`).set(h).send({ active: false }).expect(200);
     // An open and a closed-out non-conformance naming ACME.
     const cat = await categoryId(admin, ids.orgA);
-    await api().post('/api/v1/ncrs').set(h).send({ source: 'supplier', title: 'Cracked bar', supplierId: ctx.s1, siteId: ids.siteA, categoryId: cat }).expect(201);
+    const ncId = (await api().post('/api/v1/ncrs').set(h).send({ source: 'supplier', title: 'Cracked bar', supplierId: ctx.s1, siteId: ids.siteA, categoryId: cat, severity: 'minor', quantityAffected: 1, description: 'x' }).expect(201)).body.id;
+    // Opened: a draft does not count as an open non-conformance.
+    await api().post(`/api/v1/ncrs/${ncId}/transitions`).set(h).send({ to: 'open' }).expect(200);
   });
 
   it('lists active suppliers by default with the open non-conformance count, and carries the profile counts', async () => {

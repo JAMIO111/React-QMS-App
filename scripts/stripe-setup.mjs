@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// Creates (or finds) the Stripe products and the six GBP prices (observer / contributor / controller, monthly and annual) and prints the SQL that records
-// their ids against our price rows. Safe to run again: prices are found by lookup key, never duplicated. Run it per Stripe mode (test, then live).
+// Creates (or finds) the Stripe products and the ten GBP prices (the organisation fee and the observer / operator / contributor / controller seats, monthly
+// and annual) and prints the SQL that records their ids against our current price rows. Safe to run again: prices are found by lookup key, never
+// duplicated. When an amount here differs from the price holding the lookup key, a new price is made and the key moves to it (transfer_lookup_key);
+// the old price stays active for the subscriptions already on it (archive it in Stripe only when nobody uses it). Run it per Stripe mode (test, then live).
 //
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs            # creates what is missing, prints SQL
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs --dry-run  # only reports what it would create
 //
 // Review the SQL it prints, then run it against the matching Supabase project (test keys <-> the dev project). The amounts mirror
-// supabase/migrations/20251110100000_subscriptions.sql (pence, excluding VAT; annual = 10 x monthly); change them in the database first, then here.
+// supabase/migrations/20260465100000_seats_and_prices_2026.sql (pence, excluding VAT; annual = 10 x monthly); change them in the database first, then here.
 import Stripe from 'stripe';
 
 const key = process.env.STRIPE_SECRET_KEY;
@@ -22,9 +24,11 @@ const stripe = new Stripe(key, {
 });
 
 const PLANS = [
-  { slug: 'observer', name: 'Fortress QMS Observer', description: 'Read-only access to company quality information.', monthly: 500 },
-  { slug: 'contributor', name: 'Fortress QMS Contributor', description: 'Record results and complete assigned work.', monthly: 1000 },
-  { slug: 'controller', name: 'Fortress QMS Controller', description: 'Full application functionality, subject to company permissions.', monthly: 2500 },
+  { slug: 'organisation', name: 'Fortress QMS Organisation', description: 'One per organisation: every module, support and the platform itself.', monthly: 9900 },
+  { slug: 'observer', name: 'Fortress QMS Observer', description: 'Reads dashboards, registers, documents and alerts, and acknowledges what is addressed to them. Free up to twice the number of paid seats.', monthly: 0 },
+  { slug: 'operator', name: 'Fortress QMS Operator', description: 'The shop floor: records inspections and jobs, raises non-conformances, reads and acknowledges documents and alerts.', monthly: 600 },
+  { slug: 'contributor', name: 'Fortress QMS Contributor', description: 'Does the work: raises and progresses non-conformances, runs 8Ds, records inspections, calibrations, audits and deliveries.', monthly: 1900 },
+  { slug: 'controller', name: 'Fortress QMS Controller', description: 'Signs off and sets up: approves dispositions, verifies and closes 8Ds, issues documents, approves suppliers, runs integrations.', monthly: 4900 },
 ];
 const INTERVALS = [
   { interval: 'month', factor: 1 },
@@ -42,7 +46,9 @@ for (const plan of PLANS) {
   for (const { interval, factor } of INTERVALS) {
     const lookupKey = `fortress_${plan.slug}_${interval}`;
     const existing = (await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 })).data[0];
-    let price = existing;
+    const amount = plan.monthly * factor;
+    let price = existing && existing.unit_amount === amount ? existing : null;
+    if (existing && !price) console.log(`${lookupKey} is ${existing.unit_amount} in Stripe but ${amount} here: ${dryRun ? 'would make' : 'making'} a new price and moving the lookup key to it`);
     if (!price && productId && !dryRun) {
       price = await stripe.prices.create({
         product: productId,
@@ -51,12 +57,11 @@ for (const plan of PLANS) {
         recurring: { interval },
         tax_behavior: 'exclusive',
         lookup_key: lookupKey,
+        transfer_lookup_key: true,
         metadata: { plan_slug: plan.slug },
       });
       console.log(`created ${lookupKey} = ${price.id}`);
     } else if (price) {
-      const amount = plan.monthly * factor;
-      if (price.unit_amount !== amount) console.warn(`WARNING: ${lookupKey} is ${price.unit_amount} in Stripe but ${amount} here. Prices are immutable: create a new price (new lookup key) and a new database price row.`);
       console.log(`found   ${lookupKey} = ${price.id}`);
     } else {
       console.log(`would create ${lookupKey}`);

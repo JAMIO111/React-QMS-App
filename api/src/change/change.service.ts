@@ -655,8 +655,8 @@ export class ChangeService {
   /** The people who could be put on the board, and whether each can sign. */
   signers(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<Row>(sql`select * from app.change_signer_candidates(${orgOf(ctx)}::uuid)`);
-      return { data: res.rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: !!r.can_approve })) };
+      const res = await db.execute<Row>(sql`select c.*, ap.avatar_path from app.change_signer_candidates(${orgOf(ctx)}::uuid) c left join public.profiles ap on ap.id = c.user_id`);
+      return { data: res.rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: !!r.can_approve, avatarPath: (r.avatar_path as string) ?? null })) };
     });
   }
 

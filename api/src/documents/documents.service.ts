@@ -636,8 +636,8 @@ export class DocumentsService {
   /** Members who may be named as reviewers or approver (`canApprove`: holds documentation.issue). */
   signerCandidates(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
-      const rows = (await db.execute<Row>(sql`select * from app.document_signer_candidates(${orgOf(ctx)}::uuid)`)).rows;
-      return { data: rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: r.can_approve as boolean })) };
+      const rows = (await db.execute<Row>(sql`select d.*, ap.avatar_path from app.document_signer_candidates(${orgOf(ctx)}::uuid) d left join public.profiles ap on ap.id = d.user_id`)).rows;
+      return { data: rows.map((r) => ({ id: r.user_id as string, name: r.name as string, canApprove: r.can_approve as boolean, avatarPath: (r.avatar_path as string) ?? null })) };
     });
   }
 

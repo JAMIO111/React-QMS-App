@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, eq, SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
+import { onceByKey } from '../common/client-key';
 import type { RequestContext } from '../common/request-context';
 import { LINK_COLUMNS, linkJoins, toLinks } from '../production/production-links';
 import { DatabaseService, Db } from '../database/database.service';
@@ -249,8 +250,19 @@ export class NcrService {
   }
 
   create(ctx: RequestContext, body: CreateNcrBody): Promise<NcrDetail> {
+    return onceByKey({
+      database: this.database,
+      ctx,
+      table: 'nonconformances',
+      key: body.clientKey,
+      make: () => this.createOnce(ctx, body),
+      read: (id) => this.database.asUser(ctx, (db) => this.load(db, ctx, id)),
+    });
+  }
+
+  private createOnce(ctx: RequestContext, body: CreateNcrBody): Promise<NcrDetail> {
     return this.database.asUser(ctx, async (db) => {
-      const { open, source, customValues, ...rest } = body;
+      const { open, source, customValues, clientKey, ...rest } = body;
       // No site given: someone who may raise NCs at one site only raises it there (otherwise the database would refuse an NC with no site).
       if (!rest.siteId) {
         const choices = await siteChoices(db, ctx);
@@ -258,7 +270,7 @@ export class NcrService {
       }
       const [row] = await db
         .insert(nonconformances)
-        .values({ ...toColumns(rest), title: rest.title, organisationId: ctx.organisationId!, source, stage: open ? 'open' : 'draft', detectedBy: ctx.user.id })
+        .values({ ...toColumns(rest), title: rest.title, organisationId: ctx.organisationId!, source, stage: open ? 'open' : 'draft', detectedBy: ctx.user.id, clientKey: clientKey ?? null })
         .returning({ id: nonconformances.id });
       await writeCustomValues(db, 'nonconformance', row.id, customValues);
       return this.load(db, ctx, row.id);

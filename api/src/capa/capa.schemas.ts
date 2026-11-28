@@ -386,7 +386,7 @@ export const CapaDetail = CapaSummary.extend({
 export type CapaDetail = z.infer<typeof CapaDetail>;
 
 export const CapaList = z.object({ data: z.array(CapaSummary), page: z.number().int(), pageSize: z.number().int(), total: z.number().int() });
-export const PeopleList = z.object({ data: z.array(z.object({ membershipId: z.string().uuid(), userId: z.string().uuid(), name: z.string() })) });
+export const PeopleList = z.object({ data: z.array(z.object({ membershipId: z.string().uuid(), userId: z.string().uuid(), name: z.string(), avatarPath: z.string().nullable() })) });
 export const NcrCapaList = z.object({
   data: z.array(z.object({ linkId: z.string().uuid(), capaId: z.string().uuid(), reference: z.string(), title: z.string(), stage: Stage, currentStep: Step, stepsDone: z.number().int(), linkedAt: Iso })),
 });

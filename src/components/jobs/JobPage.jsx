@@ -392,6 +392,7 @@ const JobPage = () => {
             <Failures
               inspection={inspection}
               canRecord={canRecord}
+              canAcknowledge={can("inspection.acknowledge_failure")}
               canRaise={can("ncr.create") && inspection.status !== "abandoned"}
               canUpdateNcr={
                 can("ncr.update") && inspection.status !== "abandoned"

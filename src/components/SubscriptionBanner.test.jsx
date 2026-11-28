@@ -69,4 +69,24 @@ describe("SubscriptionBanner", () => {
     expect(container).toBeEmptyDOMElement();
     expect(enabledSeen).toBe(false);
   });
+
+  it("names an overdue invoice, offers to pay it, and cannot be dismissed", () => {
+    const due = new Date(Date.now() - 2 * DAY).toISOString().slice(0, 10);
+    overview = { subscription: { status: "active", paymentRoute: "invoice", gracePeriodDays: 3, openInvoice: { number: "INV-0042", total: 7500, currency: "GBP", dueOn: due, overdueDays: 2, hostedUrl: "https://pay.test/i/42" } } };
+    renderAt();
+    expect(screen.getByRole("alert")).toHaveTextContent(/Invoice INV-0042 for £75\.00 was due on .* 2 days overdue/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/access to fortress qms stops on/i);
+    expect(screen.getByRole("link", { name: "Pay this invoice" })).toHaveAttribute("href", "https://pay.test/i/42");
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
+  it("reminds about an invoice due within the week, and can be dismissed", async () => {
+    const due = new Date(Date.now() + 4 * DAY).toISOString().slice(0, 10);
+    overview = { subscription: { status: "active", paymentRoute: "invoice", gracePeriodDays: 3, openInvoice: { number: "INV-0043", total: 5000, currency: "GBP", dueOn: due, overdueDays: 0, hostedUrl: null } } };
+    renderAt();
+    expect(screen.getByRole("status")).toHaveTextContent(/Invoice INV-0043 for £50\.00 is due on/);
+    expect(screen.queryByRole("link", { name: "Pay this invoice" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });

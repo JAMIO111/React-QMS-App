@@ -13,6 +13,7 @@ import { useGaugeTypes } from "../../hooks/useCalibration";
 import { usePartFamilies } from "../../hooks/useProcessControl";
 import { useAllDepartments, useRoles, useSites } from "../../hooks/useQmsApi";
 import { OP_LABELS, RECIPIENT_KINDS, canHoldLot, defaultOp, isListOp, triggerOptions, needsValue, newAction, newCondition, opsFor } from "../../lib/workflows";
+import { avatarOf } from "@/lib/employees";
 
 const box = "flex flex-col gap-3 rounded-xl border border-border-color bg-primary-bg p-3";
 
@@ -223,7 +224,7 @@ const RecipientRow = ({ recipient, onChange, onRemove, allowGroups, labels, onLa
   const departments = useAllDepartments();
   const kinds = allowGroups ? RECIPIENT_KINDS : RECIPIENT_KINDS.filter((k) => k.value === "record_owner" || k.value === "person");
   const options = {
-    person: (people.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+    person: (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) })),
     role: (roles.data?.data ?? []).map((r) => ({ value: r.id, label: r.name })),
     department: (departments.data?.data ?? []).map((d) => ({ value: d.id, label: d.name, hint: d.siteName ?? d.site?.name })),
   };

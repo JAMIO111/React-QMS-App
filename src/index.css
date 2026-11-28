@@ -878,3 +878,26 @@ html:not(.dark) .bg-orange-500\/20.text-orange-700 {
 .document-text th { background: var(--color-secondary-bg); font-weight: 600; text-align: left; }
 .document-text .selectedCell { background: color-mix(in srgb, var(--color-brand-primary) 15%, transparent); }
 .document-text p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--color-secondary-text); float: left; height: 0; pointer-events: none; }
+
+/* Touch screens (a finger rather than a mouse pointer, so phones and tablets; a desktop with a mouse is untouched). */
+@media (pointer: coarse) {
+  /* Below 16px, iOS Safari zooms the whole page in when a field is focused and leaves it zoomed. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /* The app's one control height (38px: buttons, inputs, selects, combos, toggles) is 44px for a finger, so a row of controls still lines up. */
+  .h-9\.5 {
+    height: 2.75rem;
+  }
+  .min-h-9\.5 {
+    min-height: 2.75rem;
+  }
+  /* A row of a register is a link as well as a line of text: taller, so it is a target a finger can hit. */
+  .table-row-item,
+  .table-row-item-number {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}

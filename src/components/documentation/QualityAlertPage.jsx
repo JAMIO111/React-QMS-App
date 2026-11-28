@@ -17,6 +17,8 @@ import { ActionsList, SeverityBadge, StatusPill } from "./shared";
 import AlertFiles from "./AlertFiles";
 import { LinkList } from "./AlertLinks";
 import CTAButton from "@/components/CTAButton";
+import ComboField from "../ui/ComboField";
+import { avatarOf } from "@/lib/employees";
 import { todayIso } from "@/lib/localDate";
 
 const Facts = ({ items }) => (
@@ -163,6 +165,9 @@ const RECIPIENT_FILTERS = [
   { value: "done", label: "Acknowledged" },
 ];
 
+/** A member's name, or their address when they have none yet. */
+const nameOf = (m) => [m.firstName, m.surname].filter(Boolean).join(" ") || m.email;
+
 /** For managers: who was asked, who has seen it, who has acknowledged it, who is overdue; and adding a person later. */
 const Tracking = ({ alert, canAdd }) => {
   const query = useRecipients(alert.id);
@@ -171,7 +176,6 @@ const Tracking = ({ alert, canAdd }) => {
   const members = useMembers({ enabled: canAdd && can("members.read") });
   const [filter, setFilter] = useState("all");
   const [department, setDepartment] = useState("");
-  const [person, setPerson] = useState("");
   const rows = query.data?.data ?? [];
   const totals = query.data?.totals;
   const departments = [...new Set(rows.flatMap((r) => r.reachedVia.filter((v) => v.startsWith("Department: ")).map((v) => v.slice(12))))].sort();
@@ -195,39 +199,32 @@ const Tracking = ({ alert, canAdd }) => {
           </dl>
         )}
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text">
-            Show
-            <select aria-label="Show" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={filter} onChange={(e) => setFilter(e.target.value)}>
-              {RECIPIENT_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-            </select>
-          </label>
+          <div className="w-48">
+            <ComboField label="Show" value={filter} onChange={(v) => setFilter(v ?? "all")} options={RECIPIENT_FILTERS} clearable={false} />
+          </div>
           {departments.length > 0 && (
-            <label className="flex flex-col gap-1 text-sm font-medium text-secondary-text">
-              Department
-              <select aria-label="Department" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={department} onChange={(e) => setDepartment(e.target.value)}>
-                <option value="">All</option>
-                {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </label>
+            <div className="w-56">
+              <ComboField label="Department" value={department || null} onChange={(v) => setDepartment(v ?? "")} options={departments.map((d) => ({ value: d, label: d }))} placeholder="All" />
+            </div>
           )}
           {canAdd && candidates.length > 0 && (
-            <form
-              className="ml-auto flex items-end gap-2"
-              aria-label="Add a person"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!person) return;
-                const m = candidates.find((c) => c.membershipId === person);
-                // Listed at once (marked as saving by its placeholder id); a refusal takes them off again with a toast.
-                mutation.mutate({ action: "addRecipient", id: alert.id, body: { membershipId: person }, show: { name: m ? [m.firstName, m.surname].filter(Boolean).join(" ") || m.email : undefined }, failed: "Not added" });
-                setPerson("");
-              }}>
-              <select aria-label="Person to add" className="h-9.5 rounded-lg border border-border-color bg-text-input-color px-2 py-2 text-sm text-primary-text" value={person} onChange={(e) => setPerson(e.target.value)}>
-                <option value="">Add a person…</option>
-                {candidates.map((m) => <option key={m.membershipId} value={m.membershipId}>{[m.firstName, m.surname].filter(Boolean).join(" ") || m.email}</option>)}
-              </select>
-              <CTAButton buttonType="submit" type="neutral" size="md" disabled={!person}>Add</CTAButton>
-            </form>
+            <div className="ml-auto w-72">
+              <ComboField
+                label="Add a person"
+                value={null}
+                placeholder="Choose someone to ask…"
+                options={candidates.map((m) => {
+                  const label = nameOf(m);
+                  return { value: m.membershipId, label, hint: m.jobTitle ?? undefined, avatar: avatarOf(m, label) };
+                })}
+                onChange={(membershipId) => {
+                  if (!membershipId) return;
+                  const m = candidates.find((c) => c.membershipId === membershipId);
+                  // Listed at once (marked as saving by its placeholder id); a refusal takes them off again with a toast.
+                  mutation.mutate({ action: "addRecipient", id: alert.id, body: { membershipId }, show: { name: m ? nameOf(m) : undefined }, failed: "Not added" });
+                }}
+              />
+            </div>
           )}
         </div>
         <FormError error={mutation.error} />

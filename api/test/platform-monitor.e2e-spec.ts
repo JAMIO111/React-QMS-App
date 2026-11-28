@@ -32,6 +32,12 @@ class FakeStripe extends StripeGateway {
     return structuredClone(s);
   }
   async createCustomer(): Promise<string> { throw new Error('not used'); }
+  async updateCustomerBilling(): Promise<{ vat: 'none' | 'verified' | 'pending' }> {
+    throw new Error('not used here');
+  }
+  async createInvoiceSubscription(): Promise<{ subscriptionId: string; invoiceId: string | null }> {
+    throw new Error('not used here');
+  }
   async createCheckoutSession(): Promise<{ id: string; url: string }> { throw new Error('not used'); }
   async retrieveCheckoutSession(): Promise<never> { throw new Error('not used'); }
   async retrieveInvoice(): Promise<never> { throw new Error('not used'); }
@@ -104,7 +110,7 @@ describe('the operator monitor', () => {
     const alpha = res.data.find((o: { organisationId: string }) => o.organisationId === ids.orgA);
     expect(alpha).toMatchObject({
       organisationId: ids.orgA, name: 'Alpha Precision', status: 'active', ownerEmails: [`${ids.ownerA}@example.test`], subscriptionStatus: 'active', billingProvider: 'stripe',
-      billingInterval: 'month', seatsPurchased: 2, mrrPence: 5000,
+      billingInterval: 'month', seatsPurchased: 2, mrrPence: 9800, // two Controllers at 4900
     });
     expect(alpha.members).toBeGreaterThanOrEqual(1);
     const byOwner = (await api().get(`/api/v1/platform/organisations?search=${encodeURIComponent(`${ids.ownerB}@example`)}`).set(await mfa()).expect(200)).body;
@@ -122,9 +128,9 @@ describe('the operator monitor', () => {
     await admin.query(`insert into public.stripe_events (event_id, event_type, status, error, attempts) values ('evt_e2e3_bad', 'invoice.paid', 'failed', 'Boom', 2) on conflict do nothing`);
     const revenue = (await api().get('/api/v1/platform/revenue').set(await mfa()).expect(200)).body;
     expect(revenue).toMatchObject({ currency: 'GBP', mrrPence: expect.any(Number), arrPence: expect.any(Number), trialMrrPence: expect.any(Number) });
-    expect(revenue.mrrPence).toBeGreaterThanOrEqual(5000);
+    expect(revenue.mrrPence).toBeGreaterThanOrEqual(9800);
     expect(revenue.arrPence).toBe(revenue.mrrPence * 12);
-    expect(revenue.seats.map((s: { slug: string }) => s.slug)).toEqual(['observer', 'contributor', 'controller']);
+    expect(revenue.seats.map((s: { slug: string }) => s.slug)).toEqual(['organisation', 'observer', 'operator', 'contributor', 'controller']);
     const payments = (await api().get('/api/v1/platform/payments?limit=5').set(await mfa()).expect(200)).body;
     expect(payments.invoices.find((i: { number: string }) => i.number === 'FQ-E2E3-1')).toMatchObject({ organisation: 'Alpha Precision', total: 6000, tax: 1000 });
     const hooks = (await api().get('/api/v1/platform/webhooks?hours=48').set(await mfa()).expect(200)).body;
@@ -242,7 +248,9 @@ describe('the scheduled jobs', () => {
   describe('reconcile', () => {
     const snapshot = (id: string, status: string): SubscriptionSnapshot => ({
       id, customerId: `cus_e2e3_00${id.slice(-1)}`, status, interval: 'month', currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 20 * 864e5).toISOString(),
-      trialStart: null, trialEnd: null, cancelAtPeriodEnd: false, canceledAt: null, items: [{ itemId: 'si_1', priceId: PRICES.controller, quantity: 1 }],
+      trialStart: null, trialEnd: null, cancelAtPeriodEnd: false, canceledAt: null, collectionMethod: 'charge_automatically',
+      daysUntilDue: null,
+      latestInvoiceId: null, items: [{ itemId: 'si_1', priceId: PRICES.controller, quantity: 1 }],
     });
     const SUBS = [ORG(11), ORG(12), ORG(13)];
     beforeAll(async () => {

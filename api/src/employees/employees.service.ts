@@ -80,10 +80,19 @@ export class EmployeesService {
   lookup(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       const result = await db.execute<Row>(sql`
-        select id, ${sql.raw(personName('e'))} as name, job_title, coalesce(active, true) as active
-        from public."Employees" e where e.organisation_id = ${orgOf(ctx)}::uuid
+        select e.id, ${sql.raw(personName('e'))} as name, e.job_title, coalesce(e.active, true) as active, p.avatar_path
+        from public."Employees" e
+        left join public.profiles p on p.id = e.auth_id
+        where e.organisation_id = ${orgOf(ctx)}::uuid
         order by lower(e.surname), lower(e.first_name)`);
-      return result.rows.map((r) => ({ id: r.id as string, name: (r.name as string) ?? 'Unnamed', jobTitle: (r.job_title as string) ?? null, active: r.active as boolean }));
+      return result.rows.map((r) => ({
+        id: r.id as string,
+        name: (r.name as string) ?? 'Unnamed',
+        jobTitle: (r.job_title as string) ?? null,
+        active: r.active as boolean,
+        // The linked sign-in's profile picture, for the initials-or-photo circle in pickers (null when not linked or no picture).
+        avatarPath: (r.avatar_path as string) ?? null,
+      }));
     });
   }
 
@@ -129,7 +138,8 @@ export class EmployeesService {
   loginCandidates(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       const seat = await db.execute<{ ok: boolean }>(sql`select app.holds_controller_seat(${orgOf(ctx)}::uuid) as ok`);
-      const rows = await db.execute<Row>(sql`select user_id, first_name, surname, email, employee_id from app.employee_login_candidates(${orgOf(ctx)}::uuid)`);
+      const rows = await db.execute<Row>(sql`select c.user_id, c.first_name, c.surname, c.email, c.employee_id, ap.avatar_path
+        from app.employee_login_candidates(${orgOf(ctx)}::uuid) c left join public.profiles ap on ap.id = c.user_id`);
       return {
         canLink: seat.rows[0].ok,
         data: rows.rows.map((r) => ({
@@ -137,6 +147,7 @@ export class EmployeesService {
           name: ([r.first_name, r.surname].filter(Boolean).join(' ') as string) || (r.email as string) || 'Unknown user',
           email: (r.email as string) ?? null,
           employeeId: (r.employee_id as string) ?? null,
+          avatarPath: (r.avatar_path as string) ?? null,
         })),
       };
     });

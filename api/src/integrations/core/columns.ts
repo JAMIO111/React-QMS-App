@@ -103,7 +103,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
     fields: {
       assetNumber: { column: 'asset_number' }, description: { column: 'description' }, gaugeType: { column: 'gauge_type_id' }, manufacturer: { column: 'manufacturer' },
       model: { column: 'model' }, serialNumber: { column: 'serial_number' }, site: { column: 'site_id' }, department: { column: 'department_id' },
-      location: { column: 'location' }, rangeMin: { column: 'range_min' }, rangeMax: { column: 'range_max' }, unit: { column: 'unit_code' },
+      machine: { column: 'machine_id' }, location: { column: 'location' }, rangeMin: { column: 'range_min' }, rangeMax: { column: 'range_max' }, unit: { column: 'unit_code' },
       resolution: { column: 'resolution' }, calibrationSource: { column: 'calibration_source' }, supplier: { column: 'supplier_id' },
       intervalValue: { column: 'interval_value' }, intervalUnit: { column: 'interval_unit' }, commissionedOn: { column: 'commissioned_on' }, notes: { column: 'notes' },
     },
@@ -169,6 +169,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       production_order_id: 'Not imported yet: production links are made in Fortress', lot_id: 'Not imported yet: production links are made in Fortress',
       serial_id: 'Not imported yet: production links are made in Fortress',
       source_change_reason: 'Changing the source is a person\'s step with a reason',
+      client_key: 'Made by a screen so a retry cannot make a second record; an import has its own way of not repeating itself',
     },
   },
   ncr_cost: {
@@ -192,6 +193,7 @@ export const ENTITY_COLUMNS: Partial<Record<EntityType, EntityColumns>> = {
       override_kind: 'Set when a booked value is applied', override_note: 'Set when a booked value is applied',
       overridden_at: 'Set when a booked value is applied', overridden_by: 'Set when a booked value is applied',
       deleted_at: 'Deleting is a person\'s step with a reason', deleted_by: 'Deleting is a person\'s step with a reason', delete_reason: 'Deleting is a person\'s step with a reason',
+      client_key: 'Made by a screen so a retry cannot make a second line; an import has its own way of not repeating itself',
     },
     virtual: { bookedValue: 'The value the source booked in the site currency: applied as a stated rate on the line, not stored as a column of its own' },
   },

@@ -5,6 +5,7 @@ import { assignments, insertParts, iso, personName, Row } from '../calibration/c
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { ncOpen, ncRaised } from '../ncr/nc-definitions';
 import {
   ChangeStatusBody, Classification, ClassificationsQuery, CreateClassificationBody, CreateContactBody, CreateProductBody, CreateSupplierBody, SetClassificationsBody,
   StatusHistoryItem, SupplierContact, SupplierDetail, SupplierListQuery, SupplierPage, SupplierProduct, SupplierRow, UpdateClassificationBody, UpdateContactBody, UpdateProductBody, UpdateSupplierBody,
@@ -49,7 +50,7 @@ const LIST_COLUMNS = sql`
   coalesce(o.n, 0) as open_ncs`;
 const OPEN_NCS = sql`
   left join lateral (select count(*)::int as n from public.nonconformances n
-                      where n.supplier_id = s.id and n.deleted_at is null and n.stage not in ('closed', 'cancelled')) o on true`;
+                      where n.supplier_id = s.id and ${ncOpen('n')}) o on true`;
 
 const toRow = (r: Row): SupplierRow => ({
   id: r.id as string,
@@ -146,7 +147,7 @@ export class SupplierQualityService {
              s.approval_status_changed_by, ${sql.raw(personName('pc'))} as changed_by_name,
              (select h.conditions from public.supplier_status_history h where h.supplier_id = s.id and h.to_status = 'conditional' and s.approval_status = 'conditional' order by h.changed_at desc limit 1) as conditions,
              (select h.review_on::text from public.supplier_status_history h where h.supplier_id = s.id and h.to_status = 'conditional' and s.approval_status = 'conditional' order by h.changed_at desc limit 1) as review_on,
-             (select count(*)::int from public.nonconformances n where n.supplier_id = s.id and n.deleted_at is null) as total_ncs,
+             (select count(*)::int from public.nonconformances n where n.supplier_id = s.id and ${ncRaised('n')}) as total_ncs,
              (select count(*)::int from public.lots l where l.supplier_id = s.id and l.origin = 'received') as received_lots,
              (select max(l.received_on)::text from public.lots l where l.supplier_id = s.id and l.origin = 'received') as last_received_on
       from public.suppliers s ${OPEN_NCS}

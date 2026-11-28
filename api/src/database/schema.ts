@@ -159,6 +159,8 @@ export const ncrClassifications = pgTable('ncr_classifications', {
 
 export const nonconformances = pgTable('nonconformances', {
   id: uuid('id').primaryKey().defaultRandom(),
+  /** Made once by the screen and kept on a retry, so a second click answers the record already made (docs/audit-nc-2026-11.md API-13). */
+  clientKey: text('client_key'),
   organisationId: uuid('organisation_id').notNull(),
   reference: text('reference').notNull().default(''),
   source: text('source').notNull(),

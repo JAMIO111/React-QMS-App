@@ -53,7 +53,7 @@ const renderAt = (ui, at, route = "*") =>
   );
 
 beforeEach(() => {
-  permissions = ["receiving.read", "receiving.manage", "master_data.read"];
+  permissions = ["receiving.read", "receiving.manage", "receiving.record", "master_data.read"];
   calls.length = 0;
   apiFetch.mockReset();
 });
@@ -134,6 +134,16 @@ describe("purchase order page", () => {
     expect(within(dialog).getByText(/that stays/)).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.find((c) => c.k === "PATCH /purchase-order-lines/l1")?.body).toEqual({ agreedOn: null }));
+  });
+
+  it("a person who may only record deliveries can record one but not close, cancel or move an agreed date", async () => {
+    permissions = ["receiving.read", "receiving.record"];
+    open();
+    await screen.findByRole("heading", { name: "PO-1" });
+    expect(screen.getByRole("button", { name: "Record a delivery" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Set the agreed date for line 1" })).not.toBeInTheDocument();
   });
 
   it("a read-only person sees the order but no actions; a closed order has none either", async () => {

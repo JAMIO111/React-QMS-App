@@ -19,7 +19,7 @@ page) but none of the application's code.
   watch an 8D run D0 to D8; made-up numbers, labelled as such), the parts list of modules, the traceability thread, the
   append-only audit trail, security, integrations and the closing call to action.
 - **Pages:** `/about`, `/faq` (FAQPage structured data), `/contact` (the form writes a `mailto:` so no server is involved),
-  `/help` and nine guides (`src/content/docs`), `/legal/terms|privacy|cookies` (`src/content/legal`), a 404.
+  `/help` and the guides (`src/content/docs`, one for each module and the main admin jobs, grouped Start here, Everyday work, Quality system, Suppliers and customers, Admin and security; **every module needs a guide: add one when a module is added**), `/legal/terms|privacy|cookies` (`src/content/legal`), a 404.
 - **The navbar button** is **Log in** and links to `<app>/login`; hero and closing buttons go to `<app>/signup`.
 - **SEO:** titles, descriptions, canonical links, Open Graph image (`public/og.png`), sitemap, robots, JSON-LD.
 - **No tracking at all.** That is why the cookie page can say the site sets no cookies and shows no banner. Adding analytics

@@ -8,6 +8,9 @@ import {
 } from './requirements.schemas';
 import { RequirementsService } from './requirements.service';
 
+/** Admit people limited to one site: the database decides, per record, which site they may touch. */
+const SITE_SCOPED = { anyScope: true };
+
 /**
  * Incoming inspection requirements: rules by supplier, part, part family, classification and risk, written as drafts and approved by a different person. A rule that reduces inspection is
  * never applied to a part with a critical characteristic. The preview says what the approved rules would decide for a delivery.
@@ -83,7 +86,7 @@ export class RequirementsController {
 
   @Post('ncrs/:id/receipt-link')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update')
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(LinkNcrBody) })
   @ApiOkResponse({ description: 'Links the non-conformance to a received line of the same supplier (and part, when both name one). A non-conformance sits on one line only. Answers with its source delivery.', schema: openApiSchema(ReceiptSource) })
   linkNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -92,7 +95,7 @@ export class RequirementsController {
 
   @Post('receipt-line-ncrs/:id/unlink')
   @HttpCode(200)
-  @OrganisationScoped('ncr.update')
+  @OrganisationScoped('ncr.update', SITE_SCOPED)
   @ApiBody({ schema: openApiSchema(UnlinkNcrBody) })
   @ApiOkResponse({ description: 'Ends the link with a reason; it stays on record and the pieces stop counting against that delivery. Answers with the non-conformance\'s source delivery.', schema: openApiSchema(ReceiptSource) })
   unlinkNcr(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -100,7 +103,7 @@ export class RequirementsController {
   }
 
   @Get('ncrs/:id/receipt-source')
-  @OrganisationScoped('ncr.read')
+  @OrganisationScoped('ncr.read', SITE_SCOPED)
   @ApiOkResponse({ description: 'The goods receipt line(s) this non-conformance was raised from (`available: false` without receiving.read)', schema: openApiSchema(ReceiptSource) })
   receiptSource(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.receiptSource(ctx, parse(Uuid, id));

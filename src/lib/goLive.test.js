@@ -26,3 +26,28 @@ describe("subscriptionWarning", () => {
     expect(subscriptionWarning({ status: "cancelled", cancelAtPeriodEnd: true }, NOW)).toBeNull();
   });
 });
+
+describe("subscriptionWarning for an invoiced subscription", () => {
+  const day = (offset) => new Date(NOW + offset * DAY).toISOString().slice(0, 10);
+  const invoiced = (openInvoice, extra = {}) => ({ status: "active", paymentRoute: "invoice", gracePeriodDays: 3, openInvoice, ...extra });
+  const inv = (dueOffset, overdueDays = 0) => ({ number: "INV-1", total: 7500, currency: "GBP", dueOn: day(dueOffset), overdueDays, hostedUrl: "https://pay.test/i/1" });
+
+  it("says nothing when nothing is owed or the due date is far off", () => {
+    expect(subscriptionWarning(invoiced(null), NOW)).toBeNull();
+    expect(subscriptionWarning(invoiced(inv(10)), NOW)).toBeNull();
+  });
+  it("warns in the last week before the due date, and the warning can be dismissed", () => {
+    const w = subscriptionWarning(invoiced(inv(5)), NOW);
+    expect(w).toMatchObject({ kind: "invoice_due", dismissible: true });
+    expect(w.daysLeft).toBeGreaterThanOrEqual(5);
+    expect(w.invoice.hostedUrl).toBe("https://pay.test/i/1");
+  });
+  it("warns loudly once it is overdue, with the day access stops (the due date plus the grace days, then the next day), and cannot be dismissed", () => {
+    const w = subscriptionWarning(invoiced(inv(-2, 2)), NOW);
+    expect(w).toMatchObject({ kind: "invoice_overdue", dismissible: false });
+    expect(w.accessEnds.slice(0, 10)).toBe(day(-2 + 3 + 1));
+  });
+  it("leaves a card subscription alone", () => {
+    expect(subscriptionWarning({ status: "active", paymentRoute: "card", openInvoice: inv(-2, 2) }, NOW)).toBeNull();
+  });
+});

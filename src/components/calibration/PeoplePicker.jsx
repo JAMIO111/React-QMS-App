@@ -1,5 +1,6 @@
 import RHFComboBox from "../ui/RHFComboBox";
 import { useMe, useMembers, usePermissions } from "../../hooks/useQmsApi";
+import { avatarOf } from "@/lib/employees";
 
 const fullName = (p) => [p?.firstName, p?.surname].filter(Boolean).join(" ") || p?.email || "Unnamed";
 
@@ -15,12 +16,12 @@ const PeoplePicker = ({ current, ...props }) => {
   const options = new Map();
   if (can("members.read")) {
     for (const m of members.data?.data ?? []) {
-      if (m.userId && m.status === "active") options.set(m.userId, { id: m.userId, name: fullName(m), hint: m.jobTitle ?? undefined });
+      if (m.userId && m.status === "active") options.set(m.userId, { id: m.userId, name: fullName(m), hint: m.jobTitle ?? undefined, avatar: avatarOf(m, fullName(m)) });
     }
   }
   const self = me.data?.profile;
-  if (self && !options.has(self.id)) options.set(self.id, { id: self.id, name: fullName(self), hint: "You" });
-  if (current?.id && !options.has(current.id)) options.set(current.id, { id: current.id, name: current.name });
+  if (self && !options.has(self.id)) options.set(self.id, { id: self.id, name: fullName(self), hint: "You", avatar: avatarOf(self, fullName(self)) });
+  if (current?.id && !options.has(current.id)) options.set(current.id, { id: current.id, name: current.name, avatar: avatarOf(null, current.name) });
   return <RHFComboBox {...props} options={[...options.values()]} />;
 };
 

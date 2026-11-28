@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Switch from "@/components/ui/Switch";
 import { ArrowRightLeftIcon, PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon } from "@/components/icons";
 import CTAButton from "../CTAButton";
@@ -14,6 +14,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { describeApiError } from "../../lib/api-client";
 import { RATE_STATUS, costTypeName, formatMoney, formatQuantity, formatRate, formatUnitMoney, isCreditType, signedBase, spentInEachCurrency, totalsRateState } from "../../lib/costs";
 import { formatDate } from "../../lib/ncr";
+import { newClientKey } from "../../lib/clientKey";
 import LoadingScreen from "../ui/LoadingScreen";
 
 /**
@@ -32,6 +33,8 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
   const [editing, setEditing] = useState(null); // "new" | cost
   const [deleting, setDeleting] = useState(null);
   const [rating, setRating] = useState(null); // the line whose rate is being stated
+  // Made when the Add dialog opens and kept for retries inside it, so a second click or a resend answers the line already made instead of adding another.
+  const newLineKey = useRef(newClientKey());
 
   const settings = org.data?.settings ?? {};
   // The currency of the NC's site (the organisation's when it has no site): what lines are converted into and the headline total is in.
@@ -42,7 +45,7 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
 
   const save = (body) =>
     mutation.mutate(
-      editing === "new" ? { path: `/ncrs/${ncrId}/costs`, body } : { path: `/ncr-costs/${editing.id}`, method: "PATCH", body },
+      editing === "new" ? { path: `/ncrs/${ncrId}/costs`, body: { ...body, clientKey: newLineKey.current } } : { path: `/ncr-costs/${editing.id}`, method: "PATCH", body },
       {
         onSuccess: () => {
           showToast({ type: "success", title: "Saved", message: editing === "new" ? "Cost added." : "Cost updated." });
@@ -95,6 +98,7 @@ const NcrCosts = ({ ncrId, siteId, canEdit }) => {
               icon={PlusIcon}
               callbackFn={() => {
                 mutation.reset();
+                newLineKey.current = newClientKey();
                 setEditing("new");
               }}
             />

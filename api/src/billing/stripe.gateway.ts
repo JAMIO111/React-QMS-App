@@ -16,6 +16,12 @@ export interface SubscriptionSnapshot {
   trialEnd: string | null;
   cancelAtPeriodEnd: boolean;
   canceledAt: string | null;
+  /** How Stripe collects: charges the card itself, or sends an invoice to be paid. */
+  collectionMethod: 'charge_automatically' | 'send_invoice';
+  /** Days an invoice is payable within (an invoiced subscription), else null. */
+  daysUntilDue: number | null;
+  /** The newest invoice of the subscription (the first one of an invoiced subscription, or the invoice a seat increase made). */
+  latestInvoiceId: string | null;
   items: { itemId: string; priceId: string; quantity: number }[];
 }
 
@@ -36,6 +42,8 @@ export interface InvoiceSnapshot {
   dueDate: string | null;
   paidAt: string | null;
   pdfUrl: string | null;
+  /** Stripe's hosted payment page: bank details and pay by card. */
+  hostedUrl: string | null;
   paymentIntentId: string | null;
   paymentStatus: 'succeeded' | 'failed' | 'pending' | null;
 }
@@ -54,7 +62,11 @@ export interface SeatPreview {
   subtotal: number;
   tax: number;
   total: number;
+  /** What this change collects (or credits, when negative) and when: `now` = charged or invoiced at once, `next_invoice` = a credit on the next invoice. */
   amountDue: number;
+  timing: 'now' | 'next_invoice';
+  /** How the money is collected: the card is charged, or an invoice is issued. */
+  payment: 'card' | 'invoice';
   lines: { description: string; amount: number }[];
 }
 
@@ -70,15 +82,67 @@ export interface SeatItemChange {
   itemId?: string;
   priceId: string;
   quantity: number;
+  /** The seats it has now (0 for a package not on the subscription yet), so an increase can be told from a decrease. */
+  from?: number;
   /** Take the package off the subscription (Stripe does not keep items at quantity 0). */
   remove?: boolean;
 }
+
+/** What an invoice needs to know about the company it is for (docs/invoice-billing-plan.md §4.2). */
+export interface InvoiceBillingDetails {
+  legalName: string;
+  billingEmail: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  region?: string;
+  postcode: string;
+  /** Two capitals. */
+  country: string;
+  /** As typed; the tax id type is worked out from it. */
+  vatNumber?: string;
+  poReference?: string;
+}
+
+const EU_VAT_PREFIXES = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'EL', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'XI'];
+
+/** The Stripe tax id for a VAT number: UK numbers are `gb_vat`, EU ones (and Northern Ireland's XI) `eu_vat`; anything else cannot be checked here. */
+export function taxIdFor(vat: string, country: string): { type: 'gb_vat' | 'eu_vat'; value: string } | null {
+  let value = vat.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (!value) return null;
+  if (/^[0-9]/.test(value) && country === 'GB') value = `GB${value}`;
+  if (value.startsWith('GB')) return { type: 'gb_vat', value };
+  if (EU_VAT_PREFIXES.includes(value.slice(0, 2))) return { type: 'eu_vat', value: value.startsWith('GR') ? `EL${value.slice(2)}` : value };
+  return null;
+}
+
+export const vatInvalid = (): ApiError =>
+  new ApiError(400, 'vat_number_invalid', 'That VAT number could not be verified. Check it, or leave it out (UK and EU numbers only).');
 
 const iso = (seconds: number | null | undefined): string | null => (typeof seconds === 'number' ? new Date(seconds * 1000).toISOString() : null);
 const idOf = (x: string | { id: string } | null | undefined): string | null => (typeof x === 'string' ? x : (x?.id ?? null));
 
 const itemParams = (i: SeatItemChange): { id?: string; price?: string; quantity?: number; deleted?: boolean } =>
   i.remove && i.itemId ? { id: i.itemId, deleted: true } : i.itemId ? { id: i.itemId, quantity: i.quantity } : { price: i.priceId, quantity: i.quantity };
+
+/**
+ * Seat increases are billed at once and decreases are credited (docs/invoice-billing-plan.md I10). A package going up is an increase; one going down or
+ * taken off is a decrease. Increases go first, so a payment that fails changes nothing, and decreases follow once the increases are in.
+ */
+export function splitSeatChange(items: SeatItemChange[]): { increases: SeatItemChange[]; decreases: SeatItemChange[] } {
+  const increases: SeatItemChange[] = [];
+  const decreases: SeatItemChange[] = [];
+  for (const i of items) (!i.remove && i.quantity > (i.from ?? 0) ? increases : decreases).push(i);
+  return { increases, decreases };
+}
+
+/** The proration lines of an invoice (preview) added up: what a change credits (negative) or adds. */
+const prorationTotal = (inv: Stripe.Invoice): number =>
+  inv.lines.data.filter((l) => l.parent?.subscription_item_details?.proration).reduce((n, l) => n + l.amount, 0);
+
+/** The seat change did not go through because the payment did not: nothing was changed. */
+export const seatPaymentFailed = (): ApiError =>
+  new ApiError(402, 'seat_payment_failed', 'The payment did not go through, so your seats are unchanged. Update your payment method in Manage billing and try again.');
 
 /** Pure mapping from Stripe's subscription to the snapshot the database takes. Period dates live on the items in current API versions. */
 export function toSubscriptionSnapshot(sub: Stripe.Subscription): SubscriptionSnapshot {
@@ -100,6 +164,9 @@ export function toSubscriptionSnapshot(sub: Stripe.Subscription): SubscriptionSn
     trialEnd: iso(sub.trial_end),
     cancelAtPeriodEnd: sub.cancel_at_period_end,
     canceledAt: iso(sub.canceled_at),
+    collectionMethod: sub.collection_method === 'send_invoice' ? 'send_invoice' : 'charge_automatically',
+    daysUntilDue: sub.days_until_due ?? null,
+    latestInvoiceId: idOf(sub.latest_invoice as string | { id: string } | null),
     items: items.map((i) => ({ itemId: i.id, priceId: i.price.id, quantity: i.quantity ?? 0 })),
   };
 }
@@ -128,6 +195,7 @@ export function toInvoiceSnapshot(inv: Stripe.Invoice): InvoiceSnapshot {
     dueDate: inv.due_date ? new Date(inv.due_date * 1000).toISOString().slice(0, 10) : null,
     paidAt: iso(inv.status_transitions?.paid_at),
     pdfUrl: inv.invoice_pdf ?? inv.hosted_invoice_url ?? null,
+    hostedUrl: inv.hosted_invoice_url ?? null,
     paymentIntentId,
     paymentStatus,
   };
@@ -150,11 +218,26 @@ export abstract class StripeGateway {
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ id: string; url: string }>;
+  /**
+   * Puts the company's details on the Stripe customer (the invoice is addressed from these) and, when a VAT number is given, adds it as a tax id and waits briefly for Stripe to check it:
+   * a number Stripe says is not valid is refused with `vat_number_invalid` (and removed again). `pending` means Stripe has not finished checking.
+   */
+  abstract updateCustomerBilling(customerId: string, details: InvoiceBillingDetails): Promise<{ vat: 'none' | 'verified' | 'pending' }>;
+  /** An invoiced subscription (no trial, bank transfer or card, payable in `daysUntilDue` days); its first invoice is finalised at once. Same `clientKey`, same subscription. */
+  abstract createInvoiceSubscription(input: {
+    customerId: string;
+    organisationId: string;
+    userId: string;
+    items: { priceId: string; quantity: number }[];
+    daysUntilDue: number;
+    clientKey: string;
+  }): Promise<{ subscriptionId: string; invoiceId: string | null }>;
   abstract retrieveCheckoutSession(id: string): Promise<CheckoutSessionSnapshot>;
   abstract retrieveSubscription(id: string): Promise<SubscriptionSnapshot>;
   abstract retrieveInvoice(id: string): Promise<InvoiceSnapshot>;
-  abstract previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[] }): Promise<SeatPreview>;
-  abstract updateSeats(input: { subscriptionId: string; items: SeatItemChange[] }): Promise<void>;
+  abstract previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<SeatPreview>;
+  /** Increases are invoiced at once (a card subscription only applies them if the payment succeeds, else `seat_payment_failed`); decreases are credited. */
+  abstract updateSeats(input: { subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<void>;
   abstract createPortalSession(input: { customerId: string; returnUrl: string }): Promise<string>;
   /** Verifies Stripe's signature over the raw body and returns the event; throws ApiError 400 invalid_signature. */
   abstract constructEvent(rawBody: Buffer, signature: string | undefined): StripeEventEnvelope;
@@ -164,6 +247,9 @@ export abstract class StripeGateway {
 export class StripeSdkGateway extends StripeGateway {
   private readonly client?: Stripe;
   private readonly webhookSecret?: string;
+  /** How long to wait for Stripe to check a VAT number: `vatChecks` looks, `vatCheckMs` apart (tests set both to 0). */
+  vatChecks = 4;
+  vatCheckMs = 1000;
 
   constructor(@Inject(ENV) env: Env) {
     super();
@@ -233,13 +319,16 @@ export class StripeSdkGateway extends StripeGateway {
     return toInvoiceSnapshot(await this.stripe().invoices.retrieve(id, { expand: ['payments'] }));
   }
 
-  async previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[] }): Promise<SeatPreview> {
+  async previewSeatChange(input: { customerId: string; subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<SeatPreview> {
+    // The preview shows what the change itself collects: the increases when there are any (invoiced now), else the credit the decreases leave.
+    const { increases, decreases } = splitSeatChange(input.items);
+    const now = increases.length > 0;
     const preview = await this.stripe().invoices.createPreview({
       customer: input.customerId,
       subscription: input.subscriptionId,
       subscription_details: {
-        items: input.items.map(itemParams),
-        proration_behavior: 'create_prorations',
+        items: (now ? increases : decreases).map(itemParams),
+        proration_behavior: now ? 'always_invoice' : 'create_prorations',
       },
     });
     const snapshot = toInvoiceSnapshot(preview);
@@ -248,16 +337,96 @@ export class StripeSdkGateway extends StripeGateway {
       subtotal: snapshot.subtotal,
       tax: snapshot.tax,
       total: snapshot.total,
-      amountDue: preview.amount_due,
-      lines: preview.lines.data.map((l) => ({ description: l.description ?? 'Subscription', amount: l.amount })),
+      amountDue: now ? preview.amount_due : prorationTotal(preview),
+      timing: now ? 'now' : 'next_invoice',
+      payment: input.collectionMethod === 'send_invoice' ? 'invoice' : 'card',
+      lines: preview.lines.data.filter((l) => !now || l.parent?.subscription_item_details?.proration).map((l) => ({ description: l.description ?? 'Subscription', amount: l.amount })),
     };
   }
 
-  async updateSeats(input: { subscriptionId: string; items: SeatItemChange[] }): Promise<void> {
-    await this.stripe().subscriptions.update(input.subscriptionId, {
-      items: input.items.map(itemParams),
-      proration_behavior: 'create_prorations',
+  async updateSeats(input: { subscriptionId: string; items: SeatItemChange[]; collectionMethod: SubscriptionSnapshot['collectionMethod'] }): Promise<void> {
+    const { increases, decreases } = splitSeatChange(input.items);
+    const stripe = this.stripe();
+    if (increases.length > 0) {
+      const card = input.collectionMethod === 'charge_automatically';
+      let sub: Stripe.Subscription;
+      try {
+        sub = await stripe.subscriptions.update(input.subscriptionId, {
+          items: increases.map(itemParams),
+          proration_behavior: 'always_invoice',
+          // A card is charged now and the seats follow only if it goes through. Stripe refuses this for an invoiced subscription, which is billed by invoice instead.
+          ...(card ? { payment_behavior: 'pending_if_incomplete' as const } : {}),
+        });
+      } catch (error) {
+        if ((error as { type?: string }).type === 'StripeCardError') throw seatPaymentFailed();
+        throw error;
+      }
+      if (sub.pending_update) throw seatPaymentFailed();
+      if (!card) await this.finaliseLatestInvoice(sub);
+    }
+    if (decreases.length > 0) {
+      await stripe.subscriptions.update(input.subscriptionId, { items: decreases.map(itemParams), proration_behavior: 'create_prorations' });
+    }
+  }
+
+  /** An invoiced subscription's new invoice is a draft that Stripe would finalise in about an hour; finalise it now so it can be paid. */
+  private async finaliseLatestInvoice(sub: Stripe.Subscription): Promise<void> {
+    const id = idOf(sub.latest_invoice as string | { id: string } | null);
+    if (!id) return;
+    const invoice = await this.stripe().invoices.retrieve(id);
+    if (invoice.status === 'draft') await this.stripe().invoices.finalizeInvoice(id);
+  }
+
+  async updateCustomerBilling(customerId: string, details: InvoiceBillingDetails): Promise<{ vat: 'none' | 'verified' | 'pending' }> {
+    const stripe = this.stripe();
+    await stripe.customers.update(customerId, {
+      name: details.legalName,
+      email: details.billingEmail,
+      address: { line1: details.addressLine1, line2: details.addressLine2, city: details.city, state: details.region, postal_code: details.postcode, country: details.country },
+      invoice_settings: { custom_fields: details.poReference ? [{ name: 'PO number', value: details.poReference.slice(0, 30) }] : '' },
     });
+    if (!details.vatNumber) return { vat: 'none' };
+    const taxId = taxIdFor(details.vatNumber, details.country);
+    if (!taxId) throw vatInvalid();
+    const existing = (await stripe.customers.listTaxIds(customerId, { limit: 20 })).data.find((t) => t.type === taxId.type && t.value.toUpperCase() === taxId.value);
+    let created: Stripe.TaxId;
+    try {
+      created = existing ?? (await stripe.customers.createTaxId(customerId, { type: taxId.type, value: taxId.value }));
+    } catch (error) {
+      if ((error as { type?: string }).type === 'StripeInvalidRequestError') throw vatInvalid();
+      throw error;
+    }
+    let status = created.verification?.status ?? 'pending';
+    for (let tries = 0; status === 'pending' && tries < this.vatChecks; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, this.vatCheckMs));
+      status = (await stripe.customers.retrieveTaxId(customerId, created.id)).verification?.status ?? 'pending';
+    }
+    if (status === 'unverified') {
+      await stripe.customers.deleteTaxId(customerId, created.id).catch(() => undefined);
+      throw vatInvalid();
+    }
+    return { vat: status === 'verified' ? 'verified' : 'pending' };
+  }
+
+  async createInvoiceSubscription(input: Parameters<StripeGateway['createInvoiceSubscription']>[0]): Promise<{ subscriptionId: string; invoiceId: string | null }> {
+    const sub = await this.stripe().subscriptions.create(
+      {
+        customer: input.customerId,
+        items: input.items.map((i) => ({ price: i.priceId, quantity: i.quantity })),
+        collection_method: 'send_invoice',
+        days_until_due: input.daysUntilDue,
+        automatic_tax: { enabled: true },
+        payment_settings: {
+          payment_method_types: ['customer_balance', 'card'],
+          payment_method_options: { customer_balance: { funding_type: 'bank_transfer', bank_transfer: { type: 'gb_bank_transfer' } } },
+        },
+        metadata: { organisation_id: input.organisationId, user_id: input.userId },
+      },
+      { idempotencyKey: `invoice-subscription:${input.organisationId}:${input.clientKey}` },
+    );
+    // The first invoice is a draft that Stripe would finalise in about an hour: finalise it now so it can be paid.
+    await this.finaliseLatestInvoice(sub);
+    return { subscriptionId: sub.id, invoiceId: idOf(sub.latest_invoice as string | { id: string } | null) };
   }
 
   async createPortalSession(input: { customerId: string; returnUrl: string }): Promise<string> {

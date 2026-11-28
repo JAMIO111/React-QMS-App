@@ -5,11 +5,13 @@ import type { RequestContext } from '../common/request-context';
 import { ENV, Env, corsOrigins } from '../config/env';
 import { DatabaseService } from '../database/database.service';
 import { Row } from '../calibration/calibration.service';
-import type { CheckoutBody, ConfirmCheckoutBody, SeatChangeBody, SeatCounts, SeatPreviewResponse, SubscriptionOverview } from './billing.schemas';
+import type { CheckoutBody, ConfirmCheckoutBody, InvoiceCompanyCheckBody, InvoiceSubscriptionBody, SeatChangeBody, SeatCounts, SeatPreviewResponse, SubscriptionOverview } from './billing.schemas';
 import { BillingService } from './billing.service';
 import { StripeEventEnvelope, StripeGateway, SeatItemChange, SubscriptionSnapshot } from './stripe.gateway';
 
 export const TRIAL_DAYS = 14;
+/** Days an invoice is payable within (docs/invoice-billing-plan.md I2). */
+export const INVOICE_TERMS_DAYS = 14;
 
 /** The web app's address for Stripe's return links: APP_BASE_URL, else the first plain (non-wildcard) CORS origin. */
 export function appBaseUrl(env: Env): string | null {
@@ -58,16 +60,7 @@ export class StripeBillingService {
       throw new ApiError(409, PROBLEM, 'This organisation already has a subscription. Change it from Subscription & billing.');
     }
 
-    const items = await this.database.asApi(async (client) => {
-      const out: { slug: string; priceId: string; quantity: number }[] = [];
-      for (const [slug, quantity] of Object.entries(body.seats)) {
-        if (quantity <= 0) continue;
-        const price = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, body.interval])).rows[0].id as string | null;
-        if (!price) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
-        out.push({ slug, priceId: price, quantity });
-      }
-      return out;
-    }, ctx.correlationId);
+    const items = await this.lineItems(ctx, body.seats, body.interval);
 
     const customerId = await this.customerFor(ctx, state.name);
     const where = body.returnTo === 'settings' ? '/Settings/Subscription' : '/setup/plan';
@@ -85,6 +78,40 @@ export class StripeBillingService {
       ctx.correlationId,
     );
     return { url: session.url, sessionId: session.id };
+  }
+
+  /**
+   * Starts an invoiced subscription (docs/invoice-billing-plan.md §4.2): no Checkout and no trial. The database records the start first and refuses what is not allowed (an owner only,
+   * no live subscription, the company rule, a billing address); then the company's details go on the Stripe customer (a VAT number must verify), the subscription is created with the
+   * first invoice finalised, and what Stripe says is applied. A retry with the same clientKey is the same subscription.
+   */
+  async startInvoice(ctx: RequestContext, body: InvoiceSubscriptionBody): Promise<{ subscription: SubscriptionOverview; vat: 'none' | 'verified' | 'pending' }> {
+    this.requireEnabled();
+    const org = ctx.organisationId!;
+    await this.assertNoSeatProblems(ctx, body.seats);
+    const started = await this.database.asApi(
+      async (client) =>
+        (await client.query(`select app.stripe_start_invoice($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::jsonb) as r`, [org, ctx.user.id, body.clientKey, body.interval, JSON.stringify(body.seats), JSON.stringify(body.company)])).rows[0]
+          .r as { sessionId: string },
+      ctx.correlationId,
+    );
+
+    const items = (await this.lineItems(ctx, body.seats, body.interval)).map((i) => ({ priceId: i.priceId, quantity: i.quantity }));
+
+    const customerId = await this.customerFor(ctx, body.company.legalName);
+    const { vat } = await this.gateway.updateCustomerBilling(customerId, body.company);
+    const created = await this.gateway.createInvoiceSubscription({ customerId, organisationId: org, userId: ctx.user.id, items, daysUntilDue: INVOICE_TERMS_DAYS, clientKey: body.clientKey });
+    await this.syncSubscription(org, created.subscriptionId, started.sessionId, ctx.correlationId);
+    return { subscription: await this.billing.overview(ctx), vat };
+  }
+
+  /** For the billing details form: what would stop this organisation choosing invoicing with this company (nothing is saved). */
+  async checkInvoiceCompany(ctx: RequestContext, body: InvoiceCompanyCheckBody): Promise<{ problems: string[] }> {
+    const problems = await this.database.asUser(
+      ctx,
+      async (db) => (await db.execute<Row>(sql`select app.check_invoice_company(${ctx.organisationId}::uuid, ${body.legalName}, ${body.vatNumber ?? null}) as problems`)).rows[0].problems as string[],
+    );
+    return { problems };
   }
 
   /**
@@ -119,21 +146,21 @@ export class StripeBillingService {
     return { url: await this.gateway.createPortalSession({ customerId, returnUrl: `${base}${returnTo === 'setup' ? '/setup/plan' : '/Settings/Subscription'}` }) };
   }
 
-  /** What changing these seats would cost right now (proration from Stripe), without changing anything. */
+  /** What changing these seats collects now (an increase) or credits to the next invoice (a decrease), from Stripe, without changing anything. */
   async previewSeats(ctx: RequestContext, body: SeatChangeBody): Promise<SeatPreviewResponse> {
     const plan = await this.planSeatChange(ctx, body.seats);
     if (plan.items.length === 0) {
-      return { currency: plan.snapshot.currency, subtotal: 0, tax: 0, total: 0, amountDue: 0, lines: [], changes: plan.changes };
+      return { currency: plan.snapshot.currency, subtotal: 0, tax: 0, total: 0, amountDue: 0, timing: 'now', payment: plan.snapshot.collectionMethod === 'send_invoice' ? 'invoice' : 'card', lines: [], changes: plan.changes };
     }
-    const preview = await this.gateway.previewSeatChange({ customerId: plan.snapshot.customerId, subscriptionId: plan.snapshot.id, items: plan.items });
+    const preview = await this.gateway.previewSeatChange({ customerId: plan.snapshot.customerId, subscriptionId: plan.snapshot.id, items: plan.items, collectionMethod: plan.snapshot.collectionMethod });
     return { ...preview, changes: plan.changes };
   }
 
-  /** Changes the seats on the Stripe subscription (prorated), then reads the result back and applies it. */
+  /** Changes the seats on the Stripe subscription (increases invoiced at once, decreases credited), then reads the result back and applies it. */
   async changeSeats(ctx: RequestContext, body: SeatChangeBody): Promise<SubscriptionOverview> {
     const plan = await this.planSeatChange(ctx, body.seats);
     if (plan.changes.some((c) => c.from !== c.to)) {
-      await this.gateway.updateSeats({ subscriptionId: plan.snapshot.id, items: plan.items });
+      await this.gateway.updateSeats({ subscriptionId: plan.snapshot.id, items: plan.items, collectionMethod: plan.snapshot.collectionMethod });
       await this.syncSubscription(ctx.organisationId!, plan.snapshot.id, undefined, ctx.correlationId);
     }
     return this.billing.overview(ctx);
@@ -178,6 +205,17 @@ export class StripeBillingService {
         client.query(`select app.stripe_apply_subscription($1::uuid, $2::jsonb, $3::timestamptz, $4)`, [organisationId, JSON.stringify(snapshot), fetchedAt, checkoutSessionId ?? null]),
       correlationId,
     );
+    // An invoiced subscription's newest invoice is what is owed: apply it now so the seat and access rules see it without waiting for the webhook.
+    if (snapshot.collectionMethod === 'send_invoice' && snapshot.latestInvoiceId) await this.applyInvoice(organisationId, snapshot.latestInvoiceId, correlationId);
+  }
+
+  /** Re-reads one invoice from Stripe and applies it (with its hosted payment page address). */
+  async applyInvoice(organisationId: string, invoiceId: string, correlationId: string): Promise<void> {
+    const invoice = await this.gateway.retrieveInvoice(invoiceId);
+    await this.database.asApi(async (client) => {
+      await client.query(`select app.stripe_apply_invoice($1::uuid, $2::jsonb)`, [organisationId, JSON.stringify(invoice)]);
+      if (invoice.hostedUrl) await client.query(`select app.stripe_set_invoice_url($1::uuid, $2, $3)`, [organisationId, invoice.id, invoice.hostedUrl]);
+    }, correlationId);
   }
 
   // ------------------------------------------------------------------ internals
@@ -231,11 +269,10 @@ export class StripeBillingService {
         const invoice = await this.gateway.retrieveInvoice(invoiceId);
         const organisationId = await orgFor(invoice.customerId, invoice.subscriptionId, null);
         if (!organisationId) return { handled: false, organisationId, note: 'unknown organisation' };
-        await this.database.asApi(
-          (client) =>
-            client.query(`select app.stripe_apply_invoice($1::uuid, $2::jsonb)`, [organisationId, JSON.stringify(invoice)]),
-          correlationId,
-        );
+        await this.database.asApi(async (client) => {
+          await client.query(`select app.stripe_apply_invoice($1::uuid, $2::jsonb)`, [organisationId, JSON.stringify(invoice)]);
+          if (invoice.hostedUrl) await client.query(`select app.stripe_set_invoice_url($1::uuid, $2, $3)`, [organisationId, invoice.id, invoice.hostedUrl]);
+        }, correlationId);
         // A payment result changes the subscription's status (past due / active): apply that too.
         if (invoice.subscriptionId) await this.syncSubscription(organisationId, invoice.subscriptionId, undefined, correlationId);
         return { handled: true, organisationId };
@@ -264,6 +301,37 @@ export class StripeBillingService {
     return created;
   }
 
+  /**
+   * The Stripe line items for a new subscription: each seat package chosen, then the organisation fee once (any package of kind `fee` with a price this
+   * interval). A seat package or a fee with a price that has no Stripe price id yet is 503: Stripe has not been set up for it.
+   */
+  private async lineItems(ctx: RequestContext, seats: SeatCounts, interval: string): Promise<{ slug: string; priceId: string; quantity: number }[]> {
+    // Which packages are fees with a price this interval (read as the person: the catalogue is theirs to read), then their Stripe ids (API login).
+    const feeSlugs = await this.database.asUser(ctx, async (db) =>
+      (
+        await db.execute<Row>(sql`
+          select pl.slug from public.subscription_plans pl
+           where pl.kind = 'fee' and pl.status = 'active'
+             and exists (select 1 from public.subscription_prices pr where pr.subscription_plan_id = pl.id and pr.billing_interval = ${interval}
+                           and pr.active and pr.effective_to is null and pr.currency = 'GBP')
+           order by pl.display_order`)
+      ).rows.map((r) => r.slug as string),
+    );
+    return this.database.asApi(async (client) => {
+      const out: { slug: string; priceId: string; quantity: number }[] = [];
+      const priceFor = async (slug: string) => {
+        const id = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, interval])).rows[0].id as string | null;
+        if (!id) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
+        return id;
+      };
+      for (const [slug, quantity] of Object.entries(seats)) {
+        if (quantity > 0) out.push({ slug, priceId: await priceFor(slug), quantity });
+      }
+      for (const slug of feeSlugs) out.push({ slug, priceId: await priceFor(slug), quantity: 1 });
+      return out;
+    }, ctx.correlationId);
+  }
+
   private async assertNoSeatProblems(ctx: RequestContext, seats: SeatCounts): Promise<void> {
     const problems = await this.database.asUser(
       ctx,
@@ -289,14 +357,17 @@ export class StripeBillingService {
     const changes: { planSlug: string; from: number; to: number }[] = [];
     await this.database.asApi(async (client) => {
       for (const [slug, quantity] of Object.entries(seats)) {
-        const priceId = (await client.query(`select app.stripe_price_for($1, $2) as id`, [slug, snapshot.interval])).rows[0].id as string | null;
+        // Every price the package has had, current first: an item already on the subscription keeps its price (a customer stays on the price they
+        // signed up at); a package added now takes today's price.
+        const known = ((await client.query(`select app.stripe_prices_for_plan($1, $2) as ids`, [slug, snapshot.interval])).rows[0].ids as string[] | null) ?? [];
+        const existing = snapshot.items.find((i) => known.includes(i.priceId));
+        const priceId = existing?.priceId ?? known[0];
         if (!priceId) throw new ApiError(503, 'billing_unavailable', 'Prices have not been set up in Stripe yet');
-        const existing = snapshot.items.find((i) => i.priceId === priceId);
         const from = existing?.quantity ?? 0;
         changes.push({ planSlug: slug, from, to: quantity });
         if (from === quantity) continue;
-        if (quantity === 0 && existing) items.push({ itemId: existing.itemId, priceId, quantity: 0, remove: true });
-        else items.push({ itemId: existing?.itemId, priceId, quantity });
+        if (quantity === 0 && existing) items.push({ itemId: existing.itemId, priceId, quantity: 0, from, remove: true });
+        else items.push({ itemId: existing?.itemId, priceId, quantity, from });
       }
     }, ctx.correlationId);
     return { snapshot, items, changes };

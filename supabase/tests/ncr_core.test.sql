@@ -34,7 +34,7 @@ END $$;
 DO $$
 DECLARE
   org uuid; other uuid; site_a uuid; site_b uuid; fm uuid; sfm uuid; other_fm uuid; proc uuid; machine uuid;
-  part uuid; rev uuid; other_part uuid; cust uuid; ncr uuid; cncr uuid; site_ncr uuid; m uuid; failed boolean;
+  part uuid; rev uuid; other_part uuid; cust uuid; ncr uuid; cncr uuid; never uuid; site_ncr uuid; m uuid; failed boolean;
 BEGIN
   PERFORM pg_temp.login('20000000-0000-0000-0000-000000000101');
   org := app.create_organisation('NCR Works', 'Plant A', 'PA', NULL);
@@ -95,6 +95,24 @@ BEGIN
   UPDATE public.nonconformances SET stage = 'open', stage_reason = 'Customer found more' WHERE id = ncr;
   PERFORM pg_temp.assert_eq((SELECT stage || '|' || (closed_at IS NULL) FROM public.nonconformances WHERE id = ncr), 'open|true', 'reopened and close stamp cleared');
   PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'cancelled' WHERE id = %L$q$, cncr), 'cancelling needs a reason');
+  UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Duplicate of an earlier complaint' WHERE id = cncr;
+  -- A draft cannot be cancelled before it has what opening needs, but an NC that arrived already cancelled (a history import, which is exempt from the
+  -- opening rules) has not: reopening it needs what opening needs, as for any other NC.
+  PERFORM set_config('app.ncr_history_import', 'on', true);
+  INSERT INTO public.nonconformances (organisation_id, source, title, stage, stage_reason) VALUES (org, 'internal', 'Never completed', 'cancelled', 'Cancelled in the old system') RETURNING id INTO never;
+  PERFORM set_config('app.ncr_history_import', 'off', true);
+  BEGIN
+    UPDATE public.nonconformances SET stage = 'open', stage_reason = 'Needed after all' WHERE id = never;
+    RAISE EXCEPTION 'a cancelled draft was reopened without the opening rules';
+  EXCEPTION WHEN SQLSTATE 'QM005' THEN
+    PERFORM pg_temp.assert_eq(position('To open this non-conformance, fill in:' IN SQLERRM) > 0, true, 'the refusal says what is missing');
+  END;
+  PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = never), 'cancelled', 'it stays cancelled');
+  -- One that was complete when cancelled can be reopened.
+  UPDATE public.nonconformances SET stage = 'open', stage_reason = 'The customer confirmed it' WHERE id = cncr;
+  PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = cncr), 'open', 'a complete cancelled NC can be reopened');
+  -- An open customer NC keeps its customer.
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET customer_id = NULL WHERE id = %L$q$, cncr), 'an open customer NC cannot lose its customer');
   UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Duplicate of an earlier complaint' WHERE id = cncr;
   PERFORM pg_temp.assert_eq((SELECT array_agg(event_type ORDER BY id)::text FROM public.outbox_events WHERE entity_id = ncr AND event_type <> 'ncr.disposition.approved'),
     '{ncr.created,ncr.stage_changed,ncr.stage_changed,ncr.stage_changed,ncr.closed,ncr.stage_changed}', 'stage events written');

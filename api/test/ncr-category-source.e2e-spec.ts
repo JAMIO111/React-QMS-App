@@ -220,15 +220,40 @@ describe('the dashboard', () => {
   it('filters by several sources and counts by source and category', async () => {
     const today = new Date().toISOString().slice(0, 10);
     const h = await as(ids.ownerA);
-    const all = (await api().get(`/api/v1/ncr-dashboard?from=2026-01-01&to=${today}`).set(h).expect(200)).body;
+    const url = (extra = '') => `/api/v1/ncr-dashboard?${extra}from=2026-01-01&to=${today}`;
+    const supplier = (await admin.query(`insert into public.suppliers (organisation_id, code, name) values ($1, 'DASH-S', 'Dashboard Supply') returning id`, [ids.orgA])).rows[0].id as string;
+    const before = (await api().get(url()).set(h).expect(200)).body;
+    const beforeTwo = (await api().get(url('source=customer,supplier&')).set(h).expect(200)).body;
+    // Drafts are not raised, so the counts are made from non-conformances that were raised: written with the row triggers off, as an import of history would
+    // (a person cannot open one with no category any more; old ones from before the rule are the only uncategorised ones).
+    const c = await admin.connect();
+    try {
+      await c.query('begin');
+      await c.query('set local session_replication_role = replica');
+      const add = (source: string, title: string, category: string | null, extra: { customer?: string; supplier?: string } = {}) =>
+        c.query(
+          `insert into public.nonconformances (organisation_id, reference, source, title, description, stage, severity, category_id, customer_id, supplier_id, detected_at)
+           values ($1, $7, $2, $3, 'x', 'open', 'minor', $4, $5, $6, current_date)`,
+          [ids.orgA, source, title, category, extra.customer ?? null, extra.supplier ?? null, `DASH-${title.replace(/\W+/g, '-')}`],
+        );
+      await add('engineering', 'Dash engineering 1', ctx.process);
+      await add('engineering', 'Dash engineering 2', null);
+      await add('customer', 'Dash customer', ctx.product, { customer: ctx.customer });
+      await add('supplier', 'Dash supplier', ctx.process, { supplier });
+      await c.query('commit');
+    } finally {
+      c.release();
+    }
+    const all = (await api().get(url()).set(h).expect(200)).body;
+    const count = (d: { bySource: Array<{ key: string; count: number }> }, key: string) => d.bySource.find((x) => x.key === key)!.count;
     expect(all.bySource).toHaveLength(11);
-    expect(all.bySource.find((s: { key: string }) => s.key === 'engineering').count).toBeGreaterThanOrEqual(2);
-    expect(all.byCategory.some((c: { label: string }) => c.label === 'Uncategorised')).toBe(true);
-    expect(all.byCategory.some((c: { label: string }) => c.label === 'Process')).toBe(true);
-    const two = (await api().get(`/api/v1/ncr-dashboard?source=customer,supplier&from=2026-01-01&to=${today}`).set(h).expect(200)).body;
-    expect(two.kpis.raised).toBe(2);
+    expect(count(all, 'engineering') - count(before, 'engineering')).toBe(2);
+    expect(all.byCategory.some((x: { label: string }) => x.label === 'Uncategorised')).toBe(true);
+    expect(all.byCategory.some((x: { label: string }) => x.label === 'Process')).toBe(true);
+    const two = (await api().get(url('source=customer,supplier&')).set(h).expect(200)).body;
+    expect(two.kpis.raised - beforeTwo.kpis.raised).toBe(2);
     expect(two.bySource.filter((s: { count: number }) => s.count > 0).map((s: { key: string }) => s.key)).toEqual(['customer', 'supplier']);
-    expect(two.trend.reduce((t: number, b: { total: number }) => t + b.total, 0)).toBe(2);
+    expect(two.trend.reduce((t: number, b: { total: number }) => t + b.total, 0)).toBe(two.kpis.raised);
     expect((await api().get(`/api/v1/ncr-dashboard?source=bogus&from=2026-01-01&to=${today}`).set(h)).status).toBe(400);
   });
 });

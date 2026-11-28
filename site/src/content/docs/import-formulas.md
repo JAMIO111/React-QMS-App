@@ -2,7 +2,7 @@
 title: Formulas in imports
 summary: The formula language for import templates and record filters - how to write a formula, every operator and function, and worked examples.
 group: Admin and security
-order: 11
+order: 49
 ---
 When an import's standard steps can't produce a value, you can write a **formula**. One formula language is used everywhere in imports, whether the records come from a file, an API, a database, a folder or an internal API through the connector agent.
 

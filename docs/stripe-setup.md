@@ -16,7 +16,7 @@ What you do once, outside the code. Nothing here needs a deploy to start: the AP
 STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs --dry-run   # see what it would do
 STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs             # creates what is missing
 ```
-It creates three products and six GBP prices (£5 / £10 / £25 per seat per month; annual = 10 ×), finds them again by lookup key on the next run, and prints the SQL that records the Stripe price ids. Run that SQL against the matching Supabase project (ask me and I will run it when you say so). Repeat later with a live key for live mode.
+It creates five products and ten GBP prices (the organisation fee £99 a month, and seats: Controller £49, Contributor £19, Operator £6, Observer £0; annual = 10 ×), finds them again by lookup key on the next run, and prints the SQL that records the Stripe price ids. When an amount changes it makes a new price and moves the lookup key to it; the old price stays active for subscriptions already on it (the database keeps the old price row with its id, ended). Since 2026-11-27 both the sandbox and the live account hold this catalogue (the live account's old 2025 prices are archived; nobody used them). Run that SQL against the matching Supabase project (ask me and I will run it when you say so). Repeat later with a live key for live mode.
 
 ## 3. Webhook endpoint
 **Developers → Webhooks → Add endpoint**

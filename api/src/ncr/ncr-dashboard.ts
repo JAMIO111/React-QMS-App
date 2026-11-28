@@ -7,6 +7,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { DatabaseService } from '../database/database.service';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
+import { NC_OPEN_STAGES, ncOpen, ncRaised } from './nc-definitions';
 import { NCR_SOURCE_LABELS, NCR_SOURCES, sourceList } from './ncr.schemas';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -54,14 +55,13 @@ type Row = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
-const OPEN_STAGES = ['draft', 'open', 'contained', 'investigating', 'dispositioned', 'awaiting_closure'];
 const STAGE_LABEL: Record<string, string> = {
-  draft: 'Draft', open: 'Open', contained: 'Contained', investigating: 'Investigating', dispositioned: 'Dispositioned', awaiting_closure: 'Awaiting closure',
+  open: 'Open', contained: 'Contained', investigating: 'Investigating', dispositioned: 'Dispositioned', awaiting_closure: 'Awaiting closure',
 };
 
 /**
- * Figures for the NC dashboard, for one period and optionally one source and one site. Deleted NCRs are left out; RLS limits everything to the sites the
- * caller may read. Costs are net, credits (recoveries, charges) taken off: in the site's currency for one site, in the organisation's for all of them
+ * Figures for the NC dashboard, for one period and optionally one source and one site. Only NCs that were really raised count (not a draft, not cancelled,
+ * not deleted: `nc-definitions.ts`, the one rule every place that counts NCs uses); RLS limits everything to the sites the caller may read. Costs are net, credits (recoveries, charges) taken off: in the site's currency for one site, in the organisation's for all of them
  * (docs/cost-currency-plan.md CU1, CU9, CU10).
  */
 @Injectable()
@@ -83,12 +83,15 @@ export class NcrDashboardService {
     return this.database.asUser(ctx, async (db) => {
       const one = async (query: ReturnType<typeof sql>) => (await db.execute<Row>(query)).rows;
 
-      // The sites the caller may read; with no site chosen and only one readable, that one is shown.
+      // The sites the caller may read.
       const sites = (await one(sql`
         select s.id, s.code, s.name, s.currency from public.sites s
         where s.organisation_id = ${org}::uuid and s.active and app.has_permission(${org}::uuid, 'ncr.read', s.id) order by s.code`))
         .map((r) => ({ id: String(r.id), code: String(r.code), name: String(r.name), currency: String(r.currency) }));
-      const siteId = q.siteId ?? (sites.length === 1 ? sites[0].id : undefined);
+      // A person who can read non-conformances organisation-wide sees every one of them (also those with no site or at a switched-off site) unless
+      // they choose a site; only someone limited to a single site is shown that site, so their figures are in its currency.
+      const [orgWide] = await one(sql`select app.has_permission(${org}::uuid, 'ncr.read') as ok`);
+      const siteId = q.siteId ?? (!orgWide?.ok && sites.length === 1 ? sites[0].id : undefined);
       const site = siteId ? sites.find((s) => s.id === siteId) ?? null : null;
       if (siteId && !site) throw ApiError.notFound('site_not_found', 'Site not found');
       const [settings] = await one(sql`select base_currency from public.organisation_settings where organisation_id = ${org}::uuid`);
@@ -104,19 +107,19 @@ export class NcrDashboardService {
         left join public.ncr_classifications fm on fm.id = n.failure_mode_id
         left join public.parts p on p.id = n.part_id
         left join lateral (select sum(${costCol} * k.cost_sign) as total from public.ncr_costs k where k.nonconformance_id = n.id and k.deleted_at is null ${inCurrency}) tc on true
-        where n.organisation_id = ${org}::uuid and n.deleted_at is null ${src} ${siteFilter(siteId)}`;
+        where n.organisation_id = ${org}::uuid and ${ncRaised('n')} ${src} ${siteFilter(siteId)}`;
 
       const [unconverted] = await one(sql`
         select count(*) as n from public.ncr_costs k join public.nonconformances n on n.id = k.nonconformance_id and n.organisation_id = k.organisation_id
-        where n.organisation_id = ${org}::uuid and n.deleted_at is null and k.deleted_at is null ${src} ${siteFilter(siteId)} ${inPeriod(q.from, q.to)}
+        where n.organisation_id = ${org}::uuid and ${ncRaised('n')} and k.deleted_at is null ${src} ${siteFilter(siteId)} ${inPeriod(q.from, q.to)}
           and (${costCol} is null ${site ? sql`or k.base_currency <> ${site.currency}` : sql``})`);
 
       const [k] = await one(sql`
         select
           count(*) filter (where n.detected_at between ${q.from}::date and ${q.to}::date) as raised,
           count(*) filter (where n.detected_at between ${day(previousFrom)}::date and ${day(previousTo)}::date) as raised_previous,
-          count(*) filter (where n.stage <> all(array['closed','cancelled'])) as open,
-          count(*) filter (where n.stage <> all(array['closed','cancelled']) and n.severity = 'critical') as critical_open,
+          count(*) filter (where ${ncOpen('n')}) as open,
+          count(*) filter (where ${ncOpen('n')} and n.severity = 'critical') as critical_open,
           count(*) filter (where n.closed_at::date between ${q.from}::date and ${q.to}::date) as closed,
           avg(n.closed_at::date - n.detected_at) filter (where n.closed_at::date between ${q.from}::date and ${q.to}::date) as avg_days,
           coalesce(sum(tc.total) filter (where n.detected_at between ${q.from}::date and ${q.to}::date), 0) as cost,
@@ -132,7 +135,7 @@ export class NcrDashboardService {
           ${base} ${inPeriod(q.from, q.to)}
         )
         select to_char(b.start, 'YYYY-MM-DD') as start,
-               count(r.*) as total,
+               coalesce(sum(r.n), 0) as total,
                coalesce(jsonb_object_agg(r.source, r.n) filter (where r.source is not null), '{}'::jsonb) as by_source,
                coalesce(sum(r.cost), 0) as cost
         from buckets b
@@ -144,7 +147,7 @@ export class NcrDashboardService {
         select coalesce(cat.id::text, 'none') as key, coalesce(cat.name, 'Uncategorised') as label, count(*) as count
         from public.nonconformances n
         left join public.ncr_classifications cat on cat.id = n.category_id
-        where n.organisation_id = ${org}::uuid and n.deleted_at is null ${src} ${siteFilter(siteId)} ${inPeriod(q.from, q.to)}
+        where n.organisation_id = ${org}::uuid and ${ncRaised('n')} ${src} ${siteFilter(siteId)} ${inPeriod(q.from, q.to)}
         group by 1, 2 order by 3 desc, 2`);
 
       const failureModes = await one(sql`
@@ -153,7 +156,7 @@ export class NcrDashboardService {
         group by 1, 2 order by 3 desc, 2`);
 
       const stages = await one(sql`
-        select n.stage as key, count(*) as count ${base} and n.stage <> all(array['closed','cancelled']) group by 1`);
+        select n.stage as key, count(*) as count ${base} and ${ncOpen('n')} group by 1`);
 
       const severities = await one(sql`
         select coalesce(n.severity, 'unset') as key, count(*) as count ${base} ${inPeriod(q.from, q.to)} group by 1`);
@@ -191,7 +194,7 @@ export class NcrDashboardService {
         bySource: NCR_SOURCES.map((s) => ({ key: s, label: NCR_SOURCE_LABELS[s], count: n(sources.find((r) => r.key === s)?.count) })),
         byCategory: categories.map((r) => ({ key: String(r.key), label: String(r.label), count: n(r.count) })),
         byFailureMode,
-        byStage: OPEN_STAGES.map((s) => ({ key: s, label: STAGE_LABEL[s], count: stageCount[s] ?? 0 })),
+        byStage: NC_OPEN_STAGES.map((s) => ({ key: s, label: STAGE_LABEL[s], count: stageCount[s] ?? 0 })),
         bySeverity: [
           { key: 'critical', label: 'Critical', count: sevCount.critical ?? 0 },
           { key: 'major', label: 'Major', count: sevCount.major ?? 0 },

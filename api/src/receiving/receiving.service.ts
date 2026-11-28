@@ -67,7 +67,7 @@ const toReceiptRow = (r: Row): ReceiptRow => ({
   createdAt: iso(r.created_at)!,
 });
 
-/** Purchase orders, goods receipts and the lots a receipt makes. Every write is a database function (receiving.manage); this service shapes what the screens need. */
+/** Purchase orders, goods receipts and the lots a receipt makes. Every write is a database function (receiving.manage to change orders, receiving.record to record a delivery); this service shapes what the screens need. */
 @Injectable()
 export class ReceivingService {
   constructor(private readonly database: DatabaseService) {}

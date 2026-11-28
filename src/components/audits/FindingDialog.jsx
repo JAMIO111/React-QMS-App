@@ -9,6 +9,7 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { FormError, TextAreaField } from "../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import { changesSince } from "../../lib/editConflicts";
+import { employeeOption } from "@/lib/employees";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm font-normal text-primary-text placeholder:text-tertiary-text focus:outline-none focus:border-brand-primary";
 
@@ -79,7 +80,7 @@ const FindingDialog = ({ record, question, finding, onClose, onSaved }) => {
         <TextAreaField label="What was found" required rows={4} value={description} maxLength={4000} onChange={(e) => setDescription(e.target.value)} />
         <TextAreaField label="Requirement it was measured against" rows={2} value={requirement} maxLength={2000} hint="The standard, procedure or specification, in your own words." onChange={(e) => setRequirement(e.target.value)} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <ComboField label="Owner" value={ownerId} onChange={setOwnerId} options={(employees.data ?? []).filter((x) => x.active !== false).map((x) => ({ value: x.id, label: x.name, hint: x.jobTitle ?? undefined }))} placeholder="Nobody yet" hint="Who sees that it is dealt with." />
+          <ComboField label="Owner" value={ownerId} onChange={setOwnerId} options={(employees.data ?? []).filter((x) => x.active !== false).map((x) => employeeOption(x, { as: "field" }))} placeholder="Nobody yet" hint="Who sees that it is dealt with." />
           <RHFDatePickerPopout label="Due" valueFormat="iso" clearable value={dueOn} onChange={(d) => setDueOn(d ?? null)} />
         </div>
         <FormError error={mutation.error} />

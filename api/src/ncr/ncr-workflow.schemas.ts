@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ClientKey } from './ncr.schemas';
 
 const dateTime = z.string().datetime({ offset: true });
 const Ref = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
@@ -104,13 +105,14 @@ export const UpdateContainmentBody = CreateContainmentBody.partial()
 export const CompleteContainmentBody = z.object({ note: text(2000), quantityContained: money.nullable().optional() }).strict();
 export const ReasonBody = z.object({ reason: text(1000) }).strict();
 
-export const CreateDispositionBody = z
-  .object({ decision: z.enum(DISPOSITION_DECISIONS), quantity: z.number().gt(0).max(1e9), instructions: text(2000), reference: optionalText(200), lotId: z.string().uuid().nullable().optional() })
-  .strict();
+const dispositionFields = { decision: z.enum(DISPOSITION_DECISIONS), quantity: z.number().gt(0).max(1e9), instructions: text(2000), reference: optionalText(200), lotId: z.string().uuid().nullable().optional() };
+export const CreateDispositionBody = z.object({ ...dispositionFields, clientKey: ClientKey.optional() }).strict();
 export const GenerateRmaBody = z
-  .object({ quantity: z.number().gt(0).max(1e9), instructions: optionalText(2000), lotId: z.string().uuid().nullable().optional() })
+  .object({ quantity: z.number().gt(0).max(1e9), instructions: optionalText(2000), lotId: z.string().uuid().nullable().optional(), clientKey: ClientKey.optional() })
   .strict();
-export const UpdateDispositionBody = CreateDispositionBody.partial()
+export const UpdateDispositionBody = z
+  .object(dispositionFields)
+  .partial()
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });
 export const ApproveBody = z.object({ note: z.string().trim().max(1000).optional() }).strict();

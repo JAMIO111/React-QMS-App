@@ -17,6 +17,9 @@ const GaugeUsage = ({ calibrationId }) => {
   const { data, isLoading, error } = useGaugeUsage(calibrationId);
   if (isLoading) return <p className="text-sm text-secondary-text">Looking for measurements made with this gauge…</p>;
   if (error) return <Callout tone="error" role="alert">{describeApiError(error)}</Callout>;
+  if (data.available === false) {
+    return <Callout tone="info">You do not have access to inspections, so the measurements made with this gauge cannot be listed here. Ask someone who does to review them.</Callout>;
+  }
   const since = data.previous ? `since ${data.previous.reference} (${formatDate(data.previous.calibratedOn)})` : "since it was first used";
   return (
     <div className="flex flex-col gap-3">

@@ -14,6 +14,7 @@ import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { avatarOf } from "@/lib/employees";
 
 const useRun = (onDone) => {
   const mutation = useDocumentMutation();
@@ -73,8 +74,8 @@ export const SignersCard = ({ revision, canEdit }) => {
       </MenuCard>
     );
   }
-  const reviewerOptions = all.filter((p) => !reviewerIds.includes(p.id)).map((p) => ({ value: p.id, label: p.name }));
-  const approverOptions = all.map((p) => ({ value: p.id, label: p.name, hint: p.canApprove ? undefined : "Cannot approve documents", disabled: !p.canApprove }));
+  const reviewerOptions = all.filter((p) => !reviewerIds.includes(p.id)).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
+  const approverOptions = all.map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p), hint: p.canApprove ? undefined : "Cannot approve documents", disabled: !p.canApprove }));
   return (
     <MenuCard title="Reviewers and approver" subtitle="Each reviewer accepts or sends it back. Once all have accepted, the approver approves it. The author cannot be either; a reviewer may also approve.">
       <div className="flex flex-col gap-3">

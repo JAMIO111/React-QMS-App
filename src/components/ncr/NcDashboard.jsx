@@ -21,7 +21,7 @@ import { NCR_REGISTER, NC_TABS, formatDate } from "../../lib/ncr";
 const SEVERITY_COLOR = { critical: "var(--chart-critical)", major: "var(--chart-serious)", minor: "var(--chart-warning)", unset: "var(--chart-neutral)" };
 /** Where a non-conformance came from, as the three groups of the tabs; each keeps its colour whichever tab is chosen. */
 const ORIGINS = NC_TABS.filter((t) => t.source).map((t, i) => ({ key: t.key, label: t.label, sources: t.source.split(","), color: `var(--chart-series-${i + 1})` }));
-const OPEN_STAGES = "draft,open,contained,investigating,dispositioned,awaiting_closure";
+const OPEN_STAGES = "open,contained,investigating,dispositioned,awaiting_closure";
 const whole = (v) => v.toLocaleString("en-GB");
 
 /**

@@ -401,12 +401,12 @@ export class SupplierScarService {
     return this.database.asUser(ctx, async (db) => {
       const like = q.q ? likePattern(q.q) : null;
       const res = await db.execute<Row>(sql`
-        select m.user_id, coalesce(${sql.raw(personName('p'))}, m.invited_email, 'Unknown') as name
+        select m.user_id, coalesce(${sql.raw(personName('p'))}, m.invited_email, 'Unknown') as name, p.avatar_path
         from public.organisation_users m left join public.profiles p on p.id = m.user_id
         where m.organisation_id = ${orgOf(ctx)}::uuid and m.status = 'active' and m.user_id is not null
           and (${like}::text is null or ${sql.raw(personName('p'))} ilike ${like} or m.invited_email ilike ${like})
         order by name limit 100`);
-      return { data: res.rows.map((r) => ({ userId: r.user_id as string, name: r.name as string })) };
+      return { data: res.rows.map((r) => ({ userId: r.user_id as string, name: r.name as string, avatarPath: (r.avatar_path as string) ?? null })) };
     });
   }
   cancel(ctx: RequestContext, id: string, b: ScarReasonBody) {

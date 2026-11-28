@@ -68,7 +68,7 @@ const toShipmentRow = (r: Row): ShipmentRow => ({
   createdAt: iso(r.created_at)!,
 });
 
-/** Customer orders and shipments. Every write is a database function (shipping.manage); this service shapes what the screens need. */
+/** Customer orders and shipments. Every write is a database function (shipping.manage to change orders, shipping.record to record a shipment); this service shapes what the screens need. */
 @Injectable()
 export class ShippingService {
   constructor(private readonly database: DatabaseService) {}

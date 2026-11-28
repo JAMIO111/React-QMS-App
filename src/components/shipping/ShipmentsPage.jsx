@@ -40,7 +40,7 @@ const ShipmentsPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Shipments</h1>
           <p className="text-sm text-secondary-text">Deliveries to customers. A line may name the lot it came from, so a customer problem can be traced back to it.</p>
         </div>
-        {can("shipping.manage") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a shipment</CTAButton>}
+        {can("shipping.record") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a shipment</CTAButton>}
       </div>
       <ImportManagedNotice area="shipments" connection={owner} />
       <div className="flex flex-wrap items-center gap-3">

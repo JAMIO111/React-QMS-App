@@ -2,7 +2,7 @@
 title: Raise a non-conformance
 summary: Record a problem, contain it, decide what happens to the product and close it, with the rules that keep it honest.
 group: Everyday work
-order: 4
+order: 10
 ---
 A non-conformance (NC) records something that did not meet its requirement. All of them live in one register under **Non-Conformance → Register**.
 

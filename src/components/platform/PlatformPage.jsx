@@ -10,6 +10,7 @@ import PaymentsPanel from "./PaymentsPanel";
 import RevenuePanel from "./RevenuePanel";
 import WebhooksPanel from "./WebhooksPanel";
 import EmailPanel from "./EmailPanel";
+import InvoicesPanel from "./InvoicesPanel";
 import WorkerPanel from "./WorkerPanel";
 import AgentReleasesPanel from "./AgentReleasesPanel";
 import SlidingToggle from "../ui/SlidingToggle";
@@ -114,6 +115,7 @@ const TABS = [
   { key: "revenue", label: "Revenue", Panel: RevenuePanel },
   { key: "organisations", label: "Organisations", Panel: OrganisationsPanel },
   { key: "payments", label: "Payments", Panel: PaymentsPanel },
+  { key: "invoices", label: "Invoices", Panel: InvoicesPanel },
   { key: "webhooks", label: "Webhooks", Panel: WebhooksPanel },
   { key: "email", label: "Email", Panel: EmailPanel },
   { key: "worker", label: "Worker", Panel: WorkerPanel },

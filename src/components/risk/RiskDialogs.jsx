@@ -15,6 +15,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RiskMatrix from "./RiskMatrix";
 import { changesSince } from "../../lib/editConflicts";
+import { avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -58,7 +59,7 @@ export const RiskDialog = ({ existing, draft, onClose, onSaved }) => {
   const categoryOptions = (categories.data?.data ?? []).map((c) => ({ value: c.id, label: c.label, hint: c.description ?? undefined }));
   // A category switched off since stays on the risk that has it.
   if (existing && !categoryOptions.some((c) => c.value === existing.category.id)) categoryOptions.push({ value: existing.category.id, label: existing.category.label, hint: "Switched off" });
-  const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const personOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const siteOptions = (sites.data?.data ?? []).map((s) => ({ value: s.id, label: s.name, hint: s.code }));
   const departmentOptions = (departments.data?.data ?? []).filter((d) => !siteId || d.siteId === siteId).map((d) => ({ value: d.id, label: d.name, hint: d.code }));
   const opportunity = kind === "opportunity";

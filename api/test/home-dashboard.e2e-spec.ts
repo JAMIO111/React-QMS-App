@@ -6,7 +6,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { makeIds, requireDb, seed, startApp, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, startApp, token } from './helpers';
 
 const ids = makeIds('e7');
 let app: INestApplication;
@@ -87,16 +87,21 @@ describe('with things late, critical and waiting', () => {
     const h = await as(ids.ownerA);
     const post = async (path: string, body: object) => (await api().post(`/api/v1${path}`).set(h).send(body).expect(201)).body;
     // Non-conformances: one critical, one not.
-    await post('/ncrs', { source: 'internal', title: 'Cracked housing', severity: 'critical' });
-    await post('/ncrs', { source: 'internal', title: 'Scratch' });
+    // Both are opened: a draft is not raised, so it is not open either.
+    const cat = await categoryId(admin, ids.orgA);
+    for (const body of [{ title: 'Cracked housing', severity: 'critical' }, { title: 'Scratch', severity: 'minor' }]) {
+      const created = await post('/ncrs', { source: 'internal', quantityAffected: 1, description: 'x', categoryId: cat, ...body });
+      await api().post(`/api/v1/ncrs/${created.id}/transitions`).set(h).send({ to: 'open' }).expect(200);
+    }
     // 8Ds: one past its due date, one not.
     const late = await post('/capas', { title: 'Recurring burrs', problemStatement: 'Burrs on every third part' });
     await post('/capas', { title: 'Loose fixture', problemStatement: 'Fixture moves' });
     await admin.query(`update public.capas set due_date = current_date - 3 where id = $1`, [late.id]);
     // Gauges: one overdue, one due soon, one far off.
-    await post('/gauges', { assetNumber: 'G-1', description: 'Caliper', siteId: ids.siteA, nextDueOn: day(-3) });
-    await post('/gauges', { assetNumber: 'G-2', description: 'Micrometer', siteId: ids.siteA, nextDueOn: day(10) });
-    await post('/gauges', { assetNumber: 'G-3', description: 'Height gauge', siteId: ids.siteA, nextDueOn: day(200) });
+    const gaugeType = (await post('/gauge-types', { code: 'CAL', name: 'Calibrated gauge' })).id;
+    await post('/gauges', { assetNumber: 'G-1', description: 'Caliper', gaugeTypeId: gaugeType, siteId: ids.siteA, nextDueOn: day(-3) });
+    await post('/gauges', { assetNumber: 'G-2', description: 'Micrometer', gaugeTypeId: gaugeType, siteId: ids.siteA, nextDueOn: day(10) });
+    await post('/gauges', { assetNumber: 'G-3', description: 'Height gauge', gaugeTypeId: gaugeType, siteId: ids.siteA, nextDueOn: day(200) });
     // Master data with gaps: a part with no released revision, family or customer; a machine with no site; an employee with no department (and never assessed).
     await post('/parts', { partNumber: 'P-1', name: 'One', initialRevision: { revision: 'A' } });
     const machine = await post('/machines', { code: 'M-1', name: 'Mill' });

@@ -95,16 +95,17 @@ describe('the catalogue of what can be imported', () => {
       fields: [
         { target: 'assetNumber', source: 'Asset' },
         { target: 'description', source: 'Desc' },
+        { target: 'gaugeType', source: 'Type' },
         { target: 'intervalValue', source: 'Every' },
         { target: 'intervalUnit', source: 'Unit' },
         { target: 'rangeMax', source: 'Max', decimal: ',' as const },
       ],
     };
-    expect(mappingProblems(cat, spec, ['Asset', 'Desc', 'Every', 'Unit', 'Max'])).toEqual([]);
-    const ok = applyMapping(cat, spec, { Asset: 'G-1', Desc: 'Micrometer', Every: '6', Unit: 'Months', Max: '25,4' });
+    expect(mappingProblems(cat, spec, ['Asset', 'Desc', 'Type', 'Every', 'Unit', 'Max'])).toEqual([]);
+    const ok = applyMapping(cat, spec, { Asset: 'G-1', Desc: 'Micrometer', Type: 'MIC', Every: '6', Unit: 'Months', Max: '25,4' });
     expect(ok.errors).toEqual([]);
     expect(ok.canonical).toMatchObject({ assetNumber: 'G-1', intervalValue: 6, intervalUnit: 'months', rangeMax: 25.4 });
-    const bad = applyMapping(cat, spec, { Asset: 'G-2', Desc: 'Caliper', Every: '1.5', Unit: 'fortnights', Max: '' });
+    const bad = applyMapping(cat, spec, { Asset: 'G-2', Desc: 'Caliper', Type: 'MIC', Every: '1.5', Unit: 'fortnights', Max: '' });
     expect(bad.errors.map((e) => e.field)).toEqual(expect.arrayContaining(['intervalValue', 'intervalUnit']));
   });
 
@@ -138,10 +139,10 @@ describe('values checked against the database rules', () => {
         f.key === 'assetNumber' ? { ...f, pattern: '^\\S(.{0,38}\\S)?$' } : f.key === 'intervalValue' ? { ...f, min: 1, max: 1000 } : f.key === 'resolution' ? { ...f, min: 0, minExclusive: true } : f,
       ),
     };
-    const spec = { keyField: 'A', fields: [{ target: 'assetNumber', source: 'A' }, { target: 'description', source: 'D' }, { target: 'intervalValue', source: 'I' }, { target: 'resolution', source: 'R' }] };
-    const bad = applyMapping(withRules, spec, { A: ' G 1', D: 'x', I: '0', R: '0' });
+    const spec = { keyField: 'A', fields: [{ target: 'assetNumber', source: 'A' }, { target: 'description', source: 'D' }, { target: 'gaugeType', source: 'T' }, { target: 'intervalValue', source: 'I' }, { target: 'resolution', source: 'R' }] };
+    const bad = applyMapping(withRules, spec, { A: ' G 1', D: 'x', T: 'MIC', I: '0', R: '0' });
     expect(bad.errors.map((e) => e.field)).toEqual(['intervalValue', 'resolution']);
-    const odd = applyMapping(withRules, spec, { A: 'G1', D: 'x', I: '1001', R: '0.01' });
+    const odd = applyMapping(withRules, spec, { A: 'G1', D: 'x', T: 'MIC', I: '1001', R: '0.01' });
     expect(odd.errors).toEqual([{ field: 'intervalValue', message: 'Calibration interval: "1001" must be at most 1000' }]);
   });
 });

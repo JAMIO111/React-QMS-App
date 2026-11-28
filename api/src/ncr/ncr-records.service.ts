@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
+import { onceByKey } from '../common/client-key';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
 import { ExchangeRateService } from '../currency/exchange-rate.service';
@@ -55,16 +56,26 @@ export class NcrRecordsService {
 
   /** The line's rate is looked up by the database; when none is cached yet the published one is fetched and the line filled before the answer. */
   async createCost(ctx: RequestContext, ncrId: string, body: z.infer<typeof CreateCostBody>): Promise<Cost> {
-    const cost = await this.database.asUser(ctx, async (db) => {
-      await this.assertNcrVisible(db, ctx, ncrId);
-      const result = await db.execute<{ id: string }>(sql`
-        insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, description, incurred_on, currency, vat_treatment, vat_rate, quantity, unit_cost)
-        values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.costType}, ${body.description ?? null}, coalesce(${body.incurredOn ?? null}::date, current_date),
-                ${body.currency}, ${body.vatTreatment}, ${body.vatRate}, ${body.quantity}, ${body.unitCost})
-        returning id`);
-      return this.loadCost(db, ctx, result.rows[0].id);
+    return onceByKey({
+      database: this.database,
+      ctx,
+      table: 'ncr_costs',
+      key: body.clientKey,
+      parent: ncrId,
+      make: async () => {
+        const cost = await this.database.asUser(ctx, async (db) => {
+          await this.assertNcrVisible(db, ctx, ncrId);
+          const result = await db.execute<{ id: string }>(sql`
+            insert into public.ncr_costs (organisation_id, nonconformance_id, cost_type, description, incurred_on, currency, vat_treatment, vat_rate, quantity, unit_cost, client_key)
+            values (${ctx.organisationId!}::uuid, ${ncrId}::uuid, ${body.costType}, ${body.description ?? null}, coalesce(${body.incurredOn ?? null}::date, current_date),
+                    ${body.currency}, ${body.vatTreatment}, ${body.vatRate}, ${body.quantity}, ${body.unitCost}, ${body.clientKey ?? null})
+            returning id`);
+          return this.loadCost(db, ctx, result.rows[0].id);
+        });
+        return this.withRate(ctx, cost);
+      },
+      read: async (id) => this.withRate(ctx, await this.database.asUser(ctx, (db) => this.loadCost(db, ctx, id))),
     });
-    return this.withRate(ctx, cost);
   }
 
   async updateCost(ctx: RequestContext, id: string, body: z.infer<typeof UpdateCostBody>): Promise<Cost> {

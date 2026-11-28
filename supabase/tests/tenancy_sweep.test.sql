@@ -240,6 +240,7 @@ BEGIN
   INSERT INTO public.stripe_checkout_sessions (organisation_id, provider_session_id, membership_id, billing_interval, seats)
     SELECT a, 'cs_sweep_1', id, 'month', '{"controller":1}'::jsonb FROM public.organisation_users WHERE organisation_id = a AND user_id = '50000000-0000-0000-0000-0000000000a1';
   INSERT INTO public.stripe_events (event_id, event_type, organisation_id, status) VALUES ('evt_sweep_1', 'invoice.paid', a, 'processed');
+  INSERT INTO public.platform_invoice_alerts (organisation_id, kind) VALUES (a, 'started');
   INSERT INTO public.notification_preferences (organisation_id, user_id, event_type_id, enabled)
     SELECT a, '50000000-0000-0000-0000-0000000000a1', id, false FROM public.notification_event_types WHERE key = 'parts.created';
   INSERT INTO public.saved_filters (organisation_id, user_id, scope, name, filters) VALUES (a, '50000000-0000-0000-0000-0000000000a1', 'ncr_register', 'Sweep filter', '{"stage":"open"}');

@@ -33,6 +33,7 @@ const CustomerOrderPage = () => {
   if (query.error) return <div className="p-4"><ErrorNotice error={query.error} /></div>;
   const o = query.data;
   const manage = can("shipping.manage");
+  const record = can("shipping.record");
   const open = o.status === "open";
 
   return (
@@ -46,11 +47,11 @@ const CustomerOrderPage = () => {
           </div>
           <p className="text-sm text-secondary-text">{o.customer.code} · {o.customer.name}{o.customerReference ? ` · their order ${o.customerReference}` : ""} · ordered {formatDate(o.orderedOn)}</p>
         </div>
-        {manage && open && (
+        {(manage || record) && open && (
           <div className="flex flex-wrap items-center gap-2">
-            {!owner && <CTAButton type="main" size="default" onClick={() => setDialog({ kind: "ship" })}>Record a shipment</CTAButton>}
-            <CTAButton type="secondary" size="default" onClick={() => setDialog({ kind: "close" })}>Close order</CTAButton>
-            <CTAButton type="danger" size="default" onClick={() => setDialog({ kind: "cancel" })}>Cancel order</CTAButton>
+            {record && !owner && <CTAButton type="main" size="default" onClick={() => setDialog({ kind: "ship" })}>Record a shipment</CTAButton>}
+            {manage && <CTAButton type="secondary" size="default" onClick={() => setDialog({ kind: "close" })}>Close order</CTAButton>}
+            {manage && <CTAButton type="danger" size="default" onClick={() => setDialog({ kind: "cancel" })}>Cancel order</CTAButton>}
           </div>
         )}
       </div>

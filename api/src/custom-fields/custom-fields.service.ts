@@ -130,8 +130,9 @@ export class CustomFieldsService {
   people(ctx: RequestContext) {
     return this.database.asUser(ctx, async (db) => {
       // A function: row security on memberships shows people without members.read only themselves.
-      const res = await db.execute<Row>(sql`select user_id, name from app.custom_field_people(${ctx.organisationId}::uuid)`);
-      return { data: res.rows.map((r) => ({ id: r.user_id as string, name: r.name as string })) };
+      const res = await db.execute<Row>(sql`select c.user_id, c.name, ap.avatar_path from app.custom_field_people(${ctx.organisationId}::uuid) c
+        left join public.profiles ap on ap.id = c.user_id`);
+      return { data: res.rows.map((r) => ({ id: r.user_id as string, name: r.name as string, avatarPath: (r.avatar_path as string) ?? null })) };
     });
   }
 

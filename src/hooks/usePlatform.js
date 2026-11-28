@@ -67,6 +67,35 @@ export const useRecoverSso = () => {
   });
 };
 
+/** Organisations paying by invoice (docs/invoice-billing-plan.md IV3): whether the first invoice is paid, what is open and how late, and the two operator switches. */
+export const usePlatformInvoiceAccounts = () => useMonitor(["invoice-accounts"], "/platform/invoice-accounts", { refetch: 60_000 });
+
+/**
+ * Allow or refuse invoicing for one organisation, or lift the one-invoiced-organisation-per-company block (each with a reason). The account shows the change
+ * at once and goes back if the server refuses.
+ */
+export const useInvoiceAccountMutation = () => {
+  const queryClient = useQueryClient();
+  const listKey = ["api", "platform", "invoice-accounts"];
+  return useMutation({
+    mutationFn: ({ organisationId, action, value, reason }) =>
+      apiFetch(`/platform/organisations/${organisationId}/${action === "billing" ? "invoice-billing" : "invoice-company-exempt"}`, {
+        method: "POST",
+        body: action === "billing" ? { allowed: value, reason } : { exempt: value, reason },
+      }),
+    onMutate: async ({ organisationId, action, value }) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData(listKey);
+      queryClient.setQueryData(listKey, (data) =>
+        data ? { ...data, data: data.data.map((a) => (a.organisationId === organisationId ? { ...a, [action === "billing" ? "billingAllowed" : "companyExempt"]: value } : a)) } : data,
+      );
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => queryClient.setQueryData(listKey, ctx?.previous),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: listKey }),
+  });
+};
+
 /** Connector agent releases (AG6b): every one including withdrawn, how many agents run each, and whether the API has release keys to check them. */
 export const usePlatformAgentReleases = () => useMonitor(["agent-releases"], "/platform/agent-releases", { refetch: false });
 

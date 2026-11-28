@@ -10,6 +10,7 @@ import {
   AddDepartmentBody,
   AssignRoleBody,
   BulkInviteBody,
+  CreateRoleBody,
   Invitation,
   InviteBody,
   Member,
@@ -21,6 +22,7 @@ import {
   TRANSITIONS,
   UpdateDepartmentMembershipBody,
   UpdateMemberBody,
+  UpdateRoleBody,
 } from './members.schemas';
 
 interface MemberRow {
@@ -36,6 +38,7 @@ interface MemberRow {
   roles: z.infer<typeof RoleAssignment>[];
   departments: Member['departments'];
   invite: Member['invite'];
+  avatar_path?: string | null;
 }
 
 const toMember = (r: MemberRow): Member => ({
@@ -51,6 +54,7 @@ const toMember = (r: MemberRow): Member => ({
   roles: r.roles,
   departments: r.departments ?? [],
   invite: r.invite ?? null,
+  avatarPath: r.avatar_path ?? null,
 });
 
 /**
@@ -301,23 +305,80 @@ export class MembersService {
     return { membershipId: r.rows[0].membership_id };
   }
 
+  private async roleRows(db: Db, ctx: RequestContext, onlyId?: string): Promise<z.infer<typeof Role>[]> {
+    const res = await db.execute<{ id: string; key: string; name: string; description: string | null; is_system: boolean; permissions: string[]; holders: number }>(sql`
+      select r.id, r.key, r.name, r.description, r.is_system,
+             coalesce(array_agg(rp.permission_code order by rp.permission_code) filter (where rp.permission_code is not null), '{}') as permissions,
+             (select count(distinct a.membership_id)::int from public.user_role_assignments a
+               join public.organisation_users m on m.id = a.membership_id and m.status in ('active', 'invited')
+              where a.role_id = r.id) as holders
+      from public.roles r left join public.role_permissions rp on rp.role_id = r.id
+      where r.organisation_id = ${ctx.organisationId}::uuid and (${onlyId ?? null}::uuid is null or r.id = ${onlyId ?? null}::uuid)
+      group by r.id
+      order by r.is_system desc, r.name`);
+    return res.rows.map((r) => ({ id: r.id, key: r.key, name: r.name, description: r.description, isSystem: r.is_system, permissions: r.permissions, holders: r.holders }));
+  }
+
   roles(ctx: RequestContext): Promise<z.infer<typeof Role>[]> {
+    return this.database.asUser(ctx, (db) => this.roleRows(db, ctx));
+  }
+
+  /** What each permission is, which module it belongs to and which seat level that module asks for (information for the role editor). */
+  permissions(ctx: RequestContext): Promise<z.infer<typeof Permission>[]> {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ id: string; key: string; name: string; description: string | null; is_system: boolean; permissions: string[] }>(sql`
-        select r.id, r.key, r.name, r.description, r.is_system,
-               coalesce(array_agg(rp.permission_code order by rp.permission_code) filter (where rp.permission_code is not null), '{}') as permissions
-        from public.roles r left join public.role_permissions rp on rp.role_id = r.id
-        where r.organisation_id = ${ctx.organisationId}::uuid
-        group by r.id
-        order by r.is_system desc, r.name`);
-      return res.rows.map((r) => ({ id: r.id, key: r.key, name: r.name, description: r.description, isSystem: r.is_system, permissions: r.permissions }));
+      // `needs` = the cheapest seat package that gives the permission (its feature row if it has one, else its module row), so the Operator shows
+      // where it is enough (raising an NC, recording an inspection).
+      const res = await db.execute<{ code: string; description: string; module: string | null; needs: string | null }>(sql`
+        select p.code, p.description, m.name as module,
+               (select pl.slug from public.subscription_plans pl
+                 where f.id is not null and pl.kind = 'seat' and pl.status = 'active'
+                   and coalesce((select case when e.enabled then array_position(array['none', 'view', 'operational', 'full'], e.access_level) else 0 end
+                                   from public.subscription_entitlements e
+                                  where e.subscription_plan_id = pl.id and e.module_id = f.module_id and (e.feature_id = f.id or e.feature_id is null)
+                                  order by (e.feature_id is null) limit 1), 0) >= array_position(array['none', 'view', 'operational', 'full'], f.min_access_level)
+                 order by pl.display_order limit 1) as needs
+        from public.permissions p
+        left join public.features f on f.permission_code = p.code
+        left join public.modules m on m.id = f.module_id
+        order by coalesce(m.display_order, 9999), coalesce(m.name, 'Administration'), p.code`);
+      const known = ['observer', 'operator', 'contributor', 'controller'] as const;
+      return res.rows.map((r) => ({
+        code: r.code,
+        description: r.description,
+        module: r.module ?? 'Administration',
+        needs: r.needs && (known as readonly string[]).includes(r.needs) ? (r.needs as (typeof known)[number]) : null,
+      }));
     });
   }
 
-  permissions(ctx: RequestContext): Promise<z.infer<typeof Permission>[]> {
+  /** Makes a custom role (Owner only; the database refuses permissions the person does not hold, roles.manage, duplicate names and the 31st role). */
+  createRole(ctx: RequestContext, body: CreateRoleBody): Promise<z.infer<typeof Role>> {
     return this.database.asUser(ctx, async (db) => {
-      const res = await db.execute<{ code: string; description: string }>(sql`select code, description from public.permissions order by code`);
-      return res.rows;
+      const res = await db.execute<{ id: string }>(sql`
+        select app.save_custom_role(${ctx.organisationId}::uuid, null, ${body.name}, ${body.description ?? null}, string_to_array(${body.permissions.join(',')}, ',')) as id`);
+      return (await this.roleRows(db, ctx, res.rows[0].id))[0];
+    });
+  }
+
+  /** Changes a custom role. What is not sent stays; the permissions replace the list as a whole. A built-in role answers 409 role_rule. */
+  updateRole(ctx: RequestContext, id: string, body: UpdateRoleBody): Promise<z.infer<typeof Role>> {
+    return this.database.asUser(ctx, async (db) => {
+      const current = (await this.roleRows(db, ctx, id))[0];
+      if (!current) throw ApiError.notFound('role_not_found', 'Role not found');
+      if (current.isSystem) throw new ApiError(409, 'role_rule', 'The built-in roles cannot be changed. Make a copy and change that.');
+      await db.execute(sql`
+        select app.save_custom_role(${ctx.organisationId}::uuid, ${id}::uuid, ${body.name ?? current.name},
+          ${body.description === undefined ? current.description : body.description}, string_to_array(${(body.permissions ?? current.permissions).join(',')}, ','))`);
+      return (await this.roleRows(db, ctx, id))[0];
+    });
+  }
+
+  /** Deletes a custom role nobody holds (409 role_rule says how many people hold it otherwise). */
+  deleteRole(ctx: RequestContext, id: string): Promise<void> {
+    return this.database.asUser(ctx, async (db) => {
+      const current = (await this.roleRows(db, ctx, id))[0];
+      if (!current) throw ApiError.notFound('role_not_found', 'Role not found');
+      await db.execute(sql`select app.delete_custom_role(${id}::uuid)`);
     });
   }
 
@@ -359,7 +420,7 @@ export class MembersService {
   }
 
   private async directory(db: Db, organisationId: string): Promise<Member[]> {
-    const res = await db.execute<MemberRow & Record<string, unknown>>(sql`select * from app.list_members(${organisationId}::uuid)`);
+    const res = await db.execute<MemberRow & Record<string, unknown>>(sql`select lm.*, ap.avatar_path from app.list_members(${organisationId}::uuid) lm left join public.profiles ap on ap.id = lm.user_id`);
     const company = await db.execute<{ id: string }>(sql`select id from app.member_company_accounts(${organisationId}::uuid) as id`);
     const ids = new Set(company.rows.map((r) => r.id));
     return res.rows.map(toMember).map((m) => ({ ...m, companyAccount: m.userId ? ids.has(m.userId) : false }));

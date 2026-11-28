@@ -16,6 +16,7 @@ import Field from "../ui/Field";
 import LoadingScreen from "../ui/LoadingScreen";
 import MenuCard from "../ui/MenuCard";
 import Switch from "../ui/Switch";
+import { avatarOf } from "@/lib/employees";
 
 const KIND_LABEL = { department: "Department", role: "Role", person: "Person" };
 const asBody = (t) => (t.kind === "department" ? { departmentId: t.refId } : t.kind === "role" ? { roleId: t.refId } : { membershipId: t.refId });
@@ -58,7 +59,7 @@ export const ReadersCard = ({ doc }) => {
   const roleOptions = opts("role", (roles.data?.data ?? []).map((r) => ({ value: r.id, label: r.name })));
   const personOptions = opts(
     "person",
-    (members.data?.data ?? []).filter((m) => m.status === "active").map((m) => ({ value: m.membershipId, label: [m.firstName, m.surname].filter(Boolean).join(" ") || m.email })),
+    (members.data?.data ?? []).filter((m) => m.status === "active").map((m) => { const label = [m.firstName, m.surname].filter(Boolean).join(" ") || m.email; return { value: m.membershipId, label, avatar: avatarOf(m, label) }; }),
   );
   const add = (kind, value, list) => value && save([...doc.targets, { kind, refId: value, label: list.find((o) => o.value === value)?.label ?? "" }]);
 
@@ -229,7 +230,7 @@ const AddReaderDialog = ({ revision, recipients, onClose }) => {
   const mutation = useDocumentMutation();
   const [userId, setUserId] = useState(null);
   const already = new Set(recipients.map((x) => x.person.id));
-  const options = (people.data ?? []).filter((p) => !already.has(p.id)).map((p) => ({ value: p.id, label: p.name }));
+  const options = (people.data ?? []).filter((p) => !already.has(p.id)).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const save = (e) => {
     e.preventDefault();
     if (!userId) return;

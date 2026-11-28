@@ -17,6 +17,7 @@ import { stageOf as ncrStageOf } from "../../../lib/ncr";
 import { FormError, TextAreaField } from "../../master-data/shared";
 import CTAButton from "@/components/CTAButton";
 import { useEditBase } from "../../../hooks/useEditBase";
+import { avatarOf } from "@/lib/employees";
 
 const HeaderForm = ({ capa, editable }) => {
   const mutation = useCapaMutation();
@@ -26,7 +27,7 @@ const HeaderForm = ({ capa, editable }) => {
     ownerMembershipId: capa.owner?.membershipId ?? null, dueDate: capa.dueDate,
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const owners = [...(people.data ?? []).map((p) => ({ id: p.membershipId, name: p.name }))];
+  const owners = [...(people.data ?? []).map((p) => ({ id: p.membershipId, name: p.name, avatar: avatarOf(p) }))];
   if (capa.owner && !owners.some((o) => o.id === capa.owner.membershipId)) owners.push({ id: capa.owner.membershipId, name: capa.owner.name });
 
   const changes = {};

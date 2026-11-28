@@ -37,7 +37,7 @@ const renderAt = (ui, at, route = "*") =>
   );
 
 beforeEach(() => {
-  permissions = ["receiving.read", "receiving.manage", "supplier_quality.manage", "supplier_quality.approve", "inspection.record", "ncr.create", "master_data.read"];
+  permissions = ["receiving.read", "receiving.manage", "receiving.record", "supplier_quality.manage", "supplier_quality.approve", "inspection.record", "ncr.create", "master_data.read"];
   calls.length = 0;
   apiFetch.mockReset();
 });

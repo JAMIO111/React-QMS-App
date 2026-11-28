@@ -29,7 +29,8 @@ beforeAll(async () => {
   ctx.part = (await post('/parts', { partNumber: 'HOUS-100', name: 'Pump housing', initialRevision: { revision: 'A' } })).id;
   await post('/parts', { partNumber: 'PLUG_50%', name: 'Odd plug', initialRevision: { revision: 'A' } });
   ctx.supplier = (await post('/suppliers', { code: 'ACME', name: 'Acme Castings' })).id;
-  ctx.gauge = (await post('/gauges', { assetNumber: 'CAL-HOUS-1', description: 'Housing bore gauge', siteId: ids.siteA })).id;
+  const gaugeType = (await post('/gauge-types', { code: 'BORE', name: 'Bore gauge' })).id;
+  ctx.gauge = (await post('/gauges', { assetNumber: 'CAL-HOUS-1', description: 'Housing bore gauge', gaugeTypeId: gaugeType, siteId: ids.siteA })).id;
   const types = (await api().get('/api/v1/document-types').set(h).expect(200)).body.data;
   ctx.doc = (await post('/documents', { typeId: types[0].id, title: 'Housing inspection procedure', contentKind: 'text' })).id;
   // Another organisation has a record with the same word in it.

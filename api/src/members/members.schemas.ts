@@ -53,6 +53,8 @@ export const Member = z.object({
   departments: z.array(DepartmentMembership),
   /** Only for a pending invitation. */
   invite: InviteDetail.nullable(),
+  /** Their profile picture in the avatars bucket (for initials-or-photo circles). */
+  avatarPath: z.string().nullable().optional(),
   /** Signs in with a company account (single sign-on). */
   companyAccount: z.boolean().optional(),
 });
@@ -128,9 +130,30 @@ export const Role = z.object({
   description: z.string().nullable(),
   isSystem: z.boolean(),
   permissions: z.array(z.string()),
+  /** People (active or invited) who hold the role. */
+  holders: z.number().int(),
 });
 
-export const Permission = z.object({ code: z.string(), description: z.string() });
+/** `module` groups the permission for screens (the module it belongs to, else "Administration"); `needs` is the seat level the module asks for. */
+export const Permission = z.object({
+  code: z.string(),
+  description: z.string(),
+  module: z.string(),
+  needs: z.enum(['observer', 'operator', 'contributor', 'controller']).nullable(),
+});
+
+const RoleName = z.string().trim().min(1, 'Give the role a name').max(60, 'The role name is up to 60 characters');
+const RoleDescription = z.string().trim().max(200, 'The description is up to 200 characters');
+const RolePermissions = z.array(z.string().trim().min(1)).min(1, 'Choose at least one permission').max(200);
+/** A new custom role: its name, what it is for, and the permissions it carries. */
+export const CreateRoleBody = z.object({ name: RoleName, description: RoleDescription.nullish(), permissions: RolePermissions }).strict();
+export type CreateRoleBody = z.infer<typeof CreateRoleBody>;
+/** Changes a custom role; what is not sent stays as it is. The permissions replace the list as a whole. */
+export const UpdateRoleBody = z
+  .object({ name: RoleName.optional(), description: RoleDescription.nullish(), permissions: RolePermissions.optional() })
+  .strict()
+  .refine((b) => b.name !== undefined || b.description !== undefined || b.permissions !== undefined, { message: 'Nothing to change' });
+export type UpdateRoleBody = z.infer<typeof UpdateRoleBody>;
 
 export const Invitation = z.object({
   membershipId: z.string().uuid(),

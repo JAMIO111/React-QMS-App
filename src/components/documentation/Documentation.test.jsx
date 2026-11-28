@@ -354,15 +354,23 @@ describe("Acknowledgement", () => {
     expect(within(totals).getAllByText("1 of 2", { selector: "dd" })).toHaveLength(2); // viewed and acknowledged
     expect(within(table).getByText("Overdue")).toBeInTheDocument();
     expect(within(table).getByText(/Quarantined/)).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Show"), "open");
+    const choose = async (label, option) => {
+      await userEvent.click(screen.getByRole("combobox", { name: label }));
+      await userEvent.click(within(screen.getByRole("listbox", { name: label })).getByRole("option", { name: option }));
+    };
+    await choose("Show", "Not acknowledged");
     expect(within(table).queryByText("Ann Tester")).toBeNull();
     expect(within(table).getByText("Cat Tester")).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Show"), "all");
-    await userEvent.selectOptions(screen.getByLabelText("Department"), "Goods-in");
+    await choose("Show", "Everyone");
+    await choose("Department", "Goods-in");
     expect(within(table).queryByText("Cat Tester")).toBeNull();
-    await userEvent.selectOptions(screen.getByLabelText("Person to add"), "m2");
-    await userEvent.click(within(screen.getByRole("form", { name: "Add a person" })).getByRole("button", { name: "Add" }));
+    // Choosing a person asks them at once: no separate Add button, and they show with their initials.
+    await userEvent.click(screen.getByRole("combobox", { name: "Add a person" }));
+    const bob = within(screen.getByRole("listbox", { name: "Add a person" })).getByRole("option", { name: /Bob Tester/ });
+    expect(bob.querySelector("[data-initials]")).toHaveTextContent("BT");
+    await userEvent.click(bob);
     expect(calls).toContain("POST /quality-alerts/a1/recipients");
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
   });
 
   it("a draft shows how many people each target reaches and warns about an empty one", async () => {

@@ -22,6 +22,8 @@ const PRICES = {
   'controller:month': 'price_j_ctrl_month', 'controller:year': 'price_j_ctrl_year',
   'contributor:month': 'price_j_contrib_month', 'contributor:year': 'price_j_contrib_year',
   'observer:month': 'price_j_obs_month', 'observer:year': 'price_j_obs_year',
+  'operator:month': 'price_j_op_month', 'operator:year': 'price_j_op_year',
+  'organisation:month': 'price_j_org_month', 'organisation:year': 'price_j_org_year',
 };
 const PLAN_OF = Object.fromEntries(Object.entries(PRICES).map(([k, v]) => [v, k.split(':')[0]]));
 
@@ -186,7 +188,7 @@ async function startFakeSupabase(admin, stripe, log, storage, sso) {
 
 function makeFakeStripe(StripeGateway, ApiError) {
   class FakeStripe extends StripeGateway {
-    constructor() { super(); this.enabled = true; this.webhookEnabled = false; this.customers = new Map(); this.sessions = new Map(); this.subs = new Map(); this.n = 0; }
+    constructor() { super(); this.enabled = true; this.webhookEnabled = false; this.customers = new Map(); this.sessions = new Map(); this.subs = new Map(); this.invoices = new Map(); this.created = new Map(); this.billing = new Map(); this.n = 0; }
     async createCustomer(input) { const id = `cus_journey${NONCE}${++this.n}`; this.customers.set(id, input); return id; }
     async createCheckoutSession(input) {
       const id = `cs_test_journey${NONCE}${++this.n}`;
@@ -197,13 +199,31 @@ function makeFakeStripe(StripeGateway, ApiError) {
       const s = this.sessions.get(sessionId); const subId = `sub_journey${NONCE}${++this.n}`;
       const first = PLAN_OF[s.items[0].priceId];
       const interval = PRICES[`${first}:year`] === s.items[0].priceId ? 'year' : 'month';
-      this.subs.set(subId, { id: subId, customerId: s.customerId, status: 'trialing', interval, currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 14 * 864e5).toISOString(), trialStart: new Date().toISOString(), trialEnd: new Date(Date.now() + 14 * 864e5).toISOString(), cancelAtPeriodEnd: false, canceledAt: null, items: s.items.map((i, k) => ({ itemId: `si_journey${NONCE}${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })) });
+      this.subs.set(subId, { id: subId, customerId: s.customerId, status: 'trialing', interval, currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 14 * 864e5).toISOString(), trialStart: new Date().toISOString(), trialEnd: new Date(Date.now() + 14 * 864e5).toISOString(), cancelAtPeriodEnd: false, canceledAt: null, collectionMethod: 'charge_automatically', items: s.items.map((i, k) => ({ itemId: `si_journey${NONCE}${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })) });
       s.status = 'complete'; s.subscriptionId = subId;
     }
     async retrieveCheckoutSession(id) { const s = this.sessions.get(id); if (!s) throw new ApiError(502, 'billing_provider_error', 'no such session'); return { id, status: s.status, subscriptionId: s.subscriptionId, customerId: s.customerId, organisationId: s.organisationId }; }
     async retrieveSubscription(id) { return structuredClone(this.subs.get(id)); }
-    async retrieveInvoice() { throw new Error('no invoices in the journey'); }
-    async previewSeatChange(input) { const added = input.items.reduce((n, i) => n + (i.remove ? 0 : i.quantity), 0); return { currency: 'gbp', subtotal: added * 100, tax: added * 20, total: added * 120, amountDue: added * 120, lines: [{ description: 'Prorated seats', amount: added * 100 }] }; }
+    // Paying by invoice (docs/invoice-billing-plan.md): the company goes on the customer, the subscription is send_invoice with its first invoice open,
+    // and the journey pays it (or not) with `pay` before asking the API to read it again (the journey has no webhooks).
+    async updateCustomerBilling(customerId, details) { this.billing.set(customerId, details); return { vat: details.vatNumber ? 'verified' : 'none' }; }
+    async createInvoiceSubscription(input) {
+      const key = `${input.organisationId}:${input.clientKey}`;
+      if (this.created.has(key)) return this.created.get(key);
+      const subId = `sub_journey_inv${NONCE}${++this.n}`; const invoiceId = `in_journey${NONCE}${++this.n}`;
+      const first = PLAN_OF[input.items[0].priceId];
+      const interval = PRICES[`${first}:year`] === input.items[0].priceId ? 'year' : 'month';
+      const subtotal = input.items.reduce((t, i) => t + i.quantity * 2500, 0);
+      this.invoices.set(invoiceId, { id: invoiceId, customerId: input.customerId, subscriptionId: subId, number: `JRN-${String(this.invoices.size + 1).padStart(4, '0')}`, status: 'open', currency: 'gbp', subtotal, tax: 0, total: subtotal,
+        periodStart: new Date().toISOString(), periodEnd: new Date(Date.now() + 30 * 864e5).toISOString(), created: new Date().toISOString().slice(0, 10), dueDate: new Date(Date.now() + input.daysUntilDue * 864e5).toISOString().slice(0, 10),
+        paidAt: null, pdfUrl: `https://invoice.journey.test/pdf/${invoiceId}`, hostedUrl: `https://invoice.journey.test/i/${invoiceId}`, paymentIntentId: null, paymentStatus: null });
+      this.subs.set(subId, { id: subId, customerId: input.customerId, status: 'active', interval, currency: 'gbp', currentPeriodStart: new Date().toISOString(), currentPeriodEnd: new Date(Date.now() + 30 * 864e5).toISOString(), trialStart: null, trialEnd: null,
+        cancelAtPeriodEnd: false, canceledAt: null, collectionMethod: 'send_invoice', daysUntilDue: input.daysUntilDue, latestInvoiceId: invoiceId, items: input.items.map((i, k) => ({ itemId: `si_journey_inv${NONCE}${this.n}_${k}`, priceId: i.priceId, quantity: i.quantity })) });
+      const result = { subscriptionId: subId, invoiceId }; this.created.set(key, result); return result;
+    }
+    pay(invoiceId) { const i = this.invoices.get(invoiceId); i.status = 'paid'; i.paidAt = new Date().toISOString(); i.paymentStatus = 'succeeded'; }
+    async retrieveInvoice(id) { const i = this.invoices.get(id); if (!i) throw new ApiError(502, 'billing_provider_error', 'no such invoice'); return structuredClone(i); }
+    async previewSeatChange(input) { const added = input.items.reduce((n, i) => n + (i.remove ? 0 : i.quantity), 0); return { currency: 'gbp', subtotal: added * 100, tax: added * 20, total: added * 120, amountDue: added * 120, timing: 'now', payment: 'card', lines: [{ description: 'Prorated seats', amount: added * 100 }] }; }
     async updateSeats() { /* not used */ }
     async createPortalSession() { return 'http://127.0.0.1/portal'; }
     constructEvent() { throw ApiError.badRequest('invalid_signature', 'webhooks are not part of the journey'); }
@@ -343,8 +363,11 @@ async function startStack({ appUrl, log = console.log }) {
   const { WorkerService } = require('../../api/dist/worker/worker.service');
   // One worker tick, as pg_cron would call it every minute in production.
   const tick = (budgetMs = 30000) => nest.get(WorkerService).tick({ source: 'manual', budgetMs });
+  // The journey has no Stripe webhooks: after the fake pays an invoice this asks the API to read the subscription again, as a webhook or the daily reconcile would.
+  const { StripeBillingService } = require('../../api/dist/billing/stripe-billing.service');
+  const syncSubscription = (organisationId, subscriptionId) => nest.get(StripeBillingService).syncSubscription(organisationId, subscriptionId, undefined, 'journey');
   return {
-    admin, api, stripe, erp, sso, passwords: fake.passwords, ports: PORTS, sign, tick,
+    admin, api, stripe, erp, sso, passwords: fake.passwords, ports: PORTS, sign, tick, syncSubscription,
     stop: async () => { await new Promise((r) => fake.server.close(r)); await new Promise((r) => erp.server.close(r)); await api.close(); await admin.end(); },
   };
 }

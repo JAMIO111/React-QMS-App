@@ -5,6 +5,7 @@ import {
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SettingsIcon,
+  XIcon,
 } from "@/components/icons";
 import NavItem from "./NavItem";
 import { menuStructure } from "../MenuStructure";
@@ -15,9 +16,16 @@ import { useProductionSettings } from "../hooks/useProduction";
 import { subMenuVisible } from "../lib/production";
 import { useOrganisation } from "../contexts/OrganisationProvider";
 import SubMenuItem from "./SubMenuItem";
+import OrganisationSwitcher from "./OrganisationSwitcher";
 
-const Navbar = () => {
-  const [isMenuExpanded, setIsMenuExpanded] = useState(false);
+/**
+ * The side menu. `variant="rail"` is the desktop and tablet one (a narrow rail that expands); `variant="drawer"` is the phone one: always open at full
+ * width inside the slide-in drawer of App.jsx, with a close button, and `onNavigate` closes the drawer when a link is chosen.
+ */
+const Navbar = ({ variant = "rail", onNavigate }) => {
+  const drawer = variant === "drawer";
+  const [railExpanded, setIsMenuExpanded] = useState(false);
+  const isMenuExpanded = drawer || railExpanded;
   const canSee = useCanSee();
   const productionSettings = useProductionSettings();
   // One request, asked again once a minute, gives every badge; a number the person may not read is null (no badge).
@@ -47,6 +55,7 @@ const Navbar = () => {
   const closeMenu = () => {
     setIsSubMenuOpen(null);
     setIsMenuExpanded(false);
+    onNavigate?.();
   };
 
   const toggleSubMenu = (name) => {
@@ -54,10 +63,11 @@ const Navbar = () => {
   };
 
   return (
-    <div className="flex bg-secondary-bg">
+    <div className={`flex bg-secondary-bg ${drawer ? "h-full w-full" : ""}`}>
       <nav
-        className={`flex h-screen flex-col overflow-hidden whitespace-nowrap border-r border-border-color transition-[width] duration-300 ease-in-out motion-reduce:transition-none ${
-          isMenuExpanded ? "w-68" : "w-14"
+        aria-label="Main menu"
+        className={`flex flex-col overflow-hidden whitespace-nowrap border-r border-border-color transition-[width] duration-300 ease-in-out motion-reduce:transition-none ${
+          drawer ? "h-full w-full" : `h-screen ${isMenuExpanded ? "w-68" : "w-14"}`
         }`}>
         <div
           className={`flex justify-start items-center py-3 border-b-1 border-border-color ${
@@ -81,17 +91,34 @@ const Navbar = () => {
               <p className="text-xs text-secondary-text">Fortress QMS</p>
             </div>
           )}
-          <button
-            title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}
-            onClick={toggleMenu}
-            className="cursor-pointer">
-            {isMenuExpanded ? (
-              <PanelLeftCloseIcon className="h-6 w-6 text-icon-color hover:text-primary-text" />
-            ) : (
-              <PanelLeftOpenIcon className="h-6 w-6 text-icon-color hover:text-primary-text" />
-            )}
-          </button>
+          {drawer ? (
+            <button
+              type="button"
+              aria-label="Close the menu"
+              data-autofocus
+              onClick={() => onNavigate?.()}
+              className="-mr-2 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-icon-color hover:text-primary-text">
+              <XIcon className="h-6 w-6" />
+            </button>
+          ) : (
+            <button
+              title={isMenuExpanded ? "Hide Menu" : "Expand Menu"}
+              onClick={toggleMenu}
+              className="cursor-pointer">
+              {isMenuExpanded ? (
+                <PanelLeftCloseIcon className="h-6 w-6 text-icon-color hover:text-primary-text" />
+              ) : (
+                <PanelLeftOpenIcon className="h-6 w-6 text-icon-color hover:text-primary-text" />
+              )}
+            </button>
+          )}
         </div>
+        {/* People in several organisations choose one here on a phone (the header has no room for it). */}
+        {drawer && (
+          <div className="border-b border-border-color px-3 py-2">
+            <OrganisationSwitcher className="w-full" selectClassName="w-full max-w-none" />
+          </div>
+        )}
         <div className="flex min-h-0 flex-1 flex-col">
           {/* Only the modules scroll; the scrollbar is hidden so it never narrows the menu. */}
           <ul className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-3">

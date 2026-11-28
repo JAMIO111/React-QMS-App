@@ -57,7 +57,7 @@ const renderAt = (ui, at, route = "*") =>
   );
 
 beforeEach(() => {
-  permissions = ["shipping.read", "shipping.manage", "master_data.read"];
+  permissions = ["shipping.read", "shipping.manage", "shipping.record", "master_data.read"];
   calls.length = 0;
   apiFetch.mockReset();
 });
@@ -142,6 +142,16 @@ describe("hand entry while an import owns the records", () => {
 describe("customer order page", () => {
   const at = "/Shipping/Orders/o1";
   const route = "/Shipping/Orders/:id";
+
+  it("a person who may only record shipments can record one but not close or cancel the order, nor move the confirmed date", async () => {
+    permissions = ["shipping.read", "shipping.record", "master_data.read"];
+    routeApi({ "GET /customer-orders/o1": order() });
+    renderAt(<CustomerOrderPage />, at, route);
+    expect(await screen.findByRole("button", { name: "Record a shipment" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Set the confirmed date/ })).not.toBeInTheDocument();
+  });
 
   it("shows shipped, outstanding, over and late for each line", async () => {
     routeApi({ "GET /customer-orders/o1": order() });

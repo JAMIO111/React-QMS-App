@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlignCenterIcon,
@@ -232,8 +232,19 @@ const CalibrationRecordPage = () => {
   );
   const [form, setForm] = useState(original);
   const [readings, setReadings] = useState(originalReadings);
-  useEffect(() => setForm(original), [original]);
-  useEffect(() => setReadings(originalReadings), [originalReadings]);
+  // The form follows the saved record, but a refetch never wipes what is being typed (set by `keepEdits` once the page knows it is edited).
+  const touched = useRef(false);
+  const keepEdits = useRef(false);
+  const shownId = useRef(null);
+  const recordId = record.data?.id;
+  useEffect(() => {
+    const id = recordId ?? "new";
+    if (shownId.current !== id || !keepEdits.current) {
+      setForm(original);
+      setReadings(originalReadings);
+    }
+    shownId.current = id;
+  }, [original, originalReadings, recordId]);
   // A new calibration starts with its gauge type's procedure (the type's default); it can be changed for this record, which keeps its own copy.
   const gaugeTypes = useGaugeTypes({ includeInactive: true, enabled: isNew });
   const procedureDocument = isNew ? ((gaugeTypes.data ?? []).find((t) => t.id === gauge.data?.type?.id)?.procedureDocument ?? null) : null;
@@ -253,10 +264,19 @@ const CalibrationRecordPage = () => {
   const c = record.data;
   const g = gauge.data;
   const locked = !!c?.deletedAt || !!g?.deletedAt;
-  const canEdit = can("calibration.record") && !locked;
-  const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v?.target ? v.target.value : v }));
-  const setReading = (id, k) => (e) =>
-    setReadings((r) => ({ ...r, [id]: { asFound: "", asLeft: "", asFoundPass: null, asLeftPass: null, notes: "", ...r[id], [k]: e?.target ? e.target.value : e } }));
+  // Recording a calibration needs calibration.record; once it is saved, correcting or deleting it needs calibration.manage (the database holds the same rule).
+  const canCorrect = can("calibration.manage");
+  const canEdit = (isNew ? can("calibration.record") : canCorrect) && !locked;
+  const set = (k) => (v) => {
+    touched.current = true;
+    setForm((f) => ({ ...f, [k]: v?.target ? v.target.value : v }));
+  };
+  const setReading = (id, k) => (e) => {
+    touched.current = true;
+    setReadings(
+      (r) => ({ ...r, [id]: { asFound: "", asLeft: "", asFoundPass: null, asLeftPass: null, notes: "", ...r[id], [k]: e?.target ? e.target.value : e } })
+    );
+  };
 
   const judged = rows.map((row) => {
     const v = readings[row.key] ?? {};
@@ -278,7 +298,10 @@ const CalibrationRecordPage = () => {
     variables.every((r) => isNum(r.input.asFound) && isNum(r.input.asLeft)) &&
     !variables.some((r) => (r.input.asLeft ?? "") !== "" && (r.input.asFound ?? "") === "") &&
     !judged.some((r) => r.kind === "attribute" && r.input.asLeftPass != null && r.input.asFoundPass == null);
-  const valid = form.calibratedOn && readingsValid && isNum(form.temperatureC) && isNum(form.humidityPct) && (entered.length > 0 || form.outcome);
+  // Every check needs a reading once any is entered (the database refuses a calibration with some checks left out): name the ones still missing.
+  const missing = judged.filter((r) => !isEntered(r));
+  const partial = entered.length > 0 && missing.length > 0;
+  const valid = form.calibratedOn && readingsValid && isNum(form.temperatureC) && isNum(form.humidityPct) && (entered.length > 0 || form.outcome) && !partial;
 
   const body = toBody(form);
   const changedReadings = entered.filter((r) => snapshot(r.input) !== snapshot(originalReadings[r.key])).map(toReading);
@@ -286,6 +309,7 @@ const CalibrationRecordPage = () => {
   const changedFields = Object.fromEntries(Object.entries(body).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(originalBody[k])));
   if (!liveOutcome && form.outcome !== original.outcome) changedFields.outcome = form.outcome;
   const dirty = !isNew && (Object.keys(changedFields).length > 0 || changedReadings.length > 0);
+  keepEdits.current = isNew ? touched.current : dirty;
 
   /** Upload the certificates chosen before saving into the new calibration's folder; the calibration is already saved, so a failure is only reported. */
   const uploadPending = async (created) => {
@@ -399,7 +423,7 @@ const CalibrationRecordPage = () => {
             </CTAButton>
           )}
           {canEdit && dirty && (
-            <CTAButton buttonType="button" onClick={() => { setForm(original); setReadings(originalReadings); }} type="neutral" size="default" className="px-3">
+            <CTAButton buttonType="button" onClick={() => { touched.current = false; keepEdits.current = false; setForm(original); setReadings(originalReadings); }} type="neutral" size="default" className="px-3">
               <Undo2Icon className="h-4 w-4" /> Discard changes
             </CTAButton>
           )}
@@ -408,7 +432,7 @@ const CalibrationRecordPage = () => {
               <SaveIcon className="h-4 w-4" /> {uploading ? "Uploading certificates…" : mutation.isPending ? "Saving…" : isNew ? "Save calibration" : "Save changes"}
             </CTAButton>
           )}
-          {!isNew && can("calibration.record") && !c.deletedAt && !g.deletedAt && (
+          {!isNew && canCorrect && !c.deletedAt && !g.deletedAt && (
             <CTAButton buttonType="button" onClick={() => { mutation.reset(); setDialog("delete"); }} type="danger" size="default" className="px-3">
               <Trash2Icon className="h-4 w-4" /> Delete
             </CTAButton>
@@ -427,7 +451,7 @@ const CalibrationRecordPage = () => {
         {c?.deletedAt && (
           <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-error-color/40 bg-error-color/10 p-3 text-sm text-primary-text">
             Deleted {formatDate(c.deletedAt)} by {c.deletedBy?.name ?? "—"}: “{c.deleteReason}”. It no longer counts towards the gauge's dates.
-            {can("calibration.record") && !g.deletedAt && (
+            {canCorrect && !g.deletedAt && (
               <CTAButton buttonType="button" onClick={restore} type="neutral" size="default" className="px-3">
                 <RotateCcwIcon className="h-4 w-4" /> Restore
               </CTAButton>
@@ -436,6 +460,14 @@ const CalibrationRecordPage = () => {
         )}
         {g.deletedAt && <Callout tone="error" role="status">This gauge is deleted; its records are read-only.</Callout>}
         {mutation.error && !dialog && <Callout tone="error" role="alert">{describeApiError(mutation.error)}</Callout>}
+        {partial && canEdit && (
+          <Callout tone="warning" role="status" title="Every check needs a reading">
+            Still to enter: {missing.map((r) => r.name).join(", ")}.
+          </Callout>
+        )}
+        {!isNew && !locked && can("calibration.record") && !canCorrect && (
+          <Callout tone="info" role="status">Only a calibration manager can correct or delete a saved calibration.</Callout>
+        )}
 
         {legacy ? (
           <Callout tone="warning" title="Legacy record" role="status">
@@ -478,8 +510,10 @@ const CalibrationRecordPage = () => {
                           {r.name}
                           {r.method && <span className="block text-xs text-secondary-text">{r.method}</span>}
                         </td>
-                        <td className="whitespace-nowrap py-1.5 pr-2 text-secondary-text">
-                          {r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}
+                        <td className="py-1.5 pr-2 text-secondary-text">
+                          <span className="whitespace-nowrap">{r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}</span>
+                          {r.kind !== "attribute" && r.derivation && <span className="block text-xs">{r.derivation}</span>}
+                          {r.kind !== "attribute" && r.toleranceSource && <span className="block text-xs">Source: {r.toleranceSource}</span>}
                         </td>
                         {r.kind === "attribute" ? (
                           <>

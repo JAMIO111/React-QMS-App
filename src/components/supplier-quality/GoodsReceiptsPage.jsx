@@ -40,7 +40,7 @@ const GoodsReceiptsPage = () => {
           <h1 className="text-2xl font-semibold text-primary-text">Goods receipts</h1>
           <p className="text-sm text-secondary-text">Deliveries from suppliers. A line with a lot number makes the received lot, so it can be traced and, later, inspected.</p>
         </div>
-        {can("receiving.manage") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a delivery</CTAButton>}
+        {can("receiving.record") && !owner && <CTAButton type="main" size="default" icon={PlusIcon} onClick={() => setRecording(true)}>Record a delivery</CTAButton>}
       </div>
       <ImportManagedNotice area="receipts" connection={owner} />
       <div className="flex flex-wrap items-center gap-3">

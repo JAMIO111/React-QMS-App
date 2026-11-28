@@ -62,7 +62,14 @@ export class CronService {
         failed.push({ organisationId: c.organisation_id, error: message.slice(0, 300) });
       }
     }
-    return { checked: candidates.length, synced, failed };
+    // Operators are told when an invoiced organisation's first invoice is past due (once each); a failure here never fails the reconcile.
+    const invoiceAlerts = await this.database
+      .asApi(async (client) => Number((await client.query(`select app.system_invoice_overdue_alerts() as n`)).rows[0].n), correlationId)
+      .catch((error: unknown) => {
+        this.log.warn(`Invoice alerts failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        return 0;
+      });
+    return { checked: candidates.length, synced, failed, invoiceAlerts };
   }
 
   /** Expires every active quality alert past its expiry date, in every organisation, and logs each in the alert's history. Safe to run as often as you like. */

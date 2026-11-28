@@ -8,7 +8,7 @@ interface PgError {
   detail?: string;
 }
 
-function pgErrorOf(error: unknown): PgError | undefined {
+export function pgErrorOf(error: unknown): PgError | undefined {
   const candidates = [error, (error as { cause?: unknown })?.cause];
   for (const c of candidates) {
     if (c && typeof c === 'object' && typeof (c as PgError).code === 'string' && /^[0-9A-Z]{5}$/.test((c as PgError).code!)) {
@@ -80,6 +80,9 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
     case '22P02': // invalid_text_representation
     case '22001': // string_data_right_truncation
       return ApiError.badRequest('invalid_value', 'A value is not allowed');
+    case '22007': // invalid_datetime_format
+    case '22008': // datetime_field_overflow (e.g. 2026-02-31)
+      return ApiError.badRequest('invalid_value', 'A date is not a real date');
     case '42501': // insufficient_privilege, incl. "new row violates row-level security policy"
       return ApiError.forbidden();
     case '54000': // program_limit_exceeded (abuse limits)
@@ -170,6 +173,10 @@ export function apiErrorFromDatabase(error: unknown): ApiError | undefined {
       }
       return new ApiError(409, 'record_managed_by_import', pg.message ?? 'These records come from an import and cannot be entered here', details);
     }
+    case 'QM041': // custom roles: not roles.manage in one, not while someone holds it, limits and names (messages are written for users)
+      return new ApiError(409, 'role_rule', pg.message ?? 'That role change is not allowed');
+    case 'QM040': // a feature that lets data leave is closed until the first invoice of an invoiced subscription is paid
+      return new ApiError(403, 'payable_first', pg.message ?? 'This is available once your first invoice is paid');
     case 'QM034': // measurement system analysis rules: studies, design, readings, completion (messages are written for users)
       return new ApiError(409, 'msa_rule', pg.message ?? 'That change is not allowed for this study');
     case 'QM031': // edit conflicts: the record changed since the version the save was based on (VersionInterceptor adds the details)

@@ -25,12 +25,14 @@ const mutate = vi.fn();
 const mutateAsync = vi.fn().mockResolvedValue({});
 const confirm = vi.fn();
 const startMutate = vi.fn();
+const startInvoiceMutate = vi.fn();
+const checkCompanyMutate = vi.fn();
 const portalMutate = vi.fn();
 const previewAsync = vi.fn();
 const changeAsync = vi.fn().mockResolvedValue({});
 const checkoutReturn = { phase: "idle", error: null, retry: vi.fn(), dismiss: vi.fn() };
 
-vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
+vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }), useOrganisationDetails: () => ({ data: { name: "Acme Works", legalName: "Acme Fabrication Limited", country: "GB" } }) }));
 vi.mock("../../hooks/useSubscription", () => ({
   usePlanCatalogue: () => ({ data: catalogue }),
   useSubscriptionOverview: () => ({ data: overview }),
@@ -38,6 +40,8 @@ vi.mock("../../hooks/useSubscription", () => ({
   useInvoices: () => ({ data: [] }),
   useSubscriptionMutation: () => ({ mutate, mutateAsync, isPending: false }),
   useStartCheckout: () => ({ mutate: startMutate, isPending: false }),
+  useStartInvoiceSubscription: () => ({ mutate: startInvoiceMutate, isPending: false, error: null }),
+  useCheckInvoiceCompany: () => ({ mutate: checkCompanyMutate, isPending: false }),
   usePortalSession: () => ({ mutate: portalMutate, isPending: false }),
   useSeatPreview: () => ({ mutateAsync: previewAsync, isPending: false }),
   useChangeSeats: () => ({ mutateAsync: changeAsync, isPending: false }),
@@ -57,6 +61,8 @@ describe("SettingsSubscription", () => {
     mutate.mockReset();
     confirm.mockReset();
     startMutate.mockReset();
+    startInvoiceMutate.mockReset();
+    checkCompanyMutate.mockReset();
     portalMutate.mockReset();
     previewAsync.mockReset();
     changeAsync.mockClear();
@@ -157,13 +163,13 @@ describe("SettingsSubscription", () => {
       permissions = ["subscription.read", "subscription.manage"];
       overview = stripeOverview();
       confirm.mockResolvedValue(true);
-      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 1200, tax: 200, subtotal: 1000, total: 1200, lines: [], changes: [] });
+      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 1200, tax: 200, subtotal: 1000, total: 1200, timing: "now", payment: "card", lines: [], changes: [] });
       renderPage();
       expect(screen.queryByRole("switch", { name: "Annual billing" })).toBeNull(); // the interval is fixed by the subscription
       await userEvent.click(screen.getByRole("button", { name: "Add Controller seat" }));
       await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
       expect(previewAsync).toHaveBeenCalledWith({ seats: { controller: 3 } });
-      expect(confirm.mock.calls[0][0].message).toMatch(/Stripe charges £12\.00 now/);
+      expect(confirm.mock.calls[0][0].message).toMatch(/Your card is charged £12\.00 now/);
       expect(confirm.mock.calls[0][0].message).toMatch(/£25\.00 per month/);
       expect(changeAsync).toHaveBeenCalledWith({ seats: { controller: 3 } });
     });
@@ -172,7 +178,7 @@ describe("SettingsSubscription", () => {
       permissions = ["subscription.read", "subscription.manage"];
       overview = stripeOverview();
       confirm.mockResolvedValue(false);
-      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 0, tax: 0, subtotal: 0, total: 0, lines: [], changes: [] });
+      previewAsync.mockResolvedValue({ currency: "gbp", amountDue: 0, tax: 0, subtotal: 0, total: 0, timing: "now", payment: "card", lines: [], changes: [] });
       renderPage();
       await userEvent.click(screen.getByRole("button", { name: "Add Controller seat" }));
       await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
@@ -197,6 +203,49 @@ describe("SettingsSubscription", () => {
       expect(JSON.parse(sessionStorage.getItem("qms.checkoutChoice.org-1"))).toMatchObject({ interval: "year", seats: { controller: 2 } });
       await userEvent.click(screen.getByRole("button", { name: "Continue to secure checkout" }));
       expect(startMutate).toHaveBeenCalledWith({ interval: "year", seats: { controller: 2 }, returnTo: "settings" }, expect.any(Object));
+    });
+
+    it("offers to pay by invoice instead, asks who the invoice is for, and starts without Stripe's checkout", async () => {
+      permissions = ["subscription.read", "subscription.manage"];
+      overview = { ...stripeOverview(), subscription: null, items: [], totals: { seatsPurchased: 0, seatsAssigned: 0, seatsAvailable: 0, monthlyEquivalent: 0, annual: 0 } };
+      renderPage();
+      expect(screen.getByText(/14-day free trial, card required/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Pay by invoice" }));
+      expect(screen.getByText(/No free trial/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Continue to secure checkout" })).toBeNull();
+      // The legal name and country come from the organisation; the rest is asked for, and the button waits.
+      expect(screen.getByLabelText(/Legal company name/)).toHaveValue("Acme Fabrication Limited");
+      const start = screen.getByRole("button", { name: "Start subscription" });
+      expect(start).toBeDisabled();
+      await userEvent.type(screen.getByLabelText(/Send invoices to/), "accounts@acme.test");
+      await userEvent.type(screen.getByLabelText(/Address line 1/), "1 High Street");
+      await userEvent.type(screen.getByLabelText(/Town or city/), "Leeds");
+      await userEvent.type(screen.getByLabelText(/Postcode/), "LS1 1AA");
+      await userEvent.type(screen.getByLabelText(/Purchase order reference/), "PO-77");
+      expect(start).toBeEnabled();
+      await userEvent.click(start);
+      expect(startMutate).not.toHaveBeenCalled();
+      const [body] = startInvoiceMutate.mock.calls[0];
+      expect(body).toMatchObject({
+        interval: "month",
+        seats: { controller: 1 },
+        company: { legalName: "Acme Fabrication Limited", billingEmail: "accounts@acme.test", addressLine1: "1 High Street", city: "Leeds", postcode: "LS1 1AA", country: "GB", poReference: "PO-77" },
+      });
+      expect(body.company.vatNumber).toBeUndefined();
+      expect(body.clientKey).toMatch(/^iv-/);
+    });
+
+    it("checks the company with the server when the name is left, and says when it cannot be invoiced", async () => {
+      permissions = ["subscription.read", "subscription.manage"];
+      overview = { ...stripeOverview(), subscription: null, items: [], totals: { seatsPurchased: 0, seatsAssigned: 0, seatsAvailable: 0, monthlyEquivalent: 0, annual: 0 } };
+      checkCompanyMutate.mockImplementation((_body, { onSuccess }) => onSuccess({ problems: ["An organisation for this company already exists. Ask its owner to invite you to it."] }));
+      renderPage();
+      await userEvent.click(screen.getByRole("radio", { name: "Pay by invoice" }));
+      await userEvent.click(screen.getByLabelText(/Legal company name/));
+      await userEvent.tab();
+      expect(checkCompanyMutate.mock.calls[0][0]).toEqual({ legalName: "Acme Fabrication Limited", vatNumber: "" });
+      expect(await screen.findByText(/already exists/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Start subscription" })).toBeDisabled();
     });
 
     it("keeps the manual seat cards when Stripe cannot take a purchase", () => {

@@ -3,6 +3,7 @@ import {
   CreditCardIcon,
   DatabaseIcon,
   HandshakeIcon,
+  KeyRoundIcon,
   MonitorCogIcon,
   PlugIcon,
   SettingsIcon,
@@ -30,6 +31,13 @@ const SettingMenuStructure = [
     path: "Users",
     icon: ShieldUserIcon,
     permission: "members.read",
+    subMenu: [],
+  },
+  {
+    name: "Roles",
+    path: "Roles",
+    icon: KeyRoundIcon,
+    permission: "roles.manage",
     subMenu: [],
   },
   {

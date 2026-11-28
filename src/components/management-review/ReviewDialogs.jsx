@@ -14,6 +14,7 @@ import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import { changesSince } from "../../lib/editConflicts";
+import { avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -50,7 +51,7 @@ const useReviewCommand = (onClose, failed = "Not saved", onSaved) => {
   return { mutation, run };
 };
 
-const usePeople = () => (useCustomFieldPeople().data ?? []).map((p) => ({ value: p.id, label: p.name }));
+const usePeople = () => (useCustomFieldPeople().data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
 
 /** Plan a review (or change its details): title, the period it reviews, when, who chairs it. The period is fixed once it starts. */
 export const PlanReviewDialog = ({ existing, onClose, onSaved }) => {

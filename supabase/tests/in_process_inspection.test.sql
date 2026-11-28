@@ -30,7 +30,8 @@ BEGIN
   INSERT INTO public.gauge_types (organisation_id, name) VALUES (org, 'Micrometer 0-25') RETURNING id INTO mic_type;
   INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id, next_due_on) VALUES (org, 'MIC-1', 'Mic', mic_type, current_date + 30) RETURNING id INTO mic;
   INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id, next_due_on) VALUES (org, 'MIC-2', 'Old mic', mic_type, current_date - 1) RETURNING id INTO old_mic;
-  INSERT INTO public.gauges (organisation_id, asset_number, description, next_due_on) VALUES (org, 'CAL-9', 'Caliper', current_date + 30) RETURNING id INTO caliper;
+  WITH ct AS (INSERT INTO public.gauge_types (organisation_id, name) VALUES (org, 'Caliper') RETURNING id)
+    INSERT INTO public.gauges (organisation_id, asset_number, description, gauge_type_id, next_due_on) SELECT org, 'CAL-9', 'Caliper', ct.id, current_date + 30 FROM ct RETURNING id INTO caliper;
 
   -- Parts and plan: OD fixed (micrometer required), LENGTH part-specific, GROOVE_POS only for HCR-200, VISUAL pass/fail.
   INSERT INTO public.part_families (organisation_id, code, name) VALUES (org, 'HCR', 'Rods') RETURNING id INTO fam;

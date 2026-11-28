@@ -34,11 +34,12 @@ END $$;
 -- Seed catalogue: packages, prices in pence (annual = ten months), data-driven modules.
 DO $$
 BEGIN
-  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.subscription_plans), 3::bigint, 'three packages');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.subscription_plans WHERE kind = 'seat'), 4::bigint, 'four seat packages');
+  PERFORM pg_temp.assert_eq((SELECT count(*) FROM public.subscription_plans WHERE kind = 'fee'), 1::bigint, 'and the organisation fee');
   PERFORM pg_temp.assert_eq((SELECT unit_amount FROM public.subscription_prices p JOIN public.subscription_plans s ON s.id = p.subscription_plan_id
-                              WHERE s.slug = 'controller' AND billing_interval = 'month'), 2500, 'controller monthly pence');
+                              WHERE s.slug = 'controller' AND billing_interval = 'month' AND p.effective_to IS NULL), 4900, 'controller monthly pence');
   PERFORM pg_temp.assert_eq((SELECT unit_amount FROM public.subscription_prices p JOIN public.subscription_plans s ON s.id = p.subscription_plan_id
-                              WHERE s.slug = 'controller' AND billing_interval = 'year'), 25000, 'controller annual = ten months');
+                              WHERE s.slug = 'controller' AND billing_interval = 'year' AND p.effective_to IS NULL), 49000, 'controller annual = ten months');
 END $$;
 
 -- Not enforced yet: existing behaviour is unchanged for everyone.
@@ -62,7 +63,7 @@ BEGIN
   PERFORM app.set_subscription_seats(org, 'observer', 1);
   PERFORM app.set_subscription_seats(org, 'contributor', 1);
   PERFORM app.set_subscription_seats(org, 'controller', 2);
-  PERFORM pg_temp.assert_eq((SELECT sum(quantity * unit_amount_snapshot)::bigint FROM public.organisation_subscription_items), 6500::bigint, 'monthly total in pence');
+  PERFORM pg_temp.assert_eq((SELECT sum(quantity * unit_amount_snapshot)::bigint FROM public.organisation_subscription_items), 11700::bigint, 'monthly total in pence (Observer free, Contributor 1900, two Controllers at 4900)');
   PERFORM pg_temp.assert_fails(format($q$SELECT app.set_subscription_seats(%L, 'controller', -1)$q$, org), 'negative seats refused');
   PERFORM pg_temp.logout();
   UPDATE public.organisation_settings SET entitlements_enforced = true WHERE organisation_id = org;
@@ -99,7 +100,7 @@ BEGIN
   PERFORM pg_temp.assert_eq(app.has_permission(org, 'inspection.record'), false, 'observer cannot record despite the role');
   PERFORM pg_temp.assert_eq('inspection.record' IN (SELECT app.my_visible_permissions(org)), false, 'nor do the screens offer recording');
   PERFORM pg_temp.assert_eq('inspection.read' IN (SELECT app.my_visible_permissions(org)), true, 'reading still shows');
-  PERFORM pg_temp.assert_eq((SELECT required_plan FROM app.check_entitlement(org, 'inspections', 'record_inspections')), 'Contributor', 'required package reported');
+  PERFORM pg_temp.assert_eq((SELECT required_plan FROM app.check_entitlement(org, 'inspections', 'record_inspections')), 'Operator', 'required package reported (the cheapest seat that records: Operator)');
   PERFORM pg_temp.assert_eq((SELECT (app.my_subscription_access(org))->'modules'->>'inspections'), 'view', 'observer level for client');
   PERFORM pg_temp.logout();
 

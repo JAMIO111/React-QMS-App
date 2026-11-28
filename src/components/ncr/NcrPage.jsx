@@ -32,6 +32,7 @@ import {
   WrenchIcon,
   BoxesIcon,
 } from "@/components/icons";
+import { useEditBase } from "../../hooks/useEditBase";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
@@ -40,10 +41,12 @@ import FileDrop from "../ui/FileDrop";
 import SideMenuItem from "../SideMenuItem";
 import { useToast } from "../../contexts/ToastProvider";
 import { useAllDepartments, usePermissions, useSites } from "../../hooks/useQmsApi";
+import { useAuth } from "../../contexts/AuthProvider";
 import { useClassifications, useEmployees, useNcr, useNcrMutation, useNcrNewDefaults } from "../../hooks/useNcr";
 import { describeApiError } from "../../lib/api-client";
 import { NCR_REGISTER, NC_SOURCES, SEVERITIES, SOURCE_OPTIONS, detectionApplies, formatDate, ncrPath, sourceLabel, stageOf } from "../../lib/ncr";
 import { ncrRestore } from "../../lib/ncrGuesses";
+import { newClientKey } from "../../lib/clientKey";
 import { SeverityPill, StagePill } from "./Pills";
 import DeleteNcrDialog from "./DeleteNcrDialog";
 import { MachinePicker, PartPicker, PartyPicker, RevisionPicker } from "./Pickers";
@@ -60,7 +63,7 @@ import NcrReceiptSource from "../supplier-quality/NcrReceiptSource";
 import { useNcrReceiptSource } from "../../hooks/useIncoming";
 import { useNcrAuditSource } from "../../hooks/useAudits";
 import { useNcrInspectionSource } from "../../hooks/useInspection";
-import { EMPTY, NEW_NC, changedFields, toBody, toForm } from "./formModel";
+import { EMPTY, NEW_NC, changedFields, openingProblems, toBody, toForm } from "./formModel";
 import { useProductionSettings } from "../../hooks/useProduction";
 import { LotPicker, OrderPicker, SerialPicker } from "../production/pickers";
 import LinkNotices from "../production/LinkNotices";
@@ -77,9 +80,9 @@ import Callout from "../ui/Callout";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { useCustomFields } from "../../hooks/useCustomFields";
 import { withCustomValues } from "../../lib/customFields";
-import { withVersion } from "../../lib/editConflicts";
 import LinkedChanges from "../change/LinkedChanges";
 import RaisedFmeas from "../fmea/RaisedFmeas";
+import { employeeOption } from "@/lib/employees";
 
 /** Section title with a rule, as in the original NC entry form. */
 const SectionHeading = ({ id, title, sectionRef }) => (
@@ -120,6 +123,7 @@ const NcrPage = () => {
   });
   const navigate = useNavigate();
   const { can } = usePermissions();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const { data: ncr, isLoading, error } = useNcr(isNew ? null : routeId);
   const gates = useNcrGates(isNew ? null : routeId);
@@ -133,7 +137,7 @@ const NcrPage = () => {
   const mutation = useNcrMutation();
   const settings = useProductionSettings();
   const canLinkProduction = can("production.read");
-  const { control, reset, watch, setValue } = useForm({ defaultValues: isNew ? NEW_NC : EMPTY });
+  const { control, reset, watch, setValue, getValues } = useForm({ defaultValues: isNew ? NEW_NC : EMPTY });
   const form = watch();
   const [customValues, setCustomValues] = useState({});
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete" | "source"
@@ -142,7 +146,26 @@ const NcrPage = () => {
 
   const source = isNew ? newSource : ncr?.source;
   const original = useMemo(() => (ncr ? toForm(ncr) : isNew ? NEW_NC : EMPTY), [ncr, isNew]);
-  useEffect(() => reset(original), [original, reset]);
+  // The form follows the record, but never takes away what the person has typed: when the NC changes under them (a cost added, an 8D linked, a custom
+  // value saved, a colleague's save), the fields they have edited keep their words and every other field takes the new value.
+  const adopted = useRef({ id: undefined, values: null });
+  // Made when a new NC is opened and kept for retries, so a double click or a resend answers the NC already made instead of making another.
+  const createKey = useRef(newClientKey());
+  useEffect(() => {
+    createKey.current = newClientKey();
+  }, [routeId]);
+  useEffect(() => {
+    const id = ncr?.id ?? (isNew ? "new" : undefined);
+    const was = adopted.current;
+    adopted.current = { id, values: original };
+    if (!ncr || !was.values || was.id !== id) {
+      reset(original);
+      return;
+    }
+    const mine = getValues();
+    const edited = (k) => JSON.stringify(mine[k] ?? null) !== JSON.stringify(was.values[k] ?? null);
+    reset(Object.fromEntries(Object.keys(original).map((k) => [k, edited(k) ? mine[k] : original[k]])));
+  }, [original, reset, getValues, ncr, isNew]);
   // A new NC starts with the source's suggested category and the person's own site, until they choose one themselves.
   const { data: defaults } = useNcrNewDefaults(isNew ? source : null);
   // "More details" (the organisation's own fields): every field in use, before the NC is saved too; a retired one only while this NC holds a value for it.
@@ -164,11 +187,16 @@ const NcrPage = () => {
 
   const locked = !isNew && ncr && (ncr.stage === "closed" || ncr.stage === "cancelled" || !!ncr.deletedAt);
   const canEdit = isNew ? can("ncr.create") : can("ncr.update") && !locked;
+  // A person with only ncr.contribute may add files and containment to a non-conformance they raised (the database checks it again).
+  const raisedById = (ncr?.createdBy ?? ncr?.raisedBy)?.id;
+  const raisedByMe = !!raisedById && raisedById === user?.id;
+  const canContribute = !isNew && !locked && (can("ncr.update") || (can("ncr.contribute") && raisedByMe));
   // A category can be taken off a draft, but not off a non-conformance that has been raised.
   const categoryClearable = isNew || ncr?.stage === "draft";
   const body = toBody(form, source);
   const changes = isNew ? body : changedFields(body, toBody(original, source));
   const dirty = !isNew && Object.keys(changes).length > 0;
+  const versioned = useEditBase(ncr, dirty);
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
   // Picking a production record fills in what it implies (the typed text, the part when there is none, the order a lot or serial number belongs to), as the server will.
   const pickedProduction = ({ orderNumber, lotNumber, serialNumber, partId, orderId, lotId }) => {
@@ -181,10 +209,14 @@ const NcrPage = () => {
     if (!form.lotId) put("lotId", lotId);
   };
 
+  // A new or draft NC still needs these to be opened; once it is open the hints go and nothing is asked again.
+  const opening = isNew || ncr?.stage === "draft";
+  const stillNeeded = isNew ? openingProblems(form, source) : [];
+
   const save = (open) => {
     if (isNew) {
       mutation.mutate(
-        { path: "/ncrs", body: { source, ...body, ...withCustomValues(customValues), ...(open ? { open: true } : {}) } },
+        { path: "/ncrs", body: { source, ...body, ...withCustomValues(customValues), ...(open ? { open: true } : {}), clientKey: createKey.current } },
         {
           onSuccess: (created) => {
             showToast({ type: "success", title: "Saved", message: `${created.reference} was ${open ? "raised" : "saved as a draft"}.` });
@@ -193,9 +225,18 @@ const NcrPage = () => {
         }
       );
     } else {
+      // The save waits for the server's answer (no guessed update of the page): a refusal then leaves everything typed where it is. The version
+      // is the one the person opened, so a colleague's change to the same field is caught even if the page has refreshed since.
       mutation.mutate(
-        { path: `/ncrs/${ncr.id}`, method: "PATCH", body: withVersion(ncr, changes) },
-        { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) }
+        { path: `/ncrs/${ncr.id}`, method: "PATCH", body: versioned(changes), optimistic: false },
+        {
+          onSuccess: (saved) => {
+            const values = toForm(saved);
+            adopted.current = { id: saved.id, values };
+            reset(values);
+            showToast({ type: "success", title: "Saved", message: "Changes saved." });
+          },
+        }
       );
     }
   };
@@ -231,8 +272,8 @@ const NcrPage = () => {
   const allSites = (sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }));
   // People from the Employees register (active ones, plus whoever is already named) and the organisation's departments (site code as the hint).
   const employeeOptions = (current, saved) => {
-    const list = (employees ?? []).filter((e) => e.active || e.id === current).map((e) => ({ id: e.id, name: e.name, hint: e.jobTitle ?? undefined }));
-    return saved && current === saved.id && !list.some((e) => e.id === saved.id) ? [...list, { id: saved.id, name: saved.name || "Employee" }] : list;
+    const list = (employees ?? []).filter((e) => e.active || e.id === current).map((e) => employeeOption(e));
+    return saved && current === saved.id && !list.some((e) => e.id === saved.id) ? [...list, { id: saved.id, name: saved.name || "Employee", avatar: { name: saved.name } }] : list;
   };
   const siteCode = new Map((sites?.data ?? []).map((s) => [s.id, s.code]));
   const departmentOptions = (departments?.data ?? [])
@@ -308,7 +349,8 @@ const NcrPage = () => {
               <CTAButton type="neutral" size="default" className="px-3" buttonType="submit" form="ncr-form" disabled={mutation.isPending || !form.title.trim()} loading={mutation.isPending}>
                 Save as draft
               </CTAButton>
-              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim()} loading={mutation.isPending} type="success" size="default" className="px-3">
+              <CTAButton buttonType="button" onClick={() => save(true)} disabled={mutation.isPending || !form.title.trim() || stillNeeded.length > 0} loading={mutation.isPending} type="success" size="default" className="px-3"
+                title={stillNeeded.length > 0 ? `To raise it, fill in: ${stillNeeded.join(", ")}. Or save it as a draft.` : undefined}>
                 <SaveIcon className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Raise NC"}
               </CTAButton>
             </>
@@ -383,6 +425,7 @@ const NcrPage = () => {
                 gates={gates.data}
                 ncr={ncr}
                 canUpdate={can("ncr.update")}
+                openingNeeded={ncr.stage === "draft" ? openingProblems(toForm(ncr), ncr.source) : []}
                 dirty={dirty}
                 pending={mutation.isPending}
                 onMove={(to) => transition(to)}
@@ -397,7 +440,7 @@ const NcrPage = () => {
                 <div className="lg:col-span-2">{text("title", "Title", { required: true, maxLength: 200, icon: FileTextIcon, placeholder: "Short summary of the problem" })}</div>
                 {controlled("detectedAt", (f) => <RHFDatePickerPopout {...f} label="Detected on" required valueFormat="iso" maxDate={new Date()} />)}
                 {controlled("severity", (f) => (
-                  <RHFComboBox {...f} label="Severity" required icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint="Needed to open" options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
+                  <RHFComboBox {...f} label="Severity" required icon={TriangleAlertIcon} placeholder="Select severity" sort={false} hint={opening ? "Needed to open" : undefined} options={SEVERITIES.map((s) => ({ id: s.key, name: s.label }))} />
                 ))}
                 {isNew ? (
                   <RHFComboBox label="Source" required icon={InboxIcon} placeholder="Select a source" sort={false} clearable={false} hint="Where it came from or was detected"
@@ -419,7 +462,7 @@ const NcrPage = () => {
                 {controlled("categoryId", (f) => (
                   <RHFComboBox {...f} label="Category" required icon={TagsIcon} placeholder={isNew || ncr?.stage === "draft" ? "Select a category" : "Uncategorised"} sort={false}
                     clearable={categoryClearable} options={categories}
-                    hint={!form.categoryId ? "What the problem is. Needed to open" : suggestedCategory ? "Suggested from the source; change it if the problem is something else" : "What the problem is"} />
+                    hint={!form.categoryId ? (opening ? "What the problem is. Needed to open" : "What the problem is") : suggestedCategory ? "Suggested from the source; change it if the problem is something else" : "What the problem is"} />
                 ), () => { categoryChosen.current = true; })}
                 {source === "customer" && (
                   <>
@@ -434,7 +477,10 @@ const NcrPage = () => {
                   </>
                 )}
                 {source !== "supplier" && source !== "goods_receiving" && text("workOrder", "Work order", { maxLength: 60, icon: BoxIcon, disabled: !canEdit || !!form.productionOrderId, hint: form.productionOrderId ? "From the production order" : undefined })}
-                {controlled("partId", (f) => <PartPicker {...f} icon={QrCodeIcon} current={ncr?.part} />, () => setValue("partRevisionId", null, { shouldDirty: true }))}
+                {controlled("partId", (f) => <PartPicker {...f} icon={QrCodeIcon} current={ncr?.part} hint={opening && !form.partId && !String(form.description ?? "").trim() ? "A part or a description is needed to open" : undefined} />, () => {
+                  // Another part: the revision, order, lot and serial number chosen for the old one no longer fit it, and the server would refuse them.
+                  for (const name of ["partRevisionId", "productionOrderId", "lotId", "serialId"]) setValue(name, null, { shouldDirty: true });
+                })}
                 {canLinkProduction && source !== "supplier" && source !== "goods_receiving" && controlled("productionOrderId", (f) => (
                   <OrderPicker {...f} partId={form.partId} current={ncr?.links?.productionOrder} label="Production order" />
                 ), (id, item) => pickedProduction({ orderNumber: item?.name, partId: item?.part?.id }))}
@@ -450,7 +496,7 @@ const NcrPage = () => {
                 <div className="flex w-full flex-col gap-1">
                   <div className="flex w-full items-start gap-5">
                     {text("quantityInspected", "Quantity inspected", { dataType: "number", icon: LayersIcon, placeholder: "Enter qty" })}
-                    {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: "Needed to open" })}
+                    {text("quantityAffected", "Quantity affected", { required: true, dataType: "number", icon: LayersIcon, placeholder: "Enter qty", hint: opening ? "Needed to open" : undefined })}
                   </div>
                   {moreAffectedThanInspected && (
                     <p role="status" className="flex items-start gap-1.5 text-xs text-secondary-text">
@@ -478,7 +524,8 @@ const NcrPage = () => {
                 ), () => { detectorChosen.current = true; })}
                 </div>
                 <div className="lg:col-span-2">
-                  <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance" />
+                  <RHFTextArea label="Description" icon={AlignCenterIcon} value={form.description} onChange={set("description")} disabled={!canEdit} max={5000} rows={4} placeholder="Describe the non-conformance"
+                    hint={opening && !form.partId && !String(form.description ?? "").trim() ? "A part or a description is needed to open" : undefined} />
                 </div>
                 <RHFTextArea label="Requirement / specification" icon={ClipboardListIcon} value={form.requirement} onChange={set("requirement")} disabled={!canEdit} max={2000} rows={3} placeholder="What it should have been" />
                 <RHFTextArea label="Actual result" icon={AlignCenterIcon} value={form.actualResult} onChange={set("actualResult")} disabled={!canEdit} max={2000} rows={3} placeholder="What was found" />
@@ -580,7 +627,7 @@ const NcrPage = () => {
               <div onSubmit={(e) => e.stopPropagation()} className="flex flex-col gap-5">
                 <SectionHeading id="ncr-containment" title="Containment" sectionRef={refs.containment} />
                 <Card>
-                  <NcrContainment ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                  <NcrContainment ncrId={ncr.id} canEdit={canContribute} canReason={can("ncr.update") && !locked} />
                 </Card>
               </div>
             )}
@@ -599,7 +646,7 @@ const NcrPage = () => {
             <>
               <SectionHeading id="ncr-info" title="Additional Information" sectionRef={refs.info} />
               <Card>
-                <FileDrop ncrId={ncr.id} canEdit={can("ncr.update") && !locked} />
+                <FileDrop ncrId={ncr.id} canEdit={canContribute} />
                 <p className="pl-1 text-sm italic text-secondary-text">
                   {ncr.reference} raised by {ncr.createdBy?.name ?? "Unknown"} on{" "}
                   {new Date(ncr.createdAt).toLocaleString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}

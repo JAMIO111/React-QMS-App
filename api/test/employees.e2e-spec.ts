@@ -187,6 +187,11 @@ describe('linking an employee to a sign-in (Controller seat holders only)', () =
     await api().put(`/api/v1/employees/${ctx.grace}/login`).set(h).send({ userId: ids.ownerB }).expect(409);
     expect((await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: null }).expect(200)).body).toMatchObject({ hasLogin: false, login: null });
     await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: ids.inspectorA }).expect(200);
+    // The pickers' lookup carries the linked sign-in's profile picture, and nothing for an employee with no sign-in.
+    await admin.query(`update public.profiles set avatar_path = $2 where id = $1`, [ids.inspectorA, `users/${ids.inspectorA}/avatar.webp`]);
+    const lookup = (await api().get('/api/v1/employees/lookup').set(h).expect(200)).body.data as { id: string; avatarPath: string | null }[];
+    expect(lookup.find((e) => e.id === ctx.ada)?.avatarPath).toBe(`users/${ids.inspectorA}/avatar.webp`);
+    expect(lookup.find((e) => e.id === ctx.grace)?.avatarPath).toBeNull();
     await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({ userId: 'nope' }).expect(400);
     await api().put(`/api/v1/employees/${ctx.ada}/login`).set(h).send({}).expect(400);
   });

@@ -10,7 +10,8 @@ const SCOPE = 'qms:organisation-scope';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface Scope {
-  permission?: string;
+  /** One permission, or a list of which any one is enough (the database still decides what each allows: ownership, site). */
+  permission?: string | string[];
   /** Admit users who hold the permission for any site or department; RLS filters the rows by site. */
   anyScope?: boolean;
 }
@@ -20,12 +21,12 @@ interface Scope {
  * an active member (otherwise 404, so other tenants' ids are not confirmed) and, if given, hold the
  * permission organisation-wide (otherwise 403). RLS enforces the same rules again in the database.
  */
-export const OrganisationScoped = (permission?: string, options: { anyScope?: boolean } = {}) =>
+export const OrganisationScoped = (permission?: string | string[], options: { anyScope?: boolean } = {}) =>
   applyDecorators(
     SetMetadata(SCOPE, { permission, anyScope: options.anyScope } satisfies Scope),
     ApiHeader({ name: 'X-Organisation-Id', required: true, description: 'Organisation to act in (UUID)' }),
     ApiResponse({ status: 404, description: 'Not a member of that organisation' }),
-    ...(permission ? [ApiResponse({ status: 403, description: `Requires permission ${permission}` })] : []),
+    ...(permission ? [ApiResponse({ status: 403, description: `Requires permission ${Array.isArray(permission) ? permission.join(' or ') : permission}` })] : []),
   );
 
 /**
@@ -69,6 +70,8 @@ export class OrganisationGuard implements CanActivate {
     }
 
     const ctx = contextFrom(req);
+    // The permissions of which any one is enough (a list is sent to SQL as one text value, never as an array).
+    const wanted = scope.permission === undefined ? [] : Array.isArray(scope.permission) ? scope.permission : [scope.permission];
     const { member, allowed, mfa_blocked, seat_blocked, sso_provider, sso_blocked, sso_break_glass, sso_method, network, max_session_hours } = await this.db.asUser(ctx, async (db) => {
       const result = await db.execute<{
         member: boolean;
@@ -83,10 +86,11 @@ export class OrganisationGuard implements CanActivate {
         max_session_hours: number | null;
       }>(
         sql`select app.is_member(${organisationId}::uuid) as member,
-                   (${scope.permission ?? null}::text is null
-                    or case when ${scope.anyScope ?? false}::boolean
-                            then app.has_permission_somewhere(${organisationId}::uuid, ${scope.permission ?? null}::text)
-                            else app.has_permission(${organisationId}::uuid, ${scope.permission ?? null}::text) end) as allowed,
+                   (cardinality(string_to_array(${wanted.join(',')}, ',')) = 0 or exists (
+                      select 1 from unnest(string_to_array(${wanted.join(',')}, ',')) as w(p)
+                       where case when ${scope.anyScope ?? false}::boolean
+                                  then app.has_permission_somewhere(${organisationId}::uuid, w.p)
+                                  else app.has_permission(${organisationId}::uuid, w.p) end)) as allowed,
                    exists (select 1 from app.mfa_blocked_organisations() b
                            where b.organisation_id = ${organisationId}::uuid) as mfa_blocked,
                    exists (select 1 from app.seat_blocked_organisations() b

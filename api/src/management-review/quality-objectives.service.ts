@@ -4,6 +4,7 @@ import { iso, personName, Row } from '../calibration/calibration.service';
 import { ApiError } from '../common/api-error';
 import type { RequestContext } from '../common/request-context';
 import { DatabaseService, Db } from '../database/database.service';
+import { ncRaised } from '../ncr/nc-definitions';
 import { CreateObjectiveBody, Measure, RecordValueBody, UpdateObjectiveBody } from './quality-objectives.schemas';
 
 const orgOf = (ctx: RequestContext) => ctx.organisationId!;
@@ -50,8 +51,8 @@ async function systemValues(db: Db, org: string, measure: Measure, frequency: st
     rows = (
       await db.execute<Row>(sql`
         select s.p::text as p, (select count(*)::int from public.nonconformances n
-                                 where n.organisation_id = ${org}::uuid and n.deleted_at is null and n.stage <> 'cancelled'
-                                   and n.created_at::date >= s.p and n.created_at::date < s.e) as num, null::numeric as den
+                                 where n.organisation_id = ${org}::uuid and ${ncRaised('n')}
+                                   and n.detected_at >= s.p and n.detected_at < s.e) as num, null::numeric as den
           from (${periods}) s`)
     ).rows;
   } else if (measure === 'supplier_ppm') {

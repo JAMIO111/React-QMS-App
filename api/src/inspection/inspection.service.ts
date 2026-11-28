@@ -408,7 +408,12 @@ export class InspectionService {
           and (calibrated_on, created_at) < (${c.calibrated_on as string}::date, (select created_at from public.calibrations where id = ${calibrationId}::uuid))
         order by calibrated_on desc, created_at desc limit 1`);
       const p = prev.rows[0];
-      const usage = await db.execute<Row>(sql`select * from app.gauge_usage(
+      const canReadInspections = (
+        await db.execute<{ ok: boolean }>(sql`select app.has_permission_somewhere(${orgOf(ctx)}::uuid, 'inspection.read') as ok`)
+      ).rows[0]?.ok === true;
+      const usage = !canReadInspections
+        ? { rows: [] as Row[] }
+        : await db.execute<Row>(sql`select * from app.gauge_usage(
         ${c.gauge_id as string}::uuid, ${p ? sql`(${p.calibrated_on as string}::date)::timestamptz` : sql`null`},
         ((${c.calibrated_on as string}::date) + 1)::timestamptz)`);
       const inspections = usage.rows.map((u) => ({
@@ -423,6 +428,7 @@ export class InspectionService {
         lastUsed: iso(u.last_used)!,
       }));
       return {
+        available: canReadInspections,
         calibration: { id: c.id as string, reference: c.reference as string, calibratedOn: c.calibrated_on as string, outcome: c.outcome as string },
         gauge: { id: c.gauge_id as string, assetNumber: c.asset_number as string },
         previous: p ? { reference: p.reference as string, calibratedOn: p.calibrated_on as string } : null,

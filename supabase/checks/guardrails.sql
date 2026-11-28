@@ -47,7 +47,8 @@ global_tables(relname, why) AS (VALUES
   ('integration_providers',     'global catalogue of connector providers (csv, rest_api…), read-only'),
   ('exchange_rates',            'global cache of published exchange rates, read-only for people, written only by the API login'),
   ('integration_agent_releases', 'connector agent releases published by a platform operator with MFA, read-only for everyone else'),
-  ('stripe_events',              'webhook log written by functions for the API login only, read only by platform admins with an MFA session (organisation_id is for the operator, not for tenants)')
+  ('stripe_events',              'webhook log written by functions for the API login only, read only by platform admins with an MFA session (organisation_id is for the operator, not for tenants)'),
+  ('platform_invoice_alerts',    'operator alerts about invoiced organisations, written by functions, read only by platform admins with an MFA session (organisation_id is for the operator, not for tenants)')
 ),
 audited(relname) AS (VALUES
   ('organisations'), ('organisation_settings'), ('sites'), ('departments'), ('organisation_users'),

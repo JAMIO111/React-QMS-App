@@ -19,6 +19,7 @@ import { FormError, TextAreaField } from "../master-data/shared";
 import { todayIso } from "@/lib/localDate";
 import { changesSince } from "../../lib/editConflicts";
 import { SCAR_OPTIMISTIC, partFromOption } from "../../lib/supplierQualityGuesses";
+import { avatarOf } from "@/lib/employees";
 
 const today = () => todayIso();
 const tomorrow = () => todayIso(1);
@@ -162,7 +163,7 @@ export const CreateScarDialog = ({ supplier: fixedSupplier = null, ncrId = null,
         <span className="text-sm font-medium text-secondary-text">Severity</span>
         <SlidingToggle ariaLabel="Severity" mode="radio" options={[...SCAR_SEVERITIES].reverse().map((s) => ({ value: s.key, label: s.label }))} value={severity} onChange={setSeverity} />
       </div>
-      <ComboField label="Internal owner" value={ownerId} onChange={setOwnerId} placeholder="Me" hint="Who follows this SCAR up. Defaults to you." options={(people.data ?? []).map((p) => ({ value: p.userId, label: p.name }))} />
+      <ComboField label="Internal owner" value={ownerId} onChange={setOwnerId} placeholder="Me" hint="Who follows this SCAR up. Defaults to you." options={(people.data ?? []).map((p) => ({ value: p.userId, label: p.name, avatar: avatarOf(p) }))} />
       <div className="grid gap-3 sm:grid-cols-2">
         <RHFDatePickerPopout label="Response due" valueFormat="iso" clearable value={dueOn} onChange={(v) => setDueOn(v ?? "")} minDate={today()} placeholder="No date yet" hint="Needed before it can be issued" />
         <ComboField label="Supplier contact" value={contactId} onChange={setContactId} placeholder="Choose later" disabled={!supplierId}
@@ -202,7 +203,7 @@ export const EditScarDialog = ({ scar, onClose }) => {
       <TextAreaField label="Objective evidence" value={evidence} onChange={(e) => setEvidence(e.target.value)} maxLength={4000} rows={2} />
       <TextAreaField label="Containment required" value={containment} onChange={(e) => setContainment(e.target.value)} maxLength={4000} rows={2} />
       <SlidingToggle ariaLabel="Severity" mode="radio" options={[...SCAR_SEVERITIES].reverse().map((s) => ({ value: s.key, label: s.label }))} value={severity} onChange={setSeverity} />
-      <ComboField label="Internal owner" required value={ownerId} onChange={setOwnerId} options={(people.data ?? []).map((p) => ({ value: p.userId, label: p.name }))} />
+      <ComboField label="Internal owner" required value={ownerId} onChange={setOwnerId} options={(people.data ?? []).map((p) => ({ value: p.userId, label: p.name, avatar: avatarOf(p) }))} />
       <div className="grid gap-3 sm:grid-cols-2">
         <RHFDatePickerPopout label="Response due" valueFormat="iso" clearable value={dueOn} onChange={(v) => setDueOn(v ?? "")} minDate={today()} placeholder="No date yet" />
         <ComboField label="Supplier contact" value={contactId} onChange={setContactId} placeholder="None" options={(detail.data?.contacts ?? []).filter((c) => c.active).map((c) => ({ value: c.id, label: c.name }))} />

@@ -30,9 +30,10 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
     }
   };
 
+  // On a phone the bar wraps onto a second line instead of running off the screen; beside a mouse it is one line as before.
   return (
-    <div className="flex flex-row justify-between items-center p-2 text-primary-text border-t border-border-color">
-      <div className="flex flex-row gap-2 items-center">
+    <div className="flex flex-row flex-wrap justify-between items-center gap-y-2 p-2 text-primary-text border-t border-border-color">
+      <div className="flex flex-row flex-wrap gap-2 items-center">
         <button
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
@@ -40,7 +41,7 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
             !table.getCanPreviousPage()
               ? "text-border-color"
               : "text-primary-text cursor-pointer active:scale-97 hover:border-border-dark-color"
-          } flex h-8 w-8 items-center justify-center rounded-lg border border-border-color`}>
+          } flex h-8 w-8 pointer-coarse:h-10 pointer-coarse:w-10 items-center justify-center rounded-lg border border-border-color`}>
           <ArrowLeftIcon className="h-4 w-4" />
         </button>
 
@@ -52,7 +53,7 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
             type="number"
             min="1"
             max={String(pageCount)}
-            className="w-12 h-8 border border-border-color rounded-lg px-2 bg-text-input-color appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-12 h-8 pointer-coarse:h-10 border border-border-color rounded-lg px-2 bg-text-input-color appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onBlur={() => setInputValue(pageIndex + 1)}
@@ -68,14 +69,14 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
             !table.getCanNextPage()
               ? "text-border-color"
               : "text-primary-text cursor-pointer active:scale-97 hover:border-border-dark-color"
-          } flex h-8 w-8 items-center justify-center rounded-lg border border-border-color`}>
+          } flex h-8 w-8 pointer-coarse:h-10 pointer-coarse:w-10 items-center justify-center rounded-lg border border-border-color`}>
           <ArrowLeftIcon className="rotate-180 h-4 w-4" />
         </button>
 
         <select
           value={String(pageSize)}
           onChange={(e) => table.setPageSize(Number(e.target.value))}
-          className="w-26 h-8 border border-border-color rounded-lg px-2 bg-text-input-color"
+          className="w-26 h-8 pointer-coarse:h-10 border border-border-color rounded-lg px-2 bg-text-input-color"
           name="page-size"
           id="page-size">
           <option value="10">10 rows</option>
@@ -84,13 +85,13 @@ const DataNavBar = ({ table, totalCount, onRefresh, isLoading }) => {
           <option value="100">100 rows</option>
         </select>
 
-        <span className="ml-2">{totalCount} Results</span>
+        <span className="md:ml-2">{totalCount} Results</span>
         {isLoading && <LoadingScreen size="inline" className="ml-3" />}
       </div>
 
       <button
         onClick={handleRefresh}
-        className="flex h-8 flex-row items-center gap-2 rounded-lg border border-border-color cursor-pointer px-2 hover:border-border-dark-color active:scale-97">
+        className="flex h-8 pointer-coarse:h-10 flex-row items-center gap-2 rounded-lg border border-border-color cursor-pointer px-2 hover:border-border-dark-color active:scale-97">
         <RefreshCwIcon
           className={isSpinning ? "rotate-90 animate-spin" : "rotate-90"}
         />

@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse, Uuid } from '../common/validation';
-import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks, RecoverNetworkBody, AgentReleases, PublishReleaseBody, WithdrawReleaseBody } from './platform.schemas';
+import { HoursQuery, LimitQuery, Overview, OverviewQuery, OrganisationsQuery, PlatformActivity, PlatformMe, PlatformOrganisations, PlatformPayments, PlatformEmail, PlatformWorker, PlatformRevenue, PlatformWebhooks, RecoverNetworkBody, InvoiceBillingBody, InvoiceCompanyExemptBody, PlatformInvoiceAccounts, AgentReleases, PublishReleaseBody, WithdrawReleaseBody } from './platform.schemas';
 import { PlatformService } from './platform.service';
 
 /**
@@ -32,6 +32,28 @@ export class PlatformController {
   @ApiOkResponse({ description: 'Every organisation with its billing state, owners and counts (no business data). Search by name or owner email. 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformOrganisations) })
   organisations(@Ctx() ctx: RequestContext, @Query() query: unknown) {
     return this.service.organisations(ctx, parse(OrganisationsQuery, query));
+  }
+
+  @Get('invoice-accounts')
+  @ApiOkResponse({ description: 'Invoiced organisations: route, whether the first invoice is paid, what is open and how late. 404 for non-operators, 403 mfa_required without MFA.', schema: openApiSchema(PlatformInvoiceAccounts) })
+  invoiceAccounts(@Ctx() ctx: RequestContext) {
+    return this.service.invoiceAccounts(ctx);
+  }
+
+  @Post('organisations/:id/invoice-billing')
+  @HttpCode(200)
+  @ApiBody({ schema: openApiSchema(InvoiceBillingBody) })
+  @ApiOkResponse({ description: 'Allow or refuse paying by invoice for one organisation (reason required). Existing subscriptions carry on. 404 for non-operators, 403 mfa_required without MFA.' })
+  invoiceBilling(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setInvoiceBillingAllowed(ctx, parse(Uuid, id), parse(InvoiceBillingBody, body));
+  }
+
+  @Post('organisations/:id/invoice-company-exempt')
+  @HttpCode(200)
+  @ApiBody({ schema: openApiSchema(InvoiceCompanyExemptBody) })
+  @ApiOkResponse({ description: 'Lift (or restore) the one-invoiced-organisation-per-company block for a genuine second entity (reason required). 404 for non-operators, 403 mfa_required without MFA.' })
+  invoiceCompanyExempt(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.setInvoiceCompanyExempt(ctx, parse(Uuid, id), parse(InvoiceCompanyExemptBody, body));
   }
 
   @Post('organisations/:id/recover-network-policy')

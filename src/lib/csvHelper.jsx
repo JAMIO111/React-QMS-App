@@ -1,3 +1,5 @@
+import { csvLine } from "./reportCsv";
+
 export function exportCSV(data, filename = "export.csv") {
   if (!data || data.length === 0) {
     console.warn("No data to export");
@@ -6,29 +8,13 @@ export function exportCSV(data, filename = "export.csv") {
 
   const keys = Object.keys(data[0]);
 
-  // Helper to escape CSV fields (handle commas, quotes, new lines)
-  const escapeCSV = (value) => {
-    if (value == null) return "";
-    const stringValue = value.toString();
-    if (/[",\n]/.test(stringValue)) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    }
-    return stringValue;
-  };
-
-  // Generate CSV header row
-  const csvRows = [keys.join(",")];
-
-  // Generate CSV data rows
-  for (const row of data) {
-    const values = keys.map((k) => escapeCSV(row[k]));
-    csvRows.push(values.join(","));
-  }
-
-  const csvString = csvRows.join("\n");
+  // Quoting and the spreadsheet formula guard (a cell starting = + - @ is kept as text) are shared with the reports.
+  const csvRows = [csvLine(keys), ...data.map((row) => csvLine(keys.map((k) => row[k])))];
+  // A byte-order mark so Excel reads accents and symbols as UTF-8; CRLF line ends as spreadsheets expect.
+  const csvString = `\uFEFF${csvRows.join("\r\n")}\r\n`;
 
   // Create blob and download link
-  const blob = new Blob([csvString], { type: "text/csv" });
+  const blob = new Blob([csvString], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");

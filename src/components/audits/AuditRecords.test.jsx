@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetSaveOrder } from "../../hooks/useAudits";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -151,6 +152,7 @@ const renderAt = (url) =>
   );
 
 beforeEach(() => {
+  resetSaveOrder();
   permissions = ["audits.read", "audits.manage", "audits.perform", "ncr.create"];
   calls.length = 0;
   apiFetch.mockReset();

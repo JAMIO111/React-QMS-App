@@ -105,9 +105,12 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await page.getByRole('button', { name: 'Continue to secure checkout' }).click();
   await see(page.getByText(/free trial until/i));
   await shot(page, '05-subscribed');
-  const sub = (await stack.admin.query(`select s.status, (select sum(quantity) from public.organisation_subscription_items i where i.organisation_id = s.organisation_id) seats from public.organisation_subscriptions s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [`Journey Works ${RUN}`])).rows[0];
+  const sub = (await stack.admin.query(`select s.status,
+      (select sum(quantity) from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id and p.kind = 'seat' where i.organisation_id = s.organisation_id) seats,
+      (select sum(quantity) from public.organisation_subscription_items i join public.subscription_plans p on p.id = i.subscription_plan_id and p.kind = 'fee' where i.organisation_id = s.organisation_id) fee
+      from public.organisation_subscriptions s join public.organisations o on o.id = s.organisation_id where o.name = $1`, [`Journey Works ${RUN}`])).rows[0];
   log(`subscription: ${JSON.stringify(sub)}`);
-  if (sub.status !== 'trialing' || Number(sub.seats) !== 3) throw new Error('the subscription was not recorded as expected');
+  if (sub.status !== 'trialing' || Number(sub.seats) !== 3 || Number(sub.fee) !== 1) throw new Error('the subscription was not recorded as expected (three seats and the organisation fee once)');
 
   step('owner sends the planned invitation now the plan is active');
   await see(page.getByText(/Your plan is active/));
@@ -267,6 +270,8 @@ module.exports = async function journey({ browser, stack, APP, watch, shot, step
   await run('recordFilters', () => recordFilters({ page, stack, APP, orgName, see, shot, step, log }));
   await run('networkRestrictions', () => networkRestrictions({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
   await run('connectorAgent', () => connectorAgent({ page, stack, APP, orgName, see, shot, step, log }));
+  await run('payByInvoice', () => payByInvoice({ browser, stack, APP, see, shot, step, log, watch }));
+  await run('customRoles', () => customRoles({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }));
   await run('singleSignOn', () => singleSignOn({ browser, page, stack, APP, orgName, see, shot, step, log, owner, colleague, watch }));
 };
 
@@ -2603,7 +2608,8 @@ async function cmmImports({ page, stack, APP, orgName, see, shot, step, log, own
   const family = (await stack.admin.query(`select id from public.part_families where organisation_id = $1 and code = 'JRN'`, [org.id])).rows[0];
   const part = await api('POST', '/parts', { partNumber: 'JRN-200', name: 'Journey housing', partFamilyId: family.id, initialRevision: { revision: 'A' } });
   const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
-  const cmm = await api('POST', '/gauges', { assetNumber: 'CMM-J1', description: 'Bridge CMM', siteId: org.site });
+  const cmmType = await api('POST', '/gauge-types', { code: 'CMM-J', name: 'Coordinate measuring machine' });
+  const cmm = await api('POST', '/gauges', { assetNumber: 'CMM-J1', description: 'Bridge CMM', gaugeTypeId: cmmType.id, siteId: org.site });
   const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-200', title: 'Journey housing' });
   await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });
   const planRev = plan.revisions[0].id;
@@ -2719,7 +2725,8 @@ async function gaugeRR({ page, stack, APP, orgName, see, shot, step, log, owner 
   const api = apiAs(stack, user.id, owner.email, org.id);
   const machine = (await stack.admin.query(`select id from public.machines where organisation_id = $1 and code = 'CNC-J1'`, [org.id])).rows[0];
   const part = await api('POST', '/parts', { partNumber: 'JRN-300', name: 'Journey shaft', initialRevision: { revision: 'A' } });
-  const gauge = await api('POST', '/gauges', { assetNumber: 'GRR-J1', description: 'Journey micrometer', siteId: org.site });
+  const micType = await api('POST', '/gauge-types', { code: 'MIC-J', name: 'Micrometer' });
+  const gauge = await api('POST', '/gauges', { assetNumber: 'GRR-J1', description: 'Journey micrometer', gaugeTypeId: micType.id, siteId: org.site });
   await stack.admin.query(`update public.gauges set resolution = 0.001, unit_code = 'mm' where id = $1`, [gauge.id]);
   const plan = await api('POST', '/control-plans', { planCode: 'CP-JRN-300', title: 'Journey shaft' });
   await api('POST', `/control-plans/${plan.id}/applicability`, { partId: part.id });
@@ -3299,11 +3306,161 @@ async function networkRestrictions({ browser, page, stack, APP, orgName, see, sh
 }
 
 /**
+ * Pay by invoice (docs/invoice-billing-plan.md IV3): a second organisation, so the first one's subscription is left as it is. Its owner chooses Pay by
+ * invoice in the wizard's plan step, gives the company, and the subscription is active at once with its first invoice open (the fake Stripe makes it).
+ * While that invoice is unpaid the Power BI key button is held back and the operator's list says so; once it is paid (the fake pays, the API reads the
+ * subscription again as a webhook would) the button works and the open-invoice card is gone.
+ */
+async function payByInvoice({ browser, stack, APP, see, shot, step, log, watch }) {
+  const ivan = { first: 'Ivan', surname: 'Invoice', email: `ivan.${RUN}@journey.test` };
+  const orgName = `Invoice Works ${RUN}`;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(15000);
+  watch(page, 'invoice-owner');
+
+  step('a second owner starts an organisation and goes to the plan step');
+  await signUp(page, APP, ivan);
+  await see(page.getByText(/check your email/i).first());
+  await verify(stack, ivan.email);
+  await signIn(page, APP, ivan.email);
+  await see(page.getByRole('heading', { name: /start your organisation/i }));
+  await page.getByLabel('Organisation name').fill(orgName);
+  await page.getByRole('button', { name: 'Create organisation' }).click();
+  await page.waitForURL(/\/setup/);
+  await page.goto(`${APP}/setup/plan`);
+  await see(page.getByRole('heading', { name: /plan and seats/i }).first());
+  await page.getByRole('button', { name: 'Add Contributor seat' }).click();
+
+  step('the owner chooses Pay by invoice and gives the company: no checkout, the subscription starts at once');
+  await page.getByRole('radio', { name: 'Pay by invoice' }).click();
+  await see(page.getByText(/No free trial/));
+  await see(page.getByLabel('Legal company name'));
+  await page.getByLabel('Legal company name').fill(`${orgName} Limited`);
+  await page.getByLabel('Send invoices to').fill(`accounts.${RUN}@journey.test`);
+  await page.getByLabel('Address line 1').fill('1 Foundry Lane');
+  await page.getByLabel('Town or city').fill('Sheffield');
+  await page.getByLabel('Postcode').fill('S1 1AA');
+  await page.getByRole('combobox', { name: 'Country' }).click();
+  await page.getByRole('option', { name: /^United Kingdom/ }).first().click();
+  await page.getByLabel('Purchase order reference').fill('PO-JOURNEY-1');
+  await shot(page, '150-invoice-details');
+  await page.getByRole('button', { name: 'Start subscription' }).click();
+  await see(page.getByText('Your first invoice is waiting to be paid'));
+  await see(page.getByRole('link', { name: /pay|view|invoice/i }).filter({ hasText: /./ }));
+  await shot(page, '151-first-invoice-waiting');
+  const org = (await stack.admin.query(`select id from public.organisations where name = $1`, [orgName])).rows[0];
+  const sub = (await stack.admin.query(
+    `select s.collection_method, s.status, st.grace_period_days, s.billing_legal_name, s.purchase_order, s.billing_company_key
+       from public.organisation_subscriptions s join public.organisation_settings st on st.organisation_id = s.organisation_id where s.organisation_id = $1`, [org.id])).rows[0];
+  log(`invoiced subscription: ${JSON.stringify(sub)}`);
+  if (sub?.collection_method !== 'invoice' || sub.status !== 'active' || sub.grace_period_days !== 3 || sub.purchase_order !== 'PO-JOURNEY-1') throw new Error(`the invoiced subscription was not recorded as expected: ${JSON.stringify(sub)}`);
+  const { subscriptionId, invoiceId } = [...stack.stripe.created.values()].pop();
+  if (stack.stripe.billing.size !== 1 || ![...stack.stripe.billing.values()][0].poReference) throw new Error('the company details did not reach the Stripe customer');
+
+  step('the owner finishes set-up; the Power BI key waits for the first invoice');
+  await page.goto(`${APP}/setup/review`);
+  await see(page.getByRole('heading', { name: /review and finish/i }).first());
+  await see(page.getByText(/Pay by invoice, payable within 14 days/));
+  await shot(page, '152-review-invoice');
+  await page.getByRole('button', { name: 'Finish set-up' }).click();
+  await page.waitForURL(/\/Dashboard/);
+  await page.goto(`${APP}/Settings/Integrations`);
+  await see(page.getByText('Reporting keys wait for your first invoice'));
+  if (!(await page.getByRole('button', { name: 'Make a key' }).isDisabled())) throw new Error('Make a key should wait for the first invoice');
+  await shot(page, '153-power-bi-waits');
+  await page.goto(`${APP}/Settings/Subscription`);
+  await see(page.getByText('Your first invoice is waiting to be paid'));
+  await shot(page, '154-subscription-open-invoice');
+
+  step('the operator lists the account as unpaid, then the invoice is paid and the limits lift');
+  const ownerRow = (await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [ivan.email])).rows[0];
+  await stack.admin.query(`insert into public.platform_admins (user_id, note) values ($1, 'journey operator') on conflict do nothing`, [ownerRow.id]);
+  const token = await stack.sign({ id: ownerRow.id, email: ivan.email }, { aal: 'aal2' });
+  const accounts = async () => {
+    const res = await fetch(`http://127.0.0.1:${stack.ports.api}/api/v1/platform/invoice-accounts`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`invoice accounts -> ${res.status} ${(await res.text()).slice(0, 300)}`);
+    return (await res.json()).data.find((a) => a.organisationId === org.id);
+  };
+  const before = await accounts();
+  if (!before || before.firstInvoicePaid !== false || before.openInvoices !== 1 || before.purchaseOrder !== 'PO-JOURNEY-1') throw new Error(`the operator's list is wrong: ${JSON.stringify(before)}`);
+  stack.stripe.pay(invoiceId);
+  await stack.syncSubscription(org.id, subscriptionId);
+  const after = await accounts();
+  if (after.firstInvoicePaid !== true || after.openInvoices !== 0) throw new Error(`the paid invoice was not applied: ${JSON.stringify(after)}`);
+  await stack.admin.query(`delete from public.platform_admins where user_id = $1`, [ownerRow.id]);
+  await page.goto(`${APP}/Settings/Integrations`);
+  await see(page.getByRole('button', { name: 'Make a key' }));
+  if (await page.getByRole('button', { name: 'Make a key' }).isDisabled()) throw new Error('Make a key should work once the first invoice is paid');
+  if ((await page.getByText('Reporting keys wait for your first invoice').count()) !== 0) throw new Error('the waiting notice should be gone');
+  await page.goto(`${APP}/Settings/Subscription`);
+  await see(page.getByRole('heading', { name: /subscription/i }).first());
+  if ((await page.getByText('Your first invoice is waiting to be paid').count()) !== 0) throw new Error('the open-invoice card should be gone once paid');
+  await shot(page, '155-invoice-paid');
+  await ctx.close();
+}
+
+/**
  * Connector agent (docs/connector-agent-plan.md AG6d): the owner adds an agent and is shown its one-time token; an agent (scripts/journey/fake-agent.cjs,
  * the real protocol and signatures, keys made in this process) registers with it and comes online; "Check now" is answered; a PostgreSQL connection
  * through it is made, the password is typed in the browser and sealed there, and the agent opens exactly what was typed (Fortress only passed it on:
  * the job keeps no sealed bytes once done); finally the agent is revoked and stops.
  */
+/** Custom roles (docs/custom-roles-plan.md): the owner makes a role in the browser, gives it to Colin, sees it cannot be deleted while he holds it, changes it, then deletes it. */
+async function customRoles({ page, stack, APP, orgName, see, shot, step, log, owner, colleague }) {
+  const { rows: [org] } = await stack.admin.query(`select id from public.organisations where name = $1`, [orgName]);
+  const { rows: [user] } = await stack.admin.query(`select id from auth.users where lower(email) = lower($1)`, [owner.email]);
+  const api = apiAs(stack, user.id, owner.email, org.id);
+
+  step('the owner opens Settings → Roles and makes a role that can only view calibration');
+  await page.goto(`${APP}/Settings/Roles`);
+  await see(page.getByRole('heading', { level: 2, name: 'Roles' }));
+  await see(page.getByRole('region', { name: 'Built-in roles' }).getByText('Owner'));
+  await page.getByRole('button', { name: /New role/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'New role' });
+  await see(dialog);
+  if ((await dialog.getByText('Manage roles', { exact: true }).count()) !== 0) throw new Error('roles.manage must not be offered to a custom role');
+  await dialog.getByRole('textbox', { name: /^Name\b/ }).fill('Calibration reader');
+  await dialog.getByRole('button', { name: 'Choose only the viewing permissions of Calibration' }).click();
+  await shot(page, 'custom-role-new');
+  await dialog.getByRole('button', { name: 'Make the role' }).click();
+  const mine = page.getByRole('region', { name: 'Your roles' });
+  await see(mine.getByText(/^Calibration reader/));
+  await see(mine.getByText(/Nobody holds it yet/));
+
+  step('the role is given to Colin: it is held, so it cannot be deleted, and a change warns who it reaches');
+  const members = (await api('GET', '/members')).data;
+  const colin = members.find((m) => (m.email ?? '').toLowerCase() === colleague.email.toLowerCase());
+  const role = (await api('GET', '/roles')).data.find((r) => r.name === 'Calibration reader');
+  const assigned = await api('POST', `/members/${colin.membershipId}/role-assignments`, { roleId: role.id });
+  const assignmentId = assigned.roles.find((r) => r.roleId === role.id).assignmentId;
+  await page.reload();
+  const row = page.getByText('Calibration reader', { selector: 'p' }).locator('xpath=ancestor::li[1]');
+  await see(row.getByText(/1 person holds it/));
+  await row.getByRole('button', { name: 'Actions' }).click();
+  const del = page.getByRole('menuitem', { name: /Delete \(1 person holds it\)/ });
+  await see(del);
+  if ((await del.getAttribute('aria-disabled')) !== 'true') throw new Error('a role someone holds must not be deletable');
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const edit = page.getByRole('dialog', { name: 'Change Calibration reader' });
+  await see(edit.getByText(/1 person holds it\. What you change here takes effect for them as soon as you save/));
+  await shot(page, 'custom-role-edit');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await edit.waitFor({ state: 'detached' });
+
+  step('Colin lets go of it, and the owner deletes the role');
+  await api('DELETE', `/role-assignments/${assignmentId}`);
+  await page.reload();
+  const idle = page.getByText('Calibration reader', { selector: 'p' }).locator('xpath=ancestor::li[1]');
+  await see(idle.getByText(/Nobody holds it yet/));
+  await idle.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByText('Calibration reader', { selector: 'p' }).waitFor({ state: 'detached' });
+  await shot(page, 'custom-role-deleted');
+  log('custom roles: made in the browser, held, change warned, delete refused while held, deleted once free');
+}
+
 async function connectorAgent({ page, stack, APP, orgName, see, shot, step, log }) {
   const { fakeAgent } = require('./fake-agent.cjs');
   step('the owner adds a connector agent, an agent registers with the token and answers a check');

@@ -8,7 +8,7 @@ import { MaterialCertificatesService } from './material-certificates.service';
 
 /**
  * Material certificates (mill test reports, certificates of conformance or analysis): recorded against a supplier and traced to a receipt line, a lot and/or a heat number.
- * Recording needs receiving.manage; accepting or rejecting one needs supplier_quality.manage and freezes it; a wrong one is withdrawn with a reason. Nothing is deleted.
+ * Recording needs receiving.record; accepting or rejecting one needs supplier_quality.manage and freezes it; a wrong one is withdrawn with a reason. Nothing is deleted.
  */
 @ApiTags('receiving')
 @ApiBearerAuth()
@@ -25,7 +25,7 @@ export class MaterialCertificatesController {
 
   @Post('material-certificates')
   @HttpCode(201)
-  @OrganisationScoped('receiving.manage')
+  @OrganisationScoped('receiving.record')
   @ApiBody({ schema: openApiSchema(RecordCertificateBody) })
   @ApiCreatedResponse({ description: 'Records a certificate, waiting for review', schema: openApiSchema(Certificate) })
   record(@Ctx() ctx: RequestContext, @Body() body: unknown) {
@@ -40,7 +40,7 @@ export class MaterialCertificatesController {
   }
 
   @Patch('material-certificates/:id')
-  @OrganisationScoped('receiving.manage')
+  @OrganisationScoped('receiving.record')
   @ApiBody({ schema: openApiSchema(UpdateCertificateBody) })
   @ApiOkResponse({ description: 'Edits a certificate that has not been reviewed', schema: openApiSchema(Certificate) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
@@ -58,7 +58,7 @@ export class MaterialCertificatesController {
 
   @Post('material-certificates/:id/withdraw')
   @HttpCode(200)
-  @OrganisationScoped('receiving.manage')
+  @OrganisationScoped('receiving.record')
   @ApiBody({ schema: openApiSchema(WithdrawCertificateBody) })
   @ApiOkResponse({ description: 'Withdraws a certificate with a reason, whatever its review state; it is kept', schema: openApiSchema(Certificate) })
   withdraw(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {

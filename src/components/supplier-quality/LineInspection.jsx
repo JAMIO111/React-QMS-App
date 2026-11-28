@@ -88,7 +88,7 @@ export const LineInspection = ({ line, receiptCancelled, supplier }) => {
   const d = line.determination;
   const a = line.assessment;
   const live = !receiptCancelled;
-  const canManage = can("receiving.manage");
+  const canManage = can("receiving.record");
   return (
     <div className="flex flex-col gap-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">

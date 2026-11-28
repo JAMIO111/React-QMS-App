@@ -31,6 +31,9 @@ import {
 } from './audit-findings.schemas';
 import { AuditFindingsService } from './audit-findings.service';
 
+/** Admit people limited to one site: the database decides, per record, which site they may touch. */
+const SITE_SCOPED = { anyScope: true };
+
 const READ = 'audits.read';
 const PERFORM = 'audits.perform';
 const MANAGE = 'audits.manage';
@@ -232,7 +235,7 @@ export class NcrAuditSourceController {
   constructor(private readonly service: AuditFindingsService) {}
 
   @Get(':id/audit-source')
-  @OrganisationScoped('ncr.read')
+  @OrganisationScoped('ncr.read', SITE_SCOPED)
   @ApiOkResponse({ schema: openApiSchema(NcrAuditSource) })
   get(@Ctx() ctx: RequestContext, @Param('id') id: string) {
     return this.service.ncrSource(ctx, parse(Uuid, id));

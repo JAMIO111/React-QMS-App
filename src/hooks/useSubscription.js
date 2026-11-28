@@ -22,6 +22,14 @@ const dataOf = (r) => r.data;
 /** The packages on sale (needs `subscription.read`: pass `enabled` where someone without it may be looking). */
 export const usePlanCatalogue = ({ enabled = true } = {}) => useOrgQuery(["plans"], "/subscription-plans", { enabled, staleTime: 1000 * 60 * 5 });
 export const useSubscriptionOverview = ({ enabled = true } = {}) => useOrgQuery(["overview"], "/subscription", { enabled });
+/**
+ * True while an invoiced organisation's first invoice is unpaid: reporting keys wait until it is paid (the server refuses with 403 payable_first; this only
+ * says so before the person tries). False when the organisation pays by card, the invoice is paid, or the person may not read the subscription.
+ */
+export const useFirstInvoicePending = ({ enabled = true } = {}) => {
+  const overview = useSubscriptionOverview({ enabled });
+  return enabled && overview.data?.subscription?.firstInvoicePending === true;
+};
 export const useSeatAssignments = ({ enabled = true } = {}) => useOrgQuery(["assignments"], "/subscription/assignments", { enabled, select: dataOf });
 export const useInvoices = ({ enabled = true } = {}) => useOrgQuery(["invoices"], "/billing/invoices", { enabled, select: dataOf });
 export const useSubscriptionHistory = () => useOrgQuery(["history"], "/subscription/history", { select: dataOf });
@@ -117,6 +125,24 @@ export const useStartCheckout = () => {
     mutationFn: ({ interval, seats, returnTo = "setup" }) =>
       apiFetch("/billing/checkout-session", { method: "POST", body: { interval, seats, returnTo }, organisationId }),
     onSettled: () => refreshOrganisation(queryClient, organisationId),
+  });
+};
+
+/** Starts a subscription paid by invoice (no Checkout, no trial). Resolves with { subscription, vat }; access and permissions change, so they are refreshed too. */
+export const useStartInvoiceSubscription = () => {
+  const { organisationId } = useOrganisation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => apiFetch("/billing/invoice-subscription", { method: "POST", body, organisationId }),
+    onSettled: () => refreshOrganisation(queryClient, organisationId, { me: true }),
+  });
+};
+
+/** Whether this company may be invoiced (the one-organisation-per-company rule and the operator's switch); changes nothing. Resolves with { problems }. */
+export const useCheckInvoiceCompany = () => {
+  const { organisationId } = useOrganisation();
+  return useMutation({
+    mutationFn: ({ legalName, vatNumber }) => apiFetch("/billing/invoice-company/check", { method: "POST", body: { legalName, ...(vatNumber ? { vatNumber } : {}) }, organisationId }),
   });
 };
 

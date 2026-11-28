@@ -5,13 +5,13 @@ const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path, end = false, bad
     <div
       className={`${
         isLast ? "mb-2" : isFirst ? "mt-2" : ""
-      } flex flex-row items-center justify-start rounded-lg w-full h-8 pr-3`}>
+      } flex flex-row items-center justify-start rounded-lg w-full h-8 pointer-coarse:h-11 pr-3`}>
       <NavLink
         to={path}
         end={end}
         onClick={closeMenu}
         className={({ isActive }) =>
-          `flex flex-row items-center justify-start w-full h-8 pr-3 pl-4 ${
+          `flex flex-row items-center justify-start w-full h-8 pointer-coarse:h-11 pr-3 pl-4 ${
             isActive ? "text-cta-color" : "text-primary-text"
           }`
         }>
@@ -26,7 +26,7 @@ const SubMenuItem = ({ closeMenu, label, isLast, isFirst, path, end = false, bad
               className={`${
                 isActive &&
                 "bg-cta-color/20 hover:bg-cta-color/15 font-semibold"
-              } pl-6 h-8 text-sm w-full flex items-center hover:bg-cta-color/10 rounded-r-lg`}>
+              } pl-6 h-8 pointer-coarse:h-11 text-sm w-full flex items-center hover:bg-cta-color/10 rounded-r-lg`}>
               {label}
               {badge > 0 && (
                 <span aria-label={`${badge} need your attention`} className="ml-2 rounded-full bg-error-color px-1.5 text-xs font-medium text-white">

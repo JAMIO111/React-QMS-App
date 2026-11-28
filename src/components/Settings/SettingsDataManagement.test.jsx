@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 let permissions = [];
 vi.mock("../../hooks/useQmsApi", () => ({ usePermissions: () => ({ can: (p) => permissions.includes(p) }) }));
@@ -15,38 +14,34 @@ vi.mock("../custom-fields/CustomFieldsSettings", () => ({ default: () => <p>Cust
 
 import SettingsDataManagement from "./SettingsDataManagement";
 
-const Where = () => <span data-testid="where">{useLocation().search}</span>;
 const renderAt = (at) =>
   render(
     <MemoryRouter initialEntries={[at]}>
       <Routes>
-        <Route path="/Settings/Data-Management" element={<><SettingsDataManagement /><Where /></>} />
+        <Route path="/Settings/Data-Management" element={<SettingsDataManagement />} />
       </Routes>
     </MemoryRouter>,
   );
 
+// The module menu is the settings pane's nested "Data" level (see Settings.test.jsx); this page shows only the chosen module.
 describe("Settings → Data Management", () => {
-  it("shows a tab for each module the person may read, opening the first", async () => {
+  it("opens the first module the person may read, with no header or tab bar of its own", async () => {
     permissions = ["ncr.read", "calibration.read", "supplier_quality.read"];
     renderAt("/Settings/Data-Management");
-    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Non-conformance", "Calibration", "Supplier quality"]);
-    expect(screen.getByRole("tab", { name: "Non-conformance" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText("NC lists")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Data Management" })).toBeNull();
     expect(screen.getByText(/You can view these/)).toBeInTheDocument();
   });
 
-  it("opens the tab named in the address and keeps the choice there", async () => {
+  it("opens the module named in the address", async () => {
     permissions = ["ncr.read", "calibration.read", "calibration.manage", "audits.read"];
     renderAt("/Settings/Data-Management?tab=calibration");
     expect(await screen.findByText("Gauge types")).toBeInTheDocument();
     expect(screen.queryByText(/You can view these/)).toBeNull();
-    await userEvent.click(screen.getByRole("tab", { name: "Audits" }));
-    expect(await screen.findByText("Finding classifications")).toBeInTheDocument();
-    expect(screen.getByTestId("where")).toHaveTextContent("?tab=audits");
   });
 
-  it("falls back to the first tab for a tab the person cannot see, and explains when there is none", async () => {
+  it("falls back to the first module for one the person cannot see, and explains when there is none", async () => {
     permissions = ["process_control.read"];
     const { unmount } = renderAt("/Settings/Data-Management?tab=calibration");
     expect(await screen.findByText("Characteristic templates")).toBeInTheDocument();
@@ -56,18 +51,17 @@ describe("Settings → Data Management", () => {
     expect(screen.getByText(/no access to any module/)).toBeInTheDocument();
   });
 
-  it("shows Competence to people who may read it, with the graduation cap", async () => {
+  it("shows Competence to people who may read it", async () => {
     permissions = ["competence.read", "competence.manage"];
     renderAt("/Settings/Data-Management?tab=competence");
     expect(await screen.findByText("Skills and positions")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Competence" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText(/You can view these/)).toBeNull();
   });
 
   it("shows Custom fields only to people who may manage them", async () => {
     permissions = ["ncr.read"];
-    const { unmount } = renderAt("/Settings/Data-Management");
-    expect(screen.queryByRole("tab", { name: "Custom fields" })).toBeNull();
+    const { unmount } = renderAt("/Settings/Data-Management?tab=custom-fields");
+    expect(await screen.findByText("NC lists")).toBeInTheDocument();
     unmount();
     permissions = ["custom_fields.manage"];
     renderAt("/Settings/Data-Management?tab=custom-fields");

@@ -224,7 +224,7 @@ describe("dispositions", () => {
     await user.type(qty, "4");
     await user.click(within(dialog).getByRole("button", { name: "Propose" }));
     await waitFor(() => expect(sent("/ncrs/n1/dispositions")).toHaveLength(1));
-    expect(sent("/ncrs/n1/dispositions")[0][1].body).toEqual({ decision: "rework", quantity: 4, instructions: "Rework at op 20", reference: null, lotId: null });
+    expect(sent("/ncrs/n1/dispositions")[0][1].body).toEqual({ decision: "rework", quantity: 4, instructions: "Rework at op 20", reference: null, lotId: null, clientKey: expect.any(String) });
   });
 
   it("offers nothing on a disposition that is still saving, so its placeholder id is never sent", async () => {
@@ -314,7 +314,7 @@ describe("dispositions", () => {
     await user.type(qty, "3");
     await user.click(within(dialog).getByRole("button", { name: "Generate RMA number" }));
     await waitFor(() => expect(sent("/ncrs/n1/rma")).toHaveLength(1));
-    expect(sent("/ncrs/n1/rma")[0][1].body).toEqual({ quantity: 3, instructions: null, lotId: null });
+    expect(sent("/ncrs/n1/rma")[0][1].body).toEqual({ quantity: 3, instructions: null, lotId: null, clientKey: expect.any(String) });
   });
 
   it("shows a customer return with its RMA number, and edits it without touching the decision or the number", async () => {

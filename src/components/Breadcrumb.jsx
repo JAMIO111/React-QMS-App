@@ -29,7 +29,7 @@ const Breadcrumb = () => {
   return (
     <nav className="flex items-center gap-1 text-sm text-secondary-text font-semibold">
       <LayoutDashboardIcon />
-      <Link to="/Dashboard" className="hover:underline">
+      <Link to="/Dashboard" className="hover:underline pointer-coarse:-my-3 pointer-coarse:py-3">
         Home
       </Link>
       {segments.map((segment, index) => {
@@ -42,7 +42,7 @@ const Breadcrumb = () => {
           <React.Fragment key={segment}>
             <span className="mx-1">/</span>
             <CrumbIcon path={path} />
-            <Link to={named?.to ?? path} className={named?.label ? "hover:underline" : "hover:underline capitalize"}>
+            <Link to={named?.to ?? path} className={`${named?.label ? "hover:underline" : "hover:underline capitalize"} pointer-coarse:-my-3 pointer-coarse:py-3`}>
               {text}
             </Link>
           </React.Fragment>

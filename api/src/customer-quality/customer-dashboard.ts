@@ -6,6 +6,7 @@ import { Row } from '../calibration/calibration.service';
 import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { DatabaseService } from '../database/database.service';
+import { ncRaised } from '../ncr/nc-definitions';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -144,7 +145,7 @@ export class CustomerDashboardService {
         select to_char(date_trunc(${bucket}, nc.detected_at), 'YYYY-MM-DD') as start, count(*)::int as ncs, coalesce(sum(nc.quantity_affected), 0) as units,
                count(*) filter (where nc.severity = 'critical')::int as critical, count(*) filter (where nc.severity = 'major')::int as major, count(*) filter (where nc.severity = 'minor')::int as minor
           from public.nonconformances nc
-         where nc.organisation_id = ${org}::uuid and nc.source = 'customer' and nc.customer_id is not null and nc.deleted_at is null and nc.stage not in ('draft', 'cancelled')
+         where nc.organisation_id = ${org}::uuid and nc.source = 'customer' and nc.customer_id is not null and ${ncRaised('nc')}
            and nc.detected_at between ${q.from}::date and ${q.to}::date group by 1`);
       const starts = [...new Set([...trendShipped, ...trendNcs].map((r) => r.start as string))].sort();
       const trend = starts.map((start) => {

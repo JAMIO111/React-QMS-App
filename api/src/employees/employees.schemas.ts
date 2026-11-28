@@ -81,7 +81,7 @@ export const UpdateEmployeeBody = z
 export type UpdateEmployeeBody = z.infer<typeof UpdateEmployeeBody>;
 
 /** Everyone, for pickers (e.g. the responsible employee on a non-conformance). */
-export const EmployeeOption = z.object({ id: z.string().uuid(), name: z.string(), jobTitle: z.string().nullable(), active: z.boolean() });
+export const EmployeeOption = z.object({ id: z.string().uuid(), name: z.string(), jobTitle: z.string().nullable(), active: z.boolean(), avatarPath: z.string().nullable() });
 
 /** Link an employee to a member's sign-in, or remove the link with `userId: null`. */
 export const LinkLoginBody = z.object({ userId: z.string().uuid().nullable() }).strict();
@@ -90,5 +90,5 @@ export type LinkLoginBody = z.infer<typeof LinkLoginBody>;
 /** Members that can be linked to an employee, and whether the caller may link at all (a Controller seat). */
 export const LoginCandidates = z.object({
   canLink: z.boolean(),
-  data: z.array(z.object({ userId: z.string().uuid(), name: z.string(), email: z.string().nullable(), employeeId: z.string().uuid().nullable() })),
+  data: z.array(z.object({ userId: z.string().uuid(), name: z.string(), email: z.string().nullable(), employeeId: z.string().uuid().nullable(), avatarPath: z.string().nullable() })),
 });

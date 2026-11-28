@@ -7,6 +7,7 @@ import { Ctx, RequestContext } from '../common/request-context';
 import { openApiSchema, parse } from '../common/validation';
 import { DatabaseService } from '../database/database.service';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
+import { ncOpen, ncRaised } from '../ncr/nc-definitions';
 import { EXPIRY_WARNING_DAYS } from './expiry';
 import { AWAITING_RESPONSE } from './supplier-scar.schemas';
 
@@ -174,9 +175,9 @@ export class SupplierDashboardService {
          order by c.response_due_on, c.reference limit 8`);
 
       // Non-conformances naming a supplier as responsible (RLS shows them only to people who may read NCs).
-      const NC = sql`from public.nonconformances nc where nc.organisation_id = ${org}::uuid and nc.supplier_id is not null and nc.deleted_at is null and nc.stage <> 'cancelled'`;
+      const NC = sql`from public.nonconformances nc where nc.organisation_id = ${org}::uuid and nc.supplier_id is not null and ${ncRaised('nc')}`;
       const ncTotals = can.ncr
-        ? await one(sql`select count(*) filter (where nc.stage <> 'closed')::int as open, count(*) filter (where nc.detected_at between ${q.from}::date and ${q.to}::date)::int as raised ${NC}`)
+        ? await one(sql`select count(*) filter (where ${ncOpen('nc')})::int as open, count(*) filter (where nc.detected_at between ${q.from}::date and ${q.to}::date)::int as raised ${NC}`)
         : {};
       const ncTrend = can.ncr
         ? await many(sql`
@@ -189,7 +190,7 @@ export class SupplierDashboardService {
         ? await many(sql`
             select s.id as supplier_id, s.code as supplier_code, s.name as supplier_name, count(*)::int as n, count(*) filter (where nc.severity = 'critical')::int as critical
               from public.nonconformances nc join public.suppliers s on s.id = nc.supplier_id
-             where nc.organisation_id = ${org}::uuid and nc.deleted_at is null and nc.stage <> 'cancelled' and nc.detected_at between ${q.from}::date and ${q.to}::date
+             where nc.organisation_id = ${org}::uuid and ${ncRaised('nc')} and nc.detected_at between ${q.from}::date and ${q.to}::date
              group by s.id, s.code, s.name order by n desc, critical desc, lower(s.name) limit 8`)
         : [];
 

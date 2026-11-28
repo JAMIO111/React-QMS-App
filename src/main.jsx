@@ -7,6 +7,7 @@ import { mergeResponse } from "./lib/optimistic";
 import { ToastProvider } from "./contexts/ToastProvider.jsx";
 import { ConfirmProvider } from "./contexts/ConfirmationModalProvider.jsx";
 import EditConflictHost from "./components/ui/EditConflictDialog.jsx";
+import SettingsIndex from "./components/Settings/SettingsIndex.jsx";
 import { AuthProvider } from "./contexts/AuthProvider.jsx";
 import { UserProvider } from "./contexts/UserProvider.jsx";
 import { OrganisationProvider } from "./contexts/OrganisationProvider.jsx";
@@ -42,6 +43,7 @@ const SettingsOrganisation = lazy(() =>
   import("./components/Settings/SettingsOrganisation.jsx")
 );
 const SettingsUsers = lazy(() => import("./components/Settings/SettingsUsers.jsx"));
+const SettingsRoles = lazy(() => import("./components/Settings/SettingsRoles.jsx"));
 const SettingsSecurity = lazy(() => import("./components/Settings/SettingsSecurity.jsx"));
 const SettingsExternalAccess = lazy(() => import("./components/Settings/SettingsExternalAccess.jsx"));
 const SettingsAccount = lazy(() =>
@@ -321,9 +323,10 @@ const router = createBrowserRouter([
             path: "Settings",
             element: <Settings />,
             children: [
-              { index: true, element: <Navigate to="Organisation" replace /> },
+              { index: true, element: <SettingsIndex /> },
               { path: "Organisation", element: <SettingsOrganisation /> },
               { path: "Users", element: <SettingsUsers /> },
+              { path: "Roles", element: <SettingsRoles /> },
               { path: "Security", element: <SettingsSecurity /> },
               { path: "External-Access", element: <SettingsExternalAccess /> },
               { path: "General", element: <Navigate to="../Organisation" replace /> },

@@ -15,6 +15,7 @@ import { dataQualityChecks } from '../master-data/master-data-dashboard';
 import { PPAP_APPROVED, PPAP_AWAITING, PPAP_ENDING_DAYS, PPAP_INTERIM, PPAP_REJECTED, PPAP_REVIEWS_OVERDUE } from '../ppap/ppap-dashboard';
 import { UNHANDLED_FAILURE } from '../process-control/process-control-dashboard';
 import { EXPIRY_WARNING_DAYS } from '../supplier-quality/expiry';
+import { ncOpen, ncRaised } from '../ncr/nc-definitions';
 import { AWAITING, EXPIRING as SUPPLIER_EXPIRING, LINES, LIVE } from '../supplier-quality/supplier-dashboard';
 import { OrganisationScoped } from '../tenancy/organisation.guard';
 
@@ -91,10 +92,10 @@ export class HomeDashboardService {
 
       const nc = async () => {
         const r = await one(sql`
-          select count(*) filter (where n.stage <> all(array['closed','cancelled']))::int as open,
-                 count(*) filter (where n.stage <> all(array['closed','cancelled']) and n.severity = 'critical')::int as critical_open,
+          select count(*) filter (where ${ncOpen('n')})::int as open,
+                 count(*) filter (where ${ncOpen('n')} and n.severity = 'critical')::int as critical_open,
                  count(*) filter (where n.stage = 'awaiting_closure')::int as awaiting_closure
-            from public.nonconformances n where n.organisation_id = ${org}::uuid and n.deleted_at is null`);
+            from public.nonconformances n where n.organisation_id = ${org}::uuid and ${ncRaised('n')}`);
         return { open: n(r.open), criticalOpen: n(r.critical_open), awaitingClosure: n(r.awaiting_closure) };
       };
 

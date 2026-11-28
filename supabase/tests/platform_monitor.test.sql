@@ -35,7 +35,9 @@ BEGIN
   FOR v_slug, v_qty IN VALUES ('controller', p_controller), ('contributor', p_contributor) LOOP
     CONTINUE WHEN v_qty = 0;
     SELECT id INTO v_plan FROM public.subscription_plans WHERE slug = v_slug;
-    SELECT * INTO v_price FROM public.subscription_prices WHERE subscription_plan_id = v_plan AND billing_interval = p_interval AND currency = 'GBP' AND active AND effective_to IS NULL;
+    -- the first price the package had (2500 / 1000 a month): the sums below are about the arithmetic, not today's price list
+    SELECT * INTO v_price FROM public.subscription_prices WHERE subscription_plan_id = v_plan AND billing_interval = p_interval AND currency = 'GBP' AND active
+     ORDER BY effective_from LIMIT 1;
     INSERT INTO public.organisation_subscription_items (organisation_id, organisation_subscription_id, subscription_plan_id, subscription_price_id, quantity, unit_amount_snapshot, currency)
     VALUES (p_org, v_sub, v_plan, v_price.id, v_qty, v_price.unit_amount, 'GBP');
   END LOOP;

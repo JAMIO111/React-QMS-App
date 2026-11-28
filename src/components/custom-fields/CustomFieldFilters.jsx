@@ -3,6 +3,7 @@ import { XIcon } from "@/components/icons";
 import { useCustomFieldPeople, useCustomFields } from "../../hooks/useCustomFields";
 import ComboField from "../ui/ComboField";
 import { describeCustomFilter, useCustomFilterParams } from "./customColumns";
+import { avatarOf } from "@/lib/employees";
 
 const inputClass = "w-full rounded-lg border border-border-color bg-text-input-color px-3 min-h-9.5 py-1.5 text-sm text-primary-text outline-none focus:border-brand-primary";
 
@@ -44,7 +45,7 @@ const CustomFieldFilters = ({ entityType, title = "More details" }) => {
           case "choice":
           case "multi_choice":
           case "person": {
-            const options = f.fieldType === "person" ? (people ?? []).map((p) => ({ value: p.id, label: p.name })) : f.options.map((o) => ({ value: o.key, label: o.label }));
+            const options = f.fieldType === "person" ? (people ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) })) : f.options.map((o) => ({ value: o.key, label: o.label }));
             return <ComboField key={f.key} label={f.label} value={value.split(",")[0] || null} onChange={(v) => set(f.key, v ?? "")} options={[{ value: "-", label: "No value" }, ...options]} placeholder="Any" clearable />;
           }
           case "boolean":

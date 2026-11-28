@@ -92,6 +92,34 @@ export type PlatformActivity = z.infer<typeof PlatformActivity>;
 /** An operator puts an enforced network policy back to monitor (docs/security-plan.md SE5). */
 export const RecoverNetworkBody = z.object({ reason: z.string().trim().min(10).max(1000), verification: z.string().trim().min(10).max(1000) }).strict();
 
+/** Invoiced organisations (docs/invoice-billing-plan.md IV1): the route, whether the first invoice is paid, what is open and how late. Passed through from the database function. */
+export const PlatformInvoiceAccounts = z.object({
+  data: z.array(
+    z.object({
+      organisationId: z.string().uuid(),
+      name: z.string(),
+      subscriptionStatus: z.string(),
+      billingInterval: z.string(),
+      legalName: z.string().nullable(),
+      billingEmail: z.string().nullable(),
+      purchaseOrder: z.string().nullable(),
+      paymentTermsDays: z.number().int().nullable(),
+      firstInvoicePaid: z.boolean(),
+      openInvoices: z.number().int(),
+      openAmountPence: z.number().int(),
+      oldestOpenDueOn: z.string().nullable(),
+      overdueDays: z.number().int(),
+      billingAllowed: z.boolean(),
+      companyExempt: z.boolean(),
+      startedAt: Iso.nullable(),
+      overdueAlertedAt: Iso.nullable(),
+    }),
+  ),
+});
+export type PlatformInvoiceAccounts = z.infer<typeof PlatformInvoiceAccounts>;
+export const InvoiceBillingBody = z.object({ allowed: z.boolean(), reason: z.string().trim().min(3).max(500) }).strict();
+export const InvoiceCompanyExemptBody = z.object({ exempt: z.boolean(), reason: z.string().trim().min(3).max(500) }).strict();
+
 /** A connector agent release (docs/connector-agent-plan.md AG6b): the signed manifest text exactly as signed and its signature. */
 export const PublishReleaseBody = z.object({ manifest: z.string().min(2).max(8192), signature: z.string().min(1).max(200) }).strict();
 export const WithdrawReleaseBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();

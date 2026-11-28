@@ -17,6 +17,7 @@ import ComboField from "../ui/ComboField";
 import Dialog from "../ui/Dialog";
 import Field from "../ui/Field";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
+import { employeeOption, avatarOf } from "@/lib/employees";
 
 const Buttons = ({ onClose, pending, disabled, label, type = "main" }) => (
   <div className="flex justify-end gap-2">
@@ -48,7 +49,7 @@ export const FmeaDialog = ({ existing, draft, onClose, onSaved }) => {
   // A new FMEA can start as a copy of one in force of the same kind (a base the others inherit from); the copy is its own from then on.
   const bases = useFmeas({ status: "active", kind, pageSize: 100 }, { enabled: !existing });
   const baseOptions = (bases.data?.data ?? []).map((f) => ({ value: f.id, label: `${f.number} · ${f.title}`, hint: f.currentLetter ? `Rev ${f.currentLetter}` : undefined }));
-  const ownerOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const ownerOptions = (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const monthsValid = months === "" || (Number.isInteger(Number(months)) && Number(months) >= 1 && Number(months) <= 120);
   const ready = title.trim() && monthsValid;
 
@@ -148,8 +149,8 @@ export const TeamDialog = ({ revision, onClose }) => {
   const employees = useEmployees();
   const [rows, setRows] = useState(() => revision.team.map((m) => ({ person: `${m.kind === "employee" ? "e" : "u"}:${m.personId}`, role: m.role })));
   const options = [
-    ...(people.data ?? []).map((p) => ({ value: `u:${p.id}`, label: p.name, hint: "Member" })),
-    ...(employees.data ?? []).filter((e) => e.active).map((e) => ({ value: `e:${e.id}`, label: e.name, hint: e.jobTitle ?? "Employee" })),
+    ...(people.data ?? []).map((p) => ({ value: `u:${p.id}`, label: p.name, hint: "Member", avatar: avatarOf(p) })),
+    ...(employees.data ?? []).filter((e) => e.active).map((e) => employeeOption(e, { as: "field", value: `e:${e.id}`, hint: e.jobTitle ?? "Employee" })),
   ];
   // Someone already on the team stays offered even if they are no longer in the lists.
   revision.team.forEach((m) => {
@@ -334,7 +335,7 @@ export const ApproverDialog = ({ revision, onClose }) => {
   const [approverId, setApproverId] = useState(revision.approver?.id ?? null);
   const options = (people.data ?? [])
     .filter((p) => p.canApprove && p.id !== revision.author?.id)
-    .map((p) => ({ value: p.id, label: p.name }));
+    .map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const save = (e) => {
     e.preventDefault();
     const chosen = options.find((o) => o.value === approverId);

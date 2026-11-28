@@ -24,7 +24,7 @@ const NavItem = ({
       <NavLink
         title={label}
         className={({ isActive }) =>
-          `flex gap-3 w-full rounded-lg ml-2 p-1.5 items-center border border-transparent
+          `flex gap-3 w-full rounded-lg ml-2 p-1.5 pointer-coarse:py-2.5 items-center border border-transparent
   ${
     isActive
       ? "text-white border-cta-color hover:bg-cta-color/80 bg-cta-color/50"
@@ -64,7 +64,7 @@ const NavItem = ({
               e.stopPropagation();
               onToggleSubMenu();
             }}
-            className={`hover:bg-cta-color/20 rounded p-1.5 h-6 w-6 shrink-0 transition-transform duration-200 ${
+            className={`hover:bg-cta-color/20 rounded p-1.5 h-6 w-6 pointer-coarse:h-9 pointer-coarse:w-9 pointer-coarse:p-2 shrink-0 transition-transform duration-200 ${
               isSubMenuOpen === label ? "rotate-180" : ""
             }`}
           />

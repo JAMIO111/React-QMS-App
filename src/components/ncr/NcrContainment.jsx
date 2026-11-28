@@ -17,6 +17,7 @@ import { CONTAINMENT_KINDS, containmentKindLabel } from "../../lib/ncrWorkflow";
 import { formatDate } from "../../lib/ncr";
 import CTAButton from "@/components/CTAButton";
 import { changesSince } from "../../lib/editConflicts";
+import { employeeOption } from "@/lib/employees";
 
 const STATUS = {
   open: { label: "Open", tone: "bg-warning-color/15 text-primary-text" },
@@ -76,7 +77,7 @@ const ActionDialog = ({ ncrId, action, lots, onClose }) => {
           clearable
           value={form.ownerEmployeeId}
           onChange={(v) => setForm((f) => ({ ...f, ownerEmployeeId: v || null }))}
-          options={(employees.data ?? []).filter((e) => e.active || e.id === form.ownerEmployeeId).map((e) => ({ value: e.id, label: e.name }))}
+          options={(employees.data ?? []).filter((e) => e.active || e.id === form.ownerEmployeeId).map((e) => employeeOption(e, { as: "field" }))}
           placeholder="Not assigned"
         />
         {lots.length > 0 && (
@@ -143,7 +144,8 @@ const DoneDialog = ({ action, onClose }) => {
  * Containment of an NC: what is being done to stop suspect product going on, or why nothing is needed. Every action must be done or cancelled, and at least one
  * done (or a reason that none is needed), before the NC can reach Contained or anything beyond.
  */
-const NcrContainment = ({ ncrId, canEdit }) => {
+/** `canEdit` adds and finishes actions (ncr.update, or ncr.contribute on an NC you raised); `canReason` (ncr.update) also says no containment is needed, which changes the NC itself. */
+const NcrContainment = ({ ncrId, canEdit, canReason = canEdit }) => {
   const containment = useNcrContainment(ncrId);
   const affectedLots = useNcrAffectedLots(ncrId);
   const lots = (affectedLots.data?.data ?? []).filter((a) => !a.removedAt);
@@ -246,7 +248,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
         </div>
       )}
 
-      {(canEdit || c.notNeededReason) && (
+      {(canReason || c.notNeededReason) && (
         <div className="flex flex-col gap-2 rounded-xl border border-border-color p-3">
           {c.notNeededReason ? (
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -254,7 +256,7 @@ const NcrContainment = ({ ncrId, canEdit }) => {
                 <span className="text-secondary-text">No containment needed because: </span>
                 {c.notNeededReason}
               </p>
-              {canEdit && (
+              {canReason && (
                 <CTAButton buttonType="button" type="neutral" size="md" onClick={() => saveReason(null)}>
                   Clear
                 </CTAButton>

@@ -21,6 +21,7 @@ import { ReadersCard, SkillsCard } from "./ReadersPanels";
 import { ChangeRequestsCard, LinksCard, PeriodicReviewCard } from "./LifecyclePanels";
 import { changesSince } from "../../lib/editConflicts";
 import LinkedChanges from "../change/LinkedChanges";
+import { avatarOf } from "@/lib/employees";
 
 const Fact = ({ label, children }) => (
   <div className="flex flex-col">
@@ -42,7 +43,7 @@ const EditDialog = ({ doc, onClose }) => {
   const [issuer, setIssuer] = useState(doc.issuer ?? "");
   const [reference, setReference] = useState(doc.externalReference ?? "");
   const external = doc.origin === "external";
-  const options = (people.data ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const options = (people.data ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
   const ready = title.trim() && ownerId && (!external || issuer.trim());
   const save = (e) => {
     e.preventDefault();

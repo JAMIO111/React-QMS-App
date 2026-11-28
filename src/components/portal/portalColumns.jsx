@@ -33,9 +33,10 @@ const Pill = ({ tone, children }) => <span className={`rounded-full px-2 py-0.5 
 const reference = (to) => (i) => {
   const r = i.row.original;
   return (
-    <div className="table-row-item flex items-center gap-2">
+    // `.table-row-item` is a block that clips its text (it beats `flex` here), so the tag is spaced with its own margin.
+    <div className="table-row-item">
       <Link to={to(r)} className="font-medium text-link-color hover:underline">{r.reference}</Link>
-      {r.viewed === false && <Pill tone="bg-brand-primary/15 text-brand-primary">New</Pill>}
+      {r.viewed === false && <span className="ml-2 inline-block align-middle"><Pill tone="bg-brand-primary/15 text-brand-primary">New</Pill></span>}
     </div>
   );
 };

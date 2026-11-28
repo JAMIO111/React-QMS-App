@@ -5,14 +5,15 @@ import CTAButton from "@/components/CTAButton";
 import Callout from "../ui/Callout";
 
 /** Stage track with the moves allowed from the current stage. */
-const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pending }) => {
+const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pending, openingNeeded = [] }) => {
   const options = nextStages(ncr.stage);
   const shown = STAGES.filter((s) => s.key !== "cancelled" || ncr.stage === "cancelled");
   const current = STAGES.findIndex((s) => s.key === ncr.stage);
   const blocked = !canUpdate || !!ncr.deletedAt;
   // What is still needed for the next stage (and so for skipping past it): the rules are cumulative.
   const next = options.forward[0];
-  const needed = next && next !== "open" ? (gates?.[gateKey(next)] ?? []) : [];
+  // Opening a draft needs its basic fields (saved ones: the server checks the saved record); the later stages ask for their own things.
+  const needed = next === "open" ? openingNeeded.map((m) => `Fill in ${m}`) : next ? (gates?.[gateKey(next)] ?? []) : [];
   return (
     <section aria-label="Stage" className="flex flex-col gap-3 rounded-2xl border border-border-color bg-secondary-bg p-4">
       <ol className="flex flex-wrap items-center gap-1 text-xs">
@@ -41,7 +42,7 @@ const StageBar = ({ ncr, gates, canUpdate, dirty, onMove, onCancel, onReopen, pe
       {!blocked && (
         <div className="flex flex-wrap items-center gap-2">
           {options.forward.slice(0, 1).map((to) => (
-            <CTAButton key={to} buttonType="button" disabled={pending || dirty} loading={pending} onClick={() => onMove(to)}
+            <CTAButton key={to} buttonType="button" disabled={pending || dirty || (to === "open" && openingNeeded.length > 0)} loading={pending} onClick={() => onMove(to)}
               type="main" size="md">
               {to === "open" ? "Open this NC" : `Move to ${stageOf(to).label}`}
             </CTAButton>

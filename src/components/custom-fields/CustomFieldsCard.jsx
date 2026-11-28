@@ -9,6 +9,7 @@ import ComboField from "../ui/ComboField";
 import LockedMark from "../ui/LockedMark";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import Switch from "../ui/Switch";
+import { avatarOf } from "@/lib/employees";
 
 const inputClass =
   "w-full rounded-lg border border-border-color bg-text-input-color px-3 py-2 text-sm text-primary-text outline-none hover:border-border-dark-color focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/20 disabled:opacity-60";
@@ -108,7 +109,7 @@ const FieldRow = ({ field, value, editable, people, stages, onSave, lock }) => {
       return <ComboField label={field.label} required={required} hint={help || undefined} value={value ?? null} onChange={(v) => onSave(v)} options={options} placeholder="Choose…" {...(lockedBy ? { lockedBy, disabled: true } : {})} />;
     }
     case "person": {
-      const options = (people.list ?? []).map((p) => ({ value: p.id, label: p.name }));
+      const options = (people.list ?? []).map((p) => ({ value: p.id, label: p.name, avatar: avatarOf(p) }));
       if (value && !options.some((o) => o.value === value)) options.push({ value, label: people.byId[value] ?? "Someone who has left", hint: "No longer a member" });
       return <ComboField label={field.label} required={required} hint={help || undefined} value={value ?? null} onChange={(v) => onSave(v)} options={options} placeholder="Choose a person…" {...(lockedBy ? { lockedBy, disabled: true } : {})} />;
     }

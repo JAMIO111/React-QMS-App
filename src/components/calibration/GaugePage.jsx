@@ -24,7 +24,8 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
-import { useCalibrationMutation, useGauge, useGaugeCalibrations, useGaugeCharacteristics, useGaugeTypes } from "../../hooks/useCalibration";
+import { useCalibrationMutation, useGauge, useGaugeCalibrations, useGaugeCharacteristics, useGaugeTypes, useTypePreview } from "../../hooks/useCalibration";
+import { useDebouncedValue } from "../../hooks/useDebounce";
 import { useQuickSave } from "../../hooks/useQuickSave";
 import { softDelete } from "../../lib/guessRequest";
 import { useUnits } from "../../hooks/useMasterData";
@@ -33,13 +34,15 @@ import { describeApiError } from "../../lib/api-client";
 import { GAUGE_STATUSES, INTERVAL_UNITS, describeDue, formatInterval } from "../../lib/calibration";
 import { formatDate, ncrPath } from "../../lib/ncr";
 import SideMenuItem from "../SideMenuItem";
-import { PartyPicker } from "../ncr/Pickers";
+import { MachinePicker, PartyPicker } from "../ncr/Pickers";
 import ReasonDialog from "../ncr/ReasonDialog";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
 import TextInput from "../ui/TextInput";
 import CharacteristicsEditor from "./CharacteristicsEditor";
+import RangeChecksNotice from "./RangeChecksNotice";
+import { PreviewTable } from "./RangePreview";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import GaugeHistory from "./GaugeHistory";
@@ -55,7 +58,7 @@ import { lockKey } from "../../lib/importLocks";
 
 const EMPTY = {
   assetNumber: "", description: "", gaugeTypeId: null, manufacturer: "", model: "", serialNumber: "",
-  siteId: null, departmentId: null, location: "", custodianId: null,
+  siteId: null, departmentId: null, machineId: null, location: "", custodianId: null,
   rangeMin: "", rangeMax: "", unitCode: null, resolution: "",
   calibrationSource: "internal", supplierId: null, intervalValue: "", intervalUnit: null,
   status: "active", statusReason: "", lastCalibratedOn: null, nextDueOn: null, commissionedOn: null, notes: "",
@@ -63,7 +66,7 @@ const EMPTY = {
 const str = (v) => (v === null || v === undefined ? "" : String(v));
 const toForm = (g) => ({
   assetNumber: g.assetNumber, description: g.description, gaugeTypeId: g.type?.id ?? null, manufacturer: str(g.manufacturer), model: str(g.model), serialNumber: str(g.serialNumber),
-  siteId: g.site?.id ?? null, departmentId: g.department?.id ?? null, location: str(g.location), custodianId: g.custodian?.id ?? null,
+  siteId: g.site?.id ?? null, departmentId: g.department?.id ?? null, machineId: g.machine?.id ?? null, location: str(g.location), custodianId: g.custodian?.id ?? null,
   rangeMin: str(g.rangeMin), rangeMax: str(g.rangeMax), unitCode: g.unitCode ?? null, resolution: str(g.resolution),
   calibrationSource: g.calibrationSource, supplierId: g.supplier?.id ?? null, intervalValue: str(g.intervalValue), intervalUnit: g.intervalUnit,
   status: g.status, statusReason: str(g.statusReason), lastCalibratedOn: g.lastCalibratedOn, nextDueOn: g.nextDueOn, commissionedOn: g.commissionedOn, notes: str(g.notes),
@@ -71,7 +74,7 @@ const toForm = (g) => ({
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 const toBody = (f) => ({
   assetNumber: f.assetNumber.trim(), description: f.description.trim(), gaugeTypeId: f.gaugeTypeId, manufacturer: f.manufacturer.trim() || null,
-  model: f.model.trim() || null, serialNumber: f.serialNumber.trim() || null, siteId: f.siteId, departmentId: f.departmentId,
+  model: f.model.trim() || null, serialNumber: f.serialNumber.trim() || null, siteId: f.siteId, departmentId: f.departmentId, machineId: f.machineId,
   location: f.location.trim() || null, custodianId: f.custodianId, rangeMin: num(f.rangeMin), rangeMax: num(f.rangeMax), unitCode: f.unitCode,
   resolution: num(f.resolution), calibrationSource: f.calibrationSource, supplierId: f.calibrationSource === "external" ? f.supplierId : null,
   intervalValue: num(f.intervalValue), intervalUnit: f.intervalValue === "" ? null : f.intervalUnit ?? "months",
@@ -184,17 +187,43 @@ const GaugePage = () => {
   const refs = { details: useRef(null), characteristics: useRef(null), calibrations: useRef(null), studies: useRef(null), history: useRef(null) };
 
   const original = useMemo(() => (gauge ? toForm(gauge) : EMPTY), [gauge]);
-  useEffect(() => reset(original), [original, reset]);
+  // The form follows the saved gauge, but a refetch (another person's change, a status update) never wipes what is being typed: it is
+  // put back only when a different gauge is opened or nothing has been edited. A save that conflicts is caught by the edit-conflict check.
+  const dirtyRef = useRef(false);
+  const shownId = useRef(null);
+  useEffect(() => {
+    const id = gauge?.id ?? "new";
+    if (shownId.current !== id || !dirtyRef.current) reset(original);
+    shownId.current = id;
+  }, [original, gauge?.id, reset]);
+  const machineSite = useRef(null);
+  useEffect(() => {
+    machineSite.current = gauge?.machine?.siteId ?? null;
+  }, [gauge?.machine?.siteId, gauge?.id]);
 
   const deleted = !isNew && !!gauge?.deletedAt;
   const canEdit = can("calibration.manage") && !deleted;
   const body = toBody(form);
   const changes = isNew ? Object.fromEntries(Object.entries(body).filter(([, v]) => v !== null && v !== "")) : changed(body, toBody(original));
   const dirty = !isNew && Object.keys(changes).length > 0;
-  const numbersOk = ["rangeMin", "rangeMax", "resolution", "intervalValue"].every((k) => isNum(form[k]));
-  const valid = form.assetNumber.trim() && form.description.trim() && numbersOk;
+  dirtyRef.current = dirty;
+  const intervalOk = form.intervalValue === "" || (Number.isInteger(Number(form.intervalValue)) && Number(form.intervalValue) >= 1 && Number(form.intervalValue) <= 3650);
+  const numbersOk = ["rangeMin", "rangeMax", "resolution", "intervalValue"].every((k) => isNum(form[k])) && intervalOk;
+  // A gauge needs a type. A gauge from before that rule that still has none can be edited and saved as it is; once it has one, it keeps one.
+  const typeNeeded = isNew || !!gauge?.type;
+  const leavingQuarantine = !isNew && gauge?.status === "quarantined" && ["active", "in_calibration"].includes(form.status);
+  const reasonOk = !leavingQuarantine || (form.statusReason.trim() !== "" && form.statusReason.trim() !== (original.statusReason ?? "").trim());
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
   const selectedType = (types ?? []).find((t) => t.id === form.gaugeTypeId);
+  // A type with checks given as a percentage of the range needs the gauge's range and unit to work them out. Asked when a gauge is added or given
+  // such a type (the database asks for the same); a gauge that already has the type can still be edited as it is.
+  const typeNeedsRange = (selectedType?.rangeCheckCount ?? 0) > 0;
+  const rangeRequired = typeNeedsRange && (isNew || form.gaugeTypeId !== original.gaugeTypeId);
+  const rangeOrdered = isNum(form.rangeMin) && isNum(form.rangeMax) && form.rangeMin !== "" && form.rangeMax !== "" && Number(form.rangeMax) > Number(form.rangeMin);
+  const rangeOk = rangeOrdered && !!form.unitCode;
+  const valid = form.assetNumber.trim() && form.description.trim() && numbersOk && (!typeNeeded || !!form.gaugeTypeId) && reasonOk && (!rangeRequired || rangeOk);
+  const previewRange = useDebouncedValue({ rangeMin: num(form.rangeMin) ?? NaN, rangeMax: num(form.rangeMax) ?? NaN, unitCode: form.unitCode, resolution: num(form.resolution) ?? NaN }, 400);
+  const preview = useTypePreview(form.gaugeTypeId, previewRange, { enabled: rangeRequired });
   const { lock } = useImportLocks("gauge", isNew ? null : gauge?.id);
 
   const save = () => {
@@ -233,9 +262,9 @@ const GaugePage = () => {
       render={({ field }) =>
         render({
           ...field,
-          onChange: (v) => {
+          onChange: (v, ...rest) => {
             field.onChange(v);
-            then?.(v);
+            then?.(v, ...rest);
           },
           disabled: !canEdit,
           ...lock(lockKey(name)),
@@ -358,7 +387,7 @@ const GaugePage = () => {
                 {text("assetNumber", "Asset number", { required: true, maxLength: 40, icon: HashIcon, placeholder: "e.g. G-0042" })}
                 {text("description", "Description", { required: true, maxLength: 200, icon: GaugeIcon, placeholder: "e.g. Digital caliper 0–150 mm" })}
                 {controlled("gaugeTypeId", (f) => (
-                  <RHFComboBox {...f} label="Gauge type" icon={TagIcon} placeholder="Select a type"
+                  <RHFComboBox {...f} label="Gauge type" icon={TagIcon} placeholder="Select a type" required={typeNeeded} clearable={!typeNeeded}
                     hint={isNew ? "A new gauge gets the type's characteristics and interval" : undefined}
                     options={(types ?? []).filter((t) => t.active || t.id === form.gaugeTypeId).map((t) => ({ id: t.id, name: t.name, hint: `${t.code} · ${formatInterval(t.intervalValue, t.intervalUnit)}` }))} />
                 ))}
@@ -369,25 +398,66 @@ const GaugePage = () => {
                 <SubHeading>Location and custody</SubHeading>
                 {controlled("siteId", (f) => (
                   <RHFComboBox {...f} label="Site" icon={HouseIcon} placeholder="Select a site" options={(sites?.data ?? []).map((s) => ({ id: s.id, name: `${s.code} · ${s.name}` }))} />
-                ), () => setValue("departmentId", null, { shouldDirty: true }))}
+                ), (siteId) => {
+                  setValue("departmentId", null, { shouldDirty: true });
+                  // A machine at another site no longer fits.
+                  if (form.machineId && machineSite.current && machineSite.current !== siteId) {
+                    setValue("machineId", null, { shouldDirty: true });
+                    machineSite.current = null;
+                  }
+                })}
                 {controlled("departmentId", (f) => (
                   <RHFComboBox {...f} label="Department" icon={HouseIcon} disabled={f.disabled || !form.siteId} placeholder={form.siteId ? "Select a department" : "Choose a site first"}
                     options={(departments.data?.data ?? []).map((d) => ({ id: d.id, name: d.name, hint: d.code }))} />
                 ))}
+                {controlled("machineId", (f) => (
+                  <MachinePicker {...f} label="Machine" icon={FactoryIcon} includeInactive={false} current={gauge?.machine}
+                    hint="Optional: the machine this gauge is fixed to. Choosing one sets the site" />
+                ), (id, machine) => {
+                  machineSite.current = machine?.site?.id ?? null;
+                  if (machine?.site?.id && machine.site.id !== form.siteId) {
+                    setValue("siteId", machine.site.id, { shouldDirty: true });
+                    setValue("departmentId", null, { shouldDirty: true });
+                  }
+                })}
                 {text("location", "Location", { maxLength: 200, icon: HouseIcon, placeholder: "e.g. Inspection room, cabinet 3" })}
                 {controlled("custodianId", (f) => <PeoplePicker {...f} label="Custodian" icon={UsersIcon} placeholder="Who looks after it" current={gauge?.custodian} />)}
 
                 <SubHeading>Measuring range</SubHeading>
+                {typeNeedsRange && (
+                  <div className="w-full lg:col-span-2">
+                    <Callout tone="info" title={`${selectedType.name} needs this gauge's range`}>
+                      Some of this type&apos;s checks are placed at a percentage of the gauge&apos;s range, so each gauge needs its range and unit to work its own points out.
+                    </Callout>
+                  </div>
+                )}
                 <div className="flex w-full items-start gap-4">
-                  {numberInput("rangeMin", "Range from", { icon: RulerIcon })}
-                  {numberInput("rangeMax", "Range to", { icon: RulerIcon })}
+                  {numberInput("rangeMin", "Range from", { icon: RulerIcon, required: rangeRequired })}
+                  {numberInput("rangeMax", "Range to", {
+                    icon: RulerIcon,
+                    required: rangeRequired,
+                    ...(rangeRequired && isNum(form.rangeMin) && isNum(form.rangeMax) && form.rangeMin !== "" && form.rangeMax !== "" && !rangeOrdered ? { error: "Must be above the start of the range" } : {}),
+                  })}
                 </div>
                 <div className="flex w-full items-start gap-4">
                   {controlled("unitCode", (f) => (
-                    <RHFComboBox {...f} label="Unit" icon={RulerIcon} placeholder="Unit" sort={false} options={(units.data ?? []).map((u) => ({ id: u.code, name: u.code, hint: u.name }))} />
+                    <RHFComboBox {...f} label="Unit" icon={RulerIcon} required={rangeRequired} placeholder="Unit" sort={false} options={(units.data ?? []).map((u) => ({ id: u.code, name: u.code, hint: u.name }))} />
                   ))}
                   {numberInput("resolution", "Resolution", { icon: RulerIcon, placeholder: "e.g. 0.01" })}
                 </div>
+                {rangeRequired && (
+                  <div className="w-full lg:col-span-2" aria-live="polite">
+                    {preview.data ? (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-sm font-medium text-secondary-text">The checks this gauge will get</p>
+                        <PreviewTable preview={preview.data} label="Checks this gauge will get" />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-secondary-text">Give the range and the unit to see the checks this gauge will get.</p>
+                    )}
+                    {preview.error && <Callout tone="error" role="alert">{describeApiError(preview.error)}</Callout>}
+                  </div>
+                )}
 
                 <SubHeading>Calibration</SubHeading>
                 {controlled("calibrationSource", (f) => (
@@ -400,6 +470,7 @@ const GaugePage = () => {
                 <div className="flex w-full items-start gap-4">
                   {numberInput("intervalValue", "Interval", {
                     icon: RefreshCwIcon,
+                    ...(isNum(form.intervalValue) && !intervalOk ? { error: "Whole number from 1 to 3650" } : {}),
                     placeholder: selectedType ? `${selectedType.intervalValue} (type)` : "12",
                     hint: isNew && !form.intervalValue ? (selectedType ? `Defaults to ${formatInterval(selectedType.intervalValue, selectedType.intervalUnit)}` : "Defaults to 12 months") : undefined,
                   })}
@@ -417,10 +488,13 @@ const GaugePage = () => {
 
                 <SubHeading>Status</SubHeading>
                 {controlled("status", (f) => (
-                  <RHFComboBox {...f} label="Status" icon={ClipboardListIcon} sort={false} clearable={false} options={GAUGE_STATUSES.map((s) => ({ id: s.key, name: s.label }))}
+                  <RHFComboBox {...f} label="Status" icon={ClipboardListIcon} required sort={false} clearable={false} options={GAUGE_STATUSES.map((s) => ({ id: s.key, name: s.label }))}
                     hint="A failed calibration quarantines the gauge; passing returns it to active" />
                 ))}
-                {text("statusReason", "Status reason", { maxLength: 500, icon: AlignCenterIcon, placeholder: "Why (e.g. damaged anvil)" })}
+                {text("statusReason", "Status reason", {
+                  maxLength: 500, icon: AlignCenterIcon, placeholder: "Why (e.g. damaged anvil)", required: leavingQuarantine,
+                  error: leavingQuarantine && !reasonOk ? "Say why the gauge is back in use" : undefined,
+                })}
                 <div className="lg:col-span-2">
                   <RHFTextArea label="Notes" icon={AlignCenterIcon} value={form.notes} onChange={set("notes")} disabled={!canEdit} max={5000} rows={3} placeholder="Anything else about this gauge" {...lock("notes")} />
                 </div>
@@ -451,6 +525,7 @@ const GaugePage = () => {
                   The points checked at every calibration, each a nominal value with a tolerance either side.
                   {gauge.type ? ` Copied from ${gauge.type.name} when the gauge was added; changes here apply to this gauge only.` : ""}
                 </p>
+                <RangeChecksNotice gaugeId={gauge.id} items={characteristics.data ?? []} canEdit={canEdit} />
                 <CharacteristicsEditor
                   items={characteristics.data}
                   isLoading={characteristics.isLoading}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CheckoutNotice from "../billing/CheckoutNotice";
-import SeatPicker from "../billing/SeatPicker";
+import OpenInvoiceCard from "../billing/OpenInvoiceCard";
+import StartSubscriptionPanel from "../billing/StartSubscriptionPanel";
 import ComboField from "../ui/ComboField";
 import MenuCard from "../ui/MenuCard";
 import LoadingScreen from "../ui/LoadingScreen";
@@ -14,7 +15,7 @@ import { useToast } from "../../contexts/ToastProvider";
 import { useOrganisation } from "../../contexts/OrganisationProvider";
 import { usePermissions } from "../../hooks/useQmsApi";
 import { useCheckoutReturn } from "../../hooks/useCheckoutReturn";
-import { formatDate, loadChoice, money, saveChoice } from "../../lib/billing";
+import { formatDate, loadChoice, money, saveChoice, feePlans, seatChangeWords, seatPlans } from "../../lib/billing";
 import {
   useChangeSeats,
   useInvoices,
@@ -22,7 +23,6 @@ import {
   usePortalSession,
   useSeatAssignments,
   useSeatPreview,
-  useStartCheckout,
   useSubscriptionMutation,
   useSubscriptionOverview,
 } from "../../hooks/useSubscription";
@@ -103,6 +103,19 @@ const Overview = ({ overview, canManage }) => {
           {sub && <StatusBadge status={sub.status} />}
         </div>
       }>
+      {sub?.paymentRoute === "invoice" && (
+        <div className="mb-3 flex flex-col gap-2">
+          <OpenInvoiceCard sub={sub} />
+          {sub.billing && (
+            <p className="text-sm text-secondary-text">
+              Paid by invoice, payable within {sub.paymentTermsDays ?? 14} days. Billed to {sub.billing.legalName ?? "your company"}
+              {sub.billing.email ? ` (${sub.billing.email})` : ""}
+              {sub.billing.vatNumber ? `, VAT ${sub.billing.vatNumber}` : ""}
+              {sub.billing.purchaseOrder ? `, PO ${sub.billing.purchaseOrder}` : ""}. Change these details in Manage billing.
+            </p>
+          )}
+        </div>
+      )}
       {sub?.status === "trialing" && (
         <p role="status" className="mb-3 text-sm text-primary-text">
           Free trial until {date(sub.trialEnd)}. Your card is charged from then
@@ -202,7 +215,8 @@ const Overview = ({ overview, canManage }) => {
   );
 };
 
-const PricingCards = ({ catalogue, overview, canManage }) => {
+/** Change the number of seats of each package (Stripe previews the price first). Also used by the set-up wizard's plan step. */
+export const PricingCards = ({ catalogue, overview, canManage }) => {
   const managed =
     overview.providerManaged &&
     overview.subscription?.billingProvider === "stripe";
@@ -220,7 +234,7 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
   const seatsOf = (slug) => overview.items.find((i) => i.planSlug === slug);
   const purchased = (slug) => seatsOf(slug)?.purchased ?? 0;
   const wanted = (slug) => draft[slug] ?? purchased(slug);
-  const changes = catalogue.plans.filter(
+  const changes = seatPlans(catalogue.plans).filter(
     (p) => wanted(p.slug) !== purchased(p.slug),
   );
 
@@ -247,10 +261,9 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
     );
     try {
       const quote = await preview.mutateAsync({ seats });
-      const due = quote.amountDue;
       const ok = await confirm({
         title: "Apply seat changes?",
-        message: `${lines}. ${due > 0 ? `Stripe charges ${money(due, quote.currency.toUpperCase())} now for the rest of this period (prorated, ${money(quote.tax, quote.currency.toUpperCase())} of it VAT)` : due < 0 ? `Stripe credits ${money(-due, quote.currency.toUpperCase())} to your next invoice` : "Nothing is charged now"}. From the next billing date the recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
+        message: `${lines}. ${seatChangeWords(quote)}. From the next billing date the recurring cost changes by ${costChange < 0 ? "-" : ""}${money(Math.abs(costChange))} per ${annual ? "year" : "month"} (excluding VAT).`,
         confirmText: "Apply",
         cancelText: "Cancel",
         type: "info",
@@ -318,8 +331,8 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
           </Switch>
         )
       }>
-      <div className="grid gap-4 md:grid-cols-3">
-        {catalogue.plans.map((plan) => {
+      <div className="grid gap-4 md:grid-cols-2">
+        {seatPlans(catalogue.plans).map((plan) => {
           const price = annual ? plan.annual : plan.monthly;
           const owned = seatsOf(plan.slug);
           const qty = wanted(plan.slug);
@@ -333,18 +346,29 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
                 {plan.name}
               </h3>
               <p className="text-sm text-secondary-text">{plan.description}</p>
-              <p className="text-2xl font-semibold text-primary-text">
-                {money(
-                  annual
-                    ? plan.annualMonthlyEquivalent
-                    : plan.monthly?.unitAmount,
-                  price?.currency,
-                )}
-                <span className="text-sm font-normal text-secondary-text">
-                  {" "}
-                  /user/month
-                </span>
-              </p>
+              {(price?.unitAmount ?? 0) === 0 ? (
+                <p className="text-2xl font-semibold text-primary-text">
+                  Free
+                  {plan.slug === "observer" && (
+                    <span className="block text-sm font-normal text-secondary-text">
+                      up to twice your paid seats
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-2xl font-semibold text-primary-text">
+                  {money(
+                    annual
+                      ? plan.annualMonthlyEquivalent
+                      : plan.monthly?.unitAmount,
+                    price?.currency,
+                  )}
+                  <span className="text-sm font-normal text-secondary-text">
+                    {" "}
+                    /user/month
+                  </span>
+                </p>
+              )}
               {annual && plan.annualSaving > 0 && (
                 <p className="text-xs text-green-700 dark:text-green-300">
                   Billed {money(plan.annual.unitAmount, plan.annual.currency)}
@@ -392,6 +416,18 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
           );
         })}
       </div>
+      {feePlans(catalogue.plans).map((f) => {
+        const owned = overview.items.find((i) => i.planSlug === f.slug);
+        const amount = owned?.unitAmount ?? (annual ? f.annual : f.monthly)?.unitAmount;
+        return (
+          <p key={f.slug} className="mt-3 text-sm text-secondary-text">
+            <strong className="text-primary-text">{f.name} fee:</strong>{" "}
+            {owned
+              ? `${money(amount)} per ${annual ? "year" : "month"}, one per organisation whatever the number of seats.`
+              : `${money(amount)} per ${annual ? "year" : "month"} on subscriptions started now, one per organisation. Your subscription does not include it.`}
+          </p>
+        );
+      })}
       {canManage && changes.length > 0 && (
         <div className="mt-4 flex items-center justify-end gap-2">
           <CTAButton
@@ -415,55 +451,19 @@ const PricingCards = ({ catalogue, overview, canManage }) => {
   );
 };
 
-/** For an organisation with no subscription yet, when Stripe is set up: choose seats and go to the secure checkout. */
+/** For an organisation with no subscription yet, when Stripe is set up: choose seats, then pay by card (secure checkout, free trial) or by invoice. */
 const StartSubscription = ({ catalogue }) => {
   const { organisationId } = useOrganisation();
   const [choice, setChoice] = useState(() => loadChoice(organisationId));
-  const start = useStartCheckout();
-  const { showToast } = useToast();
   const update = (next) => {
     setChoice(next);
     saveChoice(organisationId, next);
   };
-  const go = () =>
-    start.mutate(
-      {
-        interval: choice.interval,
-        seats: Object.fromEntries(
-          Object.entries(choice.seats).filter(([, q]) => q > 0),
-        ),
-        returnTo: "settings",
-      },
-      {
-        onSuccess: ({ url }) => window.location.assign(url),
-        onError: (e) =>
-          showToast({
-            type: "error",
-            title: "Could not start checkout",
-            message: describeApiError(e),
-          }),
-      },
-    );
   return (
     <MenuCard
       title="Start your subscription"
-      subtitle="14-day free trial, card required, cancel any time before it ends">
-      <SeatPicker
-        plans={catalogue.plans}
-        value={choice}
-        onChange={update}
-        disabled={start.isPending}
-      />
-      <div className="mt-4 flex justify-end">
-        <LoadingButton
-          variant="main"
-          className="px-2 py-1"
-          loading={start.isPending}
-          loadingText="Opening checkout…"
-          onClick={go}>
-          Continue to secure checkout
-        </LoadingButton>
-      </div>
+      subtitle="By card: 14-day free trial, cancel any time before it ends. By invoice: no trial, payable within 14 days">
+      <StartSubscriptionPanel plans={catalogue.plans} choice={choice} onChoice={update} returnTo="settings" />
     </MenuCard>
   );
 };
@@ -477,7 +477,7 @@ const Comparison = ({ catalogue }) => (
         <thead>
           <tr className="text-left text-secondary-text">
             <th className="py-1 pr-3 font-medium">Module / feature</th>
-            {catalogue.plans.map((p) => (
+            {seatPlans(catalogue.plans).map((p) => (
               <th key={p.slug} className="py-1 pr-3 font-medium">
                 {p.name}
               </th>
@@ -486,7 +486,7 @@ const Comparison = ({ catalogue }) => (
         </thead>
         <tbody>
           {catalogue.modules.map((m) => (
-            <ModuleRows key={m.slug} module={m} plans={catalogue.plans} />
+            <ModuleRows key={m.slug} module={m} plans={seatPlans(catalogue.plans)} />
           ))}
         </tbody>
       </table>
@@ -627,7 +627,7 @@ const Seats = ({ catalogue, overview, canAssign }) => {
                     onChange={(v) => (v ?? "") !== (m.plan?.slug ?? "") && change(m, v ?? "")}
                     placeholder="No package"
                     clearable
-                    options={catalogue.plans.map((p) => ({ value: p.slug, label: p.name, hint: `${freeOf(p.slug)} free` }))}
+                    options={seatPlans(catalogue.plans).map((p) => ({ value: p.slug, label: p.name, hint: `${freeOf(p.slug)} free` }))}
                     className="min-w-44 [&_label]:sr-only"
                   />
                 ) : (

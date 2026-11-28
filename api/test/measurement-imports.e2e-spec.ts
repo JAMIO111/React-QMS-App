@@ -59,7 +59,8 @@ beforeAll(async () => {
   await app.init();
 
   const h = await as(ids.ownerA);
-  ctx.cmm = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'CMM-1', description: 'Bridge CMM', siteId: ids.siteA }).expect(201)).body.id;
+  ctx.cmmType = (await api().post('/api/v1/gauge-types').set(h).send({ code: 'CMM', name: 'Coordinate measuring machine' }).expect(201)).body.id;
+  ctx.cmm = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'CMM-1', description: 'Bridge CMM', gaugeTypeId: ctx.cmmType, siteId: ids.siteA }).expect(201)).body.id;
   const fam = (await api().post('/api/v1/part-families').set(h).send({ code: 'HSG', name: 'Housings' }).expect(201)).body;
   const part = (await api().post('/api/v1/parts').set(h).send({ partNumber: 'HSG-1', name: 'Housing', partFamilyId: fam.id, initialRevision: { revision: 'A' } }).expect(201)).body;
   ctx.part = part.id;
@@ -278,7 +279,7 @@ describe('applying a preview (CM3)', () => {
   it('goes through the sampling plan like typed readings, and a CMM overdue for calibration needs an authorised override with a reason', async () => {
     const owner = await as(ids.ownerA);
     const overdue = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
-    const old = (await api().post('/api/v1/gauges').set(owner).send({ assetNumber: 'CMM-OLD', description: 'Old CMM', siteId: ids.siteA, nextDueOn: overdue }).expect(201)).body.id;
+    const old = (await api().post('/api/v1/gauges').set(owner).send({ assetNumber: 'CMM-OLD', description: 'Old CMM', gaugeTypeId: ctx.cmmType, siteId: ids.siteA, nextDueOn: overdue }).expect(201)).body.id;
     // A further part: the plan's samples are all taken, and it has no rule for a manual extra.
     const extra = await upload(owner, 'extra.csv', file(['Bore,1,25.0,24.95,25.05']).replace('SN-77', 'SN-80'));
     const done = await api().post(`/api/v1/inspection-imports/${extra.id}/apply`).set(owner).send({}).expect(409);

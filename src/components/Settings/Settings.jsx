@@ -1,7 +1,11 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import SettingMenuStructure from "../../SettingMenuStructure";
 import { useCanSee } from "../../hooks/useQmsApi";
-import { ChevronLeftIcon, ChevronRightIcon, DatabaseIcon } from "@/components/icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DatabaseIcon,
+} from "@/components/icons";
 import { DATA_PATH, dataTabPath, useDataTabs } from "./dataTabs";
 
 /**
@@ -12,17 +16,37 @@ import { DATA_PATH, dataTabPath, useDataTabs } from "./dataTabs";
  * Which level shows comes from the address, so a link straight to a nested page opens with its menu already showing, and the browser's
  * own Back works. Both levels stay mounted while the other shows (the hidden one is inert), which is what lets them slide.
  */
-const LEVEL_MOVE = "transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none";
+const LEVEL_MOVE =
+  "transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none";
 
 const itemClass = (active) =>
-  `group flex flex-row cursor-pointer items-center gap-2 rounded-xl px-3 py-1 ${active ? "bg-cta-color" : "hover:bg-border-color/50"}`;
+  `group flex flex-row cursor-pointer items-center gap-2 rounded-lg px-3 py-1 ${active ? "bg-cta-color" : "hover:bg-border-color/50"}`;
 
 /** `nested` marks an entry that opens a menu of its own: a small arrow on the right says so, and nudges along on hover. */
-const Item = ({ to, icon: Icon, label, active, replace, nested, style, className = "" }) => (
-  <Link to={to} replace={replace} style={style} aria-current={active ? "page" : undefined} className={`mx-2 mt-2 block rounded-xl ${className}`}>
+const Item = ({
+  to,
+  icon: Icon,
+  label,
+  active,
+  replace,
+  nested,
+  style,
+  className = "",
+}) => (
+  <Link
+    to={to}
+    replace={replace}
+    style={style}
+    aria-current={active ? "page" : undefined}
+    className={`block ${className}`}>
     <div className={itemClass(active)}>
-      <Icon className={`${active ? "text-white" : "text-primary-text"} h-4 w-4 shrink-0`} />
-      <h2 className={`${active ? "font-semibold text-white" : "text-primary-text"} text-left`}>{label}</h2>
+      <Icon
+        className={`${active ? "text-white" : "text-primary-text"} h-4 w-4 shrink-0`}
+      />
+      <h2
+        className={`${active ? "font-semibold text-white" : "text-primary-text"} text-left`}>
+        {label}
+      </h2>
       {nested && (
         <ChevronRightIcon
           aria-hidden="true"
@@ -57,15 +81,19 @@ const Settings = () => {
           />
           <span
             aria-hidden="true"
-            className={`pointer-events-none relative flex shrink-0 items-center justify-center overflow-hidden text-secondary-text ${LEVEL_MOVE} ${inData ? "mr-1 h-7 w-7 opacity-100" : "mr-0 h-7 w-0 opacity-0"}`}
-          >
+            className={`pointer-events-none relative flex shrink-0 items-center justify-center overflow-hidden text-secondary-text ${LEVEL_MOVE} ${inData ? "mr-1 h-7 w-7 opacity-100" : "mr-0 h-7 w-0 opacity-0"}`}>
             <ChevronLeftIcon className="h-5 w-5" />
           </span>
-          <div className={`pointer-events-none relative grid min-w-0 flex-1 ${inData ? "" : "pl-2"} transition-[padding] duration-300 motion-reduce:transition-none`}>
-            <h1 aria-hidden={inData} className={`col-start-1 row-start-1 text-primary-text ${LEVEL_MOVE} ${inData ? "-translate-x-3 opacity-0" : "translate-x-0 opacity-100"}`}>
+          <div
+            className={`pointer-events-none relative grid min-w-0 flex-1 ${inData ? "" : "pl-2"} transition-[padding] duration-300 motion-reduce:transition-none`}>
+            <h1
+              aria-hidden={inData}
+              className={`col-start-1 row-start-1 text-primary-text ${LEVEL_MOVE} ${inData ? "-translate-x-3 opacity-0" : "translate-x-0 opacity-100"}`}>
               Settings
             </h1>
-            <h1 aria-hidden={!inData} className={`col-start-1 row-start-1 text-primary-text ${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"}`}>
+            <h1
+              aria-hidden={!inData}
+              className={`col-start-1 row-start-1 text-primary-text ${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"}`}>
               Data
             </h1>
           </div>
@@ -76,25 +104,27 @@ const Settings = () => {
             aria-label="Settings"
             aria-hidden={inData}
             inert={inData}
-            className={`absolute inset-0 overflow-y-auto pb-2 ${LEVEL_MOVE} ${inData ? "pointer-events-none -translate-x-10 opacity-0" : "translate-x-0 opacity-100"}`}
-          >
-            {SettingMenuStructure.filter((item) => canSee(item.permission)).map((item) => (
-              <Item
-                key={item.path}
-                to={item.path}
-                icon={item.icon ?? DatabaseIcon}
-                label={item.name}
-                nested={item.path === "Data-Management"}
-                active={pathname.toLowerCase().startsWith(`/settings/${item.path.toLowerCase()}`)}
-              />
-            ))}
+            className={`absolute flex flex-col gap-1 overflow-y-auto p-2 ${LEVEL_MOVE} ${inData ? "pointer-events-none -translate-x-10 opacity-0" : "translate-x-0 opacity-100"}`}>
+            {SettingMenuStructure.filter((item) => canSee(item.permission)).map(
+              (item) => (
+                <Item
+                  key={item.path}
+                  to={item.path}
+                  icon={item.icon ?? DatabaseIcon}
+                  label={item.name}
+                  nested={item.path === "Data-Management"}
+                  active={pathname
+                    .toLowerCase()
+                    .startsWith(`/settings/${item.path.toLowerCase()}`)}
+                />
+              ),
+            )}
           </nav>
           <nav
             aria-label="Data"
             aria-hidden={!inData}
             inert={!inData}
-            className={`absolute inset-0 overflow-y-auto pb-2 ${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-10 opacity-0"}`}
-          >
+            className={`absolute flex gap-1 inset-0 overflow-y-auto p-2 ${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-10 opacity-0"}`}>
             {tabs.map((t, i) => (
               <Item
                 key={t.value}
@@ -104,7 +134,9 @@ const Settings = () => {
                 label={t.label}
                 active={inData && current?.value === t.value}
                 // Each item arrives a moment after the one above it as the menu opens.
-                style={{ transitionDelay: inData ? `${Math.min(i, 12) * 22}ms` : "0ms" }}
+                style={{
+                  transitionDelay: inData ? `${Math.min(i, 12) * 22}ms` : "0ms",
+                }}
                 className={`${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"}`}
               />
             ))}

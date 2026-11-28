@@ -510,8 +510,10 @@ const CalibrationRecordPage = () => {
                           {r.name}
                           {r.method && <span className="block text-xs text-secondary-text">{r.method}</span>}
                         </td>
-                        <td className="whitespace-nowrap py-1.5 pr-2 text-secondary-text">
-                          {r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}
+                        <td className="py-1.5 pr-2 text-secondary-text">
+                          <span className="whitespace-nowrap">{r.kind === "attribute" ? "Pass / fail" : `${formatNumber(r.lower)} to ${formatNumber(r.upper)} ${r.unitCode}`}</span>
+                          {r.kind !== "attribute" && r.derivation && <span className="block text-xs">{r.derivation}</span>}
+                          {r.kind !== "attribute" && r.toleranceSource && <span className="block text-xs">Source: {r.toleranceSource}</span>}
                         </td>
                         {r.kind === "attribute" ? (
                           <>

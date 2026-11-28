@@ -50,6 +50,26 @@ export const useGaugeTypeCharacteristics = (id, { includeInactive = false } = {}
     select: dataOf,
   });
 
+/**
+ * What a type's checks would become for a gauge with this range (nothing is saved; the database works it out). `range` is
+ * { rangeMin, rangeMax, unitCode, resolution } as numbers; it asks only once the range holds together.
+ */
+export const useTypePreview = (typeId, range, { enabled = true } = {}) => {
+  const { organisationId } = useOrganisation();
+  const ready = !!typeId && enabled && Number.isFinite(range?.rangeMin) && Number.isFinite(range?.rangeMax) && range.rangeMax > range.rangeMin && !!range?.unitCode;
+  const body = ready
+    ? { rangeMin: range.rangeMin, rangeMax: range.rangeMax, unitCode: range.unitCode, ...(Number.isFinite(range.resolution) && range.resolution > 0 ? { resolution: range.resolution } : {}) }
+    : null;
+  return useQuery({
+    queryKey: key(organisationId, "types", typeId, "preview", body),
+    queryFn: () => apiFetch(`/gauge-types/${typeId}/preview-points`, { method: "POST", body, organisationId }),
+    enabled: !!organisationId && ready,
+    retry: false,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+};
+
 /** Calibration dashboard figures for a period ({ from, to } — YYYY-MM-DD). */
 export const useCalibrationDashboard = ({ from, to }) =>
   useOrgQuery(["dashboard", from, to], `/calibration-dashboard?${toQuery({ from, to })}`, { enabled: !!from && !!to, keepPrevious: true, staleTime: DASHBOARD_STALE_MS });

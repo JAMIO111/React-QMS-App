@@ -24,7 +24,8 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { useToast } from "../../contexts/ToastProvider";
-import { useCalibrationMutation, useGauge, useGaugeCalibrations, useGaugeCharacteristics, useGaugeTypes } from "../../hooks/useCalibration";
+import { useCalibrationMutation, useGauge, useGaugeCalibrations, useGaugeCharacteristics, useGaugeTypes, useTypePreview } from "../../hooks/useCalibration";
+import { useDebouncedValue } from "../../hooks/useDebounce";
 import { useQuickSave } from "../../hooks/useQuickSave";
 import { softDelete } from "../../lib/guessRequest";
 import { useUnits } from "../../hooks/useMasterData";
@@ -40,6 +41,8 @@ import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
 import TextInput from "../ui/TextInput";
 import CharacteristicsEditor from "./CharacteristicsEditor";
+import RangeChecksNotice from "./RangeChecksNotice";
+import { PreviewTable } from "./RangePreview";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { withCustomValues } from "../../lib/customFields";
 import GaugeHistory from "./GaugeHistory";
@@ -210,9 +213,17 @@ const GaugePage = () => {
   const typeNeeded = isNew || !!gauge?.type;
   const leavingQuarantine = !isNew && gauge?.status === "quarantined" && ["active", "in_calibration"].includes(form.status);
   const reasonOk = !leavingQuarantine || (form.statusReason.trim() !== "" && form.statusReason.trim() !== (original.statusReason ?? "").trim());
-  const valid = form.assetNumber.trim() && form.description.trim() && numbersOk && (!typeNeeded || !!form.gaugeTypeId) && reasonOk;
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
   const selectedType = (types ?? []).find((t) => t.id === form.gaugeTypeId);
+  // A type with checks given as a percentage of the range needs the gauge's range and unit to work them out. Asked when a gauge is added or given
+  // such a type (the database asks for the same); a gauge that already has the type can still be edited as it is.
+  const typeNeedsRange = (selectedType?.rangeCheckCount ?? 0) > 0;
+  const rangeRequired = typeNeedsRange && (isNew || form.gaugeTypeId !== original.gaugeTypeId);
+  const rangeOrdered = isNum(form.rangeMin) && isNum(form.rangeMax) && form.rangeMin !== "" && form.rangeMax !== "" && Number(form.rangeMax) > Number(form.rangeMin);
+  const rangeOk = rangeOrdered && !!form.unitCode;
+  const valid = form.assetNumber.trim() && form.description.trim() && numbersOk && (!typeNeeded || !!form.gaugeTypeId) && reasonOk && (!rangeRequired || rangeOk);
+  const previewRange = useDebouncedValue({ rangeMin: num(form.rangeMin) ?? NaN, rangeMax: num(form.rangeMax) ?? NaN, unitCode: form.unitCode, resolution: num(form.resolution) ?? NaN }, 400);
+  const preview = useTypePreview(form.gaugeTypeId, previewRange, { enabled: rangeRequired });
   const { lock } = useImportLocks("gauge", isNew ? null : gauge?.id);
 
   const save = () => {
@@ -413,16 +424,40 @@ const GaugePage = () => {
                 {controlled("custodianId", (f) => <PeoplePicker {...f} label="Custodian" icon={UsersIcon} placeholder="Who looks after it" current={gauge?.custodian} />)}
 
                 <SubHeading>Measuring range</SubHeading>
+                {typeNeedsRange && (
+                  <div className="w-full lg:col-span-2">
+                    <Callout tone="info" title={`${selectedType.name} needs this gauge's range`}>
+                      Some of this type&apos;s checks are placed at a percentage of the gauge&apos;s range, so each gauge needs its range and unit to work its own points out.
+                    </Callout>
+                  </div>
+                )}
                 <div className="flex w-full items-start gap-4">
-                  {numberInput("rangeMin", "Range from", { icon: RulerIcon })}
-                  {numberInput("rangeMax", "Range to", { icon: RulerIcon })}
+                  {numberInput("rangeMin", "Range from", { icon: RulerIcon, required: rangeRequired })}
+                  {numberInput("rangeMax", "Range to", {
+                    icon: RulerIcon,
+                    required: rangeRequired,
+                    ...(rangeRequired && isNum(form.rangeMin) && isNum(form.rangeMax) && form.rangeMin !== "" && form.rangeMax !== "" && !rangeOrdered ? { error: "Must be above the start of the range" } : {}),
+                  })}
                 </div>
                 <div className="flex w-full items-start gap-4">
                   {controlled("unitCode", (f) => (
-                    <RHFComboBox {...f} label="Unit" icon={RulerIcon} placeholder="Unit" sort={false} options={(units.data ?? []).map((u) => ({ id: u.code, name: u.code, hint: u.name }))} />
+                    <RHFComboBox {...f} label="Unit" icon={RulerIcon} required={rangeRequired} placeholder="Unit" sort={false} options={(units.data ?? []).map((u) => ({ id: u.code, name: u.code, hint: u.name }))} />
                   ))}
                   {numberInput("resolution", "Resolution", { icon: RulerIcon, placeholder: "e.g. 0.01" })}
                 </div>
+                {rangeRequired && (
+                  <div className="w-full lg:col-span-2" aria-live="polite">
+                    {preview.data ? (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-sm font-medium text-secondary-text">The checks this gauge will get</p>
+                        <PreviewTable preview={preview.data} label="Checks this gauge will get" />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-secondary-text">Give the range and the unit to see the checks this gauge will get.</p>
+                    )}
+                    {preview.error && <Callout tone="error" role="alert">{describeApiError(preview.error)}</Callout>}
+                  </div>
+                )}
 
                 <SubHeading>Calibration</SubHeading>
                 {controlled("calibrationSource", (f) => (
@@ -490,6 +525,7 @@ const GaugePage = () => {
                   The points checked at every calibration, each a nominal value with a tolerance either side.
                   {gauge.type ? ` Copied from ${gauge.type.name} when the gauge was added; changes here apply to this gauge only.` : ""}
                 </p>
+                <RangeChecksNotice gaugeId={gauge.id} items={characteristics.data ?? []} canEdit={canEdit} />
                 <CharacteristicsEditor
                   items={characteristics.data}
                   isLoading={characteristics.isLoading}

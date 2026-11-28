@@ -20,7 +20,7 @@ import MenuCard from "../ui/MenuCard";
 import Callout from "../ui/Callout";
 import Switch from "../ui/Switch";
 import StatTile from "../ui/StatTile";
-import CharacteristicsEditor from "../calibration/CharacteristicsEditor";
+import TypeChecks from "../calibration/TypeChecks";
 import LoadingScreen from "../ui/LoadingScreen";
 import CTAButton from "@/components/CTAButton";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
@@ -118,13 +118,37 @@ const TypeDialog = ({ type, onClose, onSubmit, pending, canManage = true }) => {
 /** One gauge type: summary, edit, switch off, and its template characteristics. */
 /** What applying a type's checks did, in words. */
 export const appliedMessage = (r) => {
-  if (!r || r.characteristicsAdded === 0) return "Every gauge already had these checks.";
+  const stuck = r?.gaugesWithProblems
+    ? ` ${r.gaugesWithProblems} ${r.gaugesWithProblems === 1 ? "gauge" : "gauges"} could not be given every check: see below.`
+    : "";
+  if (!r || (r.characteristicsAdded === 0 && !r.gaugesWithProblems)) return "Every gauge already had these checks.";
   const gauges = `${r.gaugesUpdated} ${r.gaugesUpdated === 1 ? "gauge" : "gauges"}`;
   const checks = `${r.characteristicsAdded} ${r.characteristicsAdded === 1 ? "check" : "checks"}`;
   const skipped = r.gaugesSkipped
     ? ` ${r.gaugesSkipped} ${r.gaugesSkipped === 1 ? "gauge was" : "gauges were"} left: at a site where you do not manage calibration.`
     : "";
-  return `${checks} added to ${gauges}.${skipped}`;
+  const added = r.characteristicsAdded ? `${checks} added to ${gauges}.` : "No checks could be added.";
+  return `${added}${skipped}${stuck}`;
+};
+
+/** Gauges that could not take a check that depends on their range: which, and why, with a link to each. */
+export const ApplyProblems = ({ result }) => {
+  if (!result?.gaugesWithProblems) return null;
+  const shown = result.problems ?? [];
+  return (
+    <Callout tone="warning" title={`${result.gaugesWithProblems} ${result.gaugesWithProblems === 1 ? "gauge" : "gauges"} could not be given every check`}>
+      A check given as a percentage of the range needs the gauge&apos;s range and unit. Fix the gauge, then apply the checks again.
+      <ul className="mt-2 list-disc pl-5">
+        {shown.map((p, i) => (
+          <li key={`${p.gaugeId}-${p.checkId ?? i}`}>
+            <Link className="text-link-color hover:underline" to={`/Calibration/Gauges/${p.gaugeId}`}>{p.assetNumber}</Link>
+            {p.name ? ` · ${p.name}` : ""}: {p.problem}
+          </li>
+        ))}
+      </ul>
+      {result.gaugesWithProblems > shown.length && <p className="mt-1">…and others.</p>}
+    </Callout>
+  );
 };
 
 const TypeCard = ({ type, canManage }) => {
@@ -136,12 +160,16 @@ const TypeCard = ({ type, canManage }) => {
   });
   const mutation = useCalibrationMutation();
   const apply = useCalibrationMutation();
+  const [applied, setApplied] = useState(null);
   const { showToast } = useToast();
   const applyChecks = () =>
     apply.mutate(
       { path: `/gauge-types/${type.id}/apply-characteristics`, method: "POST" },
       {
-        onSuccess: (r) => showToast({ type: "success", title: "Checks applied", message: appliedMessage(r) }),
+        onSuccess: (r) => {
+          setApplied(r);
+          showToast({ type: r.gaugesWithProblems ? "warning" : "success", title: "Checks applied", message: appliedMessage(r) });
+        },
         onError: (err) => showToast({ type: "error", title: "Not applied", message: describeApiError(err) }),
       },
     );
@@ -238,11 +266,13 @@ const TypeCard = ({ type, canManage }) => {
             )
           }>
           A gauge gets its type&apos;s checks when it is created, so gauges made or imported before a check was added do not have it.
+          {type.rangeCheckCount > 0 && " Checks given as a percentage of the range need each gauge to have a range and a unit."}
           {canManage
             ? " Applying adds only the checks a gauge does not have; nothing already on a gauge changes."
             : " Someone who manages calibration can apply them."}
         </Callout>
       )}
+      <ApplyProblems result={applied} />
       {open && (
         <div className="border-t border-border-color pt-3">
           <p className="mb-2 text-sm text-secondary-text">
@@ -250,16 +280,14 @@ const TypeCard = ({ type, canManage }) => {
             was added get it when you apply the checks; each gauge keeps its own
             copies.
           </p>
-          <CharacteristicsEditor
+          <TypeChecks
+            typeId={type.id}
             items={characteristics.data}
             isLoading={characteristics.isLoading}
             error={characteristics.error}
-            base={`/gauge-types/${type.id}`}
-            itemBase="/gauge-type-characteristics"
             canEdit={canManage}
             showInactive={showInactive}
             onShowInactive={setShowInactive}
-            emptyText="No template characteristics yet."
           />
         </div>
       )}

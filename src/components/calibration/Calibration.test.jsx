@@ -29,7 +29,7 @@ import CalibrationRecordPage from "./CalibrationRecordPage";
 import GaugePage from "./GaugePage";
 import GaugeRegister from "./GaugeRegister";
 import { outcomeFromReadings, shouldPromptForStatus, statusAfterCalibration } from "../../lib/calibration";
-import SettingsCalibration, { appliedMessage } from "../Settings/SettingsCalibration";
+import SettingsCalibration, { appliedMessage, ApplyProblems } from "../Settings/SettingsCalibration";
 
 const ALL = ["calibration.read", "calibration.manage", "calibration.record", "ncr.create"];
 
@@ -587,5 +587,235 @@ describe("pass/fail checks", () => {
       { characteristicId: "k2", asFound: 100, asLeft: null, notes: null },
       { characteristicId: "k9", asFoundPass: false, asLeftPass: true, notes: null },
     ]));
+  });
+});
+
+describe("gauge type checks across the gauge's range", () => {
+  const midCheck = { id: "tk9", sortOrder: 1, kind: "variable", name: "50 % of range", nominal: 50, nominalBasis: "span_percent", unitCode: null, toleranceBasis: "value_plus_reading_percent", toleranceMinus: 0.003, tolerancePlus: 0.003, toleranceReadingPercent: 0.01, toleranceSource: "ISO 3611", lower: null, upper: null, method: null, active: true };
+  const fixedCheck = { id: "tk1", sortOrder: 2, kind: "variable", name: "25 mm block", nominal: 25, nominalBasis: "value", unitCode: "mm", toleranceBasis: "value", toleranceMinus: 0.004, tolerancePlus: 0.004, toleranceReadingPercent: null, toleranceSource: null, lower: 24.996, upper: 25.004, method: null, active: true };
+  const rangeType = { id: "t1", code: "MIC", name: "External micrometer", description: null, intervalValue: 12, intervalUnit: "months", active: true, characteristicCount: 2, gaugeCount: 3, gaugesMissingChecks: 0, rangeCheckCount: 1 };
+  const preview = {
+    needsRange: true, hasRange: true,
+    checks: [
+      { checkId: "tk9", name: "50 % of range", method: null, sortOrder: 1, kind: "variable", nominal: 75, toleranceMinus: 0.0105, tolerancePlus: 0.0105, lower: 74.9895, upper: 75.0105, unit: "mm", derivation: "50 % of range; ±(0.003 mm + 0.01 % of reading)", followsRange: true, toleranceSource: "ISO 3611", problem: null },
+      { checkId: "tk1", name: "25 mm block", method: null, sortOrder: 2, kind: "variable", nominal: 25, toleranceMinus: 0.004, tolerancePlus: 0.004, lower: 24.996, upper: 25.004, unit: "mm", derivation: null, followsRange: false, toleranceSource: null, problem: null },
+    ],
+  };
+  const openChecks = async () => {
+    renderAt("/Settings/Calibration");
+    await userEvent.click(await screen.findByRole("button", { name: "Characteristics" }));
+    return screen.findByRole("table", { name: "Gauge type checks" });
+  };
+  const typeRoutes = (extra = {}) => ({
+    "GET /gauge-types": { data: [rangeType] },
+    "GET /gauge-types/t1/characteristics": { data: [midCheck, fixedCheck] },
+    ...extra,
+  });
+
+  it("says each check in words: a percentage point and tolerance, the source and a fixed check as before", async () => {
+    routeApi(typeRoutes());
+    const table = await openChecks();
+    expect(within(table).getByText("50 % of range, ±(0.003 + 0.01 % of reading)")).toBeInTheDocument();
+    expect(within(table).getByText("Source: ISO 3611")).toBeInTheDocument();
+    expect(within(table).getByText("From range")).toBeInTheDocument();
+    expect(within(table).getByText("25 mm, ±0.004 mm")).toBeInTheDocument();
+    expect(within(table).getAllByText("From range")).toHaveLength(1);
+  });
+
+  it("adds a check at a percentage of the range with a fixed part plus a percentage of the reading", async () => {
+    routeApi(typeRoutes({ "POST /gauge-types/t1/characteristics": (path, { body }) => ({ id: "tk10", sortOrder: 3, lower: null, upper: null, active: true, ...body }) }));
+    await openChecks();
+    await userEvent.click(screen.getByRole("button", { name: "Add characteristic" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a check" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "75 % of range");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Where on the gauge" }));
+    await userEvent.click(await screen.findByRole("option", { name: /A % of the gauge's range/ }));
+    // The unit goes: a percentage point uses the gauge's own unit.
+    expect(within(dialog).queryByRole("combobox", { name: "Unit" })).not.toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Percent of the range/ }), "75");
+    expect(within(dialog).getByRole("button", { name: "Add check" })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Tolerance" }));
+    await userEvent.click(await screen.findByRole("option", { name: /A fixed value plus a % of the reading/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Fixed part/ }), "0.003");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Percent of the reading/ }), "0.01");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Where the limit comes from" }), "ISO 3611");
+    // The example sentence is in the typed numbers.
+    expect(within(dialog).getByText(/±\(0\.003 \+ 0\.01 % of the reading\)/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add check" }));
+    await waitFor(() => expect(lastCall("POST /gauge-types/t1/characteristics")).toBeTruthy());
+    expect(lastCall("POST /gauge-types/t1/characteristics").body).toEqual({
+      kind: "variable", name: "75 % of range", nominalBasis: "span_percent", nominal: 75, unitCode: null,
+      toleranceBasis: "value_plus_reading_percent", toleranceMinus: 0.003, tolerancePlus: 0.003, toleranceReadingPercent: 0.01, toleranceSource: "ISO 3611", method: null,
+    });
+  });
+
+  it("refuses a point over 100 % before sending anything", async () => {
+    routeApi(typeRoutes());
+    await openChecks();
+    await userEvent.click(screen.getByRole("button", { name: "Add characteristic" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a check" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "Too far");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Where on the gauge" }));
+    await userEvent.click(await screen.findByRole("option", { name: /A % of the gauge's range/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Percent of the range/ }), "120");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Tolerance minus" }), "0.1");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Tolerance plus" }), "0.1");
+    expect(within(dialog).getByText(/between 0 and 100/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Add check" })).toBeDisabled();
+  });
+
+  it("changes a check from the dialog and sends the new shape", async () => {
+    routeApi(typeRoutes({ "PATCH /gauge-type-characteristics/tk9": (path, { body }) => ({ ...midCheck, ...body }) }));
+    await openChecks();
+    await userEvent.click(screen.getByRole("button", { name: "Edit 50 % of range" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit 50 % of range" });
+    expect(within(dialog).getByRole("textbox", { name: /Percent of the range/ })).toHaveValue("50");
+    expect(within(dialog).getByRole("textbox", { name: "Where the limit comes from" })).toHaveValue("ISO 3611");
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: /Percent of the range/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /Percent of the range/ }), "60");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(lastCall("PATCH /gauge-type-characteristics/tk9")).toBeTruthy());
+    expect(lastCall("PATCH /gauge-type-characteristics/tk9").body).toMatchObject({ nominalBasis: "span_percent", nominal: 60, unitCode: null, toleranceBasis: "value_plus_reading_percent", toleranceReadingPercent: 0.01 });
+  });
+
+  it("adds evenly spaced points, one check for each", async () => {
+    routeApi(typeRoutes({ "POST /gauge-types/t1/characteristics": (path, { body }) => ({ id: `n-${body.nominal}`, sortOrder: 9, lower: null, upper: null, active: true, ...body }) }));
+    await openChecks();
+    await userEvent.click(screen.getByRole("button", { name: "Add evenly spaced points" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add evenly spaced points" });
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: /How many points/ }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: /How many points/ }), "3");
+    expect(within(dialog).getByText("Will add: 0 % of range, 50 % of range, 100 % of range.")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add 3 checks" }));
+    await waitFor(() => expect(calls.filter((c) => c.k === "POST /gauge-types/t1/characteristics")).toHaveLength(3));
+    const bodies = calls.filter((c) => c.k === "POST /gauge-types/t1/characteristics").slice(-3).map((c) => c.body);
+    expect(bodies.map((b) => b.nominal)).toEqual([0, 50, 100]);
+    expect(bodies.map((b) => b.name)).toEqual(["0 % of range", "50 % of range", "100 % of range"]);
+    expect(bodies[0]).toMatchObject({ nominalBasis: "span_percent", unitCode: null, toleranceBasis: "reading_percent", toleranceMinus: 1, tolerancePlus: 1 });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("tries the type with a range and shows what the database worked out", async () => {
+    routeApi(typeRoutes({ "POST /gauge-types/t1/preview-points": preview }));
+    await openChecks();
+    await userEvent.click(screen.getByRole("button", { name: "Try it with a range" }));
+    await userEvent.clear(await screen.findByRole("textbox", { name: "Range from" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Range from" }), "50");
+    await userEvent.clear(screen.getByRole("textbox", { name: "Range to" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Range to" }), "100");
+    await waitFor(() => expect(lastCall("POST /gauge-types/t1/preview-points").body).toMatchObject({ rangeMin: 50, rangeMax: 100, unitCode: "mm", resolution: 0.001 }), { timeout: 3000 });
+    const table = await screen.findByRole("table", { name: "Checks worked out for this range" });
+    expect(within(table).getByText("75 mm")).toBeInTheDocument();
+    expect(within(table).getByText("74.9895 to 75.0105 mm")).toBeInTheDocument();
+    expect(within(table).getByText("50 % of range; ±(0.003 mm + 0.01 % of reading)")).toBeInTheDocument();
+    expect(within(table).getByText("A fixed check: the same on every gauge")).toBeInTheDocument();
+  });
+
+  it("names the gauges that could not be given a check, and why", () => {
+    const result = { gaugesUpdated: 1, characteristicsAdded: 2, gaugesSkipped: 0, gaugesWithProblems: 1, problems: [{ gaugeId: "g7", assetNumber: "G-007", checkId: "tk9", name: "50 % of range", problem: "Give the gauge a range and a unit" }] };
+    expect(appliedMessage(result)).toBe("2 checks added to 1 gauge. 1 gauge could not be given every check: see below.");
+    expect(appliedMessage({ gaugesUpdated: 0, characteristicsAdded: 0, gaugesSkipped: 0, gaugesWithProblems: 2, problems: [] })).toBe("No checks could be added. 2 gauges could not be given every check: see below.");
+    render(<MemoryRouter><ApplyProblems result={result} /></MemoryRouter>);
+    expect(screen.getByText("1 gauge could not be given every check")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "G-007" })).toHaveAttribute("href", "/Calibration/Gauges/g7");
+    expect(screen.getByText(/Give the gauge a range and a unit/)).toBeInTheDocument();
+  });
+
+  it("asks a new gauge of such a type for its range and shows the checks it will get", async () => {
+    routeApi({
+      "GET /gauge-types": { data: [rangeType] },
+      "POST /gauge-types/t1/preview-points": preview,
+      "POST /gauges": (path, { body }) => gauge({ id: "g9", assetNumber: body.assetNumber }),
+      "GET /gauges/g9": gauge({ id: "g9" }), "GET /gauges/g9/characteristics": { data: [] }, "GET /gauges/g9/calibrations": { data: [] }, "GET /gauges/g9/history": { data: [] },
+    });
+    renderAt("/Calibration/Gauges/new");
+    await userEvent.type(await screen.findByLabelText(/Asset number/), "G-RC");
+    await userEvent.type(screen.getByLabelText(/^Description/), "50-100 micrometer");
+    await userEvent.click(screen.getByRole("combobox", { name: "Gauge type" }));
+    await userEvent.click(await screen.findByRole("option", { name: /External micrometer/ }));
+    expect(screen.getByText("External micrometer needs this gauge's range")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Range from/)).toBeRequired();
+    expect(screen.getAllByRole("combobox", { name: "Unit" })[0]).toHaveAttribute("aria-required", "true");
+    expect(screen.getByRole("button", { name: "Add gauge" })).toBeDisabled();
+    expect(screen.getByText("Give the range and the unit to see the checks this gauge will get.")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/^Range from/), "50");
+    await userEvent.type(screen.getByLabelText(/^Range to/), "100");
+    await userEvent.click(screen.getAllByRole("combobox", { name: "Unit" })[0]);
+    await userEvent.click(await screen.findByRole("option", { name: /^mm/ }));
+    expect(await screen.findByRole("table", { name: "Checks this gauge will get" }, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("74.9895 to 75.0105 mm")).toBeInTheDocument();
+    expect(lastCall("POST /gauge-types/t1/preview-points").body).toMatchObject({ rangeMin: 50, rangeMax: 100, unitCode: "mm" });
+    expect(screen.getByRole("button", { name: "Add gauge" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Add gauge" }));
+    await waitFor(() => expect(lastCall("POST /gauges")).toBeTruthy());
+    expect(lastCall("POST /gauges").body).toMatchObject({ gaugeTypeId: "t1", rangeMin: 50, rangeMax: 100, unitCode: "mm" });
+  });
+
+  it("does not ask for a range when the type has no check that depends on it", async () => {
+    routeApi({});
+    renderAt("/Calibration/Gauges/new");
+    await userEvent.type(await screen.findByLabelText(/Asset number/), "G-NR");
+    await userEvent.type(screen.getByLabelText(/^Description/), "Plain gauge");
+    await userEvent.click(screen.getByRole("combobox", { name: "Gauge type" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Digital caliper/ }));
+    expect(screen.queryByText(/needs this gauge's range/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add gauge" })).toBeEnabled();
+  });
+
+  const followingChecks = (stale) => [
+    { id: "k5", sortOrder: 1, kind: "variable", name: "50 % of range", nominal: 75, toleranceMinus: 0.0105, tolerancePlus: 0.0105, lower: 74.9895, upper: 75.0105, unitCode: "mm", method: null, active: true, templateId: "tk9", toleranceSource: "ISO 3611", followsRange: true, derivation: "50 % of range; ±(0.003 mm + 0.01 % of reading)", staleFromRange: stale, rangeProblem: null },
+    characteristics[0],
+  ];
+
+  it("marks checks worked out from the range and shows how", async () => {
+    routeApi({ "GET /gauges/g1/characteristics": { data: followingChecks(false) } });
+    renderAt("/Calibration/Gauges/g1");
+    const table = await screen.findByRole("table", { name: "Calibration characteristics" });
+    expect(within(table).getByText("From range")).toBeInTheDocument();
+    expect(within(table).getByText("50 % of range; ±(0.003 mm + 0.01 % of reading)")).toBeInTheDocument();
+    expect(within(table).getByText("Source: ISO 3611")).toBeInTheDocument();
+    expect(screen.queryByText(/out of date/)).not.toBeInTheDocument();
+  });
+
+  it("says when the range has moved on, and recalculates on request", async () => {
+    routeApi({
+      "GET /gauges/g1/characteristics": { data: followingChecks(true) },
+      "POST /gauges/g1/recalculate-range-checks": { gauge: gauge(), result: { updated: 1, unchanged: 0, problems: [] } },
+    });
+    renderAt("/Calibration/Gauges/g1");
+    expect(await screen.findByText("1 check is out of date")).toBeInTheDocument();
+    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Recalculate range-based checks" }));
+    await waitFor(() => expect(lastCall("POST /gauges/g1/recalculate-range-checks")).toBeTruthy());
+  });
+
+  it("offers no Recalculate without calibration.manage", async () => {
+    permissions = ["calibration.read", "calibration.record"];
+    routeApi({ "GET /gauges/g1/characteristics": { data: followingChecks(true) } });
+    renderAt("/Calibration/Gauges/g1");
+    expect(await screen.findByText("1 check is out of date")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Recalculate range-based checks" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Someone who manages calibration can recalculate them/)).toBeInTheDocument();
+  });
+
+  it("warns that changing a following check makes it fixed", async () => {
+    routeApi({ "GET /gauges/g1/characteristics": { data: followingChecks(false) } });
+    renderAt("/Calibration/Gauges/g1");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit 50 % of range" }));
+    expect(screen.getByText(/it will no longer follow the range/)).toBeInTheDocument();
+  });
+
+  it("shows how a reading's limits were worked out on the calibration record", async () => {
+    const withDerivation = record({
+      readings: [
+        { id: "r1", characteristicId: "k5", sortOrder: 1, name: "50 % of range", nominal: 75, toleranceMinus: 0.0105, tolerancePlus: 0.0105, lower: 74.9895, upper: 75.0105, unitCode: "mm", asFound: 75, asLeft: null, asFoundOk: true, asLeftOk: null, notes: null, derivation: "50 % of range; ±(0.003 mm + 0.01 % of reading)", toleranceSource: "ISO 3611" },
+        { id: "r2", characteristicId: "k2", sortOrder: 2, name: "100 mm block", nominal: 100, toleranceMinus: 0.03, tolerancePlus: 0.03, lower: 99.97, upper: 100.03, unitCode: "mm", asFound: 100, asLeft: null, asFoundOk: true, asLeftOk: null, notes: null, derivation: null, toleranceSource: null },
+      ],
+    });
+    routeApi({ "GET /calibrations/c1": withDerivation, "GET /gauges/g1/characteristics": { data: followingChecks(false) } });
+    renderAt("/Calibration/Gauges/g1/calibrations/c1");
+    expect(await screen.findByText("50 % of range; ±(0.003 mm + 0.01 % of reading)")).toBeInTheDocument();
+    expect(screen.getByText("Source: ISO 3611")).toBeInTheDocument();
+    expect(screen.getAllByText(/^Source:/)).toHaveLength(1);
   });
 });

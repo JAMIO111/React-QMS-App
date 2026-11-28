@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Switch from "@/components/ui/Switch";
 import { ChevronDownIcon, ChevronUpIcon, PencilIcon, PlusIcon } from "@/components/icons";
 import { useCalibrationMutation } from "../../hooks/useCalibration";
@@ -157,7 +157,8 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
             <tbody className="text-primary-text">
               {ordered.map((c, i) =>
                 editing === c.id ? (
-                  <tr key={c.id} className="border-t border-border-color">
+                  <Fragment key={c.id}>
+                  <tr className="border-t border-border-color">
                     <Fields form={editForm} setForm={setEditForm} units={units.data} idPrefix={c.id} />
                     <td className="p-1">
                       <div className="flex gap-1">
@@ -167,6 +168,14 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                       </div>
                     </td>
                   </tr>
+                  {c.followsRange && (
+                    <tr>
+                      <td colSpan={8} className="px-1 pb-2 text-xs text-secondary-text">
+                        This check is worked out from the gauge type and this gauge&apos;s range. Changing its numbers makes it an ordinary fixed check on this gauge: it will no longer follow the range.
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ) : (
                   <tr key={c.id} className={`border-t border-border-color ${c.active ? "" : "opacity-60"}`}>
                     <td className="px-1 py-1.5">
@@ -177,7 +186,12 @@ const CharacteristicsEditor = ({ items = [], isLoading, error, base, itemBase, c
                     <td className="px-1 py-1.5">
                       {c.name}
                       {!c.active && <span className="ml-2 text-xs text-secondary-text">(switched off)</span>}
+                      {c.followsRange && <span className="ml-2 inline-block rounded-full bg-info-color/15 px-2 py-0.5 text-xs font-medium text-info-color">From range</span>}
+                      {c.followsRange && c.staleFromRange && <span className="ml-1 inline-block rounded-full bg-warning-color/20 px-2 py-0.5 text-xs font-medium text-primary-text">Out of date</span>}
                       {c.kind !== "attribute" && <span className="block text-xs text-secondary-text">{formatNumber(c.lower)} to {formatNumber(c.upper)} {c.unitCode}</span>}
+                      {c.followsRange && c.derivation && <span className="block text-xs text-secondary-text">{c.derivation}</span>}
+                      {c.toleranceSource && <span className="block text-xs text-secondary-text">Source: {c.toleranceSource}</span>}
+                      {c.followsRange && c.rangeProblem && <span className="block text-xs text-error-color">{c.rangeProblem}</span>}
                     </td>
                     {c.kind === "attribute" ? (
                       <td colSpan={4} className="px-1 py-1.5 text-secondary-text">—</td>

@@ -32,6 +32,7 @@ import {
   WrenchIcon,
   BoxesIcon,
 } from "@/components/icons";
+import { useEditBase } from "../../hooks/useEditBase";
 import RHFComboBox from "../ui/RHFComboBox";
 import RHFDatePickerPopout from "../ui/RHFDatePickerPopout";
 import RHFTextArea from "../ui/RHFTextArea";
@@ -78,7 +79,6 @@ import Callout from "../ui/Callout";
 import CustomFieldsCard, { CustomFieldInputs } from "../custom-fields/CustomFieldsCard";
 import { useCustomFields } from "../../hooks/useCustomFields";
 import { withCustomValues } from "../../lib/customFields";
-import { withVersion } from "../../lib/editConflicts";
 import LinkedChanges from "../change/LinkedChanges";
 import RaisedFmeas from "../fmea/RaisedFmeas";
 import { employeeOption } from "@/lib/employees";
@@ -136,7 +136,7 @@ const NcrPage = () => {
   const mutation = useNcrMutation();
   const settings = useProductionSettings();
   const canLinkProduction = can("production.read");
-  const { control, reset, watch, setValue } = useForm({ defaultValues: isNew ? NEW_NC : EMPTY });
+  const { control, reset, watch, setValue, getValues } = useForm({ defaultValues: isNew ? NEW_NC : EMPTY });
   const form = watch();
   const [customValues, setCustomValues] = useState({});
   const [dialog, setDialog] = useState(null); // "cancel" | "reopen" | "delete" | "source"
@@ -145,7 +145,21 @@ const NcrPage = () => {
 
   const source = isNew ? newSource : ncr?.source;
   const original = useMemo(() => (ncr ? toForm(ncr) : isNew ? NEW_NC : EMPTY), [ncr, isNew]);
-  useEffect(() => reset(original), [original, reset]);
+  // The form follows the record, but never takes away what the person has typed: when the NC changes under them (a cost added, an 8D linked, a custom
+  // value saved, a colleague's save), the fields they have edited keep their words and every other field takes the new value.
+  const adopted = useRef({ id: undefined, values: null });
+  useEffect(() => {
+    const id = ncr?.id ?? (isNew ? "new" : undefined);
+    const was = adopted.current;
+    adopted.current = { id, values: original };
+    if (!ncr || !was.values || was.id !== id) {
+      reset(original);
+      return;
+    }
+    const mine = getValues();
+    const edited = (k) => JSON.stringify(mine[k] ?? null) !== JSON.stringify(was.values[k] ?? null);
+    reset(Object.fromEntries(Object.keys(original).map((k) => [k, edited(k) ? mine[k] : original[k]])));
+  }, [original, reset, getValues, ncr, isNew]);
   // A new NC starts with the source's suggested category and the person's own site, until they choose one themselves.
   const { data: defaults } = useNcrNewDefaults(isNew ? source : null);
   // "More details" (the organisation's own fields): every field in use, before the NC is saved too; a retired one only while this NC holds a value for it.
@@ -176,6 +190,7 @@ const NcrPage = () => {
   const body = toBody(form, source);
   const changes = isNew ? body : changedFields(body, toBody(original, source));
   const dirty = !isNew && Object.keys(changes).length > 0;
+  const versioned = useEditBase(ncr, dirty);
   const set = (k) => (v) => setValue(k, v?.target ? v.target.value : v, { shouldDirty: true });
   // Picking a production record fills in what it implies (the typed text, the part when there is none, the order a lot or serial number belongs to), as the server will.
   const pickedProduction = ({ orderNumber, lotNumber, serialNumber, partId, orderId, lotId }) => {
@@ -200,9 +215,18 @@ const NcrPage = () => {
         }
       );
     } else {
+      // The save waits for the server's answer (no guessed update of the page): a refusal then leaves everything typed where it is. The version
+      // is the one the person opened, so a colleague's change to the same field is caught even if the page has refreshed since.
       mutation.mutate(
-        { path: `/ncrs/${ncr.id}`, method: "PATCH", body: withVersion(ncr, changes) },
-        { onSuccess: () => showToast({ type: "success", title: "Saved", message: "Changes saved." }) }
+        { path: `/ncrs/${ncr.id}`, method: "PATCH", body: versioned(changes), optimistic: false },
+        {
+          onSuccess: (saved) => {
+            const values = toForm(saved);
+            adopted.current = { id: saved.id, values };
+            reset(values);
+            showToast({ type: "success", title: "Saved", message: "Changes saved." });
+          },
+        }
       );
     }
   };

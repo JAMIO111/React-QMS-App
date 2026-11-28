@@ -13,7 +13,7 @@ GRANT SELECT ON ids TO authenticated;
 DO $$
 DECLARE
   org uuid; site uuid; fam uuid; part uuid; plan uuid; rev uuid; op uuid; od uuid; od2 uuid;
-  rec uuid; rec2 uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; m_good uuid; m_a uuid; m_b uuid; m_c uuid; m_d uuid; m_other uuid; ncr uuid; ncr2 uuid; ncr3 uuid; m uuid;
+  rec uuid; rec2 uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; m_good uuid; m_a uuid; m_b uuid; m_c uuid; m_d uuid; m_other uuid; m_e uuid; ncr uuid; ncr2 uuid; ncr3 uuid; ncr4 uuid; ncr5 uuid; ncr6 uuid; m uuid;
 BEGIN
   PERFORM pg_temp.login('39000000-0000-0000-0000-000000000101');
   org := app.create_organisation('NCR Add Works', 'Plant A', 'PA', NULL);
@@ -106,6 +106,42 @@ BEGIN
   -- A cancelled NC frees its readings: m_d (25.4) was never linked; the 25.3 reading is on the cancelled NC and can move.
   PERFORM pg_temp.assert_eq(app.reading_live_ncr(m_d), NULL::text, 'a reading of no live NC is free');
   PERFORM pg_temp.assert_eq(app.add_readings_to_ncr(ncr3, ARRAY[m_d]), 1, 'a free reading can be added');
+  -- Reopening a cancelled NC, or restoring a deleted one, must not put a reading on two live NCs.
+  INSERT INTO public.inspection_samples (organisation_id, inspection_record_id) VALUES (org, rec) RETURNING id INTO s5;
+  INSERT INTO public.inspection_measurements (organisation_id, inspection_record_id, sample_id, requirement_id, value_numeric) VALUES (org, rec, s5, od, 25.5) RETURNING id INTO m_e;
+  ncr4 := app.raise_ncr_from_inspection(rec, ARRAY[m_e], 'Fourth NC', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
+  UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Raised in error' WHERE id = ncr4;
+  ncr5 := app.raise_ncr_from_inspection(rec, ARRAY[m_e], 'Fifth NC', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
+  BEGIN
+    UPDATE public.nonconformances SET stage = 'open', stage_reason = 'It was needed after all' WHERE id = ncr4;
+    RAISE EXCEPTION 'a cancelled NC was reopened while its reading is on another live NC';
+  EXCEPTION WHEN SQLSTATE 'QM005' THEN
+    PERFORM pg_temp.assert_eq(position('are already on ' IN SQLERRM) > 0, true, 'the refusal says the readings are on another NC');
+    PERFORM pg_temp.assert_eq(position((SELECT reference FROM public.nonconformances WHERE id = ncr5) IN SQLERRM) > 0, true, 'and names it');
+  END;
+  PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = ncr4), 'cancelled', 'the first stays cancelled');
+  -- Once the other is cancelled the first can be reopened; and the reverse is refused the same way.
+  UPDATE public.nonconformances SET stage = 'cancelled', stage_reason = 'Duplicate' WHERE id = ncr5;
+  UPDATE public.nonconformances SET stage = 'open', stage_reason = 'It was needed after all' WHERE id = ncr4;
+  PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = ncr4), 'open', 'reopened when nothing else holds the reading');
+  PERFORM pg_temp.assert_fails(format($q$UPDATE public.nonconformances SET stage = 'open', stage_reason = 'Again' WHERE id = %L$q$, ncr5), 'the other cannot now be reopened');
+  -- Restore: delete the live one, raise another on the reading, then try to bring the deleted one back.
+  UPDATE public.nonconformances SET deleted_at = now(), delete_reason = 'Raised in error' WHERE id = ncr4;
+  ncr6 := app.raise_ncr_from_inspection(rec, ARRAY[m_e], 'Sixth NC', NULL, 'minor', 1, NULL, NULL, true, pg_temp.cat(org));
+  BEGIN
+    UPDATE public.nonconformances SET deleted_at = NULL WHERE id = ncr4;
+    RAISE EXCEPTION 'a deleted NC was restored while its reading is on another live NC';
+  EXCEPTION WHEN SQLSTATE 'QM005' THEN
+    PERFORM pg_temp.assert_eq(position('are already on ' IN SQLERRM) > 0, true, 'restore is refused the same way');
+  END;
+  UPDATE public.nonconformances SET deleted_at = now(), delete_reason = 'Duplicate' WHERE id = ncr6;
+  UPDATE public.nonconformances SET deleted_at = NULL WHERE id = ncr4;
+  PERFORM pg_temp.assert_eq((SELECT deleted_at IS NULL FROM public.nonconformances WHERE id = ncr4), true, 'restored when nothing else holds the reading');
+  -- A restored cancelled NC stays cancelled, which is not live, so it is never refused.
+  UPDATE public.nonconformances SET deleted_at = now(), delete_reason = 'Housekeeping' WHERE id = ncr5;
+  UPDATE public.nonconformances SET deleted_at = NULL WHERE id = ncr5;
+  PERFORM pg_temp.assert_eq((SELECT stage FROM public.nonconformances WHERE id = ncr5), 'cancelled', 'a restored cancelled NC is still cancelled');
+
   -- A whole-inspection NC (no reading) is never blocked by this rule.
   PERFORM app.raise_ncr_from_inspection(rec, ARRAY[]::uuid[], 'Another whole-inspection NC');
 

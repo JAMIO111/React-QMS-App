@@ -132,7 +132,7 @@ export class NcrDashboardService {
           ${base} ${inPeriod(q.from, q.to)}
         )
         select to_char(b.start, 'YYYY-MM-DD') as start,
-               count(r.*) as total,
+               coalesce(sum(r.n), 0) as total,
                coalesce(jsonb_object_agg(r.source, r.n) filter (where r.source is not null), '{}'::jsonb) as by_source,
                coalesce(sum(r.cost), 0) as cost
         from buckets b

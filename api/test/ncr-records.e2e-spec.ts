@@ -229,4 +229,18 @@ describe('NC dashboard', () => {
     await api().get('/api/v1/ncr-dashboard?from=2026-12-01&to=2026-01-01').set(h).expect(400);
     await api().get('/api/v1/ncr-dashboard').set(h).expect(400);
   });
+
+  it('counts every non-conformance of a week in the trend, not one for each source', async () => {
+    const h = await as(ids.ownerA);
+    // Three internal and one supplier NC detected in the same week (Mon 3 to Sun 9 March 2025).
+    for (const [i, source] of ['internal', 'internal', 'internal', 'supplier'].entries()) {
+      const body = { source, title: `Same week ${i}`, siteId: ids.siteA, detectedAt: `2025-03-0${4 + i}` };
+      await api().post('/api/v1/ncrs').set(h).send(body).expect(201);
+    }
+    const res = await api().get('/api/v1/ncr-dashboard?from=2025-03-01&to=2025-03-31').set(h).expect(200);
+    const week = res.body.trend.find((b: { start: string }) => b.start === '2025-03-03');
+    expect(week).toMatchObject({ total: 4, bySource: { internal: 3, supplier: 1 } });
+    expect(res.body.trend.reduce((t: number, b: { total: number }) => t + b.total, 0)).toBe(4);
+    expect(res.body.kpis.raised).toBe(4);
+  });
 });

@@ -1447,6 +1447,105 @@ describe("dialogs inside the NC form", () => {
   });
 });
 
+// An id the page can guess about: the optimistic update only touches records with a real uuid.
+const U = "11111111-1111-4111-8111-111111111111";
+
+describe("NC form: what is typed is kept", () => {
+  it("keeps the typed words when something else changes the NC (a cost is added), and still saves them", async () => {
+    let costed = false;
+    routeApi({
+      "GET /ncrs/n1": () => (costed ? ncr({ totalCost: 400, rowVersion: "2" }) : ncr({ rowVersion: "1" })),
+      "POST /ncrs/n1/costs": () => {
+        costed = true;
+        return { id: "c9" };
+      },
+      "PATCH /ncrs/n1": (_p, o) => ncr({ ...o.body, title: o.body.title }),
+    });
+    renderAt("/Non-Conformance/Register/n1");
+    const title = await screen.findByLabelText("Title");
+    await userEvent.clear(title);
+    await userEvent.type(title, "Bore oversize on op 20");
+    await userEvent.click(screen.getByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Rework" }));
+    await userEvent.type(within(dialog).getByLabelText(/^Unit cost/), "10");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    // the NC is read again (its total changed) ...
+    await waitFor(() => expect(calls.filter((c) => c.k === "GET /ncrs/n1").length).toBeGreaterThan(1));
+    // ... and what was typed is still there and still unsaved
+    expect(screen.getByLabelText("Title")).toHaveValue("Bore oversize on op 20");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    // the version sent is the one the person opened, not the one the refresh brought
+    expect(lastCall("PATCH /ncrs/n1").body).toEqual({ title: "Bore oversize on op 20", rowVersion: "1" });
+  });
+
+  it("takes a changed field the person has not touched", async () => {
+    let costed = false;
+    routeApi({
+      "GET /ncrs/n1": () => (costed ? ncr({ description: "Colleague's words", rowVersion: "2" }) : ncr({ rowVersion: "1" })),
+      "POST /ncrs/n1/costs": () => {
+        costed = true;
+        return { id: "c9" };
+      },
+    });
+    renderAt("/Non-Conformance/Register/n1");
+    const title = await screen.findByLabelText("Title");
+    await userEvent.type(title, " (edited)");
+    await userEvent.click(screen.getByRole("button", { name: "New item" }));
+    const dialog = screen.getByRole("dialog", { name: "New cost item" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: /Cost type/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Rework" }));
+    await userEvent.type(within(dialog).getByLabelText(/^Unit cost/), "10");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add cost" }));
+    await waitFor(() => expect(screen.getByLabelText("Description")).toHaveValue("Colleague's words"));
+    expect(screen.getByLabelText("Title")).toHaveValue("Bore oversize (edited)");
+  });
+
+  it("leaves everything typed in place when the save is refused", async () => {
+    routeApi({
+      [`GET /ncrs/${U}`]: ncr({ id: U }),
+      [`PATCH /ncrs/${U}`]: () => {
+        throw Object.assign(new Error("You cannot lower the quantity below what is already decided."), { status: 409, code: "ncr_rule" });
+      },
+    });
+    renderAt(`/Non-Conformance/Register/${U}`);
+    const title = await screen.findByLabelText("Title");
+    await userEvent.clear(title);
+    await userEvent.type(title, "Bore oversize on op 20");
+    await pick(/^Category/, "Process");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(lastCall(`PATCH /ncrs/${U}`)).toBeTruthy());
+    // the NC is read again once the save has been dealt with
+    const reads = () => calls.filter((c) => c.k === `GET /ncrs/${U}`).length;
+    await waitFor(() => expect(reads()).toBeGreaterThan(1));
+    expect(screen.getByLabelText("Title")).toHaveValue("Bore oversize on op 20");
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Process");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+  });
+
+  it("does not show the new title before the server has accepted it", async () => {
+    let release;
+    let saved = null;
+    routeApi({
+      [`GET /ncrs/${U}`]: () => saved ?? ncr({ id: U }),
+      [`PATCH /ncrs/${U}`]: (_p, o) => new Promise((resolve) => { release = () => resolve((saved = ncr({ id: U, title: o.body.title }))); }),
+    });
+    renderAt(`/Non-Conformance/Register/${U}`);
+    const title = await screen.findByLabelText("Title");
+    await userEvent.type(title, " x");
+    await pick(/^Category/, "Process");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    // while it is out, the page's own copy of the NC has not been changed by a guess, so nothing typed flickers back
+    expect(screen.getByLabelText("Title")).toHaveValue("Bore oversize x");
+    expect(screen.getByRole("combobox", { name: /^Category/ })).toHaveValue("Process");
+    release();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled());
+  });
+});
+
 describe("NC form: production records", () => {
   const links = (over = {}) => ({ productionOrder: null, lot: null, serial: null, ...over });
   const order = { id: "o1", orderNumber: "WO-154789", status: "released" };

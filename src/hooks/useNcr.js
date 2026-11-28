@@ -151,7 +151,8 @@ export const useNcrMutation = () => {
   return useMutation({
     mutationFn: ({ path, method = "POST", body, reason }) => apiFetch(path, { method, body, organisationId, reason }),
     // `guess(data, queryKey)` (lib/ncrGuesses.js) changes the cached NC data at once; else a flat PATCH or a DELETE of one id is applied as it is.
-    onMutate: (request) => (request.guess ? guessCache(queryClient, key(organisationId), request.guess) : simple.onMutate(request)),
+    // `optimistic: false` (the NC page's own save) shows nothing until the server answers, so the form keeps what was typed if the save is refused.
+    onMutate: (request) => (request.guess ? guessCache(queryClient, key(organisationId), request.guess) : request.optimistic === false ? { optimistic: false } : simple.onMutate(request)),
     onError: (error, request, context) => {
       rollbackGuess(queryClient, context);
       // the dialog that sent a guessed action has closed: say why it did not happen

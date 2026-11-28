@@ -15,7 +15,7 @@ fix should start with a failing test that shows the problem.
 | UI-1 | **The NC form is wiped when anything else changes the NC.** The form is reset from the server copy whenever the detail changes. Adding a cost line, linking an 8D, saving a custom value or changing the source refreshes the NC (its total cost, 8D count or custom values differ), and a colleague's save does the same when the tab regains focus. Everything typed and not yet saved disappears with no message. | `NcrPage.jsx:147-148` (`original` memo, `reset(original)`) | Checked |
 | UI-2 | **A refused save wipes everything typed.** The save is a flat PATCH, so the generic optimistic update patches the cached NC, and a refusal rolls it back; the form resets on both. Id fields (category, part, site) are not keys of the cached copy, so they flicker back to the old value even when the save works. "Cancel" in the edit-conflict dialog says typing is kept, but it is already gone. | `NcrPage.jsx:203-205`, `useNcr.js:154`, `lib/optimistic.js` | Reported |
 | API-1 | **The dashboard trend's "total" counts sources, not NCs.** `count(r.*)` runs over rows already grouped by (week, source), so three internal NCs in one week show as 1. The bars use the per-source counts, which are right, so the table and the bars disagree. | `ncr-dashboard.ts:135` | Checked |
-| DB-1 | **A cancelled NC can be reopened without the opening rules.** A draft can be cancelled; reopening a cancelled NC returns before `assert_ncr_openable`, so it becomes open with no severity, category, quantity or customer. Imported cancelled NCs are exempt from the opening rules on purpose, so they take the same path. Separately, `customer_id` / `supplier_id` can be set to null on an open customer or supplier NC (only `change_ncr_source` re-checks the party). | `20251218100000_ncr_category_source.sql:170-200` | Checked (the reopen branch); the party gap is reported |
+| DB-1 | **A cancelled NC can be reopened without the opening rules.** Reopening a cancelled NC returns before `assert_ncr_openable`. *Correction after fixing it:* the reviewer thought a draft could be cancelled with no fields, but cancelling a draft already runs the opening rules, so the real exposure is an NC that **arrived already cancelled** (a history import, which is exempt on purpose, or a legacy copy). Separately, `customer_id` / `supplier_id` can be set to null on an open customer or supplier NC (only `change_ncr_source` re-checks the party). | `20251218100000_ncr_category_source.sql:170-200` | Checked; **fixed, see below** |
 | DB-2 | **"One live NC per reading / finding / receipt line" holds only at the moment of linking.** Two people raising on the same failed readings at once both pass the check (no lock). Reopening a cancelled NC, or restoring a deleted one, makes a reading, finding or line live on two NCs. The NC-based supplier PPM then counts units twice. | `20251113100000`, `20251218100000:313-334`, `20251217100000:217`, `20260106100000` | Reported |
 
 ## Medium
@@ -86,3 +86,17 @@ dialogs' limits; permission gating on the NC page.
 3. **One migration:** DB-1, DB-2, DB-3, DB-4, DB-5, DB-6, DB-8 (and DB-7 if wanted), with SQL tests that fail first. Applying it live
    waits for the owner's go.
 4. Decisions for the owner: DB-9 (quantity 0), API-3 (what "raised" and "open" mean everywhere), API-13 (client keys).
+
+## Fixed so far (the five high findings)
+
+Fixed in the working tree on 28 Nov 2026; **the migration is not applied live** (it waits for the owner's go).
+
+| ID | Fix | Test |
+|---|---|---|
+| UI-1 | `NcrPage.jsx`: when the NC changes under the person, the fields they have edited keep their words and every other field takes the new value; a save sends the version the person opened (`useEditBase`), so a colleague's change to the same field is still caught. After the person's own save the form takes the saved record. | `Ncr.test.jsx` "NC form: what is typed is kept" (two tests that fail without the fix) |
+| UI-2 | The NC page's own save is no longer guessed on screen (`optimistic: false` in `useNcrMutation`): a refusal leaves everything typed in place and nothing flickers back. | two more tests in the same block, using a real uuid because the guess only touches records with one |
+| API-1 | `ncr-dashboard.ts`: the trend's total is the sum of the per-source counts. | `ncr-records.e2e-spec.ts` "counts every non-conformance of a week in the trend" |
+| DB-1 | `20260469100000_ncr_audit_high_fixes.sql`: reopening a cancelled NC runs `assert_ncr_openable`; `ncr_keep_opening_fields` also keeps the customer of an open customer NC and the supplier of an open supplier NC. | `ncr_core.test.sql` |
+| DB-2 | Same migration: `app.assert_ncr_links_free` re-checks on reopen and restore that none of the NC's readings or audit findings is on another live NC; `raise_ncr_from_inspection` and `add_readings_to_ncr` take a lock per inspection (`pg_advisory_xact_lock`) before checking, so two simultaneous raises cannot both pass. | `inspection_ncr_add_readings.test.sql` (reopen and restore). The race itself needs two sessions and is not covered by a test. |
+
+Still open: everything else in the lists above.

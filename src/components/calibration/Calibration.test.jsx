@@ -184,7 +184,7 @@ describe("gauge page", () => {
     routeApi({
       "GET /machines": { data: [{ id: "m1", code: "LATHE-1", name: "Lathe 1", site: { id: "s1", name: "Main site" }, active: true }], nextCursor: null },
       "POST /gauges": (path, { body }) => gauge({ id: "g9", assetNumber: body.assetNumber }),
-      "GET /gauges/g9": gauge({ id: "g9" }), "GET /gauges/g9/characteristics": { data: [] }, "GET /gauges/g9/calibrations": [],
+      "GET /gauges/g9": gauge({ id: "g9" }), "GET /gauges/g9/characteristics": { data: [] }, "GET /gauges/g9/calibrations": { data: [] },
     });
     renderAt("/Calibration/Gauges/new");
     await userEvent.type(await screen.findByLabelText(/Asset number/), "G-011");

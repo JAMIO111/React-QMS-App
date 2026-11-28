@@ -1,6 +1,6 @@
 # Gauge type check points as a percentage of the gauge's range, and how their tolerance is worked out
 
-Status: **plan, nothing built** (2026-11-28, revised the same day). Decisions R1–R12 below are proposed; they become agreed when the owner answers §9.
+Status: **RC1 (the migration and its SQL test) is built and committed locally, not applied live**; RC2 (API) and RC3 (screens) are not started (2026-11-28). Decisions R1–R12 below were **agreed by the owner on 2026-11-28 as proposed**.
 Builds on `docs/calibration-plan.md`. Read that first for the tables named here.
 
 ## 1. The problem
@@ -92,7 +92,7 @@ Everything is audited by the existing triggers. The migration is reversible (dro
 - Gauge types carry `rangeCheckCount`; the apply result adds `gaugesNeedRange`.
 - `POST /gauge-types/{id}/preview-points {rangeMin, rangeMax, unitCode, resolution?}` → the resolved list with each derivation and any problem (`calibration.read`; saves nothing).
 - `POST /gauges/{id}/recalculate-range-checks` (`calibration.manage`; answers the gauge).
-- The apply route calls `app.copy_type_checks_to_gauge` instead of its inline insert.
+- The apply route calls `app.apply_type_checks(type)` instead of its inline insert. It answers `{ gaugesUpdated, checksAdded, gaugesSkipped, gaugesWithProblems, problems[{gaugeId, assetNumber, checkId, name, problem}] }` (the problem is not always a missing range: a tolerance that works out to nothing or a unit that differs is reported the same way), so the API result gains `gaugesWithProblems` and `problems` rather than a `gaugesNeedRange` count. `gauges_missing_checks` on the type list also has to count gauges that lack a range-based check.
 - Calibration readings carry `derivation` and `toleranceSource`.
 
 ## 6. Screens
@@ -133,12 +133,12 @@ Everything is audited by the existing triggers. The migration is reversible (dro
 
 | Slice | Content |
 |---|---|
-| RC1 | Migration + SQL test (columns, resolver, copy, shared copy function, rules, recalculation, readings) |
+| RC1 | **Built.** Migration `20260468100000_gauge_range_checks.sql` + `supabase/tests/gauge_range_checks.test.sql` (columns, resolver, copy, `app.apply_type_checks`, recalculation and state, preview, rules, readings; nine deliberate breaks tried and caught; full SQL suite 210 passing). Not applied live. |
 | RC2 | API routes and bodies + e2e + sweep entries for the two new routes |
 | RC3 | Screens, preview, helper, tests; help guide and `CLAUDE.md` |
 | RCX | Full checks, then apply live **only on the owner's go** (history row), live guardrails and advisors, commit |
 
-Nothing is pushed until the owner says so; the API must not be pushed before the migration is live (gauge reads would select the new columns).
+Nothing is pushed until the owner says so. RC1 and RC2 ship together: until RC2, no screen or route can create a range-based check (the bodies do not expose the new columns), so the live database and the old API stay consistent either way; once RC2 is pushed the migration must be live first (gauge reads select the new columns).
 
 ## 9. Decisions for the owner (proposed answer first)
 

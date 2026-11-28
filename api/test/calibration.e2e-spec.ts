@@ -454,3 +454,149 @@ describe('gauge machine, required type and dates (module audit)', () => {
     expect(after.rowVersion).not.toBe(version); // a readings-only edit still moves the record's version
   });
 });
+
+describe("gauge type checks across the gauge's range", () => {
+  const post = async (path: string, body: unknown, status = 201, user = ids.ownerA) => api().post(`/api/v1${path}`).set(await as(user)).send(body as object).expect(status);
+
+  it('refuses malformed range checks on a type, naming the problem', async () => {
+    const t = (await post('/gauge-types', { code: 'RC-BODY', name: 'Body checks' })).body;
+    const bad = async (body: Record<string, unknown>, message: RegExp) => {
+      const r = await post(`/gauge-types/${t.id}/characteristics`, { name: 'x', ...body }, 400);
+      expect(JSON.stringify(r.body)).toMatch(message);
+    };
+    await bad({ nominal: 120, toleranceMinus: 0.1, tolerancePlus: 0.1, nominalBasis: 'span_percent' }, /between 0 and 100/);
+    await bad({ nominal: 50.0001, toleranceMinus: 0.1, tolerancePlus: 0.1, nominalBasis: 'span_percent' }, /three decimals/);
+    await bad({ nominal: 50, toleranceMinus: 0.1, tolerancePlus: 0.1, nominalBasis: 'span_percent', unitCode: 'mm' }, /leave the unit out/);
+    await bad({ nominal: 5, toleranceMinus: 0.1, tolerancePlus: 0.2, unitCode: 'mm', toleranceBasis: 'span_percent' }, /same on both sides/);
+    await bad({ nominal: 5, toleranceMinus: 0, tolerancePlus: 0, unitCode: 'mm', toleranceBasis: 'reading_percent' }, /more than 0/);
+    await bad({ nominal: 5, toleranceMinus: 0.1, tolerancePlus: 0.1, unitCode: 'mm', toleranceBasis: 'value_plus_reading_percent' }, /percentage of the reading/);
+    await bad({ nominal: 5, toleranceMinus: 0.1, tolerancePlus: 0.1, unitCode: 'mm', toleranceReadingPercent: 1 }, /only to a tolerance/);
+    await bad({ nominal: 5, toleranceMinus: 0.1, tolerancePlus: 0.1, unitCode: 'mm', toleranceSource: 'x'.repeat(201) }, /./);
+    // A fixed tolerance with different sides is still fine.
+    await post(`/gauge-types/${t.id}/characteristics`, { name: 'ok', nominal: 5, toleranceMinus: 0.1, tolerancePlus: 0.3, unitCode: 'mm' });
+  });
+
+  it('works the points out for each gauge, previews them, and says what a gauge without a range needs', async () => {
+    const t = (await post('/gauge-types', { code: 'RC-MIC', name: 'External micrometer' })).body;
+    const a = (await post(`/gauge-types/${t.id}/characteristics`, {
+      name: '50 % of range', nominal: 50, nominalBasis: 'span_percent', toleranceBasis: 'value_plus_reading_percent',
+      toleranceMinus: 0.003, tolerancePlus: 0.003, toleranceReadingPercent: 0.01, toleranceSource: 'ISO 3611',
+    })).body;
+    expect(a).toMatchObject({ nominalBasis: 'span_percent', toleranceBasis: 'value_plus_reading_percent', toleranceReadingPercent: 0.01, toleranceSource: 'ISO 3611', lower: null, upper: null, unitCode: null });
+    await post(`/gauge-types/${t.id}/characteristics`, { name: 'Fixed 25 mm', nominal: 25, toleranceMinus: 0.004, tolerancePlus: 0.004, unitCode: 'mm' });
+    expect((await api().get('/api/v1/gauge-types').set(await as(ids.ownerA)).expect(200)).body.data.find((x: { id: string }) => x.id === t.id)).toMatchObject({ rangeCheckCount: 1 });
+
+    // The preview is read-only and open to anyone who may read gauge types.
+    const preview = (await post(`/gauge-types/${t.id}/preview-points`, { rangeMin: 50, rangeMax: 100, unitCode: 'mm', resolution: 0.001 }, 200, ids.inspectorA)).body;
+    expect(preview).toMatchObject({ needsRange: true, hasRange: true });
+    const mid = preview.checks.find((c: { name: string }) => c.name === '50 % of range');
+    expect(mid).toMatchObject({ nominal: 75, unit: 'mm', followsRange: true, problem: null, toleranceSource: 'ISO 3611' });
+    expect(mid.toleranceMinus).toBeCloseTo(0.003 + 0.0075, 6);
+    expect(mid.derivation).toMatch(/50 % of range/);
+    expect(preview.checks.find((c: { name: string }) => c.name === 'Fixed 25 mm')).toMatchObject({ nominal: 25, followsRange: false });
+    await post(`/gauge-types/${t.id}/preview-points`, { rangeMin: 10, rangeMax: 10, unitCode: 'mm' }, 400);
+    await post(`/gauge-types/${t.id}/preview-points`, { rangeMin: 0, rangeMax: 10 }, 400);
+
+    // A gauge of this type needs a range and a unit; the database refuses one without.
+    const h = await as(ids.ownerA);
+    const none = await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-RC-NONE', description: 'No range', gaugeTypeId: t.id, siteId: ids.siteA }).expect(409);
+    expect(none.body.error.code).toBe('calibration_rule');
+    expect(none.body.error.message).toMatch(/range/i);
+
+    const g = (await api().post('/api/v1/gauges').set(h).send({
+      assetNumber: 'G-RC-1', description: '50-100 mm micrometer', gaugeTypeId: t.id, siteId: ids.siteA, rangeMin: 50, rangeMax: 100, unitCode: 'mm', resolution: 0.001,
+    }).expect(201)).body;
+    const checks = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data;
+    const copy = checks.find((c: { name: string }) => c.name === '50 % of range');
+    expect(copy).toMatchObject({ nominal: 75, unitCode: 'mm', followsRange: true, staleFromRange: false, rangeProblem: null, toleranceSource: 'ISO 3611' });
+    expect(copy.derivation).toMatch(/50 % of range/);
+    expect(copy.lower).toBeCloseTo(75 - copy.toleranceMinus, 6);
+    expect(checks.find((c: { name: string }) => c.name === 'Fixed 25 mm')).toMatchObject({ followsRange: false });
+
+    // A calibration reading keeps how its limits were worked out.
+    const cal = (await api().post(`/api/v1/gauges/${g.id}/calibrations`).set(h)
+      .send({ readings: checks.map((c: { id: string; nominal: number }) => ({ characteristicId: c.id, asFound: c.nominal, asLeft: c.nominal })) }).expect(201)).body;
+    const reading = cal.readings.find((r: { name: string }) => r.name === '50 % of range');
+    expect(reading).toMatchObject({ nominal: 75, toleranceSource: 'ISO 3611' });
+    expect(reading.derivation).toMatch(/50 % of range/);
+    expect(cal.readings.find((r: { name: string }) => r.name === 'Fixed 25 mm')).toMatchObject({ derivation: null, toleranceSource: null });
+  });
+
+  it('marks a following check out of date when the range changes, and recalculates on request without touching past readings', async () => {
+    const h = await as(ids.ownerA);
+    const t = (await post('/gauge-types', { code: 'RC-STALE', name: 'Stale type' })).body;
+    await post(`/gauge-types/${t.id}/characteristics`, { name: 'Mid', nominal: 50, nominalBasis: 'span_percent', toleranceBasis: 'span_percent', toleranceMinus: 1, tolerancePlus: 1 });
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-RC-STALE', description: 'Stale', gaugeTypeId: t.id, siteId: ids.siteA, rangeMin: 0, rangeMax: 25, unitCode: 'mm', resolution: 0.001 }).expect(201)).body;
+    const before = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data[0];
+    expect(before).toMatchObject({ nominal: 12.5, staleFromRange: false });
+    const cal = (await api().post(`/api/v1/gauges/${g.id}/calibrations`).set(h).send({ readings: [{ characteristicId: before.id, asFound: 12.5, asLeft: 12.5 }] }).expect(201)).body;
+
+    // Editing the range does not rewrite the check: it says Recalculate would change it.
+    await api().patch(`/api/v1/gauges/${g.id}`).set(h).send({ rangeMax: 50 }).expect(200);
+    const stale = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data[0];
+    expect(stale).toMatchObject({ nominal: 12.5, staleFromRange: true, followsRange: true });
+
+    // Only a calibration manager recalculates; an inspector on the site may not.
+    await api().post(`/api/v1/gauges/${g.id}/recalculate-range-checks`).set(await as(ids.inspectorA)).expect(403);
+    const r = (await api().post(`/api/v1/gauges/${g.id}/recalculate-range-checks`).set(h).expect(200)).body;
+    expect(r.result).toMatchObject({ updated: 1, unchanged: 0, problems: [] });
+    expect(r.gauge.id).toBe(g.id);
+    const after = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data[0];
+    expect(after).toMatchObject({ nominal: 25, staleFromRange: false });
+    const again = (await api().post(`/api/v1/gauges/${g.id}/recalculate-range-checks`).set(h).expect(200)).body;
+    expect(again.result).toMatchObject({ updated: 0, unchanged: 1 });
+
+    // The earlier calibration keeps the limits it was recorded with.
+    const old = (await api().get(`/api/v1/calibrations/${cal.id}`).set(h).expect(200)).body;
+    expect(old.readings[0].nominal).toBe(12.5);
+
+    // Editing the check's numbers by hand makes it an ordinary fixed check on this gauge.
+    await api().patch(`/api/v1/gauge-characteristics/${after.id}`).set(h).send({ nominal: 24, toleranceMinus: 0.01, tolerancePlus: 0.01, unitCode: 'mm' }).expect(200);
+    expect((await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data[0]).toMatchObject({ followsRange: false, derivation: null, staleFromRange: false });
+  });
+
+  it('applies range checks to existing gauges, reporting the ones that cannot take them', async () => {
+    const h = await as(ids.ownerA);
+    const t = (await post('/gauge-types', { code: 'RC-APPLY', name: 'Apply type' })).body;
+    // Gauges made before the check exists: one with a range, one without.
+    const withRange = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-RC-A1', description: 'Has range', gaugeTypeId: t.id, siteId: ids.siteA, rangeMin: 0, rangeMax: 100, unitCode: 'mm' }).expect(201)).body;
+    const noRange = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-RC-A2', description: 'No range', gaugeTypeId: t.id, siteId: ids.siteA }).expect(201)).body;
+    await post(`/gauge-types/${t.id}/characteristics`, { name: 'Quarter', nominal: 25, nominalBasis: 'span_percent', toleranceBasis: 'span_percent', toleranceMinus: 0.5, tolerancePlus: 0.5 });
+    await post(`/gauge-types/${t.id}/characteristics`, { name: 'Fixed', nominal: 10, toleranceMinus: 0.01, tolerancePlus: 0.01, unitCode: 'mm' });
+
+    await api().post(`/api/v1/gauge-types/${t.id}/apply-characteristics`).set(await as(ids.inspectorA)).expect(403);
+    const r = (await api().post(`/api/v1/gauge-types/${t.id}/apply-characteristics`).set(h).expect(200)).body;
+    expect(r).toMatchObject({ gaugesWithProblems: 1, gaugesSkipped: 0 });
+    expect(r.problems).toEqual([expect.objectContaining({ gaugeId: noRange.id, assetNumber: 'G-RC-A2', name: 'Quarter', problem: expect.stringMatching(/range/i) })]);
+    const got = (await api().get(`/api/v1/gauges/${withRange.id}/characteristics`).set(h).expect(200)).body.data;
+    expect(got.find((c: { name: string }) => c.name === 'Quarter')).toMatchObject({ nominal: 25, followsRange: true });
+    // The gauge with no range still gets the check that does not need one, and the other one stays missing.
+    const partial = (await api().get(`/api/v1/gauges/${noRange.id}/characteristics`).set(h).expect(200)).body.data;
+    expect(partial.map((c: { name: string }) => c.name)).toEqual(['Fixed']);
+    expect(r.type.gaugesMissingChecks).toBe(1);
+
+    // Once it has a range, applying again adds the missing check.
+    await api().patch(`/api/v1/gauges/${noRange.id}`).set(h).send({ rangeMin: 0, rangeMax: 200, unitCode: 'mm' }).expect(200);
+    const second = (await api().post(`/api/v1/gauge-types/${t.id}/apply-characteristics`).set(h).expect(200)).body;
+    expect(second).toMatchObject({ gaugesUpdated: 1, characteristicsAdded: 1, gaugesWithProblems: 0, type: { gaugesMissingChecks: 0 } });
+    expect((await api().get(`/api/v1/gauges/${noRange.id}/characteristics`).set(h).expect(200)).body.data.find((c: { name: string }) => c.name === 'Quarter')).toMatchObject({ nominal: 50 });
+  });
+
+  it('checks an update against what the check will hold, not only what is sent', async () => {
+    const h = await as(ids.ownerA);
+    const t = (await post('/gauge-types', { code: 'RC-UPD', name: 'Update type' })).body;
+    const c = (await post(`/gauge-types/${t.id}/characteristics`, { name: 'Pt', nominal: 10, toleranceMinus: 0.1, tolerancePlus: 0.1, unitCode: 'mm' })).body;
+    // Turning the point into a percentage still needs the unit dropped and a valid percentage.
+    const r = await api().patch(`/api/v1/gauge-type-characteristics/${c.id}`).set(h).send({ nominalBasis: 'span_percent' }).expect(400);
+    expect(JSON.stringify(r.body)).toMatch(/leave the unit out|between 0 and 100/);
+    const ok = (await api().patch(`/api/v1/gauge-type-characteristics/${c.id}`).set(h).send({ nominalBasis: 'span_percent', nominal: 40, unitCode: null }).expect(200)).body;
+    expect(ok).toMatchObject({ nominalBasis: 'span_percent', nominal: 40, unitCode: null, lower: null, upper: null });
+    // A tolerance basis needs symmetric sides.
+    await api().patch(`/api/v1/gauge-type-characteristics/${c.id}`).set(h).send({ toleranceBasis: 'reading_percent', toleranceMinus: 1, tolerancePlus: 2 }).expect(400);
+    await api().patch(`/api/v1/gauge-type-characteristics/${c.id}`).set(h).send({ toleranceBasis: 'reading_percent', toleranceMinus: 1, tolerancePlus: 1 }).expect(200);
+    // A gauge's own check takes no basis fields.
+    const g = (await api().post('/api/v1/gauges').set(h).send({ assetNumber: 'G-RC-UPD', description: 'Upd', gaugeTypeId: t.id, siteId: ids.siteA, rangeMin: 0, rangeMax: 10, unitCode: 'mm' }).expect(201)).body;
+    const own = (await api().get(`/api/v1/gauges/${g.id}/characteristics`).set(h).expect(200)).body.data[0];
+    await api().patch(`/api/v1/gauge-characteristics/${own.id}`).set(h).send({ nominalBasis: 'span_percent' }).expect(400);
+  });
+});

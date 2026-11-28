@@ -19,6 +19,11 @@ import {
   CreateCharacteristicBody,
   CreateGaugeBody,
   CreateGaugeTypeBody,
+  CreateTypeCharacteristicBody,
+  UpdateTypeCharacteristicBody,
+  PreviewPointsBody,
+  PreviewPointsResult,
+  RecalculateResult,
   DeleteBody,
   DeletedQuery,
   GAUGE_SORTABLE,
@@ -142,6 +147,15 @@ export class GaugesController {
     return this.service.createGaugeCharacteristic(ctx, parse(Uuid, id), parse(CreateCharacteristicBody, body));
   }
 
+  /** Work the gauge's range-based checks out again from its type and its current range (past readings keep their limits). */
+  @Post(':id/recalculate-range-checks')
+  @HttpCode(200)
+  @OrganisationScoped('calibration.manage', SITE_SCOPED)
+  @ApiOkResponse({ schema: openApiSchema(z.object({ gauge: GaugeDetail, result: RecalculateResult })) })
+  recalculateRangeChecks(@Ctx() ctx: RequestContext, @Param('id') id: string) {
+    return this.service.recalculateRangeChecks(ctx, parse(Uuid, id));
+  }
+
   @Get(':id/calibrations')
   @OrganisationScoped('calibration.read', SITE_SCOPED)
   @deletedQuery()
@@ -230,10 +244,20 @@ export class GaugeTypesController {
   @Post(':id/characteristics')
   @HttpCode(201)
   @OrganisationScoped('calibration.manage')
-  @ApiBody({ schema: openApiSchema(CreateCharacteristicBody) })
+  @ApiBody({ schema: openApiSchema(CreateTypeCharacteristicBody) })
   @ApiCreatedResponse({ schema: openApiSchema(Characteristic) })
   createCharacteristic(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
-    return this.service.createTypeCharacteristic(ctx, parse(Uuid, id), parse(CreateCharacteristicBody, body));
+    return this.service.createTypeCharacteristic(ctx, parse(Uuid, id), parse(CreateTypeCharacteristicBody, body));
+  }
+
+  /** What this type's checks would become for a gauge with the given range (nothing is saved): the editor's "try it with a range". */
+  @Post(':id/preview-points')
+  @HttpCode(200)
+  @OrganisationScoped('calibration.read', SITE_SCOPED)
+  @ApiBody({ schema: openApiSchema(PreviewPointsBody) })
+  @ApiOkResponse({ schema: openApiSchema(PreviewPointsResult) })
+  previewPoints(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
+    return this.service.previewTypePoints(ctx, parse(Uuid, id), parse(PreviewPointsBody, body));
   }
 }
 
@@ -245,10 +269,10 @@ export class GaugeTypeCharacteristicsController {
 
   @Patch(':id')
   @OrganisationScoped('calibration.manage')
-  @ApiBody({ schema: openApiSchema(UpdateCharacteristicBody) })
+  @ApiBody({ schema: openApiSchema(UpdateTypeCharacteristicBody) })
   @ApiOkResponse({ schema: openApiSchema(Characteristic) })
   update(@Ctx() ctx: RequestContext, @Param('id') id: string, @Body() body: unknown) {
-    return this.service.updateTypeCharacteristic(ctx, parse(Uuid, id), parse(UpdateCharacteristicBody, body));
+    return this.service.updateTypeCharacteristic(ctx, parse(Uuid, id), parse(UpdateTypeCharacteristicBody, body));
   }
 }
 

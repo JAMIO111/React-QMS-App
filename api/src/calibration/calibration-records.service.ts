@@ -89,6 +89,8 @@ const toReading = (r: Row): z.infer<typeof Reading> => ({
   asFoundOk: r.as_found_ok as boolean,
   asLeftOk: (r.as_left_ok as boolean) ?? null,
   notes: (r.notes as string) ?? null,
+  derivation: (r.derivation as string) ?? null,
+  toleranceSource: (r.tolerance_source as string) ?? null,
 });
 
 const ATTACHMENT_SELECT = `

@@ -17,6 +17,12 @@ import {
   GaugeType,
   GaugeTypeQuery,
   ApplyTypeCharacteristicsResult,
+  CreateTypeCharacteristicBody,
+  UpdateTypeCharacteristicBody,
+  PreviewPointsBody,
+  PreviewPointsResult,
+  RecalculateResult,
+  typeCheckProblem,
   HistoryEntry,
   UpdateCharacteristicBody,
   UpdateGaugeBody,
@@ -67,7 +73,8 @@ const GAUGE_COLUMNS: Record<string, string> = {
 };
 const CHARACTERISTIC_COLUMNS: Record<string, string> = {
   sortOrder: 'sort_order', kind: 'kind', name: 'name', nominal: 'nominal', toleranceMinus: 'tolerance_minus', tolerancePlus: 'tolerance_plus',
-  unitCode: 'unit_code', method: 'method', active: 'active',
+  unitCode: 'unit_code', method: 'method', active: 'active', toleranceSource: 'tolerance_source',
+  nominalBasis: 'nominal_basis', toleranceBasis: 'tolerance_basis', toleranceReadingPercent: 'tolerance_reading_percent',
 };
 const TYPE_COLUMNS: Record<string, string> = {
   code: 'code', name: 'name', description: 'description', intervalValue: 'interval_value', intervalUnit: 'interval_unit', active: 'active', procedureDocumentId: 'procedure_document_id',
@@ -149,6 +156,8 @@ const toGaugeSummary = (r: Row): GaugeSummary => ({
 });
 
 export const toCharacteristic = (r: Row): Characteristic => {
+  // A type's check given as percentages has no limits of its own: they depend on the gauge.
+  const percent = 'nominal_basis' in r && (r.nominal_basis !== 'value' || r.tolerance_basis !== 'value');
   return {
     id: r.id as string,
     sortOrder: Number(r.sort_order),
@@ -157,12 +166,28 @@ export const toCharacteristic = (r: Row): Characteristic => {
     nominal: num(r.nominal),
     toleranceMinus: num(r.tolerance_minus),
     tolerancePlus: num(r.tolerance_plus),
-    lower: num(r.lower_limit),
-    upper: num(r.upper_limit),
+    lower: percent ? null : num(r.lower_limit),
+    upper: percent ? null : num(r.upper_limit),
     unitCode: (r.unit_code as string) ?? null,
     method: (r.method as string) ?? null,
     active: r.active as boolean,
+    toleranceSource: (r.tolerance_source as string) ?? null,
     ...('template_id' in r ? { templateId: (r.template_id as string) ?? null } : {}),
+    ...('nominal_basis' in r
+      ? {
+          nominalBasis: r.nominal_basis as Characteristic['nominalBasis'],
+          toleranceBasis: r.tolerance_basis as Characteristic['toleranceBasis'],
+          toleranceReadingPercent: num(r.tolerance_reading_percent),
+        }
+      : {}),
+    ...('follows_range' in r
+      ? {
+          followsRange: r.follows_range as boolean,
+          derivation: (r.derivation as string) ?? null,
+          staleFromRange: (r.stale_from_range as boolean) ?? false,
+          rangeProblem: (r.range_problem as string) ?? null,
+        }
+      : {}),
   };
 };
 const CHARACTERISTIC_SELECT = (table: string) =>
@@ -317,7 +342,10 @@ export class CalibrationService {
     return this.database.asUser(ctx, async (db) => {
       await this.assertGaugeVisible(db, ctx, gaugeId);
       const result = await db.execute<Row>(sql`
-        ${sql.raw(CHARACTERISTIC_SELECT('gauge_characteristics'))}
+        select k.*, k.nominal - k.tolerance_minus as lower_limit, k.nominal + k.tolerance_plus as upper_limit,
+               st.stale as stale_from_range, st.problem as range_problem
+        from public.gauge_characteristics k
+        left join app.gauge_range_check_state(${gaugeId}::uuid) st on st.characteristic_id = k.id
         where k.gauge_id = ${gaugeId}::uuid ${q.includeInactive ? sql`` : sql`and k.active`}
         order by k.sort_order, k.created_at`);
       return result.rows.map(toCharacteristic);
@@ -382,7 +410,7 @@ export class CalibrationService {
     });
   }
 
-  createTypeCharacteristic(ctx: RequestContext, typeId: string, body: z.infer<typeof CreateCharacteristicBody>): Promise<Characteristic> {
+  createTypeCharacteristic(ctx: RequestContext, typeId: string, body: z.infer<typeof CreateTypeCharacteristicBody>): Promise<Characteristic> {
     return this.database.asUser(ctx, async (db) => {
       await this.loadType(db, ctx, typeId);
       const sortOrder =
@@ -398,39 +426,99 @@ export class CalibrationService {
    * Copy the type's active checks onto its gauges that do not have them yet (a gauge gets a type's checks only when it is created, so gauges made or
    * imported before a check was added have none). Matched by the check they came from: a check already on the gauge — even one switched off there — is
    * never added again or changed. Runs as the person: only gauges at sites where they manage calibration are touched; the others are counted as skipped.
+   * The database does the copying (`app.apply_type_checks`), so a check given as a percentage of the gauge's range is worked out for each gauge's own range;
+   * a gauge with no range or unit cannot take one and is reported in `problems`.
    */
   applyTypeCharacteristics(ctx: RequestContext, typeId: string): Promise<z.infer<typeof ApplyTypeCharacteristicsResult>> {
     return this.database.asUser(ctx, async (db) => {
       const type = await this.loadType(db, ctx, typeId);
       if (!type.active) throw new ApiError(HttpStatus.CONFLICT, 'calibration_rule', 'This gauge type is switched off; switch it on first');
-      const missing = sql`
-        from public.gauges g
-        join public.gauge_type_characteristics k on k.gauge_type_id = g.gauge_type_id and k.active
-        where g.gauge_type_id = ${typeId}::uuid and g.organisation_id = ${ctx.organisationId!}::uuid and ${sql.raw(GAUGE_TAKES_CHECKS)}
-          and not exists (select 1 from public.gauge_characteristics c where c.gauge_id = g.id and c.template_id = k.id)`;
-      const skipped = await db.execute<{ n: number }>(sql`
-        select count(distinct g.id) as n ${missing}
-          and not app.has_permission(g.organisation_id, 'calibration.manage', g.site_id)`);
-      const added = await db.execute<{ gauge_id: string }>(sql`
-        insert into public.gauge_characteristics (organisation_id, gauge_id, template_id, sort_order, kind, name, nominal,
-                                                  tolerance_minus, tolerance_plus, unit_code, method)
-        select g.organisation_id, g.id, k.id, k.sort_order, k.kind, k.name, k.nominal, k.tolerance_minus, k.tolerance_plus, k.unit_code, k.method
-        ${missing}
-          and app.has_permission(g.organisation_id, 'calibration.manage', g.site_id)
-        order by g.id, k.sort_order
-        on conflict (gauge_id, template_id) where template_id is not null do nothing
-        returning gauge_id`);
+      const applied = await db.execute<{
+        r: { gaugesUpdated: number; checksAdded: number; gaugesSkipped: number; gaugesWithProblems: number; problems: Array<Record<string, unknown>> };
+      }>(sql`select app.apply_type_checks(${typeId}::uuid) as r`);
+      const r = applied.rows[0].r;
       return {
-        gaugesUpdated: new Set(added.rows.map((r) => r.gauge_id)).size,
-        characteristicsAdded: added.rows.length,
-        gaugesSkipped: Number(skipped.rows[0].n),
+        gaugesUpdated: Number(r.gaugesUpdated),
+        characteristicsAdded: Number(r.checksAdded),
+        gaugesSkipped: Number(r.gaugesSkipped),
+        gaugesWithProblems: Number(r.gaugesWithProblems),
+        problems: (r.problems ?? []).map((p) => ({
+          gaugeId: p.gaugeId as string,
+          assetNumber: p.assetNumber as string,
+          checkId: (p.checkId as string) ?? null,
+          name: (p.name as string) ?? null,
+          problem: p.problem as string,
+        })),
         type: await this.loadType(db, ctx, typeId),
       };
     });
   }
 
-  updateTypeCharacteristic(ctx: RequestContext, id: string, body: z.infer<typeof UpdateCharacteristicBody>): Promise<Characteristic> {
+  async updateTypeCharacteristic(ctx: RequestContext, id: string, body: z.infer<typeof UpdateTypeCharacteristicBody>): Promise<Characteristic> {
+    // The database holds the same rules, but it can only say "invalid value": check what the check will hold once this change is made.
+    await this.database.asUser(ctx, async (db) => {
+      const found = await db.execute<Row>(sql`select * from public.gauge_type_characteristics where id = ${id}::uuid and organisation_id = ${ctx.organisationId!}::uuid`);
+      const cur = found.rows[0];
+      if (!cur) throw ApiError.notFound('characteristic_not_found', 'Characteristic not found');
+      const pick = <K extends keyof typeof body>(k: K, current: unknown) => (k in body ? body[k] : current);
+      const problem = typeCheckProblem({
+        kind: pick('kind', cur.kind) as 'variable' | 'attribute',
+        nominal: pick('nominal', num(cur.nominal)) as number | null,
+        toleranceMinus: pick('toleranceMinus', num(cur.tolerance_minus)) as number | null,
+        tolerancePlus: pick('tolerancePlus', num(cur.tolerance_plus)) as number | null,
+        unitCode: pick('unitCode', cur.unit_code) as string | null,
+        nominalBasis: pick('nominalBasis', cur.nominal_basis) as 'value' | 'span_percent',
+        toleranceBasis: pick('toleranceBasis', cur.tolerance_basis) as 'value' | 'span_percent' | 'reading_percent' | 'value_plus_reading_percent',
+        toleranceReadingPercent: pick('toleranceReadingPercent', num(cur.tolerance_reading_percent)) as number | null,
+      });
+      if (problem) throw ApiError.badRequest('invalid_value', problem);
+    });
     return this.changeCharacteristic(ctx, 'gauge_type_characteristics', id, body);
+  }
+
+  /** What this type's active checks would become for a gauge with this range. Nothing is saved. */
+  previewTypePoints(ctx: RequestContext, typeId: string, body: z.infer<typeof PreviewPointsBody>): Promise<z.infer<typeof PreviewPointsResult>> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.loadType(db, ctx, typeId);
+      const result = await db.execute<{ r: { needsRange: boolean; hasRange: boolean; checks: Array<Record<string, unknown>> } }>(sql`
+        select app.preview_type_checks(${typeId}::uuid, ${body.rangeMin}::numeric, ${body.rangeMax}::numeric, ${body.unitCode}, ${body.resolution ?? null}::numeric) as r`);
+      const r = result.rows[0].r;
+      return {
+        needsRange: r.needsRange,
+        hasRange: r.hasRange,
+        checks: r.checks.map((c) => {
+          const nominal = num(c.nominal);
+          const minus = num(c.toleranceMinus);
+          const plus = num(c.tolerancePlus);
+          return {
+            checkId: c.checkId as string,
+            name: c.name as string,
+            method: (c.method as string) ?? null,
+            sortOrder: Number(c.sortOrder),
+            kind: c.kind as 'variable' | 'attribute',
+            nominal,
+            toleranceMinus: minus,
+            tolerancePlus: plus,
+            lower: nominal == null || minus == null ? null : Number((nominal - minus).toFixed(6)),
+            upper: nominal == null || plus == null ? null : Number((nominal + plus).toFixed(6)),
+            unit: (c.unit as string) ?? null,
+            derivation: (c.derivation as string) ?? null,
+            followsRange: !!c.followsRange,
+            toleranceSource: (c.toleranceSource as string) ?? null,
+            problem: (c.problem as string) ?? null,
+          };
+        }),
+      };
+    });
+  }
+
+  /** Work the gauge's range-based checks out again from the type's current definition and the gauge's current range. Past readings keep their limits. */
+  recalculateRangeChecks(ctx: RequestContext, gaugeId: string): Promise<{ gauge: GaugeDetail; result: z.infer<typeof RecalculateResult> }> {
+    return this.database.asUser(ctx, async (db) => {
+      await this.assertGaugeVisible(db, ctx, gaugeId);
+      const result = await db.execute<{ r: z.infer<typeof RecalculateResult> }>(sql`select app.recalculate_gauge_range_checks(${gaugeId}::uuid) as r`);
+      return { gauge: await this.loadGauge(db, ctx, gaugeId), result: result.rows[0].r };
+    });
   }
 
   // ---- internals -----------------------------------------------------------------------------
@@ -512,6 +600,8 @@ const GAUGE_TAKES_CHECKS = `g.deleted_at is null and g.status not in ('retired',
 const TYPE_SELECT = `
   select t.*,
     (select count(*) from public.gauge_type_characteristics k where k.gauge_type_id = t.id and k.active) as characteristic_count,
+    (select count(*) from public.gauge_type_characteristics k where k.gauge_type_id = t.id and k.active and k.kind = 'variable'
+       and (k.nominal_basis = 'span_percent' or k.tolerance_basis = 'span_percent')) as range_check_count,
     (select count(*) from public.gauges g where g.gauge_type_id = t.id and g.deleted_at is null) as gauge_count,
     (select jsonb_build_object('id', d.id, 'number', d.number, 'title', d.title, 'status', d.status)
        from public.documents d where d.id = t.procedure_document_id) as procedure_document,
@@ -533,4 +623,5 @@ const toType = (r: Row): z.infer<typeof GaugeType> => ({
   characteristicCount: Number(r.characteristic_count ?? 0),
   gaugeCount: Number(r.gauge_count ?? 0),
   gaugesMissingChecks: Number(r.gauges_missing_checks ?? 0),
+  rangeCheckCount: Number(r.range_check_count ?? 0),
 });

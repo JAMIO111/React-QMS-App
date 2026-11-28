@@ -1,6 +1,6 @@
 # Gauge type check points as a percentage of the gauge's range, and how their tolerance is worked out
 
-Status: **RC1 (the migration and its SQL test) is built and committed locally, not applied live**; RC2 (API) and RC3 (screens) are not started (2026-11-28). Decisions R1–R12 below were **agreed by the owner on 2026-11-28 as proposed**.
+Status: **RC1 (the migration and its SQL test) is built and committed locally, not applied live**; **RC2 (API) is built and committed locally** (2026-11-28); RC3 (screens) is not started. Decisions R1–R12 below were **agreed by the owner on 2026-11-28 as proposed**.
 Builds on `docs/calibration-plan.md`. Read that first for the tables named here.
 
 ## 1. The problem
@@ -134,11 +134,11 @@ Everything is audited by the existing triggers. The migration is reversible (dro
 | Slice | Content |
 |---|---|
 | RC1 | **Built.** Migration `20260468100000_gauge_range_checks.sql` + `supabase/tests/gauge_range_checks.test.sql` (columns, resolver, copy, `app.apply_type_checks`, recalculation and state, preview, rules, readings; nine deliberate breaks tried and caught; full SQL suite 210 passing). Not applied live. |
-| RC2 | API routes and bodies + e2e + sweep entries for the two new routes |
+| RC2 | API routes and bodies + e2e + sweep entries for the two new routes — **built** (`POST /gauge-types/{id}/preview-points`, `POST /gauges/{id}/recalculate-range-checks`; type bodies take `nominalBasis`, `toleranceBasis`, `toleranceReadingPercent`, `toleranceSource`; gauge checks carry `followsRange`, `derivation`, `staleFromRange`, `rangeProblem`; types carry `rangeCheckCount`; readings carry `derivation` and `toleranceSource`; apply calls `app.apply_type_checks`) |
 | RC3 | Screens, preview, helper, tests; help guide and `CLAUDE.md` |
 | RCX | Full checks, then apply live **only on the owner's go** (history row), live guardrails and advisors, commit |
 
-Nothing is pushed until the owner says so. RC1 and RC2 ship together: until RC2, no screen or route can create a range-based check (the bodies do not expose the new columns), so the live database and the old API stay consistent either way; once RC2 is pushed the migration must be live first (gauge reads select the new columns).
+Nothing is pushed until the owner says so. RC1 and RC2 ship together: before RC2, no screen or route could create a range-based check (the bodies do not expose the new columns), so the live database and the old API stay consistent either way; once RC2 is pushed the migration must be live first (gauge reads select the new columns).
 
 ## 9. Decisions for the owner (proposed answer first)
 

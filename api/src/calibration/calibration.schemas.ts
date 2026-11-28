@@ -43,6 +43,8 @@ const tolerance = z.number().finite().min(0).max(1e9);
 
 // ---- gauge types and characteristics --------------------------------------------------------
 
+export const NominalBasis = z.enum(['value', 'span_percent']);
+export const ToleranceBasis = z.enum(['value', 'span_percent', 'reading_percent', 'value_plus_reading_percent']);
 export const Characteristic = z.object({
   id: z.string().uuid(),
   sortOrder: z.number(),
@@ -60,6 +62,24 @@ export const Characteristic = z.object({
   active: z.boolean(),
   /** Gauge characteristics copied from a gauge type's template keep a link to it. */
   templateId: z.string().uuid().nullable().optional(),
+  /** Where the standard's tolerance comes from, in words (for example "ISO 3611"). */
+  toleranceSource: z.string().nullable().optional(),
+  /**
+   * On a gauge type's check: how the point and the tolerance are given. A point of `span_percent` holds a percentage of the gauge's range in
+   * `nominal` (0 is the range minimum, 100 the maximum) and has no unit; the tolerance is `value` (the two sides may differ), a percentage of the
+   * `span_percent` or of the reading, or `value_plus_reading_percent` (a fixed part in the two sides plus `toleranceReadingPercent` of the reading).
+   * For the percentage kinds `lower` and `upper` are null: they depend on the gauge.
+   */
+  nominalBasis: NominalBasis.optional(),
+  toleranceBasis: ToleranceBasis.optional(),
+  toleranceReadingPercent: z.number().nullable().optional(),
+  /** On a gauge's check: it was worked out from the gauge type and the gauge's range, and `derivation` says how. */
+  followsRange: z.boolean().optional(),
+  derivation: z.string().nullable().optional(),
+  /** On a gauge's check that follows the range: the range or the type changed since, so Recalculate would give other values. */
+  staleFromRange: z.boolean().optional(),
+  /** On a gauge's check that follows the range: why it cannot be worked out now (for example the gauge has no range). */
+  rangeProblem: z.string().nullable().optional(),
 });
 export type Characteristic = z.infer<typeof Characteristic>;
 
@@ -72,12 +92,15 @@ const characteristicFields = {
   tolerancePlus: tolerance.nullable().optional(),
   unitCode: z.string().trim().min(1).max(16).nullable().optional(),
   method: text(500),
+  toleranceSource: z.string().trim().max(200).transform((v) => (v === '' ? null : v)).nullable().optional(),
 };
 const LIMITS = ['nominal', 'toleranceMinus', 'tolerancePlus', 'unitCode'] as const;
+const NO_LIMITS = { nominal: null, toleranceMinus: null, tolerancePlus: null, unitCode: null } as const;
+// On a gauge: ordinary values only (a gauge's own check never follows a rule).
 export const CreateCharacteristicBody = z
   .object(characteristicFields)
   .strict()
-  .transform((b) => (b.kind === 'attribute' ? { ...b, nominal: null, toleranceMinus: null, tolerancePlus: null, unitCode: null } : { ...b, kind: 'variable' as const }))
+  .transform((b) => (b.kind === 'attribute' ? { ...b, ...NO_LIMITS } : { ...b, kind: 'variable' as const }))
   .refine((b) => b.kind === 'attribute' || LIMITS.every((k) => b[k] !== null && b[k] !== undefined), {
     message: 'A measured characteristic needs a nominal, both tolerances and a unit',
     path: ['nominal'],
@@ -91,11 +114,69 @@ export const UpdateCharacteristicBody = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' })
   // Switching to a pass/fail check drops the limits; switching to measured needs them all.
-  .transform((b) => (b.kind === 'attribute' ? { ...b, nominal: null, toleranceMinus: null, tolerancePlus: null, unitCode: null } : b))
+  .transform((b) => (b.kind === 'attribute' ? { ...b, ...NO_LIMITS } : b))
   .refine((b) => b.kind !== 'variable' || LIMITS.every((k) => b[k] !== null && b[k] !== undefined), {
     message: 'A measured characteristic needs a nominal, both tolerances and a unit',
     path: ['nominal'],
   });
+
+// On a gauge type: the point may be a percentage of the gauge's range and the tolerance may be worked out four ways (the database holds the same rules).
+const typeFields = {
+  ...characteristicFields,
+  nominalBasis: NominalBasis.optional(),
+  toleranceBasis: ToleranceBasis.optional(),
+  toleranceReadingPercent: z.number().finite().gt(0).max(100).nullable().optional(),
+};
+const MESSAGE = { path: ['nominal'] as (string | number)[] };
+const decimals = (n: number, places: number) => Math.abs(n * 10 ** places - Math.round(n * 10 ** places)) < 1e-7;
+/** The shape rules of a measured check on a type, given everything the check will hold (`b` after defaults). Returns the first problem or null. */
+export function typeCheckProblem(b: {
+  kind?: 'variable' | 'attribute';
+  nominal?: number | null;
+  toleranceMinus?: number | null;
+  tolerancePlus?: number | null;
+  unitCode?: string | null;
+  nominalBasis?: 'value' | 'span_percent';
+  toleranceBasis?: 'value' | 'span_percent' | 'reading_percent' | 'value_plus_reading_percent';
+  toleranceReadingPercent?: number | null;
+}): string | null {
+  if (b.kind === 'attribute') return null;
+  const nb = b.nominalBasis ?? 'value';
+  const tb = b.toleranceBasis ?? 'value';
+  if (b.nominal == null || b.toleranceMinus == null || b.tolerancePlus == null) return 'A measured characteristic needs a nominal, both tolerances and a unit';
+  if (nb === 'value' && !b.unitCode) return 'A measured characteristic needs a nominal, both tolerances and a unit';
+  if (nb === 'span_percent') {
+    if (b.unitCode) return "A point given as a percentage of the gauge's range uses the gauge's unit: leave the unit out";
+    if (b.nominal < 0 || b.nominal > 100) return "The point is a percentage of the gauge's range: between 0 and 100";
+    if (!decimals(b.nominal, 3)) return 'The point may have at most three decimals';
+  }
+  if (tb === 'value') {
+    if (b.toleranceReadingPercent != null) return 'The percentage of the reading belongs only to a tolerance of a fixed part plus a percentage of the reading';
+  } else if (tb === 'span_percent' || tb === 'reading_percent') {
+    if (b.toleranceReadingPercent != null) return 'The percentage of the reading belongs only to a tolerance of a fixed part plus a percentage of the reading';
+    if (b.toleranceMinus !== b.tolerancePlus) return 'A tolerance given as a percentage is the same on both sides';
+    if (b.toleranceMinus <= 0 || b.toleranceMinus > 100) return 'A tolerance given as a percentage is more than 0 and at most 100';
+  } else {
+    if (b.toleranceMinus !== b.tolerancePlus) return 'A tolerance with a percentage of the reading is the same on both sides';
+    if (b.toleranceReadingPercent == null) return 'Give the percentage of the reading';
+  }
+  return null;
+}
+export const CreateTypeCharacteristicBody = z
+  .object(typeFields)
+  .strict()
+  .transform((b) => (b.kind === 'attribute' ? { ...b, ...NO_LIMITS, nominalBasis: 'value' as const, toleranceBasis: 'value' as const, toleranceReadingPercent: null } : { ...b, kind: 'variable' as const }))
+  .superRefine((b, ctx) => {
+    const problem = typeCheckProblem({ ...b, kind: b.kind });
+    if (problem) ctx.addIssue({ code: 'custom', message: problem, ...MESSAGE });
+  });
+export const UpdateTypeCharacteristicBody = z
+  .object({ ...typeFields, name: typeFields.name.optional(), active: z.boolean().optional() })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' })
+  .transform((b) =>
+    b.kind === 'attribute' ? { ...b, ...NO_LIMITS, nominalBasis: 'value' as const, toleranceBasis: 'value' as const, toleranceReadingPercent: null } : b,
+  );
 
 /** A gauge type's code: what identifies it in the app and in imports (unique per organisation, any case). */
 const GaugeTypeCode = z.string().trim().min(1).max(40);
@@ -115,6 +196,8 @@ export const GaugeType = z.object({
   gaugeCount: z.number(),
   /** Gauges of this type in use (not deleted, retired or lost) missing at least one of its active checks. */
   gaugesMissingChecks: z.number(),
+  /** Active checks whose point or tolerance depends on the gauge's range: a gauge of this type needs a range and a unit. */
+  rangeCheckCount: z.number(),
   customValues: CustomValues.optional(),
 });
 /** What applying a type's checks to its gauges did. */
@@ -123,7 +206,45 @@ export const ApplyTypeCharacteristicsResult = z.object({
   characteristicsAdded: z.number(),
   /** Gauges missing checks at sites where the caller does not manage calibration (left as they are). */
   gaugesSkipped: z.number(),
+  /** Gauges that could not be given a check that depends on their range (no range or unit, or the tolerance works out to nothing), and why (first 20). */
+  gaugesWithProblems: z.number(),
+  problems: z.array(z.object({ gaugeId: z.string().uuid(), assetNumber: z.string(), checkId: z.string().uuid().nullable(), name: z.string().nullable(), problem: z.string() })),
   type: GaugeType,
+});
+
+/** "What would this type's checks become for a gauge with this range?" Nothing is saved. */
+export const PreviewPointsBody = z
+  .object({
+    rangeMin: z.number().finite().min(-1e9).max(1e9),
+    rangeMax: z.number().finite().min(-1e9).max(1e9),
+    unitCode: z.string().trim().min(1).max(16),
+    resolution: z.number().finite().gt(0).max(1e9).nullable().optional(),
+  })
+  .strict()
+  .refine((b) => b.rangeMax > b.rangeMin, { message: 'The range maximum must be above the minimum', path: ['rangeMax'] });
+export const PreviewedCheck = z.object({
+  checkId: z.string().uuid(),
+  name: z.string(),
+  method: z.string().nullable(),
+  sortOrder: z.number(),
+  kind: CharacteristicKind,
+  nominal: z.number().nullable(),
+  toleranceMinus: z.number().nullable(),
+  tolerancePlus: z.number().nullable(),
+  lower: z.number().nullable(),
+  upper: z.number().nullable(),
+  unit: z.string().nullable(),
+  derivation: z.string().nullable(),
+  followsRange: z.boolean(),
+  toleranceSource: z.string().nullable(),
+  problem: z.string().nullable(),
+});
+export const PreviewPointsResult = z.object({ needsRange: z.boolean(), hasRange: z.boolean(), checks: z.array(PreviewedCheck) });
+/** What Recalculate did on a gauge: checks changed, checks that already matched, checks that could not be worked out. */
+export const RecalculateResult = z.object({
+  updated: z.number(),
+  unchanged: z.number(),
+  problems: z.array(z.object({ checkId: z.string().uuid(), name: z.string(), problem: z.string() })),
 });
 export const GaugeTypeQuery = z.object({
   includeInactive: z
@@ -324,6 +445,10 @@ export const Reading = z.object({
   asFoundOk: z.boolean(),
   asLeftOk: z.boolean().nullable(),
   notes: z.string().nullable(),
+  /** How the limits were worked out when the check was given as a percentage of the gauge's range or of the reading (kept with the reading). */
+  derivation: z.string().nullable(),
+  /** Where the tolerance comes from, in words (for example "ISO 3611"). */
+  toleranceSource: z.string().nullable(),
 });
 
 export const CalibrationSummary = z.object({

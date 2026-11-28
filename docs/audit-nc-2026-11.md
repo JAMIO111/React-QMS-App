@@ -89,7 +89,7 @@ dialogs' limits; permission gating on the NC page.
 
 ## Fixed so far (the five high findings)
 
-Fixed on 28 Nov 2026. The high-findings migration (`20260469100000`) and the medium-findings migration (`20260470100000`) are applied live. The client-key migration (`20260471100000`, API-13) is written and tested but **not applied live** (it waits for the owner's go).
+Fixed on 28 Nov 2026. The high-findings migration (`20260469100000`) and the medium-findings migration (`20260470100000`) are applied live. The client-key migration (`20260471100000`, API-13) is applied live too (28 Nov 2026).
 
 | ID | Fix | Test |
 |---|---|---|

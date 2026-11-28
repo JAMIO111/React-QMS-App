@@ -51,17 +51,28 @@ beforeAll(async () => {
   await api().post(`${base}/suppliers/${ctx.s2}/certifications`).set(h).send({ certType: 'iso_9001', certificateNumber: 'FINE-1', issuingBody: 'BSI', expiresOn: day(400) }).expect(201);
 
   // Non-conformances naming suppliers: two for Acme in the period (one critical), one old, one cancelled; one with no supplier.
-  const nc = async (ref: string, supplier: string | null, detected: number, severity: string | null) =>
-    (await admin.query(
-      `insert into public.nonconformances (organisation_id, reference, source, title, supplier_id, detected_at, severity) values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-      [ids.orgA, ref, supplier ? 'supplier' : 'internal', `NC ${ref}`, supplier, day(detected), severity],
-    )).rows[0].id as string;
+  // Raised ones are open (a draft is not raised: docs/audit-nc-2026-11.md API-3); written with the row triggers off, as an import of history would.
+  const nc = async (ref: string, supplier: string | null, detected: number, severity: string | null, stage = 'open') => {
+    const c = await admin.connect();
+    try {
+      await c.query('begin');
+      await c.query('set local session_replication_role = replica');
+      const id = (await c.query(
+        `insert into public.nonconformances (organisation_id, reference, source, title, description, supplier_id, detected_at, severity, stage) values ($1, $2, $3, $4, 'x', $5, $6, $7, $8) returning id`,
+        [ids.orgA, ref, supplier ? 'supplier' : 'internal', `NC ${ref}`, supplier, day(detected), severity, stage],
+      )).rows[0].id as string;
+      await c.query('commit');
+      return id;
+    } finally {
+      c.release();
+    }
+  };
   ctx.nc1 = await nc('SQD-1', ctx.s1, -10, 'critical');
   await nc('SQD-2', ctx.s1, -12, 'minor');
   await nc('SQD-3', ctx.s2, -200, null);
   await nc('SQD-5', null, -10, 'major');
-  const cancelled = await nc('SQD-4', ctx.s1, -10, 'major');
-  await admin.query(`update public.nonconformances set stage = 'cancelled', stage_reason = 'Raised in error' where id = $1`, [cancelled]);
+  await nc('SQD-4', ctx.s1, -10, 'major', 'cancelled');
+  await nc('SQD-6', ctx.s1, -10, 'major', 'draft'); // a draft is not raised
 
   // One corrective action request issued and now past its due date; one still a draft.
   ctx.scar = (await api().post(`${base}/scars`).set(h).send({ supplierId: ctx.s1, title: 'Bent brackets', problemDescription: 'Brackets arrive bent', severity: 'major', responseDueOn: day(14), ncrIds: [ctx.nc1] }).expect(201)).body.id;

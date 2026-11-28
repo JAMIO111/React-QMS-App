@@ -56,7 +56,7 @@ describe('quality objectives (MR1)', () => {
     expect(sys).toMatchObject({ reference: 'QO-002', unit: 'NCs', direction: 'at_most', startsOn: '2026-01-01', canRecord: false, available: true });
     const thisMonth = today().slice(0, 7);
     const counted = await admin.query(
-      `select count(*)::int as n from public.nonconformances where organisation_id = $1 and deleted_at is null and stage <> 'cancelled' and to_char(created_at, 'YYYY-MM') = $2`,
+      `select count(*)::int as n from public.nonconformances where organisation_id = $1 and deleted_at is null and stage not in ('draft', 'cancelled') and to_char(detected_at, 'YYYY-MM') = $2`,
       [ids.orgA, thisMonth],
     );
     const current = sys.periods.at(-1);

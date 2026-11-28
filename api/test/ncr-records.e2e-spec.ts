@@ -17,6 +17,12 @@ let app: INestApplication;
 let admin: Pool;
 const api = () => request(app.getHttpServer());
 const as = async (user: string, org: string = ids.orgA) => ({ Authorization: `Bearer ${await token(user)}`, 'X-Organisation-Id': org });
+/** Raises a non-conformance properly (everything needed to open, then opened): a draft is not "raised" (docs/audit-nc-2026-11.md API-3). */
+const raise = async (h: Record<string, string>, body: Record<string, unknown>) => {
+  const id = (await api().post('/api/v1/ncrs').set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x', categoryId: await categoryId(admin, ids.orgA), ...body }).expect(201)).body.id as string;
+  await api().post(`/api/v1/ncrs/${id}/transitions`).set(h).send({ to: 'open' }).expect(200);
+  return id;
+};
 const SITE_USER = '80000000-0000-0000-0000-00000000aa77';
 let plantB: string;
 let ncr: string;
@@ -209,25 +215,29 @@ describe('attachments', () => {
 describe('NC dashboard', () => {
   it('summarises the period: KPIs, trend, failure modes, stages, severity and parts', async () => {
     const h = await as(ids.ownerA);
+    // The draft at plant B is opened first: a draft is not raised, so it would not be on the dashboard.
+    await api().patch(`/api/v1/ncrs/${ncrAtB}`).set(h).send({ description: 'x', categoryId: await categoryId(admin, ids.orgA) }).expect(200);
+    await api().post(`/api/v1/ncrs/${ncrAtB}/transitions`).set(h).send({ to: 'open' }).expect(200);
     const today = new Date().toISOString().slice(0, 10);
     const res = await api().get(`/api/v1/ncr-dashboard?source=internal&from=2026-10-01&to=${today}`).set(h).expect(200);
     const d = res.body;
     // ncr: detected 2026-10-05, minor and qty 1 (set by the locking test), net £142.50, closed today.
-    // ncrAtB: detected 2026-11-01, minor, qty 3, £25, draft.
+    // ncrAtB: detected 2026-11-01, minor, qty 3, £25, opened above.
     expect(d.kpis).toMatchObject({ raised: 2, open: 1, criticalOpen: 0, closed: 1, cost: 167.5, quantity: 4, raisedPrevious: 0, costPrevious: 0 });
     expect(d.kpis.avgDaysToClose).toBeGreaterThan(0);
     expect(d.baseCurrency).toBe('GBP');
     expect(d.trend.reduce((t: number, b: { total: number }) => t + b.total, 0)).toBe(2);
     expect(d.trend.reduce((t: number, b: { bySource: Record<string, number> }) => t + (b.bySource.internal ?? 0), 0)).toBe(2);
     expect(d.trend.every((b: { bySource: Record<string, number> }) => Object.keys(b.bySource).every((k) => k === 'internal'))).toBe(true);
-    // By source: all eleven in the fixed order; by category: the NC with a category, and the one without ("Uncategorised").
+    // By source: all eleven in the fixed order; by category: both are Product.
     expect(d.bySource.map((s: { key: string }) => s.key)).toEqual(['internal', 'customer', 'supplier', 'internal_audit', 'external_audit', 'production_inspection', 'final_inspection', 'calibration', 'goods_receiving', 'engineering', 'management_review']);
     expect(d.bySource.find((s: { key: string }) => s.key === 'internal')).toEqual({ key: 'internal', label: 'Internal', count: 2 });
     expect(d.bySource.filter((s: { count: number }) => s.count > 0)).toHaveLength(1);
-    expect(d.byCategory).toEqual([{ key: expect.any(String), label: 'Product', count: 1 }, { key: 'none', label: 'Uncategorised', count: 1 }]);
+    expect(d.byCategory).toEqual([{ key: expect.any(String), label: 'Product', count: 2 }]);
     expect(d.trend.reduce((t: number, b: { cost: number }) => t + b.cost, 0)).toBe(167.5);
     expect(d.byFailureMode).toEqual([{ key: 'none', label: 'Not classified', count: 2 }]);
-    expect(d.byStage.find((s: { key: string }) => s.key === 'draft').count).toBe(1);
+    expect(d.byStage.map((s: { key: string }) => s.key)).not.toContain('draft');
+    expect(d.byStage.find((s: { key: string }) => s.key === 'open').count).toBe(1);
     expect(d.bySeverity.map((s: { count: number }) => s.count)).toEqual([0, 0, 2, 0]);
     expect(d.topParts).toEqual([]);
 
@@ -242,8 +252,8 @@ describe('NC dashboard', () => {
   it('shows an organisation-wide reader every non-conformance, also when only one site is active', async () => {
     const h = await as(ids.ownerA);
     // One NC at plant B and one with no site, then plant B switched off: only site A stays readable, which used to narrow the whole dashboard to it.
-    await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'At B, April', siteId: plantB, detectedAt: '2024-04-02' }).expect(201);
-    await api().post('/api/v1/ncrs').set(h).send({ source: 'internal', title: 'At A, April', siteId: ids.siteA, detectedAt: '2024-04-03' }).expect(201);
+    await raise(h, { source: 'internal', title: 'At B, April', siteId: plantB, detectedAt: '2024-04-02' });
+    await raise(h, { source: 'internal', title: 'At A, April', siteId: ids.siteA, detectedAt: '2024-04-03' });
     await admin.query(`update public.sites set active = false where id = $1`, [plantB]);
     try {
       const all = await api().get('/api/v1/ncr-dashboard?from=2024-04-01&to=2024-04-30').set(h).expect(200);
@@ -259,9 +269,9 @@ describe('NC dashboard', () => {
   it('counts every non-conformance of a week in the trend, not one for each source', async () => {
     const h = await as(ids.ownerA);
     // Three internal and one supplier NC detected in the same week (Mon 3 to Sun 9 March 2025).
+    const supplierId = (await admin.query(`insert into public.suppliers (organisation_id, code, name) values ($1, 'WEEK-S', 'Week Supply') returning id`, [ids.orgA])).rows[0].id as string;
     for (const [i, source] of ['internal', 'internal', 'internal', 'supplier'].entries()) {
-      const body = { source, title: `Same week ${i}`, siteId: ids.siteA, detectedAt: `2025-03-0${4 + i}` };
-      await api().post('/api/v1/ncrs').set(h).send(body).expect(201);
+      await raise(h, { source, title: `Same week ${i}`, siteId: ids.siteA, detectedAt: `2025-03-0${4 + i}`, ...(source === 'supplier' ? { supplierId } : {}) });
     }
     const res = await api().get('/api/v1/ncr-dashboard?from=2025-03-01&to=2025-03-31').set(h).expect(200);
     const week = res.body.trend.find((b: { start: string }) => b.start === '2025-03-03');

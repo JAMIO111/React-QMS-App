@@ -130,7 +130,7 @@ describe("NC dashboard", () => {
   it("links tiles and parts to the filtered register", async () => {
     renderAt("/Non-Conformance");
     await userEvent.click(await screen.findByRole("link", { name: /Open now/ }));
-    expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance/Register?stage=draft,open,contained,investigating,dispositioned,awaiting_closure");
+    expect(screen.getByTestId("where").textContent).toBe("/Non-Conformance/Register?stage=open,contained,investigating,dispositioned,awaiting_closure");
   });
 
   it("filters by the Customer / Supplier tab and period, kept in the URL", async () => {

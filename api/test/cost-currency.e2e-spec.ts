@@ -13,7 +13,7 @@ import { AppModule } from '../src/app.module';
 import { ExchangeRateGateway, RateAnswer } from '../src/currency/exchange-rate.gateway';
 import { ExchangeRateService } from '../src/currency/exchange-rate.service';
 import { WorkerService } from '../src/worker/worker.service';
-import { makeIds, requireDb, seed, testEnv, token } from './helpers';
+import { categoryId, makeIds, requireDb, seed, testEnv, token } from './helpers';
 
 class FakeRates extends ExchangeRateGateway {
   down = false;
@@ -227,6 +227,16 @@ describe('the preview for the cost form', () => {
 });
 
 describe('dashboard and register', () => {
+  // A draft is not raised, so its costs are not on the dashboard: both are opened first (docs/audit-nc-2026-11.md API-3).
+  beforeAll(async () => {
+    const h = await as(ids.ownerA);
+    const cat = await categoryId(admin, ids.orgA);
+    for (const id of [ncrA, ncrB]) {
+      await api().patch(`/api/v1/ncrs/${id}`).set(h).send({ severity: 'minor', quantityAffected: 1, description: 'x', categoryId: cat }).expect(200);
+      await api().post(`/api/v1/ncrs/${id}/transitions`).set(h).send({ to: 'open' }).expect(200);
+    }
+  });
+
   const period = () => `from=${addDays(today(), -30)}&to=${addDays(today(), 30)}`;
   const net = async (where: string) => Number((await admin.query(`select coalesce(sum(k.${where} * k.cost_sign), 0) as t from public.ncr_costs k where k.organisation_id = $1 and k.deleted_at is null`, [ids.orgA])).rows[0].t);
 

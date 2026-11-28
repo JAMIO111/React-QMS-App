@@ -104,7 +104,7 @@ const Settings = () => {
             aria-label="Settings"
             aria-hidden={inData}
             inert={inData}
-            className={`absolute flex flex-col gap-1 overflow-y-auto p-2 ${LEVEL_MOVE} ${inData ? "pointer-events-none -translate-x-10 opacity-0" : "translate-x-0 opacity-100"}`}>
+            className={`absolute inset-0 flex flex-col gap-1 overflow-y-auto p-2 ${LEVEL_MOVE} ${inData ? "pointer-events-none -translate-x-10 opacity-0" : "translate-x-0 opacity-100"}`}>
             {SettingMenuStructure.filter((item) => canSee(item.permission)).map(
               (item) => (
                 <Item
@@ -124,7 +124,7 @@ const Settings = () => {
             aria-label="Data"
             aria-hidden={!inData}
             inert={!inData}
-            className={`absolute flex gap-1 inset-0 overflow-y-auto p-2 ${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-10 opacity-0"}`}>
+            className={`absolute inset-0 flex flex-col gap-1 overflow-y-auto p-2 ${LEVEL_MOVE} ${inData ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-10 opacity-0"}`}>
             {tabs.map((t, i) => (
               <Item
                 key={t.value}
